@@ -2,11 +2,12 @@
 # Prepare a sandbox for an agent session. Run as the agent user before the
 # agent starts. Idempotent: safe to run again on a re-attached sandbox.
 #
-# Assumes the foundry has already created task/$AGENT_TASK and pushed a
-# skeleton .agent/$AGENT_TASK/TASK.md on agent-notes. Anything missing is
-# an error, not something to create here.
+# The sandbox has no host checkout: the project is cloned here from
+# $AGENT_REPO_URL into $AGENT_PROJECT_DIR. Assumes the foundry has already
+# created task/$AGENT_TASK and pushed a skeleton .agent/$AGENT_TASK/TASK.md on
+# agent-notes. Anything missing is an error, not something to create here.
 set -euo pipefail
-: "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
+: "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_REPO_URL:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
 
 role_dir="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
 [[ -f "$role_dir/gitconfig" ]] || { echo "session-init: $role_dir/gitconfig is missing" >&2; exit 1; }
@@ -25,13 +26,13 @@ fi
 
 # --- Checkouts ----------------------------------------------------------------
 
+if [[ ! -d "$AGENT_PROJECT_DIR/.git" ]]; then
+    mkdir -p "$(dirname "$AGENT_PROJECT_DIR")"
+    # Blobless partial clone: full history of commits, file contents fetched on
+    # demand. Keeps large repositories fast without the limits of --depth.
+    git clone --filter=blob:none "$AGENT_REPO_URL" "$AGENT_PROJECT_DIR"
+fi
 cd "$AGENT_PROJECT_DIR"
-
-origin="$(git remote get-url origin)"
-case "$origin" in
-    git@*|ssh://*|https://*|file://*) ;;
-    *) echo "session-init: origin is '$origin', not a remote URL; the clone was not set up for pushing" >&2; exit 1 ;;
-esac
 
 git config core.hooksPath "$AGENT_KIT_DIR/hooks"   # read-only mount: agents cannot alter hooks
 

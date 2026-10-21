@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foundry"
+version = "0.1.0"
+description = "willcode-foundry: run coding agents in Docker Sandboxes, one role per task."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6"]
+
+[dependency-groups]
+dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML"]
+
+[tool.uv]
+default-groups = []
+
+[project.scripts]
+foundry = "foundry.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+strict = true
