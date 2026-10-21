@@ -178,6 +178,7 @@ def stop(active: bool = False) -> subprocess.CompletedProcess[str]:
         input=json.dumps({"stop_hook_active": active}),
         capture_output=True,
         text=True,
+        check=False,
         env=os.environ,
     )
 

@@ -56,6 +56,7 @@ class Host:
         try:
             return subprocess.run(
                 list(cmd),
+                check=False,  # callers inspect returncode; a non-zero exit is not an exception here
                 env=None if env is None else dict(env),
                 capture_output=True,
                 text=True,
