@@ -5,9 +5,16 @@
 # can undo what it did.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
-[[ $EUID -eq 0 ]] || { echo "lockdown: must run as root" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || { echo "session-harden: must run as root" >&2; exit 1; }
 
-agent_user="${SUDO_USER:-agent}"
+# This removes sudo from the machine it runs on. Inside a sandbox that is the
+# point; anywhere else it would lock out the machine's owner. Only proceed when
+# invoked by the sandbox template's agent user.
+agent_user="${SUDO_USER:-}"
+[[ "$agent_user" == agent ]] || {
+    echo "session-harden: refusing: only runs inside a foundry sandbox, via sudo from its 'agent' user (SUDO_USER is '${agent_user:-unset}')" >&2
+    exit 1
+}
 
 # 1. Managed settings: root-owned, world-readable, agent cannot write.
 install -d -m 0755 -o root -g root /etc/claude-code
@@ -27,7 +34,7 @@ command -v doas >/dev/null && chmod 0000 "$(command -v doas)" || true
 
 # 3. Verify as the agent user.
 if su -s /bin/sh "$agent_user" -c 'sudo -n true' 2>/dev/null; then
-    echo "lockdown: FAILED, $agent_user can still sudo" >&2
+    echo "session-harden: FAILED, $agent_user can still sudo" >&2
     exit 1
 fi
-echo "lockdown: managed settings installed, sudo removed for $agent_user"
+echo "session-harden: managed settings installed, sudo removed for $agent_user"

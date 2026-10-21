@@ -1,45 +1,144 @@
 #!/usr/bin/env python3
 """PreToolUse guard for Bash commands.
 
-Denies commands that would disable or bypass the foundry's guardrails.
-Reads the tool call as JSON on stdin; exit 2 with a reason on stderr denies.
+Denies commands that would disable or bypass the foundry's guardrails. Reads
+the tool call as JSON on stdin; exits 2 with a reason on stderr to deny.
 
   RULE  Git hooks are never bypassed or reconfigured.
-  RULE  Pushed history is never rewritten and remote branches never deleted.
+  RULE  Pushed history is never rewritten and remote branches are never deleted.
   RULE  Privilege escalation and changes to Claude's settings are not allowed.
+
+The command is split into simple commands on ;, &&, || and |, and each is
+checked by its words, so text that merely mentions a flag (a commit message,
+a file name) is not refused. Commands run through `sh -c` / `bash -c` are
+checked too. A guard on command text can't see what a script it runs does;
+the git hooks and the server-side branch rules cover that.
 """
+
 import json
 import re
+import shlex
 import sys
+from collections.abc import Iterator
 
-RULES = [
-    # pattern, reason
-    (r"--no-verify|\bcommit\s+(-\S*n|\S*\s-n\b)", "git hooks must not be bypassed (--no-verify / -n)"),
-    (r"\bcore\.hooks[Pp]ath\b|\bhooks\.", "git hook configuration must not be changed"),
-    (r"\.git/hooks\b|/hooks/(pre-commit|pre-push)\b", "git hook files must not be touched"),
-    (r"\bpush\b.*(--force|--force-with-lease|-f\b|\+refs/)", "force-push is not allowed"),
-    (r"\bpush\b.*(--delete|-d\b|:refs/heads/|\s:\S+)", "deleting remote branches is not allowed"),
-    (r"\bgit\s+(rebase|reset\s+--hard|filter-branch|filter-repo)\b", "rewriting history is not allowed; use git pull --rebase only"),
-    (r"\bsudo\b|\bsu\b\s|\bdoas\b|\bpkexec\b", "privilege escalation is not allowed"),
-    (r"(>|>>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bsed\s+-i|\bchmod\b|\bchown\b|\bln\b).*(/etc/claude-code|managed-settings)", "Claude settings must not be changed"),
-    (r"\bchmod\b.*\bhooks\b|\bchattr\b", "hook permissions must not be changed"),
-]
+PRIVILEGE = {"sudo", "su", "doas", "pkexec"}
+SHELLS = {"sh", "bash", "zsh", "dash"}
+REWRITE = {"rebase", "filter-branch", "filter-repo"}
+SEPARATORS = {";", "&&", "||", "|", "&", "(", ")"}
+WRAPPERS = {"env", "command", "exec"}
+ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# Checked against the whole command: these names are dangerous wherever they
+# appear, including inside environment variables such as GIT_CONFIG_PARAMETERS.
+HOOKS_PATH = re.compile(r"core\.hookspath", re.IGNORECASE)
+SETTINGS_WRITE = re.compile(
+    r"(>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bsed\s+-i|\bchmod\b|\bchown\b|\bln\b|\binstall\b)"
+    r"[^;&|]*(/etc/claude-code|managed-settings)"
+)
 
 
-def main():
+def simple_commands(command: str) -> Iterator[list[str]]:
+    """Yield each simple command's words, descending into `sh -c '...'`."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+    lexer.whitespace_split = True
+    words: list[str] = []
+    for token in lexer:
+        if token in SEPARATORS or set(token) <= set(";&|"):
+            if words:
+                yield from _expand(words)
+            words = []
+        else:
+            words.append(token)
+    if words:
+        yield from _expand(words)
+
+
+def _expand(words: list[str]) -> Iterator[list[str]]:
+    words = _strip_prefix(words)
+    if len(words) >= 3 and words[0].rsplit("/", 1)[-1] in SHELLS and "-c" in words[1:-1]:
+        yield from simple_commands(words[words.index("-c") + 1])
+    elif words:
+        yield words
+
+
+def _strip_prefix(words: list[str]) -> list[str]:
+    """Drop leading VAR=value assignments and `env`/`command`/`exec` wrappers."""
+    i = 0
+    while i < len(words) and (ASSIGNMENT.fullmatch(words[i]) or words[i] in WRAPPERS):
+        i += 1
+    return words[i:]
+
+
+def git_subcommand(words: list[str]) -> tuple[str, list[str]] | None:
+    """For a git command, its subcommand and the words after it; else None."""
+    if not words or words[0].rsplit("/", 1)[-1] != "git":
+        return None
+    i = 1
+    while i < len(words) and words[i].startswith("-"):
+        i += 2 if words[i] in {"-c", "-C", "--git-dir", "--work-tree", "--namespace"} else 1
+    return (words[i], words[i + 1 :]) if i < len(words) else None
+
+
+def short_flags(args: list[str]) -> set[str]:
+    """Letters in short-option clusters such as -nm or -uf; long options and values excluded."""
+    return {ch for a in args if a.startswith("-") and not a.startswith("--") for ch in a[1:]}
+
+
+def check_words(words: list[str]) -> str | None:
+    name = words[0].rsplit("/", 1)[-1]
+    if name in PRIVILEGE:
+        return "privilege escalation is not allowed"
+
+    git = git_subcommand(words)
+    if git is None:
+        return None
+    sub, args = git
+    if "--no-verify" in args or (sub == "commit" and "n" in short_flags(args)):
+        return "git hooks must not be bypassed (--no-verify / -n)"
+    if sub == "push":
+        if {"--force", "--mirror", "--prune"} & set(args) or any(a.startswith("--force") for a in args):
+            return "force-push is not allowed"
+        if "--delete" in args or "d" in short_flags(args) or any(a.startswith(":") for a in args):
+            return "deleting remote branches is not allowed"
+        if "f" in short_flags(args) or any(a.startswith("+") for a in args):
+            return "force-push is not allowed"
+    if sub in REWRITE or (sub == "reset" and "--hard" in args):
+        return "rewriting history is not allowed; use git pull --rebase only"
+    return None
+
+
+def check(command: str) -> str | None:
+    """The reason to refuse ``command``, or None to let it run."""
+    if HOOKS_PATH.search(command):
+        return "git hook configuration must not be changed"
+    if SETTINGS_WRITE.search(command):
+        return "Claude settings must not be changed"
+    try:
+        commands = list(simple_commands(command))
+    except ValueError:  # unbalanced quotes: refuse rather than guess what runs
+        return "the command could not be parsed; quote it so each argument is clear"
+    for words in commands:
+        reason = check_words(words)
+        if reason:
+            return reason
+    return None
+
+
+def main() -> int:
     try:
         call = json.load(sys.stdin)
         command = call.get("tool_input", {}).get("command", "")
     except (json.JSONDecodeError, AttributeError):
-        return 0  # not a shape we understand; don't block
-
-    for pattern, reason in RULES:
-        if re.search(pattern, command):
-            print(f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
-                  "  Fix the cause instead. If you believe this is wrong, record it under\n"
-                  "  Blockers in PROGRESS.md and ask.", file=sys.stderr)
-            return 2
-    return 0
+        return 0  # not a tool call we understand; don't block
+    reason = check(command) if isinstance(command, str) else None
+    if reason is None:
+        return 0
+    print(
+        f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
+        "  Fix the cause instead. If you believe this is wrong, record it under\n"
+        "  Blockers in PROGRESS.md and ask.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":

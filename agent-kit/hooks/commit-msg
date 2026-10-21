@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Message rules apply in both checkouts.
+set -euo pipefail
+exec "$(dirname "$0")/lib/check-commit-msg.sh" "$@"

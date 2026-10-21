@@ -33,7 +33,7 @@ def ssh_key(root: Path, role: str) -> Path:
     return root / "secrets" / "ssh" / role
 
 
-def github_token(root: Path, role: str) -> Path:
+def github_token_file(root: Path, role: str) -> Path:
     """Optional: a role gets a GitHub token only if this file exists."""
     return root / "secrets" / "github" / f"{role}.token"
 

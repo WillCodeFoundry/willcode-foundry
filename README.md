@@ -6,11 +6,9 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 
 ```console
 $ uv sync
-$ uv run foundry run tkt-store dev WCF-0042          # start the dev role on task WCF-0042
-$ uv run foundry run tkt-store planner               # roles without a task
-$ uv run foundry run sessions/20261021-163005-dev-tkt-store-wcf-0042/   # re-run a session as it was
-$ uv run foundry run tkt-store dev WCF-0042 --new    # replace the sandbox
-$ uv run foundry run tkt-store dev WCF-0042 -- --continue              # args after -- go to the agent
+$ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
+$ uv run foundry run tkt-store dev WCF-0042 --new          # replace the sandbox with a fresh one
+$ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to the agent
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.
@@ -37,7 +35,7 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue              # args af
 │   │   ├── gitconfig             # behaviour shared by every role (pull.rebase, push.default, ...)
 │   │   └── allowed_signers       # one line per signing role, for verifying commits
 │   ├── hooks/                    # git hooks; core.hooksPath points here
-│   │   ├── pre-commit, pre-push
+│   │   ├── pre-commit, commit-msg, pre-push
 │   │   └── lib/                  # the rules, one script per checkout/event
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
@@ -49,9 +47,9 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue              # args af
 │   ├── ssh/<role>, <role>.pub
 │   └── github/<role>.token       # optional
 └── sessions/                     # untracked, written only by the launcher
-    └── <YYYYMMDD>-<HHMMSS>-<sandbox>/
+    └── <sandbox>/                # one per sandbox: <role>-<project>-<task>
         ├── sbxenv.yaml           # the sandbox definition; written once, never overwritten
-        └── session.yaml          # role, task, project, timings, status; updated as it changes
+        └── session.yaml          # role, task, project, creation time, one entry per launch
 ```
 
 | Folder | Written by | Tracked |
@@ -63,11 +61,11 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue              # args af
 
 ## How a session runs
 
-1. `foundry run PROJECT ROLE [TASK]` looks both up in `config/foundry.yaml`, names the sandbox `<role>-<project>-<task>` (stable, so a rerun re-attaches) and the session `<date>-<time>-<sandbox>`, and writes `sessions/<session>/sbxenv.yaml` and `session.yaml`. sbx requires a primary workspace, so the environment file names an empty temporary directory (recreated if the OS clears it); nothing is put in it. The only real mount is `agent-kit/`, read-only, and the `env` block carries `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
-2. `foundry.agent_sandbox` starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from the file (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, sets or clears the `github` secret, and checks from inside that the sandbox sees exactly that one key.
-3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, runs the role's `init` if present, then `session-harden`s: installs Claude's managed settings and removes sudo. The launch aborts if any step fails.
-4. `sbx env run` attaches the agent. It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
-5. The launcher replaces itself with `sbx`, so it never learns how the session ended: `session.yaml` records only what is known at creation, with `status: created`. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
+1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it writes `sessions/<sandbox>/sbxenv.yaml` and `session.yaml`; later runs reuse that file and re-attach, since sbx fixes a sandbox's mounts when it is created. sbx requires a primary workspace, so the environment file names an empty temporary directory (recreated if the OS clears it); nothing is put in it. The only real mount is `agent-kit/`, read-only, and the `env` block carries `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
+2. `foundry.agent_sandbox` starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from the file if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
+3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, runs the role's `init` if present, then `session-harden`s: installs Claude's managed settings and removes sudo. The launch aborts if any step fails.
+4. `sbx env run` attaches the agent, with permission prompts off (the sandbox and hooks are the controls). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
+5. The launcher replaces itself with `sbx`, so it never learns how the session ended: `session.yaml` records creation and each launch, nothing more. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
 Preconditions the launcher does not create: the task branch `task/<task>` and a skeleton `.agent/<task>/TASK.md` on `agent-notes` must already exist on GitHub.
 
@@ -97,8 +95,10 @@ Development:
 ```console
 $ uv sync --group dev
 $ uv run pytest
-$ uv run ruff check . && uv run mypy
+$ uv run ruff check . && uv run ruff format --check . && uv run mypy
 ```
+
+`tests/kit/` tests the kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`.
 
 ## sbx requirements
 

@@ -22,7 +22,7 @@ paths.
 |---|---|
 | `AGENT_TASK` | your task id |
 | `AGENT_ROLE` | your role |
-| `AGENT_PROJECT_DIR` | the code checkout, the directory you start in |
+| `AGENT_PROJECT_DIR` | the code checkout. You start in an empty directory, so `cd` here first |
 | `AGENT_NOTES_DIR` | the notes checkout, a git worktree of the same repo |
 | `AGENT_REPO_URL` | the project repository on GitHub; your checkout was cloned from it |
 | `AGENT_KIT_DIR` | the `agent-kit` directory: shared instructions, roles, skills, memory. Mounted read-only. |
@@ -50,8 +50,9 @@ around it.
 Later sections refer to these locations by name: "the code checkout", "the
 notes checkout", "the `agent-kit` directory".
 
-At session start you are shown your task id, `TASK.md`, `PROGRESS.md` and
-`LEARNINGS.md`. Read them fully before doing anything else.
+This file, your `ROLE.md` and your task's `TASK.md` are loaded at session
+start. Read `PROGRESS.md` and `LEARNINGS.md` in your task's notes too, if they
+exist, before doing anything else.
 
 ## 2. Your task notes
 
@@ -158,8 +159,13 @@ If you run out of turns or time, push whatever state you have and make sure
 
 ### Code checkout (`task/$AGENT_TASK`)
 
+Write commit messages as `$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`
+describes: a typed summary, a body saying why, and a `Task:` trailer as the
+last paragraph. No `Co-Authored-By` or other attribution lines.
+
 ```bash
-git add <files> && git commit -m "Describe the change"
+git add <files>
+git commit -m "feat(scope): summary of the change" -m "Why it was needed." -m "Task: $AGENT_TASK"
 git push -u origin task/$AGENT_TASK
 ```
 

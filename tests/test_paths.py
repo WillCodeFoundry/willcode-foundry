@@ -22,5 +22,5 @@ def test_find_root_fails_outside_an_instance(tmp_path: Path) -> None:
 def test_paths_are_built_without_touching_the_filesystem(tmp_path: Path) -> None:
     assert paths.kit(tmp_path) == tmp_path / "agent-kit"
     assert paths.ssh_key(tmp_path, "dev") == tmp_path / "secrets" / "ssh" / "dev"
-    assert paths.github_token(tmp_path, "dev") == tmp_path / "secrets" / "github" / "dev.token"
+    assert paths.github_token_file(tmp_path, "dev") == tmp_path / "secrets" / "github" / "dev.token"
     assert paths.session_dir(tmp_path, "s") == tmp_path / "sessions" / "s"

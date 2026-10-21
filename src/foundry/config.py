@@ -28,7 +28,9 @@ class Config:
         try:
             return self.projects[name]
         except KeyError:
-            raise FoundryError(f"unknown project {name!r}; known: {', '.join(sorted(self.projects)) or 'none'}") from None
+            raise FoundryError(
+                f"unknown project {name!r}; known: {', '.join(sorted(self.projects)) or 'none'}"
+            ) from None
 
     def role(self, name: str) -> Role:
         try:

@@ -54,6 +54,20 @@ fi
 task_md="$AGENT_NOTES_DIR/.agent/$AGENT_TASK/TASK.md"
 [[ -f "$task_md" ]] || { echo "session-init: $task_md is missing; task $AGENT_TASK was not created properly" >&2; exit 1; }
 
+# --- Agent instructions -------------------------------------------------------
+# Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @
+# imports without the approval dialog it shows for imports in a project file.
+# Rewritten at every launch, so edits made inside the sandbox don't persist.
+
+import_path() { printf '@%s\n' "${1// /\\ }"; }   # an @ import needs spaces escaped
+mkdir -p "$HOME/.claude"
+{
+    echo "<!-- Written by session-init at every launch; edits here are discarded. -->"
+    import_path "$AGENT_KIT_DIR/AGENTS.md"
+    import_path "$role_dir/ROLE.md"
+    import_path "$task_md"
+} > "$HOME/.claude/CLAUDE.md"
+
 # --- Role-specific preparation ------------------------------------------------
 # Runs before hardening, so a role's init may still use sudo if it must.
 

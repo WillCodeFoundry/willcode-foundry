@@ -7,13 +7,14 @@ handing the terminal to the agent.
 
 import os
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host, HostPort
-from foundry.agent_sandbox.sbx import Sbx
+from foundry.agent_sandbox.sbx import ENV_FILE, Sbx
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
 SOCKETS_DIR = Path("/tmp/sbx-agents")
@@ -32,18 +33,20 @@ class Launch:
     ssh_key: Path
     init: tuple[str, ...] = ()
     """Command run inside the sandbox before the agent starts; abort if it fails."""
-    github_token: str | None = None
+    github_token_file: Path | None = None
+    """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
     agent_args: tuple[str, ...] = ()
     fresh: bool = False
     """Remove an existing sandbox of this name first."""
 
 
-def ensure_paths_safe(context: Path, ssh_key: Path, env_dir: Path) -> None:
+def ensure_paths_safe(context: Path, env_dir: Path, private_files: Sequence[Path]) -> None:
     """Refuse layouts that would undo the sandbox's protections."""
     if ":" in str(context):
         raise SandboxError(f"context path {str(context)!r} contains ':'")
-    if ssh_key.is_relative_to(context):
-        raise SandboxError(f"ssh key {str(ssh_key)!r} is inside the context, readable by the sandbox")
+    for private in private_files:
+        if private.is_relative_to(context):
+            raise SandboxError(f"{str(private)!r} is inside the context, readable by the sandbox")
     if env_dir.is_relative_to(context):
         raise SandboxError(f"environment file {str(env_dir)!r} is inside the context; the sandbox could rewrite it")
 
@@ -64,24 +67,28 @@ def ensure_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
 
 def prepare(launch: Launch, host: HostPort, ssh_agent: SshAgent, sbx: Sbx) -> None:
     """Everything up to, but not including, attaching the agent."""
-    host.ensure_file_exists(launch.env_dir / "sbxenv.yaml", "environment file")
+    host.ensure_file_exists(launch.env_dir / ENV_FILE, "environment file")
     host.ensure_dir_exists(launch.context, "context")
     host.ensure_file_exists(launch.ssh_key, "ssh key")
-    ensure_paths_safe(launch.context, launch.ssh_key, launch.env_dir)
+    private_files = [launch.ssh_key]
+    if launch.github_token_file is not None:
+        host.ensure_file_exists(launch.github_token_file, "github token file")
+        private_files.append(launch.github_token_file)
+    ensure_paths_safe(launch.context, launch.env_dir, private_files)
 
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([launch.ssh_key])
 
-    if launch.fresh and sbx.exists():
+    if launch.fresh and sbx.start_if_exists():
         sbx.remove()
-    if not sbx.exists():
+    if not sbx.start_if_exists():
         sbx.create()
     sbx.ensure_github_ssh_allowed()
     sbx.ensure_known_hosts()
-    if launch.github_token is not None:
-        sbx.set_github_token(launch.github_token)
-    else:
-        sbx.clear_github_token()
+    # Clear first: a token from an earlier launch must not outlive its file.
+    sbx.clear_github_token()
+    if launch.github_token_file is not None:
+        sbx.set_github_token_source(launch.github_token_file)
     ensure_forwarded_keys(ssh_agent, sbx)
 
     if launch.init:
@@ -95,9 +102,11 @@ def description(launch: Launch, socket: Path) -> str:
         f"ssh-agent: {socket}",
         f"key:       {launch.ssh_key}",
         f"sandbox:   {launch.name}",
-        f"env file:  {launch.env_dir / 'sbxenv.yaml'}",
+        f"env file:  {launch.env_dir / ENV_FILE}",
         f"context:   {launch.context} (read-only)",
-        "github:    token configured" if launch.github_token is not None else "github:    no token",
+        f"github:    token from {launch.github_token_file}"
+        if launch.github_token_file is not None
+        else "github:    no token",
     )
     return "\n".join(f"==> {note}" for note in notes)
 

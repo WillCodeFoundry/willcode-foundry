@@ -1,5 +1,6 @@
 """Docker Sandboxes (sbx), driven by a sandbox environment file."""
 
+import shlex
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -8,6 +9,9 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.host import HostPort
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
+
+ENV_FILE = "sbxenv.yaml"
+"""The environment file sbx reads from a directory passed to ``sbx env``."""
 
 
 class Sbx:
@@ -34,7 +38,8 @@ class Sbx:
         env["SSH_AUTH_SOCK"] = str(socket)
         return env
 
-    def exists(self) -> bool:
+    def start_if_exists(self) -> bool:
+        """True if the sandbox exists. A stopped sandbox is started, since reaching it starts it."""
         return self.exec_in("true").returncode == 0
 
     def create(self) -> None:
@@ -67,8 +72,14 @@ class Sbx:
         if result.returncode != 0:
             raise SandboxError(f"seeding known_hosts failed: {result.stderr.strip()}")
 
-    def set_github_token(self, token: str) -> None:
-        result = self._sbx("secret", "set", "github", "--sandbox", self.name, "-t", token)
+    def set_github_token_source(self, token_file: Path) -> None:
+        """Give the sandbox a GitHub token that sbx reads from ``token_file`` on the host.
+
+        Only the command that reads the file is stored, never the token, so it
+        never appears in this process, its arguments or its errors.
+        """
+        source = f"cat {shlex.quote(str(token_file))}"
+        result = self._sbx("secret", "set", "github", "--sandbox", self.name, "--command", source)
         if result.returncode != 0:
             raise SandboxError(f"sbx secret set failed: {result.stderr.strip()}")
 
