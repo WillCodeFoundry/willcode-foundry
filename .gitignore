@@ -6,9 +6,9 @@ secrets/*
 !secrets/ssh/
 secrets/ssh/*
 !secrets/ssh/.gitkeep
-!secrets/env/
-secrets/env/*
-!secrets/env/.gitkeep
+!secrets/github/
+secrets/github/*
+!secrets/github/.gitkeep
 
 # Per-session records written by the foundry
 sessions/
