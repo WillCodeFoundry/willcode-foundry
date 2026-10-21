@@ -1,0 +1,21 @@
+{
+  "allowManagedHooksOnly": true,
+  "allowManagedPermissionRulesOnly": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "\"$AGENT_KIT_DIR/claude/hooks/guard-bash\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"$AGENT_KIT_DIR/claude/hooks/session-check\"", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}

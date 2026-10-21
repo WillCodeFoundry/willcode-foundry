@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""PreToolUse guard for Bash commands.
+
+Denies commands that would disable or bypass the foundry's guardrails.
+Reads the tool call as JSON on stdin; exit 2 with a reason on stderr denies.
+
+  RULE  Git hooks are never bypassed or reconfigured.
+  RULE  Pushed history is never rewritten and remote branches never deleted.
+  RULE  Privilege escalation and changes to Claude's settings are not allowed.
+"""
+import json
+import re
+import sys
+
+RULES = [
+    # pattern, reason
+    (r"--no-verify|\bcommit\s+(-\S*n|\S*\s-n\b)", "git hooks must not be bypassed (--no-verify / -n)"),
+    (r"\bcore\.hooks[Pp]ath\b|\bhooks\.", "git hook configuration must not be changed"),
+    (r"\.git/hooks\b|/hooks/(pre-commit|pre-push)\b", "git hook files must not be touched"),
+    (r"\bpush\b.*(--force|--force-with-lease|-f\b|\+refs/)", "force-push is not allowed"),
+    (r"\bpush\b.*(--delete|-d\b|:refs/heads/|\s:\S+)", "deleting remote branches is not allowed"),
+    (r"\bgit\s+(rebase|reset\s+--hard|filter-branch|filter-repo)\b", "rewriting history is not allowed; use git pull --rebase only"),
+    (r"\bsudo\b|\bsu\b\s|\bdoas\b|\bpkexec\b", "privilege escalation is not allowed"),
+    (r"(>|>>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bsed\s+-i|\bchmod\b|\bchown\b|\bln\b).*(/etc/claude-code|managed-settings)", "Claude settings must not be changed"),
+    (r"\bchmod\b.*\bhooks\b|\bchattr\b", "hook permissions must not be changed"),
+]
+
+
+def main():
+    try:
+        call = json.load(sys.stdin)
+        command = call.get("tool_input", {}).get("command", "")
+    except (json.JSONDecodeError, AttributeError):
+        return 0  # not a shape we understand; don't block
+
+    for pattern, reason in RULES:
+        if re.search(pattern, command):
+            print(f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
+                  "  Fix the cause instead. If you believe this is wrong, record it under\n"
+                  "  Blockers in PROGRESS.md and ask.", file=sys.stderr)
+            return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

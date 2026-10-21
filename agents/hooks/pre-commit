@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Dispatch to the rules for whichever checkout the commit is being made in.
+set -euo pipefail
+lib="$(dirname "$0")/lib"
+source "$lib/common.sh"
+
+case "$(current_branch)" in
+    "$NOTES_BRANCH") exec "$lib/check-notes-commit.sh" ;;
+    "$TASK_BRANCH")  exec "$lib/check-code-commit.sh" ;;
+    *)
+        refuse pre-commit \
+            "Commits are only allowed on $TASK_BRANCH or $NOTES_BRANCH," \
+            "not on $(current_branch)." \
+            "Switch to the right checkout and try again."
+        ;;
+esac

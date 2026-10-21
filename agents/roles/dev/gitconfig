@@ -1,0 +1,7 @@
+[include]
+    path = ../../git/gitconfig
+
+[user]
+    name = wc-foundry-dev
+    email = 339209782+wc-foundry-dev@users.noreply.github.com
+    signingkey = key::ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFkCHuHr5nrEjgimFKlJik2bxI4NcG0cjp6NlpSEED7z

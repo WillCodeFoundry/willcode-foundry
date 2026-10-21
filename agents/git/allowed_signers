@@ -1,0 +1,14 @@
+# Allowed signers for verifying foundry commits (git gpg.ssh.allowedSignersFile).
+# Rendered to agents/git/allowed_signers.
+#
+# One line per role that signs:
+#   <email> <contents of agents/roles/<role>/signing-key.pub>
+#
+# The email must match user.email in that role's gitconfig, and the key must
+# be the public half of secrets/ssh/<role>. Roles that never commit (reviewer)
+# are omitted.
+1413237+willcodeco@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAIp9aOYi6DQ+VgtOHA7euNh4C804/0pqCVhunqML/vM
+339205636+wc-foundry-architect@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOLi4laTSJEGrsorMiKFDVD6Ikhd/9VdVc9RJJjOLXlX
+339209782+wc-foundry-dev@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFkCHuHr5nrEjgimFKlJik2bxI4NcG0cjp6NlpSEED7z
+339210887+wc-foundry-qa@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFEWbsN49RNPKFuqeaINueJjp7ianHoB43OJDrRU1lr0
+339211640+wc-foundry-review@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkS1UHTIo2pH0j/3So/ACSWYRd4oVBTN/naR1mHG/Bt

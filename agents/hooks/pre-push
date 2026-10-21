@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Push rules are the same from either checkout.
+set -euo pipefail
+exec "$(dirname "$0")/lib/check-push.sh" "$@"

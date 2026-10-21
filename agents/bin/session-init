@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Prepare a sandbox for an agent session. Run as the agent user before the
+# agent starts. Idempotent: safe to run again on a re-attached sandbox.
+#
+# Assumes the foundry has already created task/$AGENT_TASK and pushed a
+# skeleton .agent/$AGENT_TASK/TASK.md on agent-notes. Anything missing is
+# an error, not something to create here.
+set -euo pipefail
+: "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
+
+role_dir="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
+[[ -f "$role_dir/gitconfig" ]] || { echo "session-init: $role_dir/gitconfig is missing" >&2; exit 1; }
+
+# --- Git identity -------------------------------------------------------------
+# Global, so both checkouts share it. Name, email, signing key and shared
+# behaviour all come from the role's gitconfig and what it includes.
+
+git config --global include.path "$role_dir/gitconfig"
+
+if [[ "$(git config --get commit.gpgsign || true)" == true ]] \
+   && [[ -z "$(git config --get user.signingkey || true)" ]]; then
+    echo "session-init: $AGENT_ROLE signs commits but $role_dir/gitconfig sets no user.signingkey" >&2
+    exit 1
+fi
+
+# --- Checkouts ----------------------------------------------------------------
+
+cd "$AGENT_PROJECT_DIR"
+
+origin="$(git remote get-url origin)"
+case "$origin" in
+    git@*|ssh://*|https://*|file://*) ;;
+    *) echo "session-init: origin is '$origin', not a remote URL; the clone was not set up for pushing" >&2; exit 1 ;;
+esac
+
+git config core.hooksPath "$AGENT_KIT_DIR/hooks"   # read-only mount: agents cannot alter hooks
+
+git fetch origin
+if git show-ref -q --verify "refs/heads/task/$AGENT_TASK"; then
+    git switch "task/$AGENT_TASK"
+else
+    git switch -c "task/$AGENT_TASK" --track "origin/task/$AGENT_TASK"
+fi
+
+if [[ ! -d "$AGENT_NOTES_DIR" ]]; then
+    if git show-ref -q --verify refs/heads/agent-notes; then
+        git worktree add "$AGENT_NOTES_DIR" agent-notes
+    else
+        git worktree add --track -b agent-notes "$AGENT_NOTES_DIR" origin/agent-notes
+    fi
+fi
+
+task_md="$AGENT_NOTES_DIR/.agent/$AGENT_TASK/TASK.md"
+[[ -f "$task_md" ]] || { echo "session-init: $task_md is missing; task $AGENT_TASK was not created properly" >&2; exit 1; }
+
+# --- Role-specific preparation ------------------------------------------------
+# Runs before hardening, so a role's init may still use sudo if it must.
+
+if [[ -x "$role_dir/init" ]]; then
+    "$role_dir/init"
+fi
+
+echo "session-init: checkouts ready"
+git -C "$AGENT_PROJECT_DIR" status -sb | head -1
+git -C "$AGENT_NOTES_DIR"   status -sb | head -1
+
+# --- Harden, last -------------------------------------------------------------
+# Installs Claude's managed settings and removes sudo. Nothing after this may
+# need root. On a re-attached sandbox sudo is already gone and this is skipped.
+
+if sudo -n true 2>/dev/null; then
+    sudo --preserve-env=AGENT_KIT_DIR "$AGENT_KIT_DIR/bin/session-harden"
+elif [[ -f /etc/claude-code/managed-settings.json ]]; then
+    echo "session-init: already hardened"
+else
+    echo "session-init: no sudo and no managed settings installed; cannot harden this sandbox" >&2
+    exit 1
+fi

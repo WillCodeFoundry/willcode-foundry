@@ -1,0 +1,8 @@
+# TODO: make a specific user for the planner role, for now use a developer
+[include]
+    path = ../../git/gitconfig
+
+[user]
+    name = wc-foundry-review
+    email = 339211640+wc-foundry-review@users.noreply.github.com
+    signingkey = key::ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkS1UHTIo2pH0j/3So/ACSWYRd4oVBTN/naR1mHG/Bt

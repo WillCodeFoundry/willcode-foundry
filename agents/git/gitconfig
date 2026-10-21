@@ -1,0 +1,21 @@
+[gpg]
+    format = ssh
+
+[commit]
+    gpgsign = true
+
+[push]
+    default = current          # push the current branch to its namesake; no accidental other-branch pushes
+    autoSetupRemote = true     # first push sets upstream without -u
+
+[pull]
+    rebase = true              # pull is always pull --rebase, as AGENTS.md requires
+
+[fetch]
+    prune = true               # drop remote branches that were deleted
+
+[init]
+    defaultBranch = main
+
+[advice]
+    detachedHead = false       # less noise in logs
