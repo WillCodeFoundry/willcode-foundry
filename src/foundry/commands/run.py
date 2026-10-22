@@ -36,14 +36,14 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
     session_dir = paths.session_dir(foundry_root, sandbox_name)
     launched_at = datetime.now().astimezone()
 
-    if not (session_dir / agent_sandbox.definition.DEFINITION_FILE_NAME).is_file():
+    if not (session_dir / agent_sandbox.SandboxDefinition.FILE_NAME).is_file():
         _create_session(session_dir, foundry_root, sandbox_name, project, role, args.task_id, launched_at)
-    sandbox = agent_sandbox.definition.read(session_dir)
-    session.require_same_sandbox(sandbox, role_name=role.name, task_id=args.task_id, repo_url=project.url)
+    definition = agent_sandbox.SandboxDefinition.read(session_dir)
+    session.require_same_sandbox(definition, role_name=role.name, task_id=args.task_id, repo_url=project.url)
 
     # The workspace is an empty temporary directory; recreate it if the OS has
     # cleared it since the sandbox was created (after a reboot, say).
-    sandbox.workspace_dir.mkdir(parents=True, exist_ok=True)
+    definition.workspace_dir.mkdir(parents=True, exist_ok=True)
     session.record_launch(session_dir, launched_at=launched_at)
 
     github_token_path = paths.github_token_path(foundry_root, role.name)
@@ -51,7 +51,7 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
         agent_sandbox.LaunchRequest(
             definition_dir=session_dir,
             ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
-            init_command=(str(sandbox.agent_kit_dir / "bin" / "session-init"),),
+            init_command=(str(definition.agent_kit_dir / "bin" / "session-init"),),
             github_token_path=github_token_path if github_token_path.is_file() else None,
             agent_args=agent_args,
         )
@@ -67,7 +67,7 @@ def _create_session(
     task_id: str,
     created_at: datetime,
 ) -> None:
-    sandbox = session.sandbox_definition(
+    definition = session.sandbox_definition(
         sandbox_name=sandbox_name,
         workspace_dir=Path(tempfile.mkdtemp(prefix=f"foundry-{sandbox_name}-")),
         agent_kit_dir=paths.agent_kit_dir(foundry_root),
@@ -78,7 +78,7 @@ def _create_session(
     )
     session.create_session(
         session_dir,
-        sandbox,
+        definition,
         sandbox=sandbox_name,
         role=role.name,
         project=project.name,

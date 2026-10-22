@@ -13,8 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from foundry.agent_sandbox import definition
-from foundry.agent_sandbox.definition import DEFINITION_FILE_NAME, SandboxDefinition
+from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.sbx import Sbx
@@ -64,15 +63,15 @@ def require_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
         )
 
 
-def prepare(request: LaunchRequest, sandbox: SandboxDefinition, host: Host, ssh_agent: SshAgent, sbx: Sbx) -> None:
+def prepare(request: LaunchRequest, definition: SandboxDefinition, host: Host, ssh_agent: SshAgent, sbx: Sbx) -> None:
     """Everything up to, but not including, attaching the agent."""
-    host.require_dir(sandbox.agent_kit_dir, "agent kit")
+    host.require_dir(definition.agent_kit_dir, "agent kit")
     host.require_file(request.ssh_key_path, "ssh key")
     private_paths = [request.ssh_key_path]
     if request.github_token_path is not None:
         host.require_file(request.github_token_path, "github token file")
         private_paths.append(request.github_token_path)
-    require_safe_paths(sandbox.agent_kit_dir, request.definition_dir, private_paths)
+    require_safe_paths(definition.agent_kit_dir, request.definition_dir, private_paths)
 
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
@@ -95,13 +94,13 @@ def prepare(request: LaunchRequest, sandbox: SandboxDefinition, host: Host, ssh_
             )
 
 
-def describe(request: LaunchRequest, sandbox: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
+def describe(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
     notes = (
         f"ssh-agent:  {ssh_agent_socket_path}",
         f"key:        {request.ssh_key_path}",
-        f"sandbox:    {sandbox.name}",
-        f"definition: {request.definition_dir / DEFINITION_FILE_NAME}",
-        f"agent kit:  {sandbox.agent_kit_dir} (read-only)",
+        f"sandbox:    {definition.name}",
+        f"definition: {request.definition_dir / SandboxDefinition.FILE_NAME}",
+        f"agent kit:  {definition.agent_kit_dir} (read-only)",
         f"github:     token from {request.github_token_path}"
         if request.github_token_path is not None
         else "github:     no token",
@@ -114,14 +113,14 @@ def launch(request: LaunchRequest) -> NoReturn:
 
     Raises SandboxError if anything before the hand-over fails.
     """
-    sandbox = definition.read(request.definition_dir)
+    definition = SandboxDefinition.read(request.definition_dir)
     uid = os.getuid()
     host = SystemHost(uid)
-    ssh_agent_socket_path = socket_path(sandbox.name, uid)
+    ssh_agent_socket_path = socket_path(definition.name, uid)
     ssh_agent = SshAgent(host, ssh_agent_socket_path)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
-    sbx = Sbx(host, process_env, sandbox.name, request.definition_dir)
+    sbx = Sbx(host, process_env, definition.name, request.definition_dir)
     host.ensure_private_dir(ssh_agent_socket_path.parent)
-    prepare(request, sandbox, host, ssh_agent, sbx)
-    print(describe(request, sandbox, ssh_agent_socket_path), file=sys.stderr)
+    prepare(request, definition, host, ssh_agent, sbx)
+    print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
     host.exec(sbx.attach_command(request.agent_args), process_env)

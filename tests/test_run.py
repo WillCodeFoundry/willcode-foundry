@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from foundry import cli, session, yaml_io
-from foundry.agent_sandbox import LaunchRequest, definition
+from foundry.agent_sandbox import LaunchRequest, SandboxDefinition
 
 CONFIG = """\
 name: test
@@ -50,29 +50,29 @@ def test_first_run_creates_the_session_named_after_the_sandbox(instance: Path) -
     got = launch("tkt-store", "dev", "WCF-0042", "--", "--continue")
 
     session_dir = instance / "sessions" / "dev-tkt-store-wcf-0042"
-    sandbox = definition.read(session_dir)
-    assert sandbox.name == "dev-tkt-store-wcf-0042"
+    definition = SandboxDefinition.read(session_dir)
+    assert definition.name == "dev-tkt-store-wcf-0042"
     assert got.definition_dir == session_dir
-    assert sandbox.agent_kit_dir == instance / "agent-kit"
+    assert definition.agent_kit_dir == instance / "agent-kit"
     assert got.init_command == (str(instance / "agent-kit" / "bin" / "session-init"),)
     assert got.ssh_key_path == instance / "secrets" / "ssh" / "dev"
     assert got.github_token_path is None
     assert got.agent_args == ("--continue",)
-    assert sandbox.variables["AGENT_TASK"] == "WCF-0042"
-    assert sandbox.workspace_dir.is_dir()
+    assert definition.variables["AGENT_TASK"] == "WCF-0042"
+    assert definition.workspace_dir.is_dir()
 
 
 def test_a_rerun_reattaches_with_the_same_file_and_records_each_launch(instance: Path) -> None:
     first = launch("tkt-store", "dev", "WCF-0042")
-    definition_path = first.definition_dir / definition.DEFINITION_FILE_NAME
+    definition_path = first.definition_dir / SandboxDefinition.FILE_NAME
     before = definition_path.read_text()
-    definition.read(first.definition_dir).workspace_dir.rmdir()  # as if /tmp was cleared
+    SandboxDefinition.read(first.definition_dir).workspace_dir.rmdir()  # as if /tmp was cleared
 
     second = launch("tkt-store", "dev", "WCF-0042")
 
     assert second.definition_dir == first.definition_dir
     assert definition_path.read_text() == before
-    assert definition.read(second.definition_dir).workspace_dir.is_dir()
+    assert SandboxDefinition.read(second.definition_dir).workspace_dir.is_dir()
     launches = yaml_io.load(first.definition_dir / session.RECORD_FILE_NAME)["launches"]
     assert len(launches) == 2
 

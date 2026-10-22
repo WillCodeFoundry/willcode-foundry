@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from foundry.agent_sandbox import definition
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.launcher import LaunchRequest, prepare, require_safe_paths
@@ -34,7 +33,7 @@ def layout(tmp_path):
     key.write_text("k")
     sdir = tmp_path / "s"
     sdir.mkdir()
-    definition.write(sdir, SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}))
+    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(sdir)
     return kit, key, sdir, tmp_path / "n.sock"
 
 
@@ -42,7 +41,7 @@ def run_prepare(layout, host, **request) -> LaunchRequest:
     """prepare() for a launch request pointing at the layout's definition."""
     _, key, sdir, sock = layout
     launch_request = LaunchRequest(definition_dir=sdir, ssh_key_path=key, **request)
-    prepare(launch_request, definition.read(sdir), host, SshAgent(host, sock), Sbx(host, {}, "n", sdir))
+    prepare(launch_request, SandboxDefinition.read(sdir), host, SshAgent(host, sock), Sbx(host, {}, "n", sdir))
     return launch_request
 
 

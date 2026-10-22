@@ -1,7 +1,7 @@
 """Sessions: one directory per sandbox, holding its sandbox definition and record.
 
 ``sessions/<sandbox>/`` holds the sandbox definition, written once when the
-sandbox is first launched (agent_sandbox.definition knows its format), and
+sandbox is first launched (SandboxDefinition knows its format), and
 ``session.yaml``, which records when it was created and each launch since:
 the launcher hands over to sbx, so it never learns whether a launch got as
 far as the agent.
@@ -14,7 +14,6 @@ from typing import Any, Final
 
 from foundry import yaml_io
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.agent_sandbox.definition import write as write_definition
 from foundry.errors import FoundryError
 
 RECORD_FILE_NAME: Final = "session.yaml"
@@ -98,7 +97,7 @@ def create_session(session_dir: Path, definition: SandboxDefinition, /, **record
         session_dir.mkdir(parents=True)
     except FileExistsError:
         raise FoundryError(f"session directory {session_dir} already exists") from None
-    write_definition(session_dir, definition)
+    definition.write(session_dir)
     yaml_io.dump(session_dir / RECORD_FILE_NAME, {**record, "launches": []})
 
 

@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from foundry.agent_sandbox import SandboxDefinition, definition
+from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 
-SANDBOX = SandboxDefinition(
+DEFINITION = SandboxDefinition(
     name="dev-p-t1",
     workspace_dir=Path("/tmp/ws"),
     agent_kit_dir=Path("/f/agent-kit"),
@@ -14,13 +14,13 @@ SANDBOX = SandboxDefinition(
 
 
 def test_a_written_definition_reads_back_the_same(tmp_path: Path) -> None:
-    definition.write(tmp_path, SANDBOX)
-    assert definition.read(tmp_path) == SANDBOX
+    DEFINITION.write(tmp_path)
+    assert SandboxDefinition.read(tmp_path) == DEFINITION
 
 
 def test_it_is_written_in_sbxs_schema(tmp_path: Path) -> None:
-    definition.write(tmp_path, SANDBOX)
-    assert (tmp_path / definition.DEFINITION_FILE_NAME).read_text() == (
+    DEFINITION.write(tmp_path)
+    assert (tmp_path / SandboxDefinition.FILE_NAME).read_text() == (
         "schemaVersion: '1'\n"
         "name: dev-p-t1\n"
         "agent: claude\n"
@@ -44,11 +44,11 @@ def test_it_is_written_in_sbxs_schema(tmp_path: Path) -> None:
     ],
 )
 def test_anything_foundry_did_not_write_fails_in_one_line(tmp_path: Path, content: str) -> None:
-    (tmp_path / definition.DEFINITION_FILE_NAME).write_text(content)
+    (tmp_path / SandboxDefinition.FILE_NAME).write_text(content)
     with pytest.raises(SandboxError, match=r"sbxenv.yaml: not a sandbox definition written by foundry \("):
-        definition.read(tmp_path)
+        SandboxDefinition.read(tmp_path)
 
 
 def test_a_missing_definition_says_so(tmp_path: Path) -> None:
     with pytest.raises(SandboxError, match=r"sbxenv.yaml is missing"):
-        definition.read(tmp_path)
+        SandboxDefinition.read(tmp_path)
