@@ -194,7 +194,8 @@ git push origin agent-notes
 
 ### Hooks
 
-Git hooks enforce the rules above. If one refuses an action, read its message:
+Git hooks, and a check on the shell commands you run, refuse actions that break
+the rules above. If one refuses an action, read its message:
 it says what was wrong and what to do instead. Never bypass a hook. If you
 believe a hook is wrong, record the case under "Blockers" and ask.
 

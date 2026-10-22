@@ -27,8 +27,6 @@ ALLOWED = [
     "git push origin agent-notes && ls -d build",  # -d belongs to ls, not push
     "pytest tests/hooks.py",
     "cat agent-kit/hooks/pre-commit",
-    "cat /etc/claude-code/managed-settings.json",
-    'grep -r "su " .',
     "npm test",
     "git reset HEAD file.txt",
     "GIT_TRACE=1 git status",
@@ -53,14 +51,8 @@ REFUSED = [
     ("git rebase main", "rewriting history"),
     ("git reset --hard HEAD~1", "rewriting history"),
     ("git filter-repo --path x", "rewriting history"),
-    ("sudo apt install jq", "privilege"),
-    ("/usr/bin/sudo true", "privilege"),
-    ("echo hi && su -", "privilege"),
-    ("bash -c 'sudo true'", "privilege"),
     ('sh -c "git push --force"', "force-push"),
-    ("env FOO=1 sudo true", "privilege"),
-    ("echo x > /etc/claude-code/managed-settings.json", "Claude settings"),
-    ("cp s.json /etc/claude-code/managed-settings.json", "Claude settings"),
+    ("env FOO=1 git push --force", "force-push"),
     ("echo 'unbalanced", "could not be parsed"),
 ]
 

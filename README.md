@@ -62,10 +62,26 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it writes `sessions/<sandbox>/sbxenv.yaml` and `session.yaml`; later runs reuse that file and re-attach, since sbx fixes a sandbox's mounts when it is created. sbx requires a primary workspace, so the environment file names an empty temporary directory (recreated if the OS clears it); nothing is put in it. The only real mount is `agent-kit/`, read-only, and the `env` block carries `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
 2. `foundry.agent_sandbox` starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from the file if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
 3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, then `session-harden`s: installs Claude's managed settings and removes sudo. The launch aborts if any step fails.
-4. `sbx env run` attaches the agent, with permission prompts off (the sandbox and hooks are the controls). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
+4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended: `session.yaml` records creation and each launch, nothing more. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
 Preconditions the launcher does not create: the task branch `task/<task>` and a skeleton `.agent/<task>/TASK.md` on `agent-notes` must already exist on GitHub.
+
+## What protects what
+
+Two kinds of control, and only the first is a boundary:
+
+| Control | Enforced by | Holds against |
+|---|---|---|
+| Sandbox isolation, network policy, read-only `agent-kit/` mount | sbx / Docker | anything in the sandbox |
+| Managed settings: permission mode, which hooks run, no attribution | root-owned file; `session-harden` removes sudo | anything in the sandbox |
+| One SSH key and token per role | the credentials' own scope on GitHub | anything in the sandbox |
+| Which branches may be pushed; no force-push or deletion | the project's GitHub rules | anything with the role's credentials |
+| Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
+| `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
+| `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
+
+The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They exist to stop the common slips, such as reaching for `--no-verify` when a hook fails or force-pushing after a bad rebase, and to explain the rule in the refusal. What must hold whatever the agent does belongs in the rows above them, chiefly the project's GitHub rules.
 
 ## The launcher
 

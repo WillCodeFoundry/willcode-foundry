@@ -13,7 +13,7 @@ if [[ "$input" == *'"stop_hook_active": true'* || "$input" == *'"stop_hook_activ
 fi
 
 problems=()
-check() {  # check <dir> <branch> <label>
+report_unsaved_work() {  # report_unsaved_work <dir> <branch> <label>
     local dir="$1" branch="$2" label="$3"
     if [[ -n "$(git -C "$dir" status --porcelain)" ]]; then
         problems+=("$label has uncommitted changes")
@@ -23,8 +23,8 @@ check() {  # check <dir> <branch> <label>
         problems+=("$label has commits not pushed to origin/$branch")
     fi
 }
-check "$AGENT_PROJECT_DIR" "task/$AGENT_TASK" "code checkout"
-check "$AGENT_NOTES_DIR"   "agent-notes"       "notes checkout"
+report_unsaved_work "$AGENT_PROJECT_DIR" "task/$AGENT_TASK" "code checkout"
+report_unsaved_work "$AGENT_NOTES_DIR"   "agent-notes"       "notes checkout"
 
 if ((${#problems[@]} == 0)); then
     exit 0

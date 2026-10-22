@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """PreToolUse guard for Bash commands.
 
-Denies commands that would disable or bypass the foundry's guardrails. Reads
-the tool call as JSON on stdin; exits 2 with a reason on stderr to deny.
+Catches commands that would skip or undo the git rules, and says what to do
+instead. Reads the tool call as JSON on stdin; exits 2 with a reason on
+stderr to refuse.
 
-  RULE  Git hooks are never bypassed or reconfigured.
-  RULE  Pushed history is never rewritten and remote branches are never deleted.
-  RULE  Privilege escalation and changes to Claude's settings are not allowed.
+  RULE  Git hooks are not bypassed or reconfigured.
+  RULE  History is not rewritten and remote branches are not deleted.
+
+This is a guardrail against mistakes, such as reaching for --no-verify when a
+hook fails, not a security boundary: it reads command text, so a script, an
+alias or another language gets past it. The protections that hold are the
+sandbox, root-owned managed settings with sudo removed (session-harden), the
+role's credentials, and the project's GitHub rules.
 
 The command is split into simple commands on ;, &&, || and |, and each is
 checked by its words, so text that merely mentions a flag (a commit message,
 a file name) is not refused. Commands run through `sh -c` / `bash -c` are
-checked too. A guard on command text can't see what a script it runs does;
-the git hooks and the server-side branch rules cover that.
+checked too.
 """
 
 import json
@@ -21,19 +26,14 @@ import shlex
 import sys
 from collections.abc import Iterator
 
-PRIVILEGE = {"sudo", "su", "doas", "pkexec"}
 SHELLS = {"sh", "bash", "zsh", "dash"}
 REWRITE = {"rebase", "filter-branch", "filter-repo"}
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")"}
 WRAPPERS = {"env", "command", "exec"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
-# Checked against the whole command: these names are dangerous wherever they
-# appear, including inside environment variables such as GIT_CONFIG_PARAMETERS.
+# Checked against the whole command: the name is dangerous wherever it appears,
+# including inside environment variables such as GIT_CONFIG_PARAMETERS.
 HOOKS_PATH = re.compile(r"core\.hookspath", re.IGNORECASE)
-SETTINGS_WRITE = re.compile(
-    r"(>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bsed\s+-i|\bchmod\b|\bchown\b|\bln\b|\binstall\b)"
-    r"[^;&|]*(/etc/claude-code|managed-settings)"
-)
 
 
 def simple_commands(command: str) -> Iterator[list[str]]:
@@ -84,10 +84,6 @@ def short_flags(args: list[str]) -> set[str]:
 
 
 def refusal_reason_for(words: list[str]) -> str | None:
-    name = words[0].rsplit("/", 1)[-1]
-    if name in PRIVILEGE:
-        return "privilege escalation is not allowed"
-
     git = git_subcommand(words)
     if git is None:
         return None
@@ -110,8 +106,6 @@ def refusal_reason(command: str) -> str | None:
     """The reason to refuse ``command``, or None to let it run."""
     if HOOKS_PATH.search(command):
         return "git hook configuration must not be changed"
-    if SETTINGS_WRITE.search(command):
-        return "Claude settings must not be changed"
     try:
         commands = list(simple_commands(command))
     except ValueError:  # unbalanced quotes: refuse rather than guess what runs
