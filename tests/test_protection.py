@@ -26,6 +26,7 @@ def test_the_shipped_protection_file_parses() -> None:
         "foundry-default-branch",
         "foundry-agent-branches",
         "foundry-other-branches",
+        "foundry-tags",
     ]
     admin_only = [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}]
     assert all(ruleset["bypass_actors"] == admin_only for ruleset in rulesets)
@@ -162,6 +163,17 @@ def test_project_files_are_not_read_when_no_rule_needs_them() -> None:
     fake = FakeGitHub()
     assert protection.check_project_files(GitHub(fake), "o/r", [RULESET]) == []
     assert fake.calls == []
+
+
+def test_the_shipped_file_leaves_dependabot_its_branches_and_closes_tags() -> None:
+    rulesets = {
+        ruleset["name"]: ruleset for ruleset in protection.load(REPO_ROOT / "config" / "github-protection.yaml")
+    }
+    other_branches = rulesets["foundry-other-branches"]["conditions"]["ref_name"]
+    assert "refs/heads/dependabot/**" in other_branches["exclude"]
+    tags = rulesets["foundry-tags"]
+    assert tags["target"] == "tag" and tags["conditions"]["ref_name"]["include"] == ["~ALL"]
+    assert {rule["type"] for rule in tags["rules"]} == {"creation", "update", "deletion"}
 
 
 def test_the_shipped_file_requires_the_ci_gate_and_code_owner_review() -> None:

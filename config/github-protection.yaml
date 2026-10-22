@@ -64,6 +64,12 @@ rulesets:
       - type: required_signatures
 
   # Every other branch is closed to agents; admins create and push them freely.
+  #
+  # Except dependabot/**: rulesets bind GitHub Apps too, and Dependabot
+  # creates, force-pushes and deletes its own branches there. Agents could
+  # push there as well, but a pull request from it still needs your review,
+  # code owner approval and ci-gate, like any other. (Dependabot can be a
+  # bypass actor instead, but the REST API docs don't give its actor id.)
   - name: foundry-other-branches
     target: branch
     enforcement: active
@@ -75,6 +81,21 @@ rulesets:
           - "~DEFAULT_BRANCH"
           - "refs/heads/task/**"
           - "refs/heads/agent-notes"
+          - "refs/heads/dependabot/**"
+    rules:
+      - type: creation
+      - type: update
+      - type: deletion
+
+  # Tags mark releases: only admins create, move or delete them.
+  - name: foundry-tags
+    target: tag
+    enforcement: active
+    bypass_actors: *admin_bypass
+    conditions:
+      ref_name:
+        include: ["~ALL"]
+        exclude: []
     rules:
       - type: creation
       - type: update

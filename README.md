@@ -77,7 +77,7 @@ Two kinds of control, and only the first is a boundary:
 | Sandbox isolation, network policy, read-only `agent-kit/` mount | sbx / Docker | anything in the sandbox |
 | Managed settings: permission mode, which hooks run, no attribution | root-owned file; `session-harden` removes sudo | anything in the sandbox |
 | One SSH key and token per role | the credentials' own scope on GitHub | anything in the sandbox |
-| Which branches may be pushed; no force-push or deletion | the project's GitHub rules | anything with the role's credentials |
+| Which branches and tags may be pushed; no force-push or deletion | the project's GitHub rules | anything with the role's credentials |
 | Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
 | `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
 | `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
@@ -97,7 +97,8 @@ $ uv run foundry protect apply                    # create missing rulesets, upd
 
 - `foundry-default-branch`: main changes only by a reviewed pull request whose `ci-gate` check passed, with code owner review; no force-push or deletion.
 - `foundry-agent-branches`: `task/**` and `agent-notes` take signed commits only and are never force-pushed or deleted.
-- `foundry-other-branches`: no other branch can be created, pushed or deleted, except by an admin.
+- `foundry-other-branches`: no other branch can be created, pushed or deleted, except by an admin, and Dependabot under `dependabot/**` (rulesets bind GitHub Apps too).
+- `foundry-tags`: only admins create, move or delete tags.
 
 Two of those rules rely on each project's own files, so `check` reads them from the default branch too, and reports what's missing; `apply` never changes project files:
 
