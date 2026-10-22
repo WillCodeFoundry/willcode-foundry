@@ -46,7 +46,7 @@ def test_sandbox_definition(tmp_path: Path) -> None:
     }
 
 
-def test_create_session_writes_the_definition_and_creates_the_workspace(tmp_path: Path) -> None:
+def test_create_writes_the_definition_and_creates_the_workspace(tmp_path: Path) -> None:
     session_dir = tmp_path / "s"
     definition = session.sandbox_definition(
         sandbox_name="dev-p-t1",
@@ -57,16 +57,16 @@ def test_create_session_writes_the_definition_and_creates_the_workspace(tmp_path
         task_id="T1",
         project_name="p",
     )
-    session.create_session(session_dir, definition)
+    session.create(session_dir, definition)
     assert SandboxDefinition.read(session_dir) == definition
     assert definition.workspace_dir.is_dir()
     assert sorted(path.name for path in session_dir.iterdir()) == ["sbxenv.yaml", "workspace"]
 
 
-def test_create_session_refuses_an_existing_directory(tmp_path: Path) -> None:
+def test_create_refuses_an_existing_directory(tmp_path: Path) -> None:
     (tmp_path / "s").mkdir()
     with pytest.raises(FoundryError, match="already exists"):
-        session.create_session(tmp_path / "s", new_definition(tmp_path))
+        session.create(tmp_path / "s", new_definition(tmp_path))
 
 
 @pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])

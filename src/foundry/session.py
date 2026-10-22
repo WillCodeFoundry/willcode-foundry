@@ -82,7 +82,7 @@ def sandbox_definition(
     )
 
 
-def create_session(session_dir: Path, definition: SandboxDefinition) -> None:
+def create(session_dir: Path, definition: SandboxDefinition) -> None:
     """Create the session directory with its sandbox definition and empty workspace.
 
     Refuses if the directory already exists, so an existing sandbox's

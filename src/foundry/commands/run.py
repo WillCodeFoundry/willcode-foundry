@@ -44,7 +44,7 @@ def prepare_launch(foundry_root: Path, project_name: str, role_name: str, task_i
             task_id=task_id,
             project_name=project.name,
         )
-        session.create_session(session_dir, new_definition)
+        session.create(session_dir, new_definition)
         print(f"==> session:   {session_dir} (new)", file=sys.stderr)
     definition = agent_sandbox.SandboxDefinition.read(session_dir)
     session.require_same_sandbox(definition, role_name=role.name, task_id=task_id, repo_url=project.url)

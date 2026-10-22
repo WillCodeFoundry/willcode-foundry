@@ -29,9 +29,17 @@ passwd -l root >/dev/null                           # su needs root's password; 
 # leaving the group changes nothing: the socket has to leave the group
 # instead. dockerd reads daemon.json each time it starts and recreates its
 # socket owned by that group; the socket that exists now changes too.
+#
+# Assumption: the sandbox template doesn't configure dockerd itself. If it
+# ever does, stop with a clear message rather than merge into its settings.
 docker_config='{"group": "root"}'
 if [[ -e /etc/docker/daemon.json && "$(cat /etc/docker/daemon.json)" != "$docker_config" ]]; then
-    echo "session-harden: FAILED, /etc/docker/daemon.json already exists; add \"group\": \"root\" to it by hand" >&2
+    {
+        echo "session-harden: refusing: this sandbox's template already has /etc/docker/daemon.json."
+        echo "  foundry assumes the template leaves dockerd unconfigured, so that it can write"
+        echo "  $docker_config there and keep the agent off the Docker socket. Merging into a"
+        echo "  template's own Docker settings isn't supported; change session-harden or the template."
+    } >&2
     exit 1
 fi
 install -d -m 0755 -o root -g root /etc/docker
