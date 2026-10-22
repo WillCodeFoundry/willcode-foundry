@@ -53,7 +53,7 @@ def test_create_session_writes_both_files_and_refuses_an_existing_dir(tmp_path: 
     d = tmp_path / "s"
     session.create_session(d, doc(tmp_path), role="dev")
     assert session.read_env_file(d)["name"] == "dev-p-t1"
-    assert session.read_record(d) == {"role": "dev", "launches": []}
+    assert yaml_io.load(d / session.RECORD_FILE) == {"role": "dev", "launches": []}
     with pytest.raises(FoundryError, match="already exists"):
         session.create_session(d, doc(tmp_path))
 

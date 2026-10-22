@@ -68,12 +68,12 @@ def sandbox_name(role: str, project: str, task: str) -> str:
     return name
 
 
-def project_dir(project: str) -> str:
+def _project_dir(project: str) -> str:
     return f"{WORK_DIR}/{_slug(project)}"
 
 
-def notes_dir(project: str) -> str:
-    return f"{project_dir(project)}-notes"
+def _notes_dir(project: str) -> str:
+    return f"{_project_dir(project)}-notes"
 
 
 def env_document(
@@ -105,8 +105,8 @@ def env_document(
             TASK: task,
             KIT_DIR: str(kit_dir),
             REPO_URL: repo_url,
-            PROJECT_DIR: project_dir(project),
-            NOTES_DIR: notes_dir(project),
+            PROJECT_DIR: _project_dir(project),
+            NOTES_DIR: _notes_dir(project),
         },
     }
 
@@ -145,7 +145,7 @@ def read_env_file(session_dir: Path) -> EnvFile:
     return cast(EnvFile, doc)
 
 
-def read_record(session_dir: Path) -> dict[str, Any]:
+def _read_record(session_dir: Path) -> dict[str, Any]:
     path = session_dir / RECORD_FILE
     record = yaml_io.load(path)
     if not isinstance(record, dict):
@@ -155,7 +155,7 @@ def read_record(session_dir: Path) -> dict[str, Any]:
 
 def record_launch(session_dir: Path, *, at: datetime, fresh: bool) -> None:
     """Append one launch to session.yaml, keeping everything already there."""
-    record = read_record(session_dir)
+    record = _read_record(session_dir)
     launches = record.get("launches") or []
     record["launches"] = [*launches, {"at": at.isoformat(timespec="seconds"), "fresh": fresh}]
     yaml_io.dump(session_dir / RECORD_FILE, record)

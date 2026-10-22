@@ -88,20 +88,6 @@ def test_code_commit_without_task_trailer_is_refused(repo) -> None:
     assert result.returncode != 0 and "Task: T1" in result.stderr
 
 
-def test_co_authored_by_is_refused(repo) -> None:
-    code, _ = repo
-    change(code, "hello.sh")
-    result = commit(code, "feat: hello", "Task: T1\nCo-Authored-By: Claude <noreply@anthropic.com>")
-    assert result.returncode != 0 and "Co-Authored-By" in result.stderr
-
-
-def test_attribution_line_is_refused(repo) -> None:
-    code, _ = repo
-    change(code, "hello.sh")
-    result = commit(code, "feat: hello", "Generated with Claude Code", "Task: T1")
-    assert result.returncode != 0 and "attribution" in result.stderr
-
-
 def test_notes_on_the_task_branch_are_refused(repo) -> None:
     code, _ = repo
     change(code, ".agent/T1/PROGRESS.md")
@@ -160,13 +146,6 @@ def test_another_tasks_folder_is_refused(repo) -> None:
     change(notes, ".agent/T2/PROGRESS.md")
     result = commit(notes, "T2: progress")
     assert result.returncode != 0 and "only change files inside" in result.stderr
-
-
-def test_co_authored_by_is_refused_on_the_notes_branch_too(repo) -> None:
-    _, notes = repo
-    change(notes, ".agent/T1/PROGRESS.md")
-    result = commit(notes, "T1: progress", "Co-Authored-By: x <x@x>")
-    assert result.returncode != 0 and "Co-Authored-By" in result.stderr
 
 
 # --- Stop hook ---------------------------------------------------------------

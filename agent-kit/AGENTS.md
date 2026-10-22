@@ -197,7 +197,6 @@ git push origin agent-notes
 Git hooks enforce the rules above. If one refuses an action, read its message:
 it says what was wrong and what to do instead. Never bypass a hook. If you
 believe a hook is wrong, record the case under "Blockers" and ask.
-`$AGENT_KIT_DIR/bin/hook-rules` lists every rule without triggering one.
 
 You will not be allowed to end the session while either checkout has
 uncommitted or unpushed changes.

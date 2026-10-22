@@ -1,12 +1,69 @@
 #!/usr/bin/env bash
-# Dispatch to the rules for whichever checkout the commit is being made in.
+# Rules for what may be committed, by checkout:
+#   task branch (code checkout): code and project docs only; no task notes, no credentials.
+#   agent-notes (notes checkout): only this task's .agent/<task>/ folder; never TASK.md.
 set -euo pipefail
-lib="$(dirname "$0")/lib"
-source "$lib/common.sh"
+source "$(dirname "$0")/lib/common.sh"
+
+check_task_branch() {
+    local notes=() credentials=() f
+    while IFS= read -r f; do
+        case "$f" in
+            .agent/*|*/.agent/*|TASK.md|PROGRESS.md|LEARNINGS.md|*/TASK.md|*/PROGRESS.md|*/LEARNINGS.md)
+                notes+=("$f") ;;
+            .env|.env.*|*/.env|*/.env.*|*.pem|*.key|*_rsa|*_ed25519|*.p12|*.pfx)
+                credentials+=("$f") ;;
+        esac
+    done < <(staged_files)
+
+    if ((${#notes[@]})); then
+        refuse pre-commit \
+            "Task notes do not belong on $TASK_BRANCH:" \
+            "${notes[@]/#/    }" \
+            "" \
+            "Move them to \$AGENT_NOTES_DIR/$NOTES_DIR/ and commit there on $NOTES_BRANCH." \
+            "Unstage with: git restore --staged <file>"
+    fi
+    if ((${#credentials[@]})); then
+        refuse pre-commit \
+            "These look like credential files and must never be committed:" \
+            "${credentials[@]/#/    }" \
+            "" \
+            "Unstage with: git restore --staged <file>" \
+            "If a file is genuinely not a credential, rename it so it does not match."
+    fi
+}
+
+check_notes_branch() {
+    local outside=() task_md=() f
+    while IFS= read -r f; do
+        case "$f" in
+            "$NOTES_DIR"/TASK.md) task_md+=("$f") ;;
+            "$NOTES_DIR"/*)       ;;
+            *)                    outside+=("$f") ;;
+        esac
+    done < <(staged_files)
+
+    if ((${#outside[@]})); then
+        refuse pre-commit \
+            "On $NOTES_BRANCH you may only change files inside $NOTES_DIR/:" \
+            "${outside[@]/#/    }" \
+            "" \
+            "Other folders belong to other tasks and agents." \
+            "Unstage with: git restore --staged <file>"
+    fi
+    if ((${#task_md[@]})); then
+        refuse pre-commit \
+            "$NOTES_DIR/TASK.md is owned by the human and must not be modified." \
+            "" \
+            "To propose changes, write them to $NOTES_DIR/TASK.proposed.md instead." \
+            "Discard your edit with: git restore --staged --worktree $NOTES_DIR/TASK.md"
+    fi
+}
 
 case "$(current_branch)" in
-    "$NOTES_BRANCH") exec "$lib/check-notes-commit.sh" ;;
-    "$TASK_BRANCH")  exec "$lib/check-code-commit.sh" ;;
+    "$TASK_BRANCH")  check_task_branch ;;
+    "$NOTES_BRANCH") check_notes_branch ;;
     *)
         refuse pre-commit \
             "Commits are only allowed on $TASK_BRANCH or $NOTES_BRANCH," \

@@ -27,7 +27,6 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 │   ├── bin/
 │   │   ├── session-init          # clones the project, sets up checkouts, hooks, identity; runs hardening
 │   │   ├── session-harden        # root step: installs Claude's managed settings, removes sudo
-│   │   └── hook-rules            # lists every rule the hooks enforce
 │   ├── claude/
 │   │   ├── managed-settings.json # Claude Code policy: only these hooks and permissions apply
 │   │   └── hooks/                # guard-bash (PreToolUse), session-check (Stop)
@@ -35,8 +34,8 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 │   │   ├── gitconfig             # behaviour shared by every role (pull.rebase, push.default, ...)
 │   │   └── allowed_signers       # one line per signing role, for verifying commits
 │   ├── hooks/                    # git hooks; core.hooksPath points here
-│   │   ├── pre-commit, commit-msg, pre-push
-│   │   └── lib/                  # the rules, one script per checkout/event
+│   │   ├── pre-commit, commit-msg, pre-push   # each holds its own rules
+│   │   └── lib/common.sh         # shared helpers
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
 │   │   ├── gitconfig             # name, email, key::signing key; includes ../../git/gitconfig

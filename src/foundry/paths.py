@@ -38,9 +38,5 @@ def github_token_file(root: Path, role: str) -> Path:
     return root / "secrets" / "github" / f"{role}.token"
 
 
-def sessions(root: Path) -> Path:
-    return root / "sessions"
-
-
 def session_dir(root: Path, name: str) -> Path:
-    return sessions(root) / name
+    return root / "sessions" / name
