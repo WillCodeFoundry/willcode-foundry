@@ -32,6 +32,7 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
     foundry_config = config.load(paths.config_path(foundry_root))
     project = foundry_config.project(args.project_name)
     role = foundry_config.role(args.role_name)
+    session.ensure_valid_task_id(args.task_id)
     sandbox_name = session.sandbox_name(role.role_name, project.project_name, args.task_id)
     session_path = paths.session_path(foundry_root, sandbox_name)
     launched_at = datetime.now().astimezone()
@@ -39,6 +40,7 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
     if not (session_path / session.ENV_FILE_NAME).is_file():
         _create_session(session_path, foundry_root, sandbox_name, project, role, args.task_id, launched_at)
     env_file = session.read_env_file(session_path)
+    session.ensure_env_file_matches(env_file, role_name=role.role_name, task_id=args.task_id, repo_url=project.url)
 
     # The workspace is an empty temporary directory; recreate it if the OS has
     # cleared it since the sandbox was created (after a reboot, say).

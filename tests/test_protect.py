@@ -20,7 +20,7 @@ rulesets:
   - name: agent-branches
     target: branch
     enforcement: active
-    bypass_actors: []
+    bypass_actors: [{actor_type: RepositoryRole, actor_id: 5, bypass_mode: always}]
     conditions: {ref_name: {include: ["refs/heads/task/**"], exclude: []}}
     rules: [{type: deletion}, {type: non_fast_forward}]
 """
@@ -29,7 +29,7 @@ RULESET = {
     "name": "agent-branches",
     "target": "branch",
     "enforcement": "active",
-    "bypass_actors": [],
+    "bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}],
     "conditions": {"ref_name": {"include": ["refs/heads/task/**"], "exclude": []}},
     "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
 }

@@ -1,6 +1,6 @@
 import pytest
 
-from foundry.repo_files import owners, pull_request_check_names
+from foundry.repo_files import codeowners_lines, pull_request_check_names
 
 CI = """\
 name: ci
@@ -45,35 +45,10 @@ def test_workflows_that_report_nothing_on_pull_requests(text: str) -> None:
     assert pull_request_check_names(text) == set()
 
 
-CODEOWNERS = """\
-# Default owner for everything
-*                     @will
-/docs/                @writers
-.github/              @will   # CI and this file
-/src/generated/*.py
-"""
-
-
-@pytest.mark.parametrize(
-    ("path", "expected"),
-    [
-        ("README.md", ["@will"]),
-        ("docs/guide/intro.md", ["@writers"]),
-        (".github/workflows/ci.yml", ["@will"]),
-        (".github/CODEOWNERS", ["@will"]),
-        ("src/generated/models.py", []),  # last match wins, and names nobody
-        ("src/generated/sub/models.py", ["@will"]),  # * doesn't cross directories
-    ],
-)
-def test_owners_follow_the_last_matching_line(path: str, expected: list[str]) -> None:
-    assert owners(CODEOWNERS, path) == expected
-
-
-def test_an_unanchored_name_matches_at_any_depth_and_an_anchored_one_only_at_the_root() -> None:
-    assert owners("workflows @will\n", ".github/workflows/ci.yml") == ["@will"]
-    assert owners("/workflows/ @will\n", ".github/workflows/ci.yml") == []
-    assert owners("/.github/workflows/*.yml @will\n", ".github/workflows/ci.yml") == ["@will"]
-
-
-def test_no_codeowners_line_means_no_owner() -> None:
-    assert owners("# nothing yet\n", ".github/workflows/ci.yml") == []
+def test_codeowners_lines_keep_patterns_and_owners_and_drop_comments() -> None:
+    text = "# Default owner\n*  @will   # everything\n\n/docs/ @will @org/writers a@b.c\n/generated/\n"
+    assert codeowners_lines(text) == [
+        ("*", ["@will"]),
+        ("/docs/", ["@will", "@org/writers", "a@b.c"]),
+        ("/generated/", []),
+    ]

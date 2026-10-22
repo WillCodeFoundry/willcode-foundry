@@ -1,6 +1,4 @@
-"""Reading a project's own files: which jobs its workflows run on pull requests, and who owns a path."""
-
-import re
+"""Reading a project's own files: which jobs its workflows run on pull requests, and its CODEOWNERS."""
 
 import yaml
 
@@ -42,36 +40,19 @@ def _triggers(workflow: dict[object, object]) -> set[str]:
     return set()
 
 
-def owners(codeowners_text: str, file_path: str) -> list[str]:
-    """The owners CODEOWNERS gives ``file_path``: the last matching line wins, and may name none."""
-    found: list[str] = []
+CATCH_ALL_PATTERNS = ("*", "**", "/**")
+"""CODEOWNERS patterns that match every file in the repository."""
+
+
+def codeowners_lines(codeowners_text: str) -> list[tuple[str, list[str]]]:
+    """Each CODEOWNERS line as (pattern, owners), comments and blank lines left out.
+
+    An owner is ``@user``, ``@org/team`` or an email address. A line may name
+    no owners, which leaves the files it matches without one.
+    """
+    lines = []
     for line in codeowners_text.splitlines():
         fields = line.split("#", 1)[0].split()
-        if fields and _pattern_regex(fields[0]).fullmatch(file_path):
-            found = fields[1:]
-    return found
-
-
-def _pattern_regex(pattern: str) -> re.Pattern[str]:
-    """A CODEOWNERS (gitignore-style) pattern as a regex over repository-relative paths."""
-    anchored = pattern.startswith("/") or "/" in pattern.rstrip("/")
-    body = pattern.strip("/")
-    if pattern.endswith("/"):
-        body += "/**"
-    regex = ""
-    i = 0
-    while i < len(body):
-        if body.startswith("**", i):
-            regex += ".*"
-            i += 2
-        elif body[i] == "*":
-            regex += "[^/]*"
-            i += 1
-        elif body[i] == "?":
-            regex += "[^/]"
-            i += 1
-        else:
-            regex += re.escape(body[i])
-            i += 1
-    prefix = "" if anchored else "(?:.*/)?"
-    return re.compile(f"{prefix}{regex}(?:/.*)?")
+        if fields:
+            lines.append((fields[0], fields[1:]))
+    return lines

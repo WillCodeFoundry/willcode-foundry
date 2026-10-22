@@ -12,6 +12,8 @@ CONFIG = """\
 name: test
 projects:
   tkt-store: {url: "git@github.com:o/tkt-store.git"}
+  foundry: {url: "git@github.com:o/foundry.git"}
+  foundry-test: {url: "git@github.com:o/foundry-test.git"}
 roles:
   dev: {}
 """
@@ -97,3 +99,16 @@ def test_unknown_names_are_reported(instance: Path, capsys, argv: list[str], mes
 def test_the_task_is_required(instance: Path) -> None:
     with pytest.raises(SystemExit):
         cli.main(["run", "tkt-store", "dev"])
+
+
+def test_a_colliding_sandbox_name_is_refused_not_reattached(instance: Path, capsys) -> None:
+    launch("foundry", "dev", "test-1")
+
+    assert cli.main(["run", "foundry-test", "dev", "1"]) == 1  # also dev-foundry-test-1
+    assert "already exists for a different run" in capsys.readouterr().err
+
+
+def test_an_invalid_task_id_is_refused_before_anything_is_created(instance: Path, capsys) -> None:
+    assert cli.main(["run", "tkt-store", "dev", "feat/x"]) == 1
+    assert "task id 'feat/x' is not valid" in capsys.readouterr().err
+    assert not (instance / "sessions").exists()

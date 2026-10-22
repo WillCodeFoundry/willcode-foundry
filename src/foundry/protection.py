@@ -2,8 +2,8 @@
 
 Some rules only work if the project's own files cooperate: a required status
 check must be produced by a workflow job on pull requests, and a required
-code owner review needs a CODEOWNERS file that owns the workflows. Those are
-checked and reported, never changed: they belong to the project.
+code owner review needs a CODEOWNERS file in which admins own every file.
+Those are checked and reported, never changed: they belong to the project.
 """
 
 from dataclasses import dataclass, field
@@ -92,8 +92,10 @@ def parse(raw: object, *, source: str = "protection file") -> list[Ruleset]:
 def differences(desired: object, actual: object, location: str = "") -> list[str]:
     """Where ``actual`` falls short of ``desired``; fields only ``actual`` has are ignored.
 
-    Rule lists are matched by rule ``type``; other lists must hold the same
-    items, in any order.
+    Rule lists are matched by rule ``type``. Other lists must hold as many
+    items as ``desired``, each matching one of its items in any order, with
+    mappings compared as above: key order and extra fields don't matter, but
+    an extra item, such as another bypass actor, does.
     """
     if isinstance(desired, dict):
         if not isinstance(actual, dict):
@@ -119,12 +121,27 @@ def differences(desired: object, actual: object, location: str = "") -> list[str
                 found += differences(rule, actual_rules[rule["type"]], rule_location)
         return found
     if isinstance(desired, list):
-        if not isinstance(actual, list) or sorted(map(repr, desired)) != sorted(map(repr, actual)):
+        if not isinstance(actual, list) or not _same_items(desired, actual):
             return [f"{location}: expected {desired!r}, found {actual!r}"]
         return []
     if desired != actual:
         return [f"{location}: expected {desired!r}, found {actual!r}"]
     return []
+
+
+def _same_items(desired: list[Any], actual: list[Any]) -> bool:
+    if len(desired) != len(actual):
+        return False
+    unmatched = list(actual)
+    for item in desired:
+        match = next((candidate for candidate in unmatched if not differences(item, candidate)), _NO_MATCH)
+        if match is _NO_MATCH:
+            return False
+        unmatched.remove(match)
+    return True
+
+
+_NO_MATCH = object()
 
 
 def _is_rule_list(items: list[Any]) -> bool:
@@ -183,7 +200,7 @@ def check_project_files(github: GitHub, repo_slug: str, rulesets: list[Ruleset])
     ]
     checks = [_check_workflows_produce(github, repo_slug, workflow_paths, name) for name in check_names]
     if needs_code_owners:
-        checks.append(_check_code_owners(github, repo_slug, workflow_paths))
+        checks.append(_check_code_owners(github, repo_slug))
     return checks
 
 
@@ -199,18 +216,36 @@ def _check_workflows_produce(github: GitHub, repo_slug: str, workflow_paths: lis
     return FileCheck(description, False, "no workflow on the default branch runs a job of that name on pull requests")
 
 
-def _check_code_owners(github: GitHub, repo_slug: str, workflow_paths: list[str]) -> FileCheck:
-    """Code owner review only protects the workflows, and CODEOWNERS itself, if someone owns them."""
+def _check_code_owners(github: GitHub, repo_slug: str) -> FileCheck:
+    """Code owner review only keeps agents from merging if an admin owns every file.
+
+    Agents' users have write access, and so does the reviewer role: one
+    approval from it would do for any file without an owner, or owned by
+    someone who isn't an admin. So CODEOWNERS needs a catch-all line, no line
+    that leaves files unowned, and admins as its only owners.
+    """
     for codeowners_path in repo_files.CODEOWNERS_PATHS:
         text = github.file_text(repo_slug, codeowners_path)
         if text is not None:
             break
     else:
         return FileCheck("CODEOWNERS", False, "no CODEOWNERS file, but code owner review is required")
-    unowned = [path for path in [*workflow_paths, codeowners_path] if not repo_files.owners(text, path)]
-    if unowned:
-        return FileCheck("CODEOWNERS", False, f"no owner for {', '.join(unowned)}")
-    return FileCheck("CODEOWNERS", True, f"{codeowners_path} owns the workflows and itself")
+
+    lines = repo_files.codeowners_lines(text)
+    problems = []
+    if not any(pattern in repo_files.CATCH_ALL_PATTERNS and owners for pattern, owners in lines):
+        problems.append("no catch-all line such as '* @you': files it doesn't list need no admin's approval")
+    unowning = [pattern for pattern, owners in lines if not owners]
+    if unowning:
+        problems.append(f"lines that leave files without an owner: {', '.join(unowning)}")
+    for owner in sorted({owner for _, owners in lines for owner in owners}):
+        if not owner.startswith("@") or "/" in owner:
+            problems.append(f"{owner} can't be checked; name admins by @username")
+        elif (access := github.permission(repo_slug, owner.removeprefix("@"))) != "admin":
+            problems.append(f"{owner} has {access} access, not admin")
+    if problems:
+        return FileCheck("CODEOWNERS", False, "; ".join(problems))
+    return FileCheck("CODEOWNERS", True, f"{codeowners_path}: admins own every file")
 
 
 def apply_status(github: GitHub, repo_slug: str, status: RulesetStatus) -> None:

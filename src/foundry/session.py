@@ -31,6 +31,10 @@ AGENT_NOTES_DIR_VAR: Final = "AGENT_NOTES_DIR"
 MAX_SANDBOX_NAME_LENGTH: Final = 64
 _SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
 
+# A task id becomes the git branch task/<id>, so it must be a valid ref
+# component as well as readable: WCF-0042, fix-login.2.
+_TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
 # Inside the sandbox: where session-init clones the project. Nothing on the
 # host corresponds to this path; it assumes the template's `agent` user.
 SANDBOX_WORK_PATH: Final = "/home/agent/work"
@@ -54,6 +58,15 @@ class EnvFile(TypedDict):
 
 def _slug(text: str) -> str:
     return _SBX_UNSAFE_CHARACTERS.sub("-", text).strip("-").lower()
+
+
+def ensure_valid_task_id(task_id: str) -> None:
+    """Raise unless ``task_id`` is letters, digits, '.', '_' or '-', and makes a valid branch name."""
+    if not _TASK_ID.fullmatch(task_id) or ".." in task_id or task_id.endswith((".", ".lock")):
+        raise FoundryError(
+            f"task id {task_id!r} is not valid: use letters, digits, '.', '_' and '-', "
+            "starting with a letter or digit (e.g. WCF-0042)"
+        )
 
 
 def sandbox_name(role_name: str, project_name: str, task_id: str) -> str:
@@ -146,6 +159,25 @@ def read_env_file(session_path: Path) -> EnvFile:
     except (TypeError, KeyError, IndexError):
         raise FoundryError(f"{env_file_path} is not a foundry sandbox environment file") from None
     return cast(EnvFile, env_file)
+
+
+def ensure_env_file_matches(env_file: EnvFile, *, role_name: str, task_id: str, repo_url: str) -> None:
+    """Raise unless the existing environment file is for this role, task and repository.
+
+    Sandbox names are slugs, so different runs can share one: role dev on
+    project foundry, task test-1, and on project foundry-test, task 1, are both
+    dev-foundry-test-1. Re-attaching would then run the other run's task.
+    """
+    expected = {AGENT_ROLE_VAR: role_name, AGENT_TASK_VAR: task_id, AGENT_REPO_URL_VAR: repo_url}
+    found = {key: env_file["env"].get(key) for key in expected}
+    if found != expected:
+        recorded = ", ".join(f"{key}={value!r}" for key, value in found.items())
+        raise FoundryError(
+            f"sandbox {env_file['name']} already exists for a different run ({recorded}); "
+            "either its name collides with this one, so use a task id that gives a different name, "
+            "or the project's url has changed since, so remove the sandbox and "
+            f"sessions/{env_file['name']}/ to start over."
+        )
 
 
 def _read_record(session_path: Path) -> dict[str, Any]:

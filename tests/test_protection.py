@@ -128,17 +128,26 @@ GATED: protection.Ruleset = {
 GATE_WORKFLOW = "on: pull_request\njobs:\n  test: {}\n  ci-gate: {needs: [test]}\n"
 
 
-def file_checks(files: dict[str, str], rulesets: list[protection.Ruleset]) -> list[tuple[str, bool, str]]:
+def file_checks(
+    files: dict[str, str], rulesets: list[protection.Ruleset], permissions: dict[str, str] | None = None
+) -> list[tuple[str, bool, str]]:
     fake = FakeGitHub()
     fake.files["o/r"] = files
+    fake.permissions["o/r"] = {"will": "admin", **(permissions or {})}
     return [(c.description, c.ok, c.detail) for c in protection.check_project_files(GitHub(fake), "o/r", rulesets)]
 
 
+def codeowners_check(codeowners: str, permissions: dict[str, str] | None = None) -> tuple[bool, str]:
+    files = {".github/workflows/ci.yml": GATE_WORKFLOW, ".github/CODEOWNERS": codeowners}
+    _, ok, detail = file_checks(files, [GATED], permissions)[1]
+    return ok, detail
+
+
 def test_project_files_that_support_the_rules() -> None:
-    files = {".github/workflows/ci.yml": GATE_WORKFLOW, ".github/CODEOWNERS": ".github/ @will\n"}
+    files = {".github/workflows/ci.yml": GATE_WORKFLOW, ".github/CODEOWNERS": "* @will\n"}
     assert file_checks(files, [GATED]) == [
         ("required check ci-gate", True, ".github/workflows/ci.yml"),
-        ("CODEOWNERS", True, ".github/CODEOWNERS owns the workflows and itself"),
+        ("CODEOWNERS", True, ".github/CODEOWNERS: admins own every file"),
     ]
 
 
@@ -150,9 +159,29 @@ def test_a_project_without_the_gate_job_or_codeowners() -> None:
     ]
 
 
-def test_codeowners_must_own_the_workflows_and_itself() -> None:
-    files = {".github/workflows/ci.yml": GATE_WORKFLOW, "CODEOWNERS": "/src/ @will\n"}
-    assert file_checks(files, [GATED])[1] == ("CODEOWNERS", False, "no owner for .github/workflows/ci.yml, CODEOWNERS")
+def test_owning_only_github_is_not_enough() -> None:
+    # A pull request that leaves .github/ alone would need one approval from
+    # anyone with write access, such as the reviewer role.
+    ok, detail = codeowners_check(".github/ @will\n")
+    assert not ok and "no catch-all line" in detail
+
+
+def test_a_line_that_unowns_files_is_refused() -> None:
+    ok, detail = codeowners_check("* @will\n/src/generated/\n")
+    assert not ok and "lines that leave files without an owner: /src/generated/" in detail
+
+
+def test_owners_must_be_admins() -> None:
+    ok, detail = codeowners_check("* @will\n/src/ @reviewer-bot\n/docs/ @stranger\n", {"reviewer-bot": "write"})
+    assert not ok
+    assert "@reviewer-bot has write access, not admin" in detail
+    assert "@stranger has none access, not admin" in detail
+
+
+def test_team_and_email_owners_cannot_be_checked() -> None:
+    ok, detail = codeowners_check("* @will @org/devs a@b.c\n")
+    assert not ok
+    assert "@org/devs can't be checked" in detail and "a@b.c can't be checked" in detail
 
 
 def test_a_project_with_no_workflows_at_all() -> None:
@@ -180,3 +209,19 @@ def test_the_shipped_file_requires_the_ci_gate_and_code_owner_review() -> None:
     rulesets = protection.load(REPO_ROOT / "config" / "github-protection.yaml")
     assert protection.required_check_names(rulesets) == ["ci-gate"]
     assert protection.requires_code_owner_review(rulesets)
+
+
+def test_differences_ignore_key_order_and_github_fields_inside_list_items() -> None:
+    desired = {"bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}]}
+    # The order GitHub's documented response uses, plus a field it may add.
+    actual = {"bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always", "x": 1}]}
+    assert protection.differences(desired, actual) == []
+
+
+def test_differences_still_catch_an_extra_or_changed_list_item() -> None:
+    desired = {"bypass_actors": [{"actor_type": "RepositoryRole", "actor_id": 5}]}
+    extra = {"bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole"}, {"actor_id": 4, "actor_type": "Team"}]}
+    changed = {"bypass_actors": [{"actor_id": 4, "actor_type": "RepositoryRole"}]}
+    assert protection.differences(desired, extra) != []
+    assert protection.differences(desired, changed) != []
+    assert protection.differences({"include": ["a", "a"]}, {"include": ["a", "b"]}) != []

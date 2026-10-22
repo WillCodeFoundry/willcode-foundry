@@ -79,6 +79,16 @@ class GitHub:
             return []
         return sorted(entry["path"] for entry in content if entry.get("type") == "file")
 
+    def permission(self, repo_slug: str, username: str) -> str:
+        """A user's base access to the repository: admin, write, read or none."""
+        try:
+            response = self.api("GET", f"repos/{repo_slug}/collaborators/{username}/permission")
+        except GitHubError as error:
+            if error.http_status == 404:  # not a collaborator, or no such user
+                return "none"
+            raise
+        return str(response["permission"])
+
     def _contents(self, repo_slug: str, path: str) -> Any:
         try:
             return self.api("GET", f"repos/{repo_slug}/contents/{path}")

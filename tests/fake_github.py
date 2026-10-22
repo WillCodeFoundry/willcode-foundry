@@ -19,6 +19,8 @@ class FakeGitHub:
         self.calls: list[tuple[str, str]] = []
         self.files: dict[str, dict[str, str]] = {}
         """File text by repo slug, then path on the default branch."""
+        self.permissions: dict[str, dict[str, str]] = {}
+        """Base access by repo slug, then username; anyone else is not a collaborator."""
         self.unavailable: dict[str, str] = {}
         """Repo slug -> the error gh prints for it, e.g. for a plan without rulesets."""
         self._next_id = 1
@@ -27,7 +29,7 @@ class FakeGitHub:
         ruleset_id = self._next_id
         self._next_id += 1
         self.rulesets.setdefault(repo_slug, {})[ruleset_id] = {
-            **copy.deepcopy(ruleset),
+            **_as_github_returns(ruleset),
             **SERVER_FIELDS,
             "source_type": source_type,
             "id": ruleset_id,
@@ -38,6 +40,12 @@ class FakeGitHub:
         assert list(command[:3]) == ["gh", "api", "--method"], command
         method, endpoint = command[3], command[4]
         self.calls.append((method, endpoint))
+        permission = re.fullmatch(r"repos/([^/]+/[^/]+)/collaborators/([^/]+)/permission", endpoint)
+        if permission:
+            access = self.permissions.get(permission[1], {}).get(permission[2])
+            if access is None:
+                return subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)\n")
+            return self._ok({"permission": access, "role_name": access})
         contents = re.fullmatch(r"repos/([^/]+/[^/]+)/contents/(.+)", endpoint)
         if contents:
             return self._contents(contents[1], contents[2])
@@ -59,7 +67,7 @@ class FakeGitHub:
         if method == "POST":
             return self._ok(repo[self.add(slug, body)])
         if method == "PUT":
-            repo[int(ruleset_id)] = {**body, **SERVER_FIELDS, "id": int(ruleset_id)}
+            repo[int(ruleset_id)] = {**_as_github_returns(body), **SERVER_FIELDS, "id": int(ruleset_id)}
             return self._ok(repo[int(ruleset_id)])
         raise AssertionError(f"unexpected call {method} {endpoint}")
 
@@ -78,3 +86,13 @@ class FakeGitHub:
     @staticmethod
     def _ok(payload: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+
+
+def _as_github_returns(ruleset: dict[str, Any]) -> dict[str, Any]:
+    """A copy with each bypass actor's keys in the order GitHub's documented response uses."""
+    stored = copy.deepcopy(ruleset)
+    stored["bypass_actors"] = [
+        {key: actor[key] for key in ("actor_id", "actor_type", "bypass_mode") if key in actor}
+        for actor in stored.get("bypass_actors", [])
+    ]
+    return stored

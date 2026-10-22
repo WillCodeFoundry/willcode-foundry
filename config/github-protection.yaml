@@ -22,8 +22,11 @@ rulesets:
   # integration_id 15368 is GitHub Actions: a status posted by anyone else
   # under that name doesn't count.
   #
-  # Code owner review: a pull request can change its own workflows, so each
-  # project's CODEOWNERS names you for .github/ (and itself).
+  # Code owner review: agents' users, the reviewer role's included, have
+  # write access, so one approval alone could come from an agent. Each
+  # project's CODEOWNERS has a catch-all line, such as `* @you`, and names
+  # only admins, so every pull request needs an admin's approval, including
+  # one that changes the workflows ci-gate runs.
   # `foundry protect check` reports a project missing either.
   - name: foundry-default-branch
     target: branch

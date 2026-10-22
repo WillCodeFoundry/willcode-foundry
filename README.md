@@ -113,7 +113,7 @@ Two of those rules rely on each project's own files, so `check` reads them from 
       - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'
   ```
 
-- **`CODEOWNERS`** naming you for `.github/` and for the file itself. A pull request runs the workflows it contains, so without this an agent could change `ci.yml` in its own pull request to make `ci-gate` pass.
+- **`CODEOWNERS`** with a catch-all line, such as `* @you`, naming only admins, and no line that leaves files without an owner. Agents' users, the reviewer role's included, have write access, so a required approval alone could come from an agent; code owner review makes it an admin's. It also covers a pull request that changes `ci.yml` to make `ci-gate` pass, since a pull request runs the workflows it contains. Owners are checked by their access to the repository, so they must be named as `@username`; teams and emails are reported as unverifiable.
 
 `check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Commit-message rules, which could check the `Task:` trailer, are GitHub Enterprise only, so the trailer stays a git-hook check. Both commands use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
 

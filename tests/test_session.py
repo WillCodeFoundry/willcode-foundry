@@ -90,3 +90,23 @@ def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None
 def test_record_launch_needs_a_record(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match="is missing"):
         session.record_launch(tmp_path, launched_at=datetime.now(UTC), fresh=False)
+
+
+@pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
+def test_valid_task_ids(task_id: str) -> None:
+    session.ensure_valid_task_id(task_id)
+
+
+@pytest.mark.parametrize("task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "ü", "x~1", "x:y"])
+def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
+    with pytest.raises(FoundryError, match="is not valid"):
+        session.ensure_valid_task_id(task_id)
+
+
+def test_an_env_file_for_another_run_is_refused(tmp_path: Path) -> None:
+    env_file = doc(tmp_path)  # role dev, task T1, repo git@h:o/p.git
+    session.ensure_env_file_matches(env_file, role_name="dev", task_id="T1", repo_url="git@h:o/p.git")
+    for mismatch in ({"task_id": "t1"}, {"role_name": "qa"}, {"repo_url": "git@h:o/q.git"}):
+        wanted = {"role_name": "dev", "task_id": "T1", "repo_url": "git@h:o/p.git", **mismatch}
+        with pytest.raises(FoundryError, match="already exists for a different run"):
+            session.ensure_env_file_matches(env_file, **wanted)
