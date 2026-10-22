@@ -1,52 +1,37 @@
 #!/usr/bin/env bash
-# Root part of session setup. Installs Claude's managed settings, then
-# removes the agent user's ways to become root again: sudo, su, and Docker,
-# whose daemon mounts this sandbox's own filesystem for anyone in its group.
-# Run once, last, via sudo from session-init. After it returns, nothing
-# inside the sandbox can undo what it did.
+# Root part of session setup. Installs Claude's managed settings, then takes
+# away the agent user's ways to become root: sudo, su, and Docker, whose
+# daemon mounts this sandbox's own filesystem for anyone in its group. Run
+# once, last, via sudo from session-init; the final check fails the launch
+# if any way is left.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
-[[ $EUID -eq 0 ]] || { echo "session-harden: must run as root" >&2; exit 1; }
 
-# This removes sudo from the machine it runs on. Inside a sandbox that is the
-# point; anywhere else it would lock out the machine's owner. Only proceed when
-# invoked by the sandbox template's agent user.
+# Removing sudo would lock a real machine's owner out; only run in a sandbox,
+# via sudo from its agent user.
 agent_user="${SUDO_USER:-}"
-[[ "$agent_user" == agent ]] || {
+if [[ $EUID -ne 0 || "$agent_user" != agent ]]; then
     echo "session-harden: refusing: only runs inside a foundry sandbox, via sudo from its 'agent' user (SUDO_USER is '${agent_user:-unset}')" >&2
     exit 1
-}
+fi
 
-# 1. Managed settings: root-owned, world-readable, agent cannot write.
+# Root-owned, so the agent can read the settings but not change or replace
+# them. The directory is set too, in case it already existed.
 install -d -m 0755 -o root -g root /etc/claude-code
-install    -m 0644 -o root -g root \
-    "$AGENT_KIT_DIR/claude/managed-settings.json" \
-    /etc/claude-code/managed-settings.json
+install    -m 0644 -o root -g root "$AGENT_KIT_DIR/claude/managed-settings.json" /etc/claude-code/managed-settings.json
 
-# 2. Remove the agent user's ways to root, every way each can be granted.
-rm -f /etc/sudoers.d/*
-sed -i -E '/NOPASSWD/d' /etc/sudoers 2>/dev/null || true
-# docker: `docker run -v /:/host` is root over this sandbox's files.
-for g in sudo wheel admin docker; do
-    if getent group "$g" >/dev/null; then
-        gpasswd -d "$agent_user" "$g" >/dev/null 2>&1 || true
-    fi
-done
-# Belt and braces: no setuid sudo at all. /usr/bin/sudo may be a link
-# (to sudo.ws, through alternatives); chmod changes what it points to.
-chmod 0000 /usr/bin/sudo 2>/dev/null || true
-if command -v doas >/dev/null; then chmod 0000 "$(command -v doas)"; fi
-# su needs root's password; make sure there is none to know, whatever the image.
-passwd -l root >/dev/null
+chmod 0000 "$(readlink -f "$(command -v sudo)")"         # sudo can't run, whatever its rules say
+gpasswd -d "$agent_user" docker >/dev/null 2>&1 || true   # docker run -v /:/host is root
+passwd -l root >/dev/null                                 # su needs root's password; there is none
 
-# 3. Verify as the agent user, with the groups a new login gets.
+# Verify as the agent user, with the groups a new login gets.
 as_agent() { su -s /bin/sh "$agent_user" -c "$1" </dev/null >/dev/null 2>&1; }
 failed=()
-as_agent 'sudo -n true' && failed+=("can still sudo")
-as_agent 'su root -c true' && failed+=("can still su to root")
-as_agent 'test -w /var/run/docker.sock' && failed+=("can still use the Docker socket")
+as_agent 'sudo -n true' && failed+=("sudo")
+as_agent 'su root -c true' && failed+=("su to root")
+as_agent 'test -w /var/run/docker.sock' && failed+=("the Docker socket")
 if ((${#failed[@]})); then
-    echo "session-harden: FAILED, $agent_user $(IFS=,; echo "${failed[*]}")" >&2
+    echo "session-harden: FAILED, $agent_user can still use: $(IFS=,; echo "${failed[*]}")" >&2
     exit 1
 fi
 echo "session-harden: managed settings installed; sudo, su and Docker removed for $agent_user"

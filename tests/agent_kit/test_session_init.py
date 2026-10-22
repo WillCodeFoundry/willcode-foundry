@@ -1,8 +1,8 @@
-"""agent-kit/bin/session-init's refusals for a task that hasn't been created.
+"""agent-kit/bin/session-init's refusals for a task that hasn't been created, and
+session-harden's refusal to run outside a sandbox.
 
 Only paths that exit before hardening are run here: session-harden removes
-sudo from the machine it runs on, and session-harden itself refuses unless
-invoked by the sandbox's agent user.
+sudo from the machine it runs on, so it is only run as far as its refusal.
 """
 
 import os
@@ -73,3 +73,16 @@ def test_a_task_without_its_task_md_is_explained(tmp_path, origin) -> None:
     assert result.returncode == 1
     assert "agent-notes has no .agent/T1/TASK.md" in result.stderr
     assert not (tmp_path / "home" / ".claude").exists()  # stopped before writing instructions
+
+
+@pytest.mark.parametrize("sudo_user", [None, "root", "will"])
+def test_session_harden_refuses_outside_a_sandbox_before_changing_anything(sudo_user: str | None) -> None:
+    # Never run with SUDO_USER=agent: as root, that would harden this machine.
+    env = {"PATH": os.environ["PATH"], "AGENT_KIT_DIR": str(AGENT_KIT_PATH)}
+    if sudo_user is not None:
+        env["SUDO_USER"] = sudo_user
+    result = subprocess.run(
+        [str(AGENT_KIT_PATH / "bin" / "session-harden")], env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1
+    assert "only runs inside a foundry sandbox" in result.stderr
