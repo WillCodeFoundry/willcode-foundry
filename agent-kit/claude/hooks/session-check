@@ -6,9 +6,9 @@
 set -euo pipefail
 : "${AGENT_TASK:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}"
 
-input=$(cat)
-# Already looping on this hook: let the stop through rather than spin.
-if [[ "$input" == *'"stop_hook_active": true'* || "$input" == *'"stop_hook_active":true'* ]]; then
+# Already looping on this hook: let the stop through rather than spin. Input
+# that isn't the JSON Claude Code sends is not a reason to let it through.
+if python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("stop_hook_active") is True else 1)' 2>/dev/null; then
     exit 0
 fi
 

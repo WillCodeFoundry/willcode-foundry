@@ -151,10 +151,10 @@ def test_another_tasks_folder_is_refused(repo) -> None:
 # --- Stop hook ---------------------------------------------------------------
 
 
-def stop(active: bool = False) -> subprocess.CompletedProcess[str]:
+def stop(active: bool = False, *, raw_input: str | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(AGENT_KIT_PATH / "claude" / "hooks" / "session-check")],
-        input=json.dumps({"stop_hook_active": active}),
+        input=json.dumps({"stop_hook_active": active}) if raw_input is None else raw_input,
         capture_output=True,
         text=True,
         check=False,
@@ -182,3 +182,17 @@ def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:
     code, _ = repo
     (code / "wip.txt").write_text("x\n")
     assert stop(active=True).stdout.strip() == ""
+
+
+@pytest.mark.parametrize("raw_input", ['{"stop_hook_active" : true}', '{\n  "stop_hook_active":\ttrue\n}'])
+def test_the_looping_flag_is_read_whatever_the_json_spacing(repo, raw_input: str) -> None:
+    code, _ = repo
+    (code / "wip.txt").write_text("x\n")
+    assert stop(raw_input=raw_input).stdout.strip() == ""
+
+
+@pytest.mark.parametrize("raw_input", ["not json", "[]", '{"stop_hook_active": "true"}'])
+def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: str) -> None:
+    code, _ = repo
+    (code / "wip.txt").write_text("x\n")
+    assert json.loads(stop(raw_input=raw_input).stdout)["decision"] == "block"

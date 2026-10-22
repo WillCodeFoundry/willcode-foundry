@@ -16,8 +16,10 @@ role's credentials, and the project's GitHub rules.
 
 The command is split into simple commands on ;, &&, || and |, and each is
 checked by its words, so text that merely mentions a flag (a commit message,
-a file name) is not refused. Commands run through `sh -c` / `bash -c` are
-checked too.
+a file name) is not refused. Commands a shell runs with -c are checked too,
+in any option cluster such as -lc or -ec. Git's options are read as git reads
+them: values such as a commit message are skipped, and long options may be
+abbreviated (--no-ver is --no-verify).
 """
 
 import json
@@ -31,13 +33,28 @@ REWRITE = {"rebase", "filter-branch", "filter-repo"}
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")"}
 WRAPPERS = {"env", "command", "exec"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
-# Checked against the whole command: the name is dangerous wherever it appears,
-# including inside environment variables such as GIT_CONFIG_PARAMETERS.
+# Dangerous in any word of a command, including environment variables such as
+# GIT_CONFIG_PARAMETERS, except where git config only reads it.
 HOOKS_PATH = re.compile(r"core\.hookspath", re.IGNORECASE)
+
+# Options that take a value, so the next word (or the rest of a short-option
+# cluster) is that value, not more options: `git commit -m "-n removed"`.
+COMMIT_VALUE_SHORT = set("mFCct")
+COMMIT_VALUE_LONG = (
+    "--message", "--file", "--author", "--date", "--template", "--reuse-message", "--reedit-message",
+    "--fixup", "--squash", "--cleanup", "--trailer", "--pathspec-from-file",
+)  # fmt: skip
+PUSH_VALUE_SHORT = set("o")
+PUSH_VALUE_LONG = ("--repo", "--receive-pack", "--exec", "--push-option")
+CONFIG_VALUE_SHORT = set("f")
+CONFIG_VALUE_LONG = ("--file", "--blob", "--type", "--default", "--comment", "--value")
+CONFIG_READS = ("--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list")
+CONFIG_WRITES = ("--add", "--unset", "--unset-all", "--replace-all", "--edit", "--rename-section", "--remove-section")
+CONFIG_SUBCOMMANDS_THAT_READ = {"get", "list"}
 
 
 def simple_commands(command: str) -> Iterator[list[str]]:
-    """Yield each simple command's words, descending into `sh -c '...'`."""
+    """Yield each simple command's words, assignments included, descending into `sh -c '...'`."""
     lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
     lexer.whitespace_split = True
     words: list[str] = []
@@ -53,11 +70,36 @@ def simple_commands(command: str) -> Iterator[list[str]]:
 
 
 def _expand(words: list[str]) -> Iterator[list[str]]:
-    words = _strip_prefix(words)
-    if len(words) >= 3 and words[0].rsplit("/", 1)[-1] in SHELLS and "-c" in words[1:-1]:
-        yield from simple_commands(words[words.index("-c") + 1])
-    elif words:
+    command_words = _strip_prefix(words)
+    script = _shell_script(command_words)
+    if script is None:
         yield words
+        return
+    prefix = words[: len(words) - len(command_words)]
+    if prefix:
+        yield prefix  # its assignments reach every command the shell runs
+    yield from simple_commands(script)
+
+
+def _shell_script(words: list[str]) -> str | None:
+    """The script a shell runs with -c, in any option cluster (-c, -lc, -ec); else None."""
+    if not words or words[0].rsplit("/", 1)[-1] not in SHELLS:
+        return None
+    i = 1
+    while i < len(words):
+        word = words[i]
+        if word in {"-o", "+o", "-O", "+O"}:
+            i += 2  # -o pipefail: the option's name is not the script
+            continue
+        if word.startswith("--") and word != "--":
+            i += 1  # --login, --norc
+            continue
+        if not word.startswith(("-", "+")) or word in {"-", "--"}:
+            return None  # a script file or other operand, not -c
+        if word.startswith("-") and "c" in word[1:]:
+            return words[i + 1] if i + 1 < len(words) else None
+        i += 1
+    return None
 
 
 def _strip_prefix(words: list[str]) -> list[str]:
@@ -78,34 +120,103 @@ def git_subcommand(words: list[str]) -> tuple[str, list[str]] | None:
     return (words[i], words[i + 1 :]) if i < len(words) else None
 
 
-def short_flags(args: list[str]) -> set[str]:
-    """Letters in short-option clusters such as -nm or -uf; long options and values excluded."""
-    return {ch for a in args if a.startswith("-") and not a.startswith("--") for ch in a[1:]}
+class Options:
+    """A git subcommand's arguments as git's option parser reads them.
+
+    Values of options that take one are skipped, so a message such as
+    `-m "-n removed"` is not read as -n. Long options keep their name only,
+    and may be abbreviated, as git allows: --no-ver is --no-verify.
+    """
+
+    def __init__(self, args: list[str], value_short: set[str], value_long: tuple[str, ...]) -> None:
+        self.letters: set[str] = set()
+        self.long_names: list[str] = []
+        self.operands: list[str] = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--":
+                self.operands += args[i + 1 :]
+                break
+            if arg.startswith("--"):
+                name = arg.split("=", 1)[0]
+                self.long_names.append(name)
+                if "=" not in arg and any(_abbreviates(name, option) for option in value_long):
+                    i += 1
+            elif arg.startswith("-") and len(arg) > 1:
+                for position, letter in enumerate(arg[1:], start=1):
+                    self.letters.add(letter)
+                    if letter in value_short:
+                        if position == len(arg) - 1:
+                            i += 1  # the value is the next word
+                        break  # otherwise the rest of the cluster is the value
+            else:
+                self.operands.append(arg)
+            i += 1
+
+    def given(self, *options: str) -> bool:
+        """Whether any of these long options was given, in full or abbreviated."""
+        return any(_abbreviates(name, option) for name in self.long_names for option in options)
+
+
+def _abbreviates(name: str, option: str) -> bool:
+    return len(name) > 2 and option.startswith(name)
+
+
+def reads_git_config(words: list[str]) -> bool:
+    """Whether this is `git config` reading a setting, not writing one."""
+    git = git_subcommand(words)
+    if git is None or git[0] != "config":
+        return False
+    args = git[1]
+    before_config = words[: len(words) - len(args) - 1]
+    if any(HOOKS_PATH.search(word) for word in before_config):
+        return False  # git -c core.hooksPath=... config: sets it for this command
+    options = Options(args, CONFIG_VALUE_SHORT, CONFIG_VALUE_LONG)
+    if options.given(*CONFIG_WRITES) or "e" in options.letters:
+        return False
+    if options.operands and options.operands[0] in {"set", "unset", "edit", "rename-section", "remove-section"}:
+        return False
+    if options.given(*CONFIG_READS) or "l" in options.letters:
+        return True
+    if options.operands and options.operands[0] in CONFIG_SUBCOMMANDS_THAT_READ:
+        return True
+    return len(options.operands) == 1  # `git config <name>` reads; with a value it writes
 
 
 def refusal_reason_for(words: list[str]) -> str | None:
-    git = git_subcommand(words)
+    command_words = _strip_prefix(words)
+    prefix = words[: len(words) - len(command_words)]
+    if any(HOOKS_PATH.search(word) for word in prefix) or (
+        any(HOOKS_PATH.search(word) for word in command_words) and not reads_git_config(command_words)
+    ):
+        return "git hook configuration must not be changed"
+
+    git = git_subcommand(command_words)
     if git is None:
         return None
     sub, args = git
-    if "--no-verify" in args or (sub == "commit" and "n" in short_flags(args)):
-        return "git hooks must not be bypassed (--no-verify / -n)"
+    if sub == "commit":
+        commit = Options(args, COMMIT_VALUE_SHORT, COMMIT_VALUE_LONG)
+        if commit.given("--no-verify") or "n" in commit.letters:
+            return "git hooks must not be bypassed (--no-verify / -n)"
     if sub == "push":
-        if {"--force", "--mirror", "--prune"} & set(args) or any(a.startswith("--force") for a in args):
+        push = Options(args, PUSH_VALUE_SHORT, PUSH_VALUE_LONG)
+        if push.given("--no-verify"):
+            return "git hooks must not be bypassed (--no-verify / -n)"
+        if push.given("--force", "--force-with-lease", "--force-if-includes", "--mirror", "--prune"):
             return "force-push is not allowed"
-        if "--delete" in args or "d" in short_flags(args) or any(a.startswith(":") for a in args):
+        if push.given("--delete") or "d" in push.letters or any(a.startswith(":") for a in push.operands):
             return "deleting remote branches is not allowed"
-        if "f" in short_flags(args) or any(a.startswith("+") for a in args):
+        if "f" in push.letters or any(a.startswith("+") for a in push.operands):
             return "force-push is not allowed"
-    if sub in REWRITE or (sub == "reset" and "--hard" in args):
+    if sub in REWRITE or (sub == "reset" and Options(args, set(), ()).given("--hard")):
         return "rewriting history is not allowed; use git pull --rebase only"
     return None
 
 
 def refusal_reason(command: str) -> str | None:
     """The reason to refuse ``command``, or None to let it run."""
-    if HOOKS_PATH.search(command):
-        return "git hook configuration must not be changed"
     try:
         commands = list(simple_commands(command))
     except ValueError:  # unbalanced quotes: refuse rather than guess what runs

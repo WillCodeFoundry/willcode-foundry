@@ -30,6 +30,22 @@ ALLOWED = [
     "npm test",
     "git reset HEAD file.txt",
     "GIT_TRACE=1 git status",
+    # Values are skipped, so a message or file that looks like an option is not one.
+    'git commit -m "-n flag removed"',
+    'git commit -am "--no-verify is gone" -m "Task: T1"',
+    "git commit -F -n.txt",
+    "git commit -mn",  # the message is "n"
+    'git push -o "--force" origin task/T1',
+    # Reading the hooks path is fine; only changing it is refused.
+    "git config --get core.hooksPath",
+    "git config core.hooksPath",
+    "git config --show-origin --get core.hooksPath",
+    "git config get core.hooksPath",
+    # Shells with combined flags still run what's checked.
+    "bash -lc 'git status'",
+    "sh -ec 'pytest -q'",
+    "bash -o pipefail -c 'git log | head'",
+    "bash script.sh -c",  # a script file, not -c
 ]
 
 REFUSED = [
@@ -54,6 +70,29 @@ REFUSED = [
     ('sh -c "git push --force"', "force-push"),
     ("env FOO=1 git push --force", "force-push"),
     ("echo 'unbalanced", "could not be parsed"),
+    # Combined shell flags.
+    ('bash -lc "git push -f"', "force-push"),
+    ('sh -ec "git push --force origin task/T1"', "force-push"),
+    ("bash -xec 'git commit -n -m x'", "bypassed"),
+    ("bash -o pipefail -c 'git push -f'", "force-push"),
+    ("/bin/bash --login -c 'git rebase main'", "rewriting history"),
+    ("GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/x'\" bash -c 'git commit -m x'", "hook configuration"),
+    # Abbreviated long options, which git accepts.
+    ("git commit --no-ver -m x", "bypassed"),
+    ("git push --no-verif", "bypassed"),
+    ("git push --forc origin task/T1", "force-push"),
+    ("git push --force-with origin task/T1", "force-push"),
+    ("git push --del origin other", "deleting"),
+    ("git push --mirr", "force-push"),
+    ("git reset --har HEAD~1", "rewriting history"),
+    # Changing the hooks path, however it's spelled.
+    ("git config --global core.hooksPath /tmp/h", "hook configuration"),
+    ("git config --unset core.hooksPath", "hook configuration"),
+    ("git config set core.hooksPath /tmp/h", "hook configuration"),
+    ("git -c core.hooksPath=/tmp/h config --get user.name", "hook configuration"),
+    ("git config --get core.hooksPath && git config core.hooksPath /tmp/h", "hook configuration"),
+    # Outside git config, any mention is refused: export would set it for every later git command.
+    ("export GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/x'\"", "hook configuration"),
 ]
 
 
