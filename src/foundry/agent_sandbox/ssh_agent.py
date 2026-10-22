@@ -3,7 +3,7 @@
 import os
 import stat
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from enum import IntEnum
 from pathlib import Path
 
@@ -26,27 +26,35 @@ def _agent_sockets_dir(uid: int) -> Path:
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
-    """How every sandbox's agent is started. running_agents recognises agents by this command line."""
+    """How every sandbox's agent is started. list_ssh_agents recognises agents by this command line."""
     return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
-def running_agents(host: Host, uid: int) -> dict[str, int]:
+def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
     """The running ssh-agents this launcher started for ``uid``, as sandbox name -> process id.
 
     Each is recognised by its command line, which names its socket and so its
     sandbox: ``ssh-agent -a /tmp/sbx-agents-<uid>/<sandbox>.sock -s``.
     """
-    result = host.run(("ps", "-u", str(uid), "-o", "pid=,command="))
-    if result.returncode != 0:
-        raise SandboxError(f"could not list running processes: {result.stderr.strip()}")
     head, tail = f"ssh-agent -a {_agent_sockets_dir(uid)}/", ".sock -s"
-    agents = {}
-    for line in result.stdout.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        command = command.strip()
-        if command.startswith(head) and command.endswith(tail):
-            agents[command.removeprefix(head).removesuffix(tail)] = int(pid)
-    return agents
+    return {
+        command.removeprefix(head).removesuffix(tail): pid
+        for pid, command in host.list_processes(uid)
+        if command.startswith(head) and command.endswith(tail)
+    }
+
+
+def kill_ssh_agents(host: Host, uid: int, *, keep: Collection[str]) -> list[str]:
+    """Kill every ssh-agent this launcher started for ``uid``, except those of the sandboxes in ``keep``.
+
+    Returns the sandbox names whose agents were killed. An agent removes its
+    own socket when it stops.
+    """
+    agents = list_ssh_agents(host, uid)
+    killed = sorted(name for name in agents if name not in keep)
+    for name in killed:
+        host.kill_process(agents[name])
+    return killed
 
 
 def _ensure_private_dir(private_dir: Path, uid: int) -> None:

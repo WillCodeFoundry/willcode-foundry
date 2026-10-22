@@ -1,4 +1,6 @@
 import os
+import signal
+import subprocess
 import sys
 
 import pytest
@@ -40,3 +42,28 @@ def test_run_passes_the_given_env_to_the_child_process(host):
 
 def test_environ_is_the_processs_own_environment(host):
     assert host.environ() is os.environ
+
+
+# --- list_processes / kill_process ----------------------------------------------
+
+
+def test_list_processes_includes_this_test_process(host):
+    processes = dict(host.list_processes(os.getuid()))
+
+    assert os.getpid() in processes
+    assert processes[os.getpid()]  # its command line
+
+
+def test_kill_process_stops_a_running_process(host):
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+
+    host.kill_process(child.pid)
+
+    assert child.wait(timeout=10) == -signal.SIGTERM
+
+
+def test_kill_process_counts_an_exited_process_as_stopped(host):
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()
+
+    host.kill_process(child.pid)  # no error

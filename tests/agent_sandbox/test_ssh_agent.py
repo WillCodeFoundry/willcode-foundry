@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, running_agents
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, kill_ssh_agents, list_ssh_agents
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -186,37 +186,43 @@ def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
     assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
 
 
-# --- running_agents ---------------------------------------------------------
-
-PS = ("ps", "-u", str(OWN_UID), "-o", "pid=,command=")
+# --- list_ssh_agents / kill_ssh_agents --------------------------------------
 
 
-def test_running_agents_are_found_by_the_command_line_the_agent_is_started_with(host):
-    started = " ".join(start(agent_socket_path("dev-p-t1", OWN_UID)))
-    host.responses = {PS: f"  101 {started}\n"}
-
-    assert running_agents(host, OWN_UID) == {"dev-p-t1": 101}
+def agent_process(pid: int, sandbox_name: str, uid: int = OWN_UID) -> tuple[int, str]:
+    return (pid, " ".join(start(agent_socket_path(sandbox_name, uid))))
 
 
-def test_running_agents_ignore_every_other_process(host):
-    host.responses = {
-        PS: "\n".join(
-            [
-                f"  101 ssh-agent -a /tmp/sbx-agents-{OWN_UID}/dev-p-t1.sock -s",
-                f"  102 ssh-agent -a /tmp/sbx-agents-{OWN_UID + 1}/qa-p-t1.sock -s",  # another user's directory
-                "  103 ssh-agent -s",  # the user's own agent
-                "  104 /usr/bin/ssh-agent -l",
-                "  105 vim notes.md",
-                f"  106 ssh-agent -a /tmp/sbx-agents-{OWN_UID}/qa-p-t2.sock -s",
-            ]
-        )
-    }
+def test_ssh_agents_are_found_by_the_command_line_they_are_started_with(host):
+    host.processes = [agent_process(101, "dev-p-t1")]
 
-    assert running_agents(host, OWN_UID) == {"dev-p-t1": 101, "qa-p-t2": 106}
+    assert list_ssh_agents(host, OWN_UID) == {"dev-p-t1": 101}
 
 
-def test_running_agents_report_a_failing_ps(host):
-    host.responses = {PS: 1}
+def test_listing_ignores_every_other_process(host):
+    host.processes = [
+        agent_process(101, "dev-p-t1"),
+        agent_process(102, "qa-p-t1", uid=OWN_UID + 1),  # another user's sockets directory
+        (103, "ssh-agent -s"),  # the user's own agent
+        (104, "/usr/bin/ssh-agent -l"),
+        (105, "vim notes.md"),
+        agent_process(106, "qa-p-t2"),
+    ]
 
-    with pytest.raises(SandboxError, match="could not list running processes"):
-        running_agents(host, OWN_UID)
+    assert list_ssh_agents(host, OWN_UID) == {"dev-p-t1": 101, "qa-p-t2": 106}
+
+
+def test_every_agent_is_killed_except_those_kept(host):
+    host.processes = [agent_process(101, "dev-p-live"), agent_process(102, "dev-p-b"), agent_process(103, "dev-p-a")]
+
+    killed = kill_ssh_agents(host, OWN_UID, keep={"dev-p-live", "dev-p-not-running"})
+
+    assert killed == ["dev-p-a", "dev-p-b"]
+    assert sorted(host.killed) == [102, 103]
+
+
+def test_nothing_is_killed_when_every_agent_is_kept(host):
+    host.processes = [agent_process(101, "dev-p-live")]
+
+    assert kill_ssh_agents(host, OWN_UID, keep={"dev-p-live"}) == []
+    assert host.killed == []

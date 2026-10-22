@@ -11,9 +11,8 @@ from foundry.agent_sandbox.launcher import (
     require_dir,
     require_file,
     require_safe_paths,
-    stop_idle_agents,
 )
-from foundry.agent_sandbox.sbx import Sbx, sandbox_statuses
+from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
 FP = "256 SHA256:abc comment (ED25519)"
@@ -183,64 +182,26 @@ def test_a_session_whose_workspace_is_gone_is_refused(layout, host, tmp_path) ->
         run_prepare(layout, host)
 
 
-# --- idle agents --------------------------------------------------------------
+# --- list_live_sandboxes ------------------------------------------------------
 
-UID = 1000
-PS = ("ps", "-u", str(UID), "-o", "pid=,command=")
 SBX_LS = ("sbx", "ls", "--json")
 SBX_LS_JSON = """{
   "sandboxes": [
     {"name": "dev-p-running", "id": "1", "agent": "claude", "status": "running", "workspaces": []},
     {"name": "dev-p-stopped", "id": "2", "agent": "claude", "status": "stopped", "workspaces": []},
-    {"name": "dev-p-current", "id": "3", "agent": "claude", "status": "stopped", "workspaces": []},
-    {"name": "dev-p-starting", "id": "4", "agent": "claude", "status": "starting", "workspaces": []}
+    {"name": "dev-p-starting", "id": "3", "agent": "claude", "status": "starting", "workspaces": []}
   ]
 }"""
 
 
-def agents_ps(*sandbox_names: str) -> str:
-    return "\n".join(
-        f"  {101 + index} ssh-agent -a /tmp/sbx-agents-{UID}/{name}.sock -s" for index, name in enumerate(sandbox_names)
-    )
-
-
-def test_sandbox_statuses_come_from_sbx_ls(host) -> None:
+def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:
     host.responses = {SBX_LS: SBX_LS_JSON}
 
-    assert sandbox_statuses(host, {})["dev-p-stopped"] == "stopped"
-    assert sandbox_statuses(host, {})["dev-p-running"] == "running"
+    assert list_live_sandboxes(host, {}) == {"dev-p-running", "dev-p-starting"}
 
 
-def test_sandbox_statuses_report_a_failing_sbx_ls(host) -> None:
+def test_a_failing_sbx_ls_is_reported(host) -> None:
     host.responses = {SBX_LS: 1}
 
     with pytest.raises(SandboxError, match="sbx ls failed"):
-        sandbox_statuses(host, {})
-
-
-def test_agents_of_stopped_or_removed_sandboxes_are_stopped(host) -> None:
-    host.responses = {
-        SBX_LS: SBX_LS_JSON,
-        PS: agents_ps("dev-p-running", "dev-p-stopped", "dev-p-gone", "dev-p-current", "dev-p-starting"),
-        ("kill", "102"): "",  # dev-p-stopped
-        ("kill", "103"): "",  # dev-p-gone
-    }
-
-    stopped = stop_idle_agents(host, UID, {}, keep="dev-p-current")
-
-    assert stopped == ["dev-p-gone", "dev-p-stopped"]
-    assert [command for command in host.commands if command[0] == "kill"] == [("kill", "102"), ("kill", "103")]
-
-
-def test_nothing_is_stopped_when_every_agent_is_needed(host) -> None:
-    host.responses = {SBX_LS: SBX_LS_JSON, PS: agents_ps("dev-p-running", "dev-p-current")}
-
-    assert stop_idle_agents(host, UID, {}, keep="dev-p-current") == []
-
-
-def test_no_agent_is_stopped_when_sbx_ls_fails(host) -> None:
-    host.responses = {SBX_LS: 1, PS: agents_ps("dev-p-stopped")}
-
-    with pytest.raises(SandboxError, match="sbx ls failed"):
-        stop_idle_agents(host, UID, {}, keep="dev-p-current")
-    assert not any(command[0] == "kill" for command in host.commands)
+        list_live_sandboxes(host, {})

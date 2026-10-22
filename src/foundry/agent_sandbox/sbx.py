@@ -12,12 +12,16 @@ from foundry.agent_sandbox.host import Host
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
 
 
-def sandbox_statuses(host: Host, process_env: Mapping[str, str]) -> dict[str, str]:
-    """Every sandbox sbx knows, as name -> status (such as "stopped"), from ``sbx ls --json``."""
+def list_live_sandboxes(host: Host, process_env: Mapping[str, str]) -> set[str]:
+    """Names of the sandboxes sbx lists that aren't stopped, from ``sbx ls --json``.
+
+    Any status but "stopped" counts as live, so a sandbox that is starting
+    keeps what it needs.
+    """
     result = host.run(("sbx", "ls", "--json"), env=process_env)
     if result.returncode != 0:
         raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")
-    return {sandbox["name"]: sandbox["status"] for sandbox in json.loads(result.stdout)["sandboxes"]}
+    return {sandbox["name"] for sandbox in json.loads(result.stdout)["sandboxes"] if sandbox["status"] != "stopped"}
 
 
 class Sbx:
