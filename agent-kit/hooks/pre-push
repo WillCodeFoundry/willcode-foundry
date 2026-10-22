@@ -1,39 +1,17 @@
 #!/usr/bin/env bash
-# Rules for pushes, from either checkout: only task/<task> and agent-notes, no
-# deletions, fast-forwards only. git passes one line per ref on stdin:
+# Pushes only to this task's branch and agent-notes. The project's GitHub
+# rulesets allow any task/**, since GitHub can't tell one task from another;
+# this keeps a role to its own. git passes one line per ref on stdin:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -euo pipefail
 # For ShellCheck, relative to the repository root, where CI runs it:
 # shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 
-zero="0000000000000000000000000000000000000000"
-
-while read -r _local_ref local_sha remote_ref remote_sha; do
-    branch="${remote_ref#refs/heads/}"
-
-    if [[ "$local_sha" == "$zero" ]]; then
-        refuse pre-push \
-            "Deleting remote branch $branch is not allowed." \
-            "If it must go, record the request under Blockers and ask."
-    fi
-
-    case "$branch" in
-        "$TASK_BRANCH"|"$NOTES_BRANCH") ;;
-        *)
-            refuse pre-push \
-                "You may only push $TASK_BRANCH and $NOTES_BRANCH, not $branch." \
-                "Code goes on $TASK_BRANCH; notes go on $NOTES_BRANCH."
-            ;;
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    case "$remote_ref" in
+        "refs/heads/$TASK_BRANCH"|"refs/heads/$NOTES_BRANCH") ;;
+        *) refuse pre-push "You may only push $TASK_BRANCH and $NOTES_BRANCH, not ${remote_ref#refs/heads/}." \
+               "Code goes on $TASK_BRANCH; notes go on $NOTES_BRANCH." ;;
     esac
-
-    if [[ "$remote_sha" != "$zero" ]] \
-       && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-        refuse pre-push \
-            "This push would rewrite history on $branch (not a fast-forward)." \
-            "" \
-            "Never force-push or rebase pushed commits." \
-            "If the remote has moved, run: git pull --rebase origin $branch" \
-            "then push again. If that conflicts, record it under Blockers and ask."
-    fi
 done

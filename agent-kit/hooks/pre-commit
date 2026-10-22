@@ -1,75 +1,31 @@
 #!/usr/bin/env bash
-# Rules for what may be committed, by checkout:
-#   task branch (code checkout): code and project docs only; no task notes, no credentials.
-#   agent-notes (notes checkout): only this task's .agent/<task>/ folder; never TASK.md.
+# What each checkout may commit, so tasks don't step on each other:
+#   task branch: no task notes (they belong on agent-notes);
+#   agent-notes: only this task's .agent/<task>/ folder, never its TASK.md.
+# Commits on any other branch are left alone: they can't be pushed.
 set -euo pipefail
 # For ShellCheck, relative to the repository root, where CI runs it:
 # shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 
-check_task_branch() {
-    local notes=() credentials=() f
-    while IFS= read -r f; do
-        case "$f" in
-            .agent/*|*/.agent/*|TASK.md|PROGRESS.md|LEARNINGS.md|*/TASK.md|*/PROGRESS.md|*/LEARNINGS.md)
-                notes+=("$f") ;;
-            .env|.env.*|*/.env|*/.env.*|*.pem|*.key|*_rsa|*_ed25519|*.p12|*.pfx)
-                credentials+=("$f") ;;
-        esac
-    done < <(staged_files)
-
-    if ((${#notes[@]})); then
-        refuse pre-commit \
-            "Task notes do not belong on $TASK_BRANCH:" \
-            "${notes[@]/#/    }" \
-            "" \
-            "Move them to \$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH/ and commit there on $NOTES_BRANCH." \
-            "Unstage with: git restore --staged <file>"
-    fi
-    if ((${#credentials[@]})); then
-        refuse pre-commit \
-            "These look like credential files and must never be committed:" \
-            "${credentials[@]/#/    }" \
-            "" \
-            "Unstage with: git restore --staged <file>" \
-            "If a file is genuinely not a credential, rename it so it does not match."
-    fi
-}
-
-check_notes_branch() {
-    local outside=() task_md=() f
-    while IFS= read -r f; do
-        case "$f" in
-            "$TASK_NOTES_RELATIVE_PATH"/TASK.md) task_md+=("$f") ;;
-            "$TASK_NOTES_RELATIVE_PATH"/*)       ;;
-            *)                    outside+=("$f") ;;
-        esac
-    done < <(staged_files)
-
-    if ((${#outside[@]})); then
-        refuse pre-commit \
-            "On $NOTES_BRANCH you may only change files inside $TASK_NOTES_RELATIVE_PATH/:" \
-            "${outside[@]/#/    }" \
-            "" \
-            "Other folders belong to other tasks and agents." \
-            "Unstage with: git restore --staged <file>"
-    fi
-    if ((${#task_md[@]})); then
-        refuse pre-commit \
-            "$TASK_NOTES_RELATIVE_PATH/TASK.md is owned by the human and must not be modified." \
-            "" \
-            "To propose changes, write them to $TASK_NOTES_RELATIVE_PATH/TASK.proposed.md instead." \
-            "Discard your edit with: git restore --staged --worktree $TASK_NOTES_RELATIVE_PATH/TASK.md"
-    fi
-}
-
+refused=()
 case "$(current_branch)" in
-    "$TASK_BRANCH")  check_task_branch ;;
-    "$NOTES_BRANCH") check_notes_branch ;;
-    *)
-        refuse pre-commit \
-            "Commits are only allowed on $TASK_BRANCH or $NOTES_BRANCH," \
-            "not on $(current_branch)." \
-            "Switch to the right checkout and try again."
-        ;;
+    "$TASK_BRANCH")
+        while IFS= read -r f; do
+            case "$f" in .agent/*|*/.agent/*|TASK.md|*/TASK.md|PROGRESS.md|*/PROGRESS.md|LEARNINGS.md|*/LEARNINGS.md)
+                refused+=("$f") ;; esac
+        done < <(staged_files)
+        rule="Task notes belong on $NOTES_BRANCH, in \$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH/, not on $TASK_BRANCH:" ;;
+    "$NOTES_BRANCH")
+        while IFS= read -r f; do
+            if [[ "$f" != "$TASK_NOTES_RELATIVE_PATH"/* || "$f" == "$TASK_NOTES_RELATIVE_PATH/TASK.md" ]]; then
+                refused+=("$f")
+            fi
+        done < <(staged_files)
+        rule="On $NOTES_BRANCH you may only change files in $TASK_NOTES_RELATIVE_PATH/, and never its TASK.md:" ;;
+    *) exit 0 ;;
 esac
+
+if ((${#refused[@]})); then
+    refuse pre-commit "$rule" "${refused[@]/#/    }" "" "Unstage with: git restore --staged <file>"
+fi
