@@ -88,8 +88,9 @@ git -C "$AGENT_PROJECT_DIR" status -sb | head -1
 git -C "$AGENT_NOTES_DIR"   status -sb | head -1
 
 # --- Harden, last -------------------------------------------------------------
-# Installs Claude's managed settings and removes sudo. Nothing after this may
-# need root. On a re-attached sandbox sudo is already gone and this is skipped.
+# Installs Claude's managed settings and removes sudo, su and Docker. Nothing
+# after this may need root. On a re-attached sandbox sudo is already gone and
+# this is skipped.
 
 if sudo -n true 2>/dev/null; then
     sudo --preserve-env=AGENT_KIT_DIR "$AGENT_KIT_DIR/bin/session-harden"

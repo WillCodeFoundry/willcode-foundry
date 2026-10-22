@@ -42,6 +42,10 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
 | `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising |
 
+You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
+not available to you. If the task needs them, record it under "Blockers" and
+ask.
+
 The whole of `$AGENT_KIT_DIR` is mounted read-only: any write there fails, and
 that is intended. Nothing in it can be edited, including your role's `memory/`.
 If an instruction there is wrong, say so in `LEARNINGS.md` rather than working

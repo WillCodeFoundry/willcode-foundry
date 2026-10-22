@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Root part of session setup. Installs Claude's managed settings, then
-# removes the agent user's ability to become root again. Run once, last,
-# via sudo from session-init. After it returns, nothing inside the sandbox
-# can undo what it did.
+# removes the agent user's ways to become root again: sudo, su, and Docker,
+# whose daemon mounts this sandbox's own filesystem for anyone in its group.
+# Run once, last, via sudo from session-init. After it returns, nothing
+# inside the sandbox can undo what it did.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
 [[ $EUID -eq 0 ]] || { echo "session-harden: must run as root" >&2; exit 1; }
@@ -22,19 +23,30 @@ install    -m 0644 -o root -g root \
     "$AGENT_KIT_DIR/claude/managed-settings.json" \
     /etc/claude-code/managed-settings.json
 
-# 2. Remove passwordless sudo for the agent user, every way it can be granted.
+# 2. Remove the agent user's ways to root, every way each can be granted.
 rm -f /etc/sudoers.d/*
 sed -i -E '/NOPASSWD/d' /etc/sudoers 2>/dev/null || true
-for g in sudo wheel admin; do
-    getent group "$g" >/dev/null && gpasswd -d "$agent_user" "$g" >/dev/null 2>&1 || true
+# docker: `docker run -v /:/host` is root over this sandbox's files.
+for g in sudo wheel admin docker; do
+    if getent group "$g" >/dev/null; then
+        gpasswd -d "$agent_user" "$g" >/dev/null 2>&1 || true
+    fi
 done
-# Belt and braces: no setuid sudo at all.
+# Belt and braces: no setuid sudo at all. /usr/bin/sudo may be a link
+# (to sudo.ws, through alternatives); chmod changes what it points to.
 chmod 0000 /usr/bin/sudo 2>/dev/null || true
-command -v doas >/dev/null && chmod 0000 "$(command -v doas)" || true
+if command -v doas >/dev/null; then chmod 0000 "$(command -v doas)"; fi
+# su needs root's password; make sure there is none to know, whatever the image.
+passwd -l root >/dev/null
 
-# 3. Verify as the agent user.
-if su -s /bin/sh "$agent_user" -c 'sudo -n true' 2>/dev/null; then
-    echo "session-harden: FAILED, $agent_user can still sudo" >&2
+# 3. Verify as the agent user, with the groups a new login gets.
+as_agent() { su -s /bin/sh "$agent_user" -c "$1" </dev/null >/dev/null 2>&1; }
+failed=()
+as_agent 'sudo -n true' && failed+=("can still sudo")
+as_agent 'su root -c true' && failed+=("can still su to root")
+as_agent 'test -w /var/run/docker.sock' && failed+=("can still use the Docker socket")
+if ((${#failed[@]})); then
+    echo "session-harden: FAILED, $agent_user $(IFS=,; echo "${failed[*]}")" >&2
     exit 1
 fi
-echo "session-harden: managed settings installed, sudo removed for $agent_user"
+echo "session-harden: managed settings installed; sudo, su and Docker removed for $agent_user"
