@@ -1,6 +1,6 @@
 # The rulesets every project's GitHub repository must have, whatever runs
-# inside a sandbox: part of the project standard, with CODEOWNERS and
-# ci-gate.yml beside it. Checked and applied by `foundry protect check|apply`.
+# inside a sandbox: part of the repo policy, with CODEOWNERS and ci-gate.yml
+# beside it. Checked and applied by `foundry protect check|apply`.
 #
 # Each ruleset is in the shape of GitHub's REST API ("Create a repository
 # ruleset"), sent as-is by `apply` and matched to GitHub's by name. `check`
@@ -27,7 +27,7 @@ rulesets:
   #
   # Code owner review: agents' users, the reviewer role's included, have
   # write access, so one approval alone could come from an agent. Each
-  # project's CODEOWNERS is the standard's, which names you for every file,
+  # project's CODEOWNERS is the repo policy's, which names you for every file,
   # so every pull request needs your approval, including one that changes
   # the workflows ci-gate runs.
   - name: foundry-default-branch
