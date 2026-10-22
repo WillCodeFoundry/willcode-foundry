@@ -93,13 +93,13 @@ $ uv run foundry protect apply --dry-run          # what apply would change
 $ uv run foundry protect apply                    # create missing rulesets, update ones that differ
 ```
 
-`config/github-protection.yaml` lists the rulesets, in the shape of GitHub's REST API, and is the place to change them: edit it, then `apply`. They allow no bypass, for you either:
+`config/github-protection.yaml` lists the rulesets, in the shape of GitHub's REST API, and is the place to change them: edit it, then `apply`. Repository admins (you) bypass them; agents' users, with write access only, can't:
 
 - `foundry-default-branch`: main changes only by a reviewed pull request; no force-push or deletion.
 - `foundry-agent-branches`: `task/**` and `agent-notes` take signed commits only and are never force-pushed or deleted.
-- `foundry-other-branches`: no other branch can be created, pushed or deleted, except the `feat/**` and `fix/**` prefixes left open for people.
+- `foundry-other-branches`: no other branch can be created, pushed or deleted, except by an admin.
 
-`check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Both use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
+`check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Commit-message rules, which could check the `Task:` trailer, are GitHub Enterprise only, so the trailer stays a git-hook check. Both commands use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
 
 ## The launcher
 

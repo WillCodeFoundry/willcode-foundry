@@ -27,7 +27,8 @@ def test_the_shipped_protection_file_parses() -> None:
         "foundry-agent-branches",
         "foundry-other-branches",
     ]
-    assert all(ruleset["bypass_actors"] == [] for ruleset in rulesets)
+    admin_only = [{"actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always"}]
+    assert all(ruleset["bypass_actors"] == admin_only for ruleset in rulesets)
 
 
 @pytest.mark.parametrize(

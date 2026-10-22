@@ -5,17 +5,21 @@
 # ruleset"), sent as-is by `apply` and matched to GitHub's by name. `check`
 # compares only the fields written here; ones GitHub adds are ignored.
 #
-# Nobody bypasses these, you included: change this file and apply it instead.
+# Repository admins (you) bypass every rule; agents' users have write access
+# only, so the rules hold for them. RepositoryRole 5 is GitHub's admin role.
 # Needs a plan with rulesets on private repositories (GitHub Pro or Team).
+
+admin_bypass: &admin_bypass
+  - {actor_type: RepositoryRole, actor_id: 5, bypass_mode: always}
 
 rulesets:
   # Main changes only through a reviewed pull request. Roles are separate
-  # GitHub users, so you can approve an agent's pull request; a pull request
-  # you open yourself needs another user's approval, or set the count to 0.
+  # GitHub users, so you can approve an agent's pull request; your own you
+  # can merge, or push directly, through the admin bypass.
   - name: foundry-default-branch
     target: branch
     enforcement: active
-    bypass_actors: []
+    bypass_actors: *admin_bypass
     conditions:
       ref_name:
         include: ["~DEFAULT_BRANCH"]
@@ -35,7 +39,7 @@ rulesets:
   - name: foundry-agent-branches
     target: branch
     enforcement: active
-    bypass_actors: []
+    bypass_actors: *admin_bypass
     conditions:
       ref_name:
         include: ["refs/heads/task/**", "refs/heads/agent-notes"]
@@ -45,12 +49,11 @@ rulesets:
       - type: non_fast_forward
       - type: required_signatures
 
-  # Every other branch is closed, except the prefixes people work on. Agents
-  # could push to those too; their git hooks refuse it as a mistake.
+  # Every other branch is closed to agents; admins create and push them freely.
   - name: foundry-other-branches
     target: branch
     enforcement: active
-    bypass_actors: []
+    bypass_actors: *admin_bypass
     conditions:
       ref_name:
         include: ["~ALL"]
@@ -58,8 +61,6 @@ rulesets:
           - "~DEFAULT_BRANCH"
           - "refs/heads/task/**"
           - "refs/heads/agent-notes"
-          - "refs/heads/feat/**"
-          - "refs/heads/fix/**"
     rules:
       - type: creation
       - type: update
