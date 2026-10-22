@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import SshAgent, socket_path
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -130,8 +130,8 @@ def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host,
     assert make_agent().list_key_fingerprints() == set()
 
 
-def test_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
-    assert socket_path("myproj-dev", 501) == Path("/tmp/sbx-agents-501/myproj-dev.sock")
+def test_agent_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
+    assert agent_socket_path("myproj-dev", 501) == Path("/tmp/sbx-agents-501/myproj-dev.sock")
 
 
 def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):

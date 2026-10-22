@@ -9,7 +9,7 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host
 
 
-def socket_path(sandbox_name: str, uid: int) -> Path:
+def agent_socket_path(sandbox_name: str, uid: int) -> Path:
     """The sandbox's ssh-agent socket: /tmp/sbx-agents-<uid>/<sandbox_name>.sock.
 
     The directory is per user, since /tmp is shared; the launcher makes it

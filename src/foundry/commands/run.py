@@ -20,8 +20,8 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
             "Arguments after '--' go to the agent."
         ),
     )
-    parser.add_argument("project", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")
-    parser.add_argument("role", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
+    parser.add_argument("project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")
+    parser.add_argument("role_name", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
     parser.add_argument("task_id", metavar="TASK", help="task id, e.g. WCF-0042")
     parser.set_defaults(func=main)
 
@@ -29,8 +29,8 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(paths.config_path(foundry_root))
-    project = foundry_config.project(args.project)
-    role = foundry_config.role(args.role)
+    project = foundry_config.project(args.project_name)
+    role = foundry_config.role(args.role_name)
     session.require_valid_task_id(args.task_id)
     sandbox_name = session.sandbox_name(role.name, project.name, args.task_id)
     session_dir = paths.session_dir(foundry_root, sandbox_name)

@@ -17,7 +17,7 @@ from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.sbx import Sbx
-from foundry.agent_sandbox.ssh_agent import SshAgent, socket_path
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def launch(request: LaunchRequest) -> NoReturn:
     definition = SandboxDefinition.read(request.definition_dir)
     uid = os.getuid()
     host = SystemHost(uid)
-    ssh_agent_socket_path = socket_path(definition.name, uid)
+    ssh_agent_socket_path = agent_socket_path(definition.name, uid)
     ssh_agent = SshAgent(host, ssh_agent_socket_path)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
