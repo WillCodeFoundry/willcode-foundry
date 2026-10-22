@@ -1,11 +1,17 @@
-"""config/github-protection.yaml: the rulesets every project's repository must have."""
+"""config/github-protection.yaml: the rulesets every project's repository must have.
+
+Some rules only work if the project's own files cooperate: a required status
+check must be produced by a workflow job on pull requests, and a required
+code owner review needs a CODEOWNERS file that owns the workflows. Those are
+checked and reported, never changed: they belong to the project.
+"""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from foundry import yaml_io
+from foundry import repo_files, yaml_io
 from foundry.errors import FoundryError
 from foundry.github import GitHub
 
@@ -34,15 +40,33 @@ class RulesetStatus:
 
 
 @dataclass(frozen=True)
+class FileCheck:
+    """Whether the project's own files support a rule; fixed in the project, not by apply."""
+
+    description: str
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
 class RepoStatus:
     repo_slug: str
     rulesets: list[RulesetStatus]
     unmanaged_ruleset_names: list[str]
     """Rulesets on GitHub that the protection file doesn't name; reported, never changed."""
+    file_checks: list[FileCheck] = field(default_factory=list)
+
+    @property
+    def rulesets_match(self) -> bool:
+        return all(status.state is RulesetState.OK for status in self.rulesets)
+
+    @property
+    def files_ok(self) -> bool:
+        return all(check.ok for check in self.file_checks)
 
     @property
     def is_protected(self) -> bool:
-        return all(status.state is RulesetState.OK for status in self.rulesets)
+        return self.rulesets_match and self.files_ok
 
 
 def load(protection_path: Path) -> list[Ruleset]:
@@ -125,7 +149,68 @@ def check_repo(github: GitHub, repo_slug: str, rulesets: list[Ruleset]) -> RepoS
         statuses.append(RulesetStatus(ruleset, state, found, ruleset_id))
     managed = {ruleset["name"] for ruleset in rulesets}
     unmanaged = sorted(name for name in ids_by_name if name not in managed)
-    return RepoStatus(repo_slug, statuses, unmanaged)
+    return RepoStatus(repo_slug, statuses, unmanaged, check_project_files(github, repo_slug, rulesets))
+
+
+def required_check_names(rulesets: list[Ruleset]) -> list[str]:
+    """The status check names the rulesets require, in order, without repeats."""
+    names: list[str] = []
+    for rule in _rules(rulesets, "required_status_checks"):
+        for check in rule.get("parameters", {}).get("required_status_checks", []):
+            if check["context"] not in names:
+                names.append(check["context"])
+    return names
+
+
+def requires_code_owner_review(rulesets: list[Ruleset]) -> bool:
+    return any(rule.get("parameters", {}).get("require_code_owner_review") for rule in _rules(rulesets, "pull_request"))
+
+
+def _rules(rulesets: list[Ruleset], rule_type: str) -> list[dict[str, Any]]:
+    return [rule for ruleset in rulesets for rule in ruleset.get("rules", []) if rule.get("type") == rule_type]
+
+
+def check_project_files(github: GitHub, repo_slug: str, rulesets: list[Ruleset]) -> list[FileCheck]:
+    """Check the default branch's workflows and CODEOWNERS against what the rulesets require."""
+    check_names = required_check_names(rulesets)
+    needs_code_owners = requires_code_owner_review(rulesets)
+    if not check_names and not needs_code_owners:
+        return []
+    workflow_paths = [
+        path
+        for path in github.dir_file_paths(repo_slug, repo_files.WORKFLOWS_DIR_PATH)
+        if path.endswith((".yml", ".yaml"))
+    ]
+    checks = [_check_workflows_produce(github, repo_slug, workflow_paths, name) for name in check_names]
+    if needs_code_owners:
+        checks.append(_check_code_owners(github, repo_slug, workflow_paths))
+    return checks
+
+
+def _check_workflows_produce(github: GitHub, repo_slug: str, workflow_paths: list[str], check_name: str) -> FileCheck:
+    producers = [
+        path
+        for path in workflow_paths
+        if check_name in repo_files.pull_request_check_names(github.file_text(repo_slug, path) or "")
+    ]
+    description = f"required check {check_name}"
+    if producers:
+        return FileCheck(description, True, ", ".join(producers))
+    return FileCheck(description, False, "no workflow on the default branch runs a job of that name on pull requests")
+
+
+def _check_code_owners(github: GitHub, repo_slug: str, workflow_paths: list[str]) -> FileCheck:
+    """Code owner review only protects the workflows, and CODEOWNERS itself, if someone owns them."""
+    for codeowners_path in repo_files.CODEOWNERS_PATHS:
+        text = github.file_text(repo_slug, codeowners_path)
+        if text is not None:
+            break
+    else:
+        return FileCheck("CODEOWNERS", False, "no CODEOWNERS file, but code owner review is required")
+    unowned = [path for path in [*workflow_paths, codeowners_path] if not repo_files.owners(text, path)]
+    if unowned:
+        return FileCheck("CODEOWNERS", False, f"no owner for {', '.join(unowned)}")
+    return FileCheck("CODEOWNERS", True, f"{codeowners_path} owns the workflows and itself")
 
 
 def apply_status(github: GitHub, repo_slug: str, status: RulesetStatus) -> None:

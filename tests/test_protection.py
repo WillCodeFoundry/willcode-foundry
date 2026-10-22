@@ -112,3 +112,59 @@ def test_apply_status_creates_and_updates_until_the_repo_is_protected() -> None:
     assert protection.check_repo(github, "o/r", wanted).is_protected
     assert ("PUT", "repos/o/r/rulesets/1") in fake.calls
     assert ("POST", "repos/o/r/rulesets") in fake.calls
+
+
+GATED: protection.Ruleset = {
+    "name": "default-branch",
+    "rules": [
+        {"type": "pull_request", "parameters": {"require_code_owner_review": True}},
+        {
+            "type": "required_status_checks",
+            "parameters": {"required_status_checks": [{"context": "ci-gate", "integration_id": 15368}]},
+        },
+    ],
+}
+GATE_WORKFLOW = "on: pull_request\njobs:\n  test: {}\n  ci-gate: {needs: [test]}\n"
+
+
+def file_checks(files: dict[str, str], rulesets: list[protection.Ruleset]) -> list[tuple[str, bool, str]]:
+    fake = FakeGitHub()
+    fake.files["o/r"] = files
+    return [(c.description, c.ok, c.detail) for c in protection.check_project_files(GitHub(fake), "o/r", rulesets)]
+
+
+def test_project_files_that_support_the_rules() -> None:
+    files = {".github/workflows/ci.yml": GATE_WORKFLOW, ".github/CODEOWNERS": ".github/ @will\n"}
+    assert file_checks(files, [GATED]) == [
+        ("required check ci-gate", True, ".github/workflows/ci.yml"),
+        ("CODEOWNERS", True, ".github/CODEOWNERS owns the workflows and itself"),
+    ]
+
+
+def test_a_project_without_the_gate_job_or_codeowners() -> None:
+    files = {".github/workflows/ci.yml": "on: pull_request\njobs:\n  test: {}\n", "README.md": ""}
+    assert file_checks(files, [GATED]) == [
+        ("required check ci-gate", False, "no workflow on the default branch runs a job of that name on pull requests"),
+        ("CODEOWNERS", False, "no CODEOWNERS file, but code owner review is required"),
+    ]
+
+
+def test_codeowners_must_own_the_workflows_and_itself() -> None:
+    files = {".github/workflows/ci.yml": GATE_WORKFLOW, "CODEOWNERS": "/src/ @will\n"}
+    assert file_checks(files, [GATED])[1] == ("CODEOWNERS", False, "no owner for .github/workflows/ci.yml, CODEOWNERS")
+
+
+def test_a_project_with_no_workflows_at_all() -> None:
+    assert file_checks({"CODEOWNERS": "* @will\n"}, [GATED])[0][1] is False
+
+
+def test_project_files_are_not_read_when_no_rule_needs_them() -> None:
+    fake = FakeGitHub()
+    assert protection.check_project_files(GitHub(fake), "o/r", [RULESET]) == []
+    assert fake.calls == []
+
+
+def test_the_shipped_file_requires_the_ci_gate_and_code_owner_review() -> None:
+    rulesets = protection.load(REPO_ROOT / "config" / "github-protection.yaml")
+    assert protection.required_check_names(rulesets) == ["ci-gate"]
+    assert protection.requires_code_owner_review(rulesets)

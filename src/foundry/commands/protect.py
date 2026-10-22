@@ -37,7 +37,7 @@ def check_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
 
 def apply_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
     def apply_repo(github: GitHub, status: protection.RepoStatus) -> bool:
-        if status.is_protected:
+        if status.rulesets_match:
             return _report(github, status)
         for ruleset_status in status.rulesets:
             if ruleset_status.state is protection.RulesetState.OK:
@@ -48,9 +48,10 @@ def apply_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
                 _print_differences(ruleset_status)
             else:
                 protection.apply_status(github, status.repo_slug, ruleset_status)
-                print(f"  {verb}d    {ruleset_status.ruleset_name}")
+                print(f"  {verb + 'd':<8} {ruleset_status.ruleset_name}")
+        _print_file_checks(status)
         _print_unmanaged(status)
-        return not args.dry_run  # a dry run leaves it unprotected
+        return status.files_ok and not args.dry_run  # a dry run leaves it unprotected
 
     return _for_each_repo(args, agent_args, GitHub(), apply_repo)
 
@@ -90,6 +91,7 @@ def _report(github: GitHub, status: protection.RepoStatus) -> bool:
     for ruleset_status in status.rulesets:
         print(f"  {ruleset_status.state:<8} {ruleset_status.ruleset_name}")
         _print_differences(ruleset_status)
+    _print_file_checks(status)
     _print_unmanaged(status)
     return status.is_protected
 
@@ -97,6 +99,14 @@ def _report(github: GitHub, status: protection.RepoStatus) -> bool:
 def _print_differences(status: protection.RulesetStatus) -> None:
     for difference in status.differences:
         print(f"           {difference}")
+
+
+def _print_file_checks(status: protection.RepoStatus) -> None:
+    for check in status.file_checks:
+        state = "ok" if check.ok else "missing"
+        print(f"  {state:<8} {check.description}: {check.detail}")
+    if not status.files_ok:
+        print("           fix these in the project; apply does not change project files")
 
 
 def _print_unmanaged(status: protection.RepoStatus) -> None:

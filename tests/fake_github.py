@@ -1,5 +1,6 @@
-"""An in-memory stand-in for `gh api` on the repository rulesets endpoints."""
+"""An in-memory stand-in for `gh api` on the repository rulesets and contents endpoints."""
 
+import base64
 import copy
 import json
 import re
@@ -16,6 +17,8 @@ class FakeGitHub:
         self.rulesets: dict[str, dict[int, dict[str, Any]]] = {}
         """Rulesets by repo slug, then id."""
         self.calls: list[tuple[str, str]] = []
+        self.files: dict[str, dict[str, str]] = {}
+        """File text by repo slug, then path on the default branch."""
         self.unavailable: dict[str, str] = {}
         """Repo slug -> the error gh prints for it, e.g. for a plan without rulesets."""
         self._next_id = 1
@@ -35,6 +38,9 @@ class FakeGitHub:
         assert list(command[:3]) == ["gh", "api", "--method"], command
         method, endpoint = command[3], command[4]
         self.calls.append((method, endpoint))
+        contents = re.fullmatch(r"repos/([^/]+/[^/]+)/contents/(.+)", endpoint)
+        if contents:
+            return self._contents(contents[1], contents[2])
         match = re.fullmatch(r"repos/([^/]+/[^/?]+)/rulesets(?:/(\d+))?(?:\?.*)?", endpoint)
         assert match, endpoint
         slug, ruleset_id = match[1], match[2]
@@ -56,6 +62,18 @@ class FakeGitHub:
             repo[int(ruleset_id)] = {**body, **SERVER_FIELDS, "id": int(ruleset_id)}
             return self._ok(repo[int(ruleset_id)])
         raise AssertionError(f"unexpected call {method} {endpoint}")
+
+    def _contents(self, slug: str, path: str) -> subprocess.CompletedProcess[str]:
+        files = self.files.get(slug, {})
+        if path in files:
+            return self._ok({"type": "file", "path": path, "content": base64.b64encode(files[path].encode()).decode()})
+        entries = sorted({f.removeprefix(f"{path}/").split("/")[0] for f in files if f.startswith(f"{path}/")})
+        if not entries:
+            return subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)\n")
+        listing = [
+            {"path": f"{path}/{name}", "type": "file" if f"{path}/{name}" in files else "dir"} for name in entries
+        ]
+        return self._ok(listing)
 
     @staticmethod
     def _ok(payload: object) -> subprocess.CompletedProcess[str]:

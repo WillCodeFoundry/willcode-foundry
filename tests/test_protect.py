@@ -100,3 +100,32 @@ def test_apply_makes_check_pass(fake: FakeGitHub) -> None:
 def test_unknown_project_is_an_error(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["protect", "check", "nope"]) == 1
     assert "unknown project 'nope'" in capsys.readouterr().err
+
+
+GATED_PROTECTION = """\
+rulesets:
+  - name: default-branch
+    target: branch
+    enforcement: active
+    rules:
+      - type: required_status_checks
+        parameters:
+          strict_required_status_checks_policy: true
+          required_status_checks: [{context: ci-gate, integration_id: 15368}]
+"""
+
+
+def test_project_files_are_reported_and_apply_leaves_them_to_the_project(
+    fake: FakeGitHub, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "config" / "github-protection.yaml").write_text(GATED_PROTECTION)
+
+    assert cli.main(["protect", "apply", "store"]) == 1  # rulesets created, but the project lacks ci-gate
+    out = capsys.readouterr().out
+    assert "  created  default-branch\n" in out
+    assert "  missing  required check ci-gate: no workflow" in out
+    assert "fix these in the project" in out
+
+    fake.files["o/store"] = {".github/workflows/ci.yml": "on: pull_request\njobs:\n  ci-gate: {}\n"}
+    assert cli.main(["protect", "check", "store"]) == 0
+    assert "  ok       required check ci-gate: .github/workflows/ci.yml" in capsys.readouterr().out

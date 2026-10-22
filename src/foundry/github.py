@@ -4,6 +4,7 @@ The foundry never handles a token itself: `gh` holds the login. Agents'
 role credentials are never used here.
 """
 
+import base64
 import json
 import re
 import subprocess
@@ -21,8 +22,16 @@ _GITHUB_URL = re.compile(
 )
 
 
+_HTTP_STATUS = re.compile(r"\(HTTP (\d{3})\)")
+
+
 class GitHubError(FoundryError):
     """A GitHub API call failed; the message is gh's."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        match = _HTTP_STATUS.search(message)
+        self.http_status = int(match[1]) if match else None
 
 
 def repo_slug(url: str) -> str:
@@ -55,3 +64,25 @@ class GitHub:
         if result.returncode != 0:
             raise GitHubError(result.stderr.strip().removeprefix("gh: ") or f"gh api {endpoint} failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
+
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+        """A file's text on the default branch, or None if there is no such file."""
+        content = self._contents(repo_slug, file_path)
+        if not isinstance(content, dict) or content.get("type") != "file":
+            return None
+        return base64.b64decode(content["content"]).decode()
+
+    def dir_file_paths(self, repo_slug: str, dir_path: str) -> list[str]:
+        """Paths of the files directly in a directory on the default branch; empty if it doesn't exist."""
+        content = self._contents(repo_slug, dir_path)
+        if not isinstance(content, list):
+            return []
+        return sorted(entry["path"] for entry in content if entry.get("type") == "file")
+
+    def _contents(self, repo_slug: str, path: str) -> Any:
+        try:
+            return self.api("GET", f"repos/{repo_slug}/contents/{path}")
+        except GitHubError as error:
+            if error.http_status == 404:
+                return None
+            raise

@@ -95,9 +95,24 @@ $ uv run foundry protect apply                    # create missing rulesets, upd
 
 `config/github-protection.yaml` lists the rulesets, in the shape of GitHub's REST API, and is the place to change them: edit it, then `apply`. Repository admins (you) bypass them; agents' users, with write access only, can't:
 
-- `foundry-default-branch`: main changes only by a reviewed pull request; no force-push or deletion.
+- `foundry-default-branch`: main changes only by a reviewed pull request whose `ci-gate` check passed, with code owner review; no force-push or deletion.
 - `foundry-agent-branches`: `task/**` and `agent-notes` take signed commits only and are never force-pushed or deleted.
 - `foundry-other-branches`: no other branch can be created, pushed or deleted, except by an admin.
+
+Two of those rules rely on each project's own files, so `check` reads them from the default branch too, and reports what's missing; `apply` never changes project files:
+
+- **`ci-gate`**: a job of that name in a workflow that runs on `pull_request`. It ends the project's CI and fails if any other job did, so each project keeps its own jobs while the ruleset requires the same single check everywhere. Only a check from GitHub Actions counts, not a status posted under that name.
+
+  ```yaml
+  ci-gate:
+    if: always()
+    needs: [ruff, mypy, test]   # every other job in this workflow
+    runs-on: ubuntu-latest
+    steps:
+      - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'
+  ```
+
+- **`CODEOWNERS`** naming you for `.github/` and for the file itself. A pull request runs the workflows it contains, so without this an agent could change `ci.yml` in its own pull request to make `ci-gate` pass.
 
 `check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Commit-message rules, which could check the `Task:` trailer, are GitHub Enterprise only, so the trailer stays a git-hook check. Both commands use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
 

@@ -44,3 +44,16 @@ def test_api_reports_gh_errors_in_gh_words() -> None:
 
     with pytest.raises(GitHubError, match=r"^Upgrade to GitHub Pro \(HTTP 403\)$"):
         GitHub(runner).api("GET", "repos/o/r/rulesets")
+
+
+def test_file_text_is_none_for_a_missing_file_and_errors_otherwise_still_raise() -> None:
+    def runner(command: Sequence[str], stdin: str | None) -> subprocess.CompletedProcess[str]:
+        stderr = "gh: Not Found (HTTP 404)" if command[-1].endswith("missing") else "gh: Bad credentials (HTTP 401)"
+        return subprocess.CompletedProcess(command, 1, "", stderr)
+
+    github = GitHub(runner)
+    assert github.file_text("o/r", "missing") is None
+    assert github.dir_file_paths("o/r", "missing") == []
+    with pytest.raises(GitHubError, match="Bad credentials") as error:
+        github.file_text("o/r", "CODEOWNERS")
+    assert error.value.http_status == 401
