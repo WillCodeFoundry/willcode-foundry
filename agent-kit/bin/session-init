@@ -110,7 +110,7 @@ for socket in /var/run/docker.sock /var/run/docker/containerd/containerd.sock; d
     if [[ -S "$socket" && -w "$socket" ]]; then
         echo "session-init: the agent can use $socket, which is root over this sandbox; not starting the agent." >&2
         echo "  A sandbox hardened before Docker's socket was made root-only needs recreating:" >&2
-        echo "  sbx env rm sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again." >&2
+        echo "  sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again." >&2
         exit 1
     fi
 done
