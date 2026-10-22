@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {python-version: "3.11", enable-cache: true}
+      - run: uv sync --locked --group dev
+      - run: uv run ruff format --check . agent-kit/claude/hooks/guard-bash
+      - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
+      - run: for f in agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/commit-msg agent-kit/hooks/lib/*.sh agent-kit/claude/hooks/session-check; do bash -n "$f"; done
+
+  mypy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {python-version: "3.11", enable-cache: true}
+      - run: uv sync --locked --group dev
+      - run: uv run mypy
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: {python-version: "3.11", enable-cache: true}
+      - run: uv sync --locked --group dev
+      - run: uv run pytest
+
+  # Required by config/github-protection.yaml: passes only if every job above did.
+  ci-gate:
+    if: always()
+    needs: [lint, mypy, test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'
