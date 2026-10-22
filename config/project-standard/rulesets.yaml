@@ -1,9 +1,11 @@
-# What every project's GitHub repository must enforce, whatever runs inside
-# a sandbox. Checked and applied by `foundry protect check|apply`.
+# The rulesets every project's GitHub repository must have, whatever runs
+# inside a sandbox: part of the project standard, with CODEOWNERS and
+# ci-gate.yml beside it. Checked and applied by `foundry protect check|apply`.
 #
 # Each ruleset is in the shape of GitHub's REST API ("Create a repository
 # ruleset"), sent as-is by `apply` and matched to GitHub's by name. `check`
-# compares only the fields written here; ones GitHub adds are ignored.
+# compares only the fields written here; ones GitHub adds are ignored. If
+# GitHub fills in a default field and check keeps showing it, add it here.
 #
 # Repository admins (you) bypass every rule; agents' users have write access
 # only, so the rules hold for them. RepositoryRole 5 is GitHub's admin role.
@@ -18,16 +20,16 @@ rulesets:
   # your own you can merge, or push directly, through the admin bypass.
   #
   # CI: each project's workflow ends in a job named ci-gate that needs all its
-  # other jobs, so projects keep their own jobs and this file stays the same.
+  # other jobs (ci-gate.yml), so projects keep their own jobs and this file
+  # stays the same.
   # integration_id 15368 is GitHub Actions: a status posted by anyone else
   # under that name doesn't count.
   #
   # Code owner review: agents' users, the reviewer role's included, have
   # write access, so one approval alone could come from an agent. Each
-  # project's CODEOWNERS has a catch-all line, such as `* @you`, and names
-  # only admins, so every pull request needs an admin's approval, including
-  # one that changes the workflows ci-gate runs.
-  # `foundry protect check` reports a project missing either.
+  # project's CODEOWNERS is the standard's, which names you for every file,
+  # so every pull request needs your approval, including one that changes
+  # the workflows ci-gate runs.
   - name: foundry-default-branch
     target: branch
     enforcement: active

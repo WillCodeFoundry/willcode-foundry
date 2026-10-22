@@ -44,7 +44,8 @@ or `CONTRIBUTING.md` wins where it says otherwise.
 
 ### Footer
 
-- `Task: <task-id>`, always.
+- `Task: <task-id>`, on every commit on a task branch. The foundry's
+  `prepare-commit-msg` hook adds it, so don't write it yourself.
 - `BREAKING CHANGE: <what breaks and how to migrate>` when it does.
 - No `Co-authored-by` or other attribution lines.
 

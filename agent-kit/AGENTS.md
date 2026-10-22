@@ -164,12 +164,13 @@ If you run out of turns or time, push whatever state you have and make sure
 ### Code checkout (`task/$AGENT_TASK`)
 
 Write commit messages as `$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`
-describes: a typed summary, a body saying why, and a `Task:` trailer as the
-last paragraph. No `Co-Authored-By` or other attribution lines.
+describes: a typed summary and a body saying why. A `Task: $AGENT_TASK`
+trailer is added for you on this branch; you don't need to write it. No
+`Co-Authored-By` or other attribution lines.
 
 ```bash
 git add <files>
-git commit -m "feat(scope): summary of the change" -m "Why it was needed." -m "Task: $AGENT_TASK"
+git commit -m "feat(scope): summary of the change" -m "Why it was needed."
 git push -u origin task/$AGENT_TASK
 ```
 

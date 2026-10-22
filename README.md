@@ -21,7 +21,10 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 ├── tests/
 ├── config/
 │   ├── foundry.yaml              # instance name, projects (clone URLs), roles
-│   └── github-protection.yaml    # rulesets every project's GitHub repository must have
+│   └── project-standard/         # what every project's repository must match (foundry protect)
+│       ├── rulesets.yaml         # GitHub rulesets, in the REST API's shape
+│       ├── CODEOWNERS            # the project's .github/CODEOWNERS, verbatim
+│       └── ci-gate.yml           # the on: block and ci-gate job its ci.yml must have
 ├── agent-kit/                    # everything an agent is given (read-only mount)
 │   ├── AGENTS.md                 # instructions shared by every role
 │   ├── bin/
@@ -34,7 +37,9 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 │   │   ├── gitconfig             # behaviour shared by every role (pull.rebase, push.default, ...)
 │   │   └── allowed_signers       # one line per signing role, for verifying commits
 │   ├── hooks/                    # git hooks; core.hooksPath points here
-│   │   ├── pre-commit, commit-msg, pre-push   # each holds its own rules
+│   │   ├── pre-commit            # no task notes on the task branch; only this task's folder on agent-notes
+│   │   ├── prepare-commit-msg    # adds the Task: trailer on the task branch
+│   │   ├── pre-push              # only this task's branch and agent-notes
 │   │   └── lib/common.sh         # shared helpers
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
@@ -76,45 +81,43 @@ Two kinds of control, and only the first is a boundary:
 | Sandbox isolation, network policy, read-only `agent-kit/` mount | sbx / Docker | anything in the sandbox |
 | Managed settings: permission mode, which hooks run, no attribution | root-owned file; `session-harden` removes sudo, `su` and Docker | anything in the sandbox |
 | One SSH key and token per role | the credentials' own scope on GitHub | anything in the sandbox |
-| Which branches and tags may be pushed; no force-push or deletion | the project's GitHub rules | anything with the role's credentials |
+| Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets | anything with the role's credentials |
 | Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
 | `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
 | `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
 
-The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They exist to stop the common slips, such as reaching for `--no-verify` when a hook fails or force-pushing after a bad rebase, and to explain the rule in the refusal. What must hold whatever the agent does belongs in the rows above them, chiefly the project's GitHub rules.
+The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
-### Checking the GitHub rules
+- `pre-push`: push only `task/<this task>` and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another.
+- `pre-commit`: no task notes on the task branch; on `agent-notes`, only this task's `.agent/<task>/` folder, never its `TASK.md`.
+- `prepare-commit-msg`: adds the `Task: <task>` trailer to commits on the task branch, so agents don't have to; `--no-verify` doesn't skip it.
+- `guard-bash`: refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the hooks above.
+
+Force-pushes, deletions, history rewrites and pushes elsewhere are left to the rulesets, which refuse them on the server. What must hold whatever the agent does belongs in the rows above the hooks.
+
+### Checking projects against the standard
 
 ```console
-$ uv run foundry protect check                    # every project; exit 1 if any repository falls short
+$ uv run foundry protect check                    # every project; shows a diff for anything that differs, exit 1 if any
 $ uv run foundry protect check tkt-store          # one project
-$ uv run foundry protect apply --dry-run          # what apply would change
-$ uv run foundry protect apply                    # create missing rulesets, update ones that differ
+$ uv run foundry protect apply                    # make the rulesets match, then check
 ```
 
-`config/github-protection.yaml` lists the rulesets, in the shape of GitHub's REST API, and is the place to change them: edit it, then `apply`. Repository admins (you) bypass them; agents' users, with write access only, can't:
+Every project's repository must match the project standard in `config/project-standard/`: its rulesets, its `.github/CODEOWNERS`, and the part of its `.github/workflows/ci.yml` the rulesets depend on. `check` compares rather than analyses: anything different is shown as a diff from the project to the standard, even when it's harmless. When a project really needs to differ, change the standard.
+
+`rulesets.yaml` lists the rulesets, in the shape of GitHub's REST API; edit it, then `apply`. Repository admins (you) bypass them; agents' users, with write access only, can't:
 
 - `foundry-default-branch`: main changes only by a reviewed pull request whose `ci-gate` check passed, with code owner review; no force-push or deletion.
 - `foundry-agent-branches`: `task/**` and `agent-notes` take signed commits only and are never force-pushed or deleted.
 - `foundry-other-branches`: no other branch can be created, pushed or deleted, except by an admin, and Dependabot under `dependabot/**` (rulesets bind GitHub Apps too).
 - `foundry-tags`: only admins create, move or delete tags.
 
-Two of those rules rely on each project's own files, so `check` reads them from the default branch too, and reports what's missing; `apply` never changes project files:
+Two of those rules rely on the project's own files, which `apply` never writes; their diff shows what to change:
 
-- **`ci-gate`**: a job of that name in a workflow that runs on `pull_request`. It ends the project's CI and fails if any other job did, so each project keeps its own jobs while the ruleset requires the same single check everywhere. Only a check from GitHub Actions counts, not a status posted under that name.
+- **`ci.yml`** must have the `on:` block and the `ci-gate` job in `ci-gate.yml`, with `ci-gate`'s `needs` naming every other job (the template writes `<all other jobs>`). `ci-gate` ends the project's CI and fails if any other job did, so each project keeps its own jobs while the ruleset requires one check everywhere. To start a project's CI, copy `ci-gate.yml` into its `ci.yml`.
+- **`CODEOWNERS`** must be `config/project-standard/CODEOWNERS`, which names you for every file. Agents' users, the reviewer role's included, have write access, so a required approval alone could come from an agent; code owner review makes it yours. It also covers a pull request that changes `ci.yml` to make `ci-gate` pass, since a pull request runs the workflows it contains.
 
-  ```yaml
-  ci-gate:
-    if: always()
-    needs: [ruff, mypy, test]   # every other job in this workflow
-    runs-on: ubuntu-latest
-    steps:
-      - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'
-  ```
-
-- **`CODEOWNERS`** with a catch-all line, such as `* @you`, naming only admins, and no line that leaves files without an owner. Agents' users, the reviewer role's included, have write access, so a required approval alone could come from an agent; code owner review makes it an admin's. It also covers a pull request that changes `ci.yml` to make `ci-gate` pass, since a pull request runs the workflows it contains. Owners are checked by their access to the repository, so they must be named as `@username`; teams and emails are reported as unverifiable.
-
-`check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Commit-message rules, which could check the `Task:` trailer, are GitHub Enterprise only, so the trailer stays a git-hook check. Both commands use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
+`check` matches rulesets by name and ignores fields GitHub adds; extra items in a list, such as another bypass actor, still show. Rulesets on GitHub that the standard doesn't name are left alone: rulesets add up, so an extra one can't weaken these. Both commands use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. This repository is one of its own projects, and a test checks it meets the standard.
 
 ## The launcher
 
@@ -123,7 +126,7 @@ src/foundry/
 ├── cli.py              # `foundry` command; one subcommand per module in commands/
 ├── commands/run.py     # foundry run
 ├── commands/protect.py # foundry protect check|apply
-├── protection.py       # loads github-protection.yaml; compares and applies rulesets
+├── standard.py         # the project standard: loads it, compares a repository with it
 ├── github.py           # GitHub's REST API through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml
@@ -147,10 +150,10 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
 ```
 
-These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/github-protection.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything. Run ShellCheck from the repository root: the hooks' `source` directives are relative to it.
+These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/project-standard/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry protect check` will show the difference. Run ShellCheck from the repository root: the hooks' `source` directives are relative to it.
 
 `tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`.
 
