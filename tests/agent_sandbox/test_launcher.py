@@ -34,6 +34,7 @@ def layout(tmp_path):
     key.write_text("k")
     sdir = tmp_path / "s"
     sdir.mkdir()
+    (tmp_path / "ws").mkdir()
     SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(sdir)
     return kit, key, sdir, tmp_path / "n.sock"
 
@@ -166,3 +167,10 @@ def test_require_file_accepts_a_file_and_refuses_a_directory(tmp_path: Path) -> 
     require_file(tmp_path / "key", "ssh key")
     with pytest.raises(SandboxError, match="is not a file"):
         require_file(tmp_path, "ssh key")
+
+
+def test_a_session_whose_workspace_is_gone_is_refused(layout, host, tmp_path) -> None:
+    # A session from before the workspace moved into it, its /tmp workspace since cleared.
+    (tmp_path / "ws").rmdir()
+    with pytest.raises(SandboxError, match=r"workspace '.*ws' is not a directory"):
+        run_prepare(layout, host)

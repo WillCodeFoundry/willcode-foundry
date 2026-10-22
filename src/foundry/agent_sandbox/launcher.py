@@ -75,6 +75,7 @@ def require_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
 def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sbx: Sbx) -> None:
     """Everything up to, but not including, attaching the agent."""
     require_dir(definition.agent_kit_dir, "agent kit")
+    require_dir(definition.workspace_dir, "workspace")
     require_file(request.ssh_key_path, "ssh key")
     private_paths = [request.ssh_key_path]
     if request.github_token_path is not None:

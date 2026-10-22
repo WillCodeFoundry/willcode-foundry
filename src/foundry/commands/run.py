@@ -2,8 +2,6 @@
 
 import argparse
 import sys
-import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
@@ -23,62 +21,38 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def main(args: argparse.Namespace) -> NoReturn:
-    foundry_root = paths.find_foundry_root()
+    """Composition root: prepare the launch from this foundry, then hand over to the sandbox."""
+    agent_sandbox.launch(prepare_launch(paths.find_foundry_root(), args.project_name, args.role_name, args.task_id))
+
+
+def prepare_launch(foundry_root: Path, project_name: str, role_name: str, task_id: str) -> agent_sandbox.LaunchRequest:
+    """Everything up to the hand-over: the session, created the first time, and the request to launch it."""
     foundry_config = config.load(paths.config_path(foundry_root))
-    project = foundry_config.project(args.project_name)
-    role = foundry_config.role(args.role_name)
-    session.require_valid_task_id(args.task_id)
-    sandbox_name = session.sandbox_name(role.name, project.name, args.task_id)
+    project = foundry_config.project(project_name)
+    role = foundry_config.role(role_name)
+    session.require_valid_task_id(task_id)
+    sandbox_name = session.sandbox_name(role.name, project.name, task_id)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
-    launched_at = datetime.now().astimezone()
 
     if not (session_dir / agent_sandbox.SandboxDefinition.FILE_NAME).is_file():
-        _create_session(session_dir, foundry_root, sandbox_name, project, role, args.task_id, launched_at)
+        new_definition = session.sandbox_definition(
+            sandbox_name=sandbox_name,
+            workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
+            agent_kit_dir=paths.agent_kit_dir(foundry_root),
+            repo_url=project.url,
+            role_name=role.name,
+            task_id=task_id,
+            project_name=project.name,
+        )
+        session.create_session(session_dir, new_definition)
+        print(f"==> session:   {session_dir} (new)", file=sys.stderr)
     definition = agent_sandbox.SandboxDefinition.read(session_dir)
-    session.require_same_sandbox(definition, role_name=role.name, task_id=args.task_id, repo_url=project.url)
-
-    # The workspace is an empty temporary directory; recreate it if the OS has
-    # cleared it since the sandbox was created (after a reboot, say).
-    definition.workspace_dir.mkdir(parents=True, exist_ok=True)
-    session.record_launch(session_dir, launched_at=launched_at)
+    session.require_same_sandbox(definition, role_name=role.name, task_id=task_id, repo_url=project.url)
 
     github_token_path = paths.github_token_path(foundry_root, role.name)
-    agent_sandbox.launch(
-        agent_sandbox.LaunchRequest(
-            definition_dir=session_dir,
-            ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
-            init_command=(str(definition.agent_kit_dir / "bin" / "session-init"),),
-            github_token_path=github_token_path if github_token_path.is_file() else None,
-        )
+    return agent_sandbox.LaunchRequest(
+        definition_dir=session_dir,
+        ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
+        init_command=(str(definition.agent_kit_dir / "bin" / "session-init"),),
+        github_token_path=github_token_path if github_token_path.is_file() else None,
     )
-
-
-def _create_session(
-    session_dir: Path,
-    foundry_root: Path,
-    sandbox_name: str,
-    project: config.Project,
-    role: config.Role,
-    task_id: str,
-    created_at: datetime,
-) -> None:
-    definition = session.sandbox_definition(
-        sandbox_name=sandbox_name,
-        workspace_dir=Path(tempfile.mkdtemp(prefix=f"foundry-{sandbox_name}-")),
-        agent_kit_dir=paths.agent_kit_dir(foundry_root),
-        repo_url=project.url,
-        role_name=role.name,
-        task_id=task_id,
-        project_name=project.name,
-    )
-    session.create_session(
-        session_dir,
-        definition,
-        sandbox=sandbox_name,
-        role=role.name,
-        project=project.name,
-        task=task_id,
-        branch=f"task/{task_id}",
-        created=created_at.isoformat(timespec="seconds"),
-    )
-    print(f"==> session:   {session_dir} (new)", file=sys.stderr)

@@ -42,6 +42,11 @@ def session_dir(foundry_root: Path, sandbox_name: str) -> Path:
     return foundry_root / "sessions" / sandbox_name
 
 
+def workspace_dir(foundry_root: Path, sandbox_name: str) -> Path:
+    """The empty primary workspace sbx requires; nothing is put in it."""
+    return session_dir(foundry_root, sandbox_name) / "workspace"
+
+
 def repo_policy_dir(foundry_root: Path) -> Path:
     """The directory holding what every project's repository must match."""
     return foundry_root / "config" / "repo-policy"

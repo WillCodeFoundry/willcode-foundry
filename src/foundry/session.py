@@ -1,22 +1,17 @@
-"""Sessions: one directory per sandbox, holding its sandbox definition and record.
+"""Sessions: one directory per sandbox, holding its sandbox definition and workspace.
 
 ``sessions/<sandbox>/`` holds the sandbox definition, written once when the
-sandbox is first launched (SandboxDefinition knows its format), and
-``session.yaml``, which records when it was created and each launch since:
-the launcher hands over to sbx, so it never learns whether a launch got as
-far as the agent.
+sandbox is first launched (SandboxDefinition knows its format), and the
+empty ``workspace/`` directory sbx requires as the sandbox's primary
+workspace.
 """
 
 import re
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
-from foundry import yaml_io
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.errors import FoundryError
-
-RECORD_FILE_NAME: Final = "session.yaml"
 
 # sbx accepts letters, digits, '.', '+', '-'. The name also names an
 # ssh-agent socket, whose path length is limited.
@@ -87,8 +82,8 @@ def sandbox_definition(
     )
 
 
-def create_session(session_dir: Path, definition: SandboxDefinition, /, **record: Any) -> None:
-    """Create the session directory with its sandbox definition and session.yaml.
+def create_session(session_dir: Path, definition: SandboxDefinition) -> None:
+    """Create the session directory with its sandbox definition and empty workspace.
 
     Refuses if the directory already exists, so an existing sandbox's
     definition is never rewritten.
@@ -97,8 +92,8 @@ def create_session(session_dir: Path, definition: SandboxDefinition, /, **record
         session_dir.mkdir(parents=True)
     except FileExistsError:
         raise FoundryError(f"session directory {session_dir} already exists") from None
+    definition.workspace_dir.mkdir()
     definition.write(session_dir)
-    yaml_io.dump(session_dir / RECORD_FILE_NAME, {**record, "launches": []})
 
 
 def require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task_id: str, repo_url: str) -> None:
@@ -118,18 +113,3 @@ def require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task_
             "or the project's url has changed since, so remove the sandbox and "
             f"sessions/{definition.name}/ to start over."
         )
-
-
-def record_launch(session_dir: Path, *, launched_at: datetime) -> None:
-    """Append one launch to session.yaml, keeping everything already there.
-
-    Recorded before the sandbox is prepared, so it includes launches that then
-    failed: the launcher replaces itself with sbx and can't record success.
-    """
-    record_path = session_dir / RECORD_FILE_NAME
-    record = yaml_io.load(record_path)
-    try:
-        record["launches"].append({"at": launched_at.isoformat(timespec="seconds")})
-    except (KeyError, TypeError, AttributeError):
-        raise FoundryError(f"{record_path}: not a session record written by foundry") from None
-    yaml_io.dump(record_path, record)

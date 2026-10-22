@@ -1,9 +1,8 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from foundry import session, yaml_io
+from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.errors import FoundryError
 
@@ -47,40 +46,27 @@ def test_sandbox_definition(tmp_path: Path) -> None:
     }
 
 
-def test_create_session_writes_both_files_and_refuses_an_existing_dir(tmp_path: Path) -> None:
+def test_create_session_writes_the_definition_and_creates_the_workspace(tmp_path: Path) -> None:
     session_dir = tmp_path / "s"
-    session.create_session(session_dir, new_definition(tmp_path), role="dev")
-    assert SandboxDefinition.read(session_dir) == new_definition(tmp_path)
-    assert yaml_io.load(session_dir / session.RECORD_FILE_NAME) == {"role": "dev", "launches": []}
+    definition = session.sandbox_definition(
+        sandbox_name="dev-p-t1",
+        workspace_dir=session_dir / "workspace",
+        agent_kit_dir=Path("/f/agent-kit"),
+        repo_url="git@h:o/p.git",
+        role_name="dev",
+        task_id="T1",
+        project_name="p",
+    )
+    session.create_session(session_dir, definition)
+    assert SandboxDefinition.read(session_dir) == definition
+    assert definition.workspace_dir.is_dir()
+    assert sorted(path.name for path in session_dir.iterdir()) == ["sbxenv.yaml", "workspace"]
+
+
+def test_create_session_refuses_an_existing_directory(tmp_path: Path) -> None:
+    (tmp_path / "s").mkdir()
     with pytest.raises(FoundryError, match="already exists"):
-        session.create_session(session_dir, new_definition(tmp_path))
-
-
-def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None:
-    d = tmp_path / "s"
-    session.create_session(d, new_definition(tmp_path), sandbox="s")
-    first = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
-    session.record_launch(d, launched_at=first)
-    session.record_launch(d, launched_at=first.replace(hour=19))
-    assert yaml_io.load(d / session.RECORD_FILE_NAME) == {
-        "sandbox": "s",
-        "launches": [
-            {"at": "2026-10-21T18:00:00+00:00"},
-            {"at": "2026-10-21T19:00:00+00:00"},
-        ],
-    }
-
-
-@pytest.mark.parametrize("content", ["[]\n", "sandbox: s\n", "launches: none\n"])
-def test_a_record_foundry_did_not_write_fails_with_its_path(tmp_path: Path, content: str) -> None:
-    (tmp_path / session.RECORD_FILE_NAME).write_text(content)
-    with pytest.raises(FoundryError, match=r"session.yaml: not a session record written by foundry"):
-        session.record_launch(tmp_path, launched_at=datetime.now(UTC))
-
-
-def test_record_launch_needs_a_record(tmp_path: Path) -> None:
-    with pytest.raises(FoundryError, match="is missing"):
-        session.record_launch(tmp_path, launched_at=datetime.now(UTC))
+        session.create_session(tmp_path / "s", new_definition(tmp_path))
 
 
 @pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
