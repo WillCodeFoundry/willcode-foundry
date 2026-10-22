@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from foundry import session, yaml_io
+from foundry.agent_sandbox import SandboxDefinition, definition
 from foundry.errors import FoundryError
 
 
@@ -22,11 +23,11 @@ def test_sandbox_name_refuses_an_unusable_name() -> None:
         session.sandbox_name("!", "!", "!")
 
 
-def doc(tmp_path: Path) -> session.EnvFile:
-    return session.build_env_file(
+def new_sandbox(tmp_path: Path) -> SandboxDefinition:
+    return session.sandbox_definition(
         sandbox_name="dev-p-t1",
-        workspace_path=tmp_path / "ws",
-        agent_kit_path=Path("/f/agent-kit"),
+        workspace_dir=tmp_path / "ws",
+        agent_kit_dir=Path("/f/agent-kit"),
         repo_url="git@h:o/p.git",
         role_name="dev",
         task_id="T1",
@@ -34,12 +35,14 @@ def doc(tmp_path: Path) -> session.EnvFile:
     )
 
 
-def test_build_env_file(tmp_path: Path) -> None:
-    d = doc(tmp_path)
-    assert session.workspace_path(d) == tmp_path / "ws"
-    assert session.agent_kit_path(d) == Path("/f/agent-kit")
-    assert d["additionalWorkspaces"] == [{"path": "/f/agent-kit", "readOnly": True}]
-    assert d["env"] == {
+def test_sandbox_definition(tmp_path: Path) -> None:
+    sandbox = new_sandbox(tmp_path)
+    assert (sandbox.name, sandbox.workspace_dir, sandbox.agent_kit_dir) == (
+        "dev-p-t1",
+        tmp_path / "ws",
+        Path("/f/agent-kit"),
+    )
+    assert sandbox.variables == {
         session.AGENT_ROLE_VAR: "dev",
         session.AGENT_TASK_VAR: "T1",
         session.AGENT_KIT_DIR_VAR: "/f/agent-kit",
@@ -50,31 +53,17 @@ def test_build_env_file(tmp_path: Path) -> None:
 
 
 def test_create_session_writes_both_files_and_refuses_an_existing_dir(tmp_path: Path) -> None:
-    d = tmp_path / "s"
-    session.create_session(d, doc(tmp_path), role="dev")
-    assert session.read_env_file(d)["name"] == "dev-p-t1"
-    assert yaml_io.load(d / session.RECORD_FILE_NAME) == {"role": "dev", "launches": []}
+    session_dir = tmp_path / "s"
+    session.create_session(session_dir, new_sandbox(tmp_path), role="dev")
+    assert definition.read(session_dir) == new_sandbox(tmp_path)
+    assert yaml_io.load(session_dir / session.RECORD_FILE_NAME) == {"role": "dev", "launches": []}
     with pytest.raises(FoundryError, match="already exists"):
-        session.create_session(d, doc(tmp_path))
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        "name: x\nenv: {}\n",
-        "[]\n",
-        "name: x\nworkspace: /w\nenv: {AGENT_ROLE: dev, AGENT_TASK: t}\nadditionalWorkspaces: []\n",
-    ],
-)
-def test_read_env_file_rejects_the_wrong_shape(tmp_path: Path, content: str) -> None:
-    (tmp_path / session.ENV_FILE_NAME).write_text(content)
-    with pytest.raises(FoundryError, match="not a foundry sandbox environment file"):
-        session.read_env_file(tmp_path)
+        session.create_session(session_dir, new_sandbox(tmp_path))
 
 
 def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None:
     d = tmp_path / "s"
-    session.create_session(d, doc(tmp_path), sandbox="s")
+    session.create_session(d, new_sandbox(tmp_path), sandbox="s")
     first = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
     session.record_launch(d, launched_at=first)
     session.record_launch(d, launched_at=first.replace(hour=19))
@@ -103,10 +92,10 @@ def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> N
         session.ensure_valid_task_id(task_id)
 
 
-def test_an_env_file_for_another_run_is_refused(tmp_path: Path) -> None:
-    env_file = doc(tmp_path)  # role dev, task T1, repo git@h:o/p.git
-    session.ensure_env_file_matches(env_file, role_name="dev", task_id="T1", repo_url="git@h:o/p.git")
+def test_a_sandbox_for_another_role_task_or_repository_is_refused(tmp_path: Path) -> None:
+    sandbox = new_sandbox(tmp_path)  # role dev, task T1, repo git@h:o/p.git
+    session.require_same_sandbox(sandbox, role_name="dev", task_id="T1", repo_url="git@h:o/p.git")
     for mismatch in ({"task_id": "t1"}, {"role_name": "qa"}, {"repo_url": "git@h:o/q.git"}):
         wanted = {"role_name": "dev", "task_id": "T1", "repo_url": "git@h:o/p.git", **mismatch}
-        with pytest.raises(FoundryError, match="already exists for a different run"):
-            session.ensure_env_file_matches(env_file, **wanted)
+        with pytest.raises(FoundryError, match="already exists for a different role, task or repository"):
+            session.require_same_sandbox(sandbox, **wanted)

@@ -1,21 +1,22 @@
-"""Sessions: one directory per sandbox, holding its environment file and record.
+"""Sessions: one directory per sandbox, holding its sandbox definition and record.
 
-``sessions/<sandbox>/sbxenv.yaml`` is written once, when the sandbox is first
-run, and describes the sandbox for its whole life: sbx fixes a sandbox's mounts
-when it is created. ``session.yaml`` records when it was created and each
-launch attempt since: the launcher hands over to sbx, so it never learns
-whether a launch got as far as the agent.
+``sessions/<sandbox>/`` holds the sandbox definition, written once when the
+sandbox is first launched (agent_sandbox.definition knows its format), and
+``session.yaml``, which records when it was created and each launch since:
+the launcher hands over to sbx, so it never learns whether a launch got as
+far as the agent.
 """
 
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final, TypedDict, cast
+from typing import Any, Final
 
 from foundry import yaml_io
+from foundry.agent_sandbox import SandboxDefinition
+from foundry.agent_sandbox.definition import write as write_definition
 from foundry.errors import FoundryError
 
-ENV_FILE_NAME: Final = "sbxenv.yaml"
 RECORD_FILE_NAME: Final = "session.yaml"
 
 # The environment variables every sandbox gets; AGENTS.md, the kit's scripts
@@ -39,22 +40,6 @@ _TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 # Inside the sandbox: where session-init clones the project. Nothing on the
 # host corresponds to this path; it assumes the template's `agent` user.
 SANDBOX_WORK_PATH: Final = "/home/agent/work"
-
-
-class Mount(TypedDict):
-    path: str
-    readOnly: bool
-
-
-class EnvFile(TypedDict):
-    """The parts of sbxenv.yaml the foundry writes and reads back. Keys follow sbx's schema."""
-
-    schemaVersion: str
-    name: str
-    agent: str
-    workspace: str
-    additionalWorkspaces: list[Mount]
-    env: dict[str, str]
 
 
 def _slug(text: str) -> str:
@@ -92,92 +77,66 @@ def _notes_checkout_path(project_name: str) -> str:
     return f"{_project_checkout_path(project_name)}-notes"
 
 
-def build_env_file(
+def sandbox_definition(
     *,
     sandbox_name: str,
-    workspace_path: Path,
-    agent_kit_path: Path,
+    workspace_dir: Path,
+    agent_kit_dir: Path,
     repo_url: str,
     role_name: str,
     task_id: str,
     project_name: str,
-    agent_name: str = "claude",
-) -> EnvFile:
-    """The sbxenv.yaml structure, built but not written.
+) -> SandboxDefinition:
+    """The definition for a new sandbox: the agent kit mounted, and the variables the kit's scripts read.
 
-    ``workspace_path`` is an empty temporary directory: sbx requires a primary
-    workspace before it accepts additional ones, but nothing goes in it. The
-    agent kit is mounted read-only; the project is cloned inside the sandbox
-    by session-init.
+    ``workspace_dir`` is an empty temporary directory; the project is cloned
+    inside the sandbox by session-init.
     """
-    return {
-        "schemaVersion": "1",
-        "name": sandbox_name,
-        "agent": agent_name,
-        "workspace": str(workspace_path),
-        "additionalWorkspaces": [{"path": str(agent_kit_path), "readOnly": True}],
-        "env": {
+    return SandboxDefinition(
+        name=sandbox_name,
+        workspace_dir=workspace_dir,
+        agent_kit_dir=agent_kit_dir,
+        variables={
             AGENT_ROLE_VAR: role_name,
             AGENT_TASK_VAR: task_id,
-            AGENT_KIT_DIR_VAR: str(agent_kit_path),
+            AGENT_KIT_DIR_VAR: str(agent_kit_dir),
             AGENT_REPO_URL_VAR: repo_url,
             AGENT_PROJECT_DIR_VAR: _project_checkout_path(project_name),
             AGENT_NOTES_DIR_VAR: _notes_checkout_path(project_name),
         },
-    }
+    )
 
 
-def workspace_path(env_file: EnvFile) -> Path:
-    return Path(env_file["workspace"])
-
-
-def agent_kit_path(env_file: EnvFile) -> Path:
-    return Path(env_file["additionalWorkspaces"][0]["path"])
-
-
-def create_session(session_path: Path, env_file: EnvFile, **record: Any) -> None:
-    """Create the session directory with its sbxenv.yaml and session.yaml.
+def create_session(session_dir: Path, definition: SandboxDefinition, /, **record: Any) -> None:
+    """Create the session directory with its sandbox definition and session.yaml.
 
     Refuses if the directory already exists, so an existing sandbox's
-    environment file is never rewritten.
+    definition is never rewritten.
     """
     try:
-        session_path.mkdir(parents=True)
+        session_dir.mkdir(parents=True)
     except FileExistsError:
-        raise FoundryError(f"session directory {session_path} already exists") from None
-    yaml_io.dump(session_path / ENV_FILE_NAME, env_file)
-    yaml_io.dump(session_path / RECORD_FILE_NAME, {**record, "launches": []})
+        raise FoundryError(f"session directory {session_dir} already exists") from None
+    write_definition(session_dir, definition)
+    yaml_io.dump(session_dir / RECORD_FILE_NAME, {**record, "launches": []})
 
 
-def read_env_file(session_path: Path) -> EnvFile:
-    env_file_path = session_path / ENV_FILE_NAME
-    env_file = yaml_io.load(env_file_path)
-    try:
-        if not all(isinstance(env_file[key], str) for key in ("name", "workspace")):
-            raise TypeError
-        _ = env_file["env"][AGENT_ROLE_VAR], env_file["env"][AGENT_TASK_VAR]
-        _ = env_file["additionalWorkspaces"][0]["path"]
-    except (TypeError, KeyError, IndexError):
-        raise FoundryError(f"{env_file_path} is not a foundry sandbox environment file") from None
-    return cast(EnvFile, env_file)
+def require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task_id: str, repo_url: str) -> None:
+    """Raise unless the existing sandbox is for this role, task and repository.
 
-
-def ensure_env_file_matches(env_file: EnvFile, *, role_name: str, task_id: str, repo_url: str) -> None:
-    """Raise unless the existing environment file is for this role, task and repository.
-
-    Sandbox names are slugs, so different runs can share one: role dev on
+    Sandbox names are slugs, so different launches can share one: role dev on
     project foundry, task test-1, and on project foundry-test, task 1, are both
-    dev-foundry-test-1. Re-attaching would then run the other run's task.
+    dev-foundry-test-1. Re-attaching would then work on the other one's task.
     """
     expected = {AGENT_ROLE_VAR: role_name, AGENT_TASK_VAR: task_id, AGENT_REPO_URL_VAR: repo_url}
-    found = {key: env_file["env"].get(key) for key in expected}
+    found = {key: definition.variables.get(key) for key in expected}
     if found != expected:
         recorded = ", ".join(f"{key}={value!r}" for key, value in found.items())
         raise FoundryError(
-            f"sandbox {env_file['name']} already exists for a different run ({recorded}); "
+            f"sandbox {definition.name} already exists for a different role, task or repository ({recorded}); "
             "either its name collides with this one, so use a task id that gives a different name, "
             "or the project's url has changed since, so remove the sandbox and "
-            f"sessions/{env_file['name']}/ to start over."
+            f"sessions/{definition.name}/ to start over."
         )
 
 

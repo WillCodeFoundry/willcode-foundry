@@ -10,12 +10,9 @@ from foundry.agent_sandbox.github_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.host import HostPort
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
 
-ENV_FILE_NAME = "sbxenv.yaml"
-"""The environment file sbx reads from a directory passed to ``sbx env``."""
-
 
 class Sbx:
-    """sbx commands for one sandbox, declared by the ``sbxenv.yaml`` in ``env_dir_path``.
+    """sbx commands for one sandbox, whose definition is in ``definition_dir``.
 
     ``sandbox_name`` must be the ``name:`` in that file; policy and secret
     commands address the sandbox by name, everything else through the file.
@@ -25,11 +22,11 @@ class Sbx:
     another socket.
     """
 
-    def __init__(self, host: HostPort, process_env: Mapping[str, str], sandbox_name: str, env_dir_path: Path) -> None:
+    def __init__(self, host: HostPort, process_env: Mapping[str, str], sandbox_name: str, definition_dir: Path) -> None:
         self._host = host
         self._process_env = process_env
         self.sandbox_name = sandbox_name
-        self.env_dir_path = env_dir_path
+        self.definition_dir = definition_dir
 
     @staticmethod
     def process_env(environ: Mapping[str, str], ssh_agent_socket_path: Path) -> dict[str, str]:
@@ -44,13 +41,13 @@ class Sbx:
 
     def create(self) -> None:
         """Create the sandbox from its environment file without attaching."""
-        result = self._sbx("env", "create", "--auto-approve", str(self.env_dir_path))
+        result = self._sbx("env", "create", "--auto-approve", str(self.definition_dir))
         if result.returncode != 0:
             raise SandboxError(f"sbx env create failed: {result.stderr.strip()}")
 
     def exec_in_sandbox(self, *command: str) -> subprocess.CompletedProcess[str]:
         """Run a command inside the sandbox, with the environment file's variables set."""
-        return self._sbx("env", "exec", str(self.env_dir_path), "--", *command)
+        return self._sbx("env", "exec", str(self.definition_dir), "--", *command)
 
     def ensure_github_ssh_allowed(self) -> None:
         """sbx denies non-HTTP(S) TCP by default; git over SSH needs this route."""
@@ -96,7 +93,7 @@ class Sbx:
 
     def run_command(self, agent_args: Sequence[str]) -> tuple[str, ...]:
         """The ``sbx env run`` command that attaches the agent to the existing sandbox."""
-        command = ("sbx", "env", "run", "--auto-approve", str(self.env_dir_path))
+        command = ("sbx", "env", "run", "--auto-approve", str(self.definition_dir))
         return (*command, "--", *agent_args) if agent_args else command
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:

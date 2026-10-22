@@ -1,9 +1,12 @@
 """Run one Docker Sandbox (sbx) safely: private ssh-agent, read-only agent kit, verified keys.
 
 Imports nothing from the rest of ``foundry``; it could be lifted out unchanged.
+tests/agent_sandbox/test_boundary.py checks that.
 """
 
+from foundry.agent_sandbox import definition
+from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launch import Launch, run_sandbox
+from foundry.agent_sandbox.launcher import LaunchRequest, launch
 
-__all__ = ["Launch", "SandboxError", "run_sandbox"]
+__all__ = ["LaunchRequest", "SandboxDefinition", "SandboxError", "definition", "launch"]

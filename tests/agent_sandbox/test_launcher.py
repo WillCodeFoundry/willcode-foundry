@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
+from foundry.agent_sandbox import definition
+from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launch import Launch, ensure_paths_safe, prepare_sandbox
+from foundry.agent_sandbox.launcher import LaunchRequest, prepare, require_safe_paths
 from foundry.agent_sandbox.sbx import Sbx
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
@@ -32,8 +34,16 @@ def layout(tmp_path):
     key.write_text("k")
     sdir = tmp_path / "s"
     sdir.mkdir()
-    (sdir / "sbxenv.yaml").write_text("name: n\n")
+    definition.write(sdir, SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}))
     return kit, key, sdir, tmp_path / "n.sock"
+
+
+def run_prepare(layout, host, **request) -> LaunchRequest:
+    """prepare() for a launch request pointing at the layout's definition."""
+    _, key, sdir, sock = layout
+    launch_request = LaunchRequest(definition_dir=sdir, ssh_key_path=key, **request)
+    prepare(launch_request, definition.read(sdir), host, SshAgent(host, sock), Sbx(host, {}, "n", sdir))
+    return launch_request
 
 
 def exec_command(sdir: Path, *command: str) -> tuple[str, ...]:
@@ -41,7 +51,7 @@ def exec_command(sdir: Path, *command: str) -> tuple[str, ...]:
 
 
 def responses(key: Path, sdir: Path) -> Responses:
-    """The calls every prepare_sandbox() makes once the agent is up and the sandbox exists."""
+    """The calls every prepare() makes once the agent is up and the sandbox exists."""
     base = {
         ("ssh-add", "-l"): [0, FP],
         ("ssh-add", "-D"): "",
@@ -54,21 +64,21 @@ def responses(key: Path, sdir: Path) -> Responses:
     return Responses(sdir, base)
 
 
-def test_paths_safe_rejects_secrets_or_envfile_inside_agent_kit(tmp_path: Path) -> None:
+def test_safe_paths_reject_secrets_or_the_definition_inside_agent_kit(tmp_path: Path) -> None:
     kit = tmp_path / "kit"
     with pytest.raises(SandboxError, match="inside the agent kit"):
-        ensure_paths_safe(kit, tmp_path / "s", [kit / "key"])
+        require_safe_paths(kit, tmp_path / "s", [kit / "key"])
     with pytest.raises(SandboxError, match="inside the agent kit"):
-        ensure_paths_safe(kit, tmp_path / "s", [tmp_path / "key", kit / "token"])
+        require_safe_paths(kit, tmp_path / "s", [tmp_path / "key", kit / "token"])
     with pytest.raises(SandboxError, match="inside the agent kit"):
-        ensure_paths_safe(kit, kit / "s", [tmp_path / "key"])
+        require_safe_paths(kit, kit / "s", [tmp_path / "key"])
     with pytest.raises(SandboxError, match="contains ':'"):
-        ensure_paths_safe(tmp_path / "a:b", tmp_path / "s", [])
-    ensure_paths_safe(kit, tmp_path / "s", [tmp_path / "key"])
+        require_safe_paths(tmp_path / "a:b", tmp_path / "s", [])
+    require_safe_paths(kit, tmp_path / "s", [tmp_path / "key"])
 
 
 def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> None:
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, sock = layout
     host.responses = responses(key, sdir)
     host.responses[("ssh-add", "-l")] = [2, 0, FP]  # no agent; started; listing
     host.responses[("ssh-agent", "-a", str(sock), "-s")] = ""
@@ -76,19 +86,7 @@ def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> Non
     host.responses[("sbx", "env", "create", "--auto-approve", str(sdir))] = ""
     host.responses[exec_command(sdir, "/k/bin/session-init")] = ""
 
-    sbx = Sbx(host, {}, "n", sdir)
-    prepare_sandbox(
-        Launch(
-            sandbox_name="n",
-            env_dir_path=sdir,
-            agent_kit_path=kit,
-            ssh_key_path=key,
-            init_command=("/k/bin/session-init",),
-        ),
-        host,
-        SshAgent(host, sock),
-        sbx,
-    )
+    run_prepare(layout, host, init_command=("/k/bin/session-init",))
 
     cmds = host.commands
     assert ("sbx", "env", "create", "--auto-approve", str(sdir)) in cmds
@@ -96,7 +94,7 @@ def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> Non
 
 
 def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path) -> None:
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, _sock = layout
     token_file = tmp_path / "secrets dir" / "dev.token"
     token_file.parent.mkdir()
     token_file.write_text(TOKEN)
@@ -104,12 +102,7 @@ def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path
     host.responses = responses(key, sdir)
     host.responses[set_token] = ""
 
-    prepare_sandbox(
-        Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key, github_token_path=token_file),
-        host,
-        SshAgent(host, sock),
-        Sbx(host, {}, "n", sdir),
-    )
+    run_prepare(layout, host, github_token_path=token_file)
 
     cmds = host.commands
     assert cmds.index(("sbx", "secret", "rm", "github", "--sandbox", "n", "-f")) < cmds.index(set_token)
@@ -117,32 +110,24 @@ def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path
 
 
 def test_a_failing_token_source_never_reports_the_token(layout, host, tmp_path) -> None:
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, _sock = layout
     token_file = tmp_path / "dev.token"
     token_file.write_text(TOKEN)
     host.responses = responses(key, sdir)
     host.responses[("sbx", "secret", "set", "github", "--sandbox", "n", "--command", f"cat {token_file}")] = 1
-    launch = Launch(
-        sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key, github_token_path=token_file
-    )
-
     with pytest.raises(SandboxError, match="sbx secret set failed") as error:
-        prepare_sandbox(launch, host, SshAgent(host, sock), Sbx(host, {}, "n", sdir))
-    assert TOKEN not in str(error.value) and TOKEN not in repr(launch)
+        run_prepare(layout, host, github_token_path=token_file)
+    assert TOKEN not in str(error.value)
+    assert TOKEN not in repr(LaunchRequest(definition_dir=sdir, ssh_key_path=key, github_token_path=token_file))
 
 
 def test_prepare_aborts_when_init_fails(layout, host) -> None:
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, _sock = layout
     host.responses = responses(key, sdir)
     host.responses[exec_command(sdir, "init")] = (1, "boom")
 
     with pytest.raises(SandboxError, match="init failed"):
-        prepare_sandbox(
-            Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key, init_command=("init",)),
-            host,
-            SshAgent(host, sock),
-            Sbx(host, {}, "n", sdir),
-        )
+        run_prepare(layout, host, init_command=("init",))
 
 
 def test_run_command_auto_approve_and_pass_agent_args(tmp_path: Path, host) -> None:
@@ -152,15 +137,10 @@ def test_run_command_auto_approve_and_pass_agent_args(tmp_path: Path, host) -> N
 
 
 def test_prepare_never_removes_a_sandbox(layout, host) -> None:
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, _sock = layout
     host.responses = responses(key, sdir)
 
-    prepare_sandbox(
-        Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key),
-        host,
-        SshAgent(host, sock),
-        Sbx(host, {}, "n", sdir),
-    )
+    run_prepare(layout, host)
 
     assert not any(command[:3] == ("sbx", "env", "rm") for command in host.commands)
 
@@ -168,15 +148,10 @@ def test_prepare_never_removes_a_sandbox(layout, host) -> None:
 def test_an_empty_agent_never_counts_as_the_expected_keys(layout, host) -> None:
     # The host agent lists no keys after loading, and the sandbox's agent is
     # empty too: the sets match, but nothing could push.
-    kit, key, sdir, sock = layout
+    _kit, key, sdir, _sock = layout
     host.responses = responses(key, sdir)
     host.responses[("ssh-add", "-l")] = [0, 1]  # running; then lists no keys
     host.responses[exec_command(sdir, "ssh-add", "-l")] = 1
 
     with pytest.raises(SandboxError, match="holds no keys after loading them"):
-        prepare_sandbox(
-            Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key),
-            host,
-            SshAgent(host, sock),
-            Sbx(host, {}, "n", sdir),
-        )
+        run_prepare(layout, host)
