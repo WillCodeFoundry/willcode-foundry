@@ -44,9 +44,9 @@ CI = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 def fake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeGitHub:
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "foundry.yaml").write_text(CONFIG)
-    standard_path = tmp_path / "config" / "project-standard"
-    shutil.copytree(REPO_ROOT / "config" / "project-standard", standard_path)
-    (standard_path / "rulesets.yaml").write_text(RULESETS)
+    policy_dir = tmp_path / "config" / "repo-policy"
+    shutil.copytree(REPO_ROOT / "config" / "repo-policy", policy_dir)
+    (policy_dir / "rulesets.yaml").write_text(RULESETS)
     monkeypatch.chdir(tmp_path)
     fake = FakeGitHub()
     for slug in ("o/store", "o/site"):
@@ -61,8 +61,7 @@ def test_check_passes_when_every_project_matches(fake: FakeGitHub, capsys: pytes
 
     assert cli.main(["protect", "check"]) == 0
     out = capsys.readouterr().out
-    assert out.count("ok       ruleset agent-branches") == 2
-    assert out.count("ok       .github/CODEOWNERS") == 2
+    assert out == "site (o/site)\n  conforms\nstore (o/store)\n  conforms\n"  # deviations only
 
 
 def test_check_fails_and_shows_the_diff(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
@@ -72,6 +71,8 @@ def test_check_fails_and_shows_the_diff(fake: FakeGitHub, capsys: pytest.Capture
     assert cli.main(["protect", "check", "store"]) == 1
     out = capsys.readouterr().out
     assert "differs  ruleset agent-branches" in out
+    assert "+++ ruleset agent-branches (repo policy)" in out
+    assert "differs  .github/workflows/ci.yml" not in out and "conforms" not in out
     assert '+      "type": "non_fast_forward"' in out
     assert "differs  .github/CODEOWNERS" in out
     assert "           -* @someone\n           +* @WillCodeCo" in out
@@ -88,7 +89,7 @@ def test_check_reports_a_repo_github_refuses_and_carries_on(
     assert cli.main(["protect", "check"]) == 1
     out = capsys.readouterr().out
     assert "site (o/site)\n  error    Upgrade to GitHub Pro" in out
-    assert "store (o/store)\n  ok       ruleset agent-branches" in out
+    assert "store (o/store)\n  conforms" in out
 
 
 def test_apply_creates_and_updates_rulesets_until_check_passes(
@@ -98,8 +99,8 @@ def test_apply_creates_and_updates_rulesets_until_check_passes(
 
     assert cli.main(["protect", "apply"]) == 0
     out = capsys.readouterr().out
-    assert "store (o/store)\n  updated  ruleset agent-branches" in out
-    assert "site (o/site)\n  created  ruleset agent-branches" in out
+    assert "store (o/store)\n  updated  ruleset agent-branches\n  conforms" in out
+    assert "site (o/site)\n  created  ruleset agent-branches\n  conforms" in out
     assert cli.main(["protect", "check"]) == 0
 
 

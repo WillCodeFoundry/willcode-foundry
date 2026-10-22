@@ -34,7 +34,7 @@ class GitHubError(FoundryError):
         self.http_status = int(match[1]) if match else None
 
 
-def repo_slug(url: str) -> str:
+def repo_slug_from_url(url: str) -> str:
     """``owner/repo`` for a GitHub clone URL (SSH or HTTPS); raises for anything else."""
     match = _GITHUB_URL.match(url)
     if match is None:
