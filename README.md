@@ -7,7 +7,6 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 ```console
 $ uv sync
 $ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
-$ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to the agent
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.

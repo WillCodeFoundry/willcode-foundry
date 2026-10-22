@@ -14,11 +14,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser = subparsers.add_parser(
         "run",
         help="start or re-attach to a sandboxed agent",
-        usage="foundry run PROJECT ROLE TASK [-- AGENT_ARGS...]",
-        description=(
-            "Start the sandbox for ROLE on TASK in PROJECT, or re-attach to it if it already exists. "
-            "Arguments after '--' go to the agent."
-        ),
+        description="Start the sandbox for ROLE on TASK in PROJECT, or re-attach to it if it already exists.",
     )
     parser.add_argument("project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")
     parser.add_argument("role_name", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
@@ -26,7 +22,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser.set_defaults(func=main)
 
 
-def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
+def main(args: argparse.Namespace) -> NoReturn:
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(paths.config_path(foundry_root))
     project = foundry_config.project(args.project_name)
@@ -53,7 +49,6 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
             ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
             init_command=(str(definition.agent_kit_dir / "bin" / "session-init"),),
             github_token_path=github_token_path if github_token_path.is_file() else None,
-            agent_args=agent_args,
         )
     )
 

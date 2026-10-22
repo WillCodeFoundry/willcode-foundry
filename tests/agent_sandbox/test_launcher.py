@@ -129,10 +129,8 @@ def test_prepare_aborts_when_init_fails(layout, host) -> None:
         run_prepare(layout, host, init_command=("init",))
 
 
-def test_attach_command_auto_approves_and_passes_agent_args(tmp_path: Path, host) -> None:
-    sbx = Sbx(host, {}, "n", tmp_path)
-    assert sbx.attach_command(()) == ("sbx", "env", "run", "--auto-approve", str(tmp_path))
-    assert sbx.attach_command(("--continue",))[-2:] == ("--", "--continue")
+def test_attach_command_auto_approves(tmp_path: Path, host) -> None:
+    assert Sbx(host, {}, "n", tmp_path).attach_command() == ("sbx", "env", "run", "--auto-approve", str(tmp_path))
 
 
 def test_prepare_never_removes_a_sandbox(layout, host) -> None:

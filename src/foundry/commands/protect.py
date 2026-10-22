@@ -4,7 +4,6 @@ import argparse
 from collections.abc import Callable
 
 from foundry import config, paths, repo_policy
-from foundry.errors import FoundryError
 from foundry.github import GitHub, GitHubError, repo_slug_from_url
 
 
@@ -27,11 +26,11 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         action.set_defaults(func=func)
 
 
-def check_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
-    return _for_each_repo(args, agent_args, lambda github, repo_slug, policy: None)
+def check_main(args: argparse.Namespace) -> int:
+    return _for_each_repo(args, lambda github, repo_slug, policy: None)
 
 
-def apply_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
+def apply_main(args: argparse.Namespace) -> int:
     def apply_rulesets(github: GitHub, repo_slug: str, policy: repo_policy.RepoPolicy) -> None:
         actual_rulesets = github.rulesets(repo_slug)
         for ruleset in policy.rulesets:
@@ -43,17 +42,14 @@ def apply_main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> int:
                 github.api("PUT", f"repos/{repo_slug}/rulesets/{actual['id']}", ruleset)
                 print(f"  updated  ruleset {ruleset['name']}")
 
-    return _for_each_repo(args, agent_args, apply_rulesets)
+    return _for_each_repo(args, apply_rulesets)
 
 
 def _for_each_repo(
     args: argparse.Namespace,
-    agent_args: tuple[str, ...],
     before_check: Callable[[GitHub, str, repo_policy.RepoPolicy], None],
 ) -> int:
     """For each selected project, run ``before_check``, then check and report; exit 1 unless all conform."""
-    if agent_args:
-        raise FoundryError("foundry protect takes no arguments after '--'")
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(paths.config_path(foundry_root))
     policy = repo_policy.load(paths.repo_policy_dir(foundry_root))

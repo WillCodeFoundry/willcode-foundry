@@ -47,7 +47,7 @@ def launch(*argv: str) -> LaunchRequest:
 
 
 def test_first_run_creates_the_session_named_after_the_sandbox(instance: Path) -> None:
-    got = launch("tkt-store", "dev", "WCF-0042", "--", "--continue")
+    got = launch("tkt-store", "dev", "WCF-0042")
 
     session_dir = instance / "sessions" / "dev-tkt-store-wcf-0042"
     definition = SandboxDefinition.read(session_dir)
@@ -57,7 +57,6 @@ def test_first_run_creates_the_session_named_after_the_sandbox(instance: Path) -
     assert got.init_command == (str(instance / "agent-kit" / "bin" / "session-init"),)
     assert got.ssh_key_path == instance / "secrets" / "ssh" / "dev"
     assert got.github_token_path is None
-    assert got.agent_args == ("--continue",)
     assert definition.variables["AGENT_TASK"] == "WCF-0042"
     assert definition.workspace_dir.is_dir()
 

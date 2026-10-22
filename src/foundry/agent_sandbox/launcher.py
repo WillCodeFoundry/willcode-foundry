@@ -31,7 +31,6 @@ class LaunchRequest:
     """Run inside the sandbox before the agent starts; the launch aborts if it fails."""
     github_token_path: Path | None = None
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
-    agent_args: tuple[str, ...] = ()
 
 
 def require_safe_paths(agent_kit_dir: Path, definition_dir: Path, private_paths: Sequence[Path]) -> None:
@@ -123,4 +122,4 @@ def launch(request: LaunchRequest) -> NoReturn:
     host.ensure_private_dir(ssh_agent_socket_path.parent)
     prepare(request, definition, host, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
-    host.exec(sbx.attach_command(request.agent_args), process_env)
+    host.exec(sbx.attach_command(), process_env)

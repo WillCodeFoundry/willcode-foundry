@@ -2,7 +2,7 @@
 
 import shlex
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 
 from foundry.agent_sandbox.errors import SandboxError
@@ -91,10 +91,9 @@ class Sbx:
             return None
         raise SandboxError(f"could not list the sandbox's keys: {result.stderr.strip()}")
 
-    def attach_command(self, agent_args: Sequence[str]) -> tuple[str, ...]:
+    def attach_command(self) -> tuple[str, ...]:
         """The ``sbx env run`` command that attaches the agent to the existing sandbox."""
-        command = ("sbx", "env", "run", "--auto-approve", str(self.definition_dir))
-        return (*command, "--", *agent_args) if agent_args else command
+        return ("sbx", "env", "run", "--auto-approve", str(self.definition_dir))
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self._host.run(("sbx", *args), env=self._process_env)

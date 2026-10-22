@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from foundry.agent_sandbox import SandboxError
 from foundry.commands import protect, run
@@ -21,12 +21,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Commands either return an exit code or replace this process; errors are reported here only."""
-    argv = list(sys.argv[1:] if argv is None else argv)
-    split_at = argv.index("--") if "--" in argv else len(argv)
-    foundry_args, agent_args = argv[:split_at], tuple(argv[split_at + 1 :])
-    args = build_parser().parse_args(foundry_args)
+    args = build_parser().parse_args(argv)
+    handler: Callable[[argparse.Namespace], int] = args.func
     try:
-        return int(args.func(args, agent_args))
+        return handler(args)
     except (FoundryError, SandboxError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
