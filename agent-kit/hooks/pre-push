@@ -3,6 +3,8 @@
 # deletions, fast-forwards only. git passes one line per ref on stdin:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -euo pipefail
+# For ShellCheck, relative to the repository root, where CI runs it:
+# shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 
 zero="0000000000000000000000000000000000000000"

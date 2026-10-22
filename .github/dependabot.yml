@@ -1,0 +1,14 @@
+# Weekly pull requests for newer GitHub Actions (the SHAs pinned in
+# workflows) and newer locked dependencies (uv.lock). Each goes through ci-gate
+# and needs a review like any other change to main.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly

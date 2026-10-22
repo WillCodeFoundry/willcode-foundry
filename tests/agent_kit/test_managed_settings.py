@@ -4,8 +4,8 @@ import json
 import os
 from pathlib import Path
 
-KIT = Path(__file__).parents[2] / "agent-kit"
-SETTINGS = json.loads((KIT / "claude" / "managed-settings.json").read_text())
+AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
+SETTINGS = json.loads((AGENT_KIT_PATH / "claude" / "managed-settings.json").read_text())
 
 
 def test_runs_unattended_without_attribution() -> None:
@@ -23,5 +23,5 @@ def test_every_hook_command_is_an_executable_in_the_kit() -> None:
     commands = [hook["command"] for event in SETTINGS["hooks"].values() for entry in event for hook in entry["hooks"]]
     assert commands
     for command in commands:
-        path = Path(command.strip('"').replace("$AGENT_KIT_DIR", str(KIT)))
+        path = Path(command.strip('"').replace("$AGENT_KIT_DIR", str(AGENT_KIT_PATH)))
         assert path.is_file() and os.access(path, os.X_OK), command

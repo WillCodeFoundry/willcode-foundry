@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-GUARD = Path(__file__).parents[2] / "agent-kit" / "claude" / "hooks" / "guard-bash"
+GUARD_BASH_PATH = Path(__file__).parents[2] / "agent-kit" / "claude" / "hooks" / "guard-bash"
 
 
 def guard(command: str) -> subprocess.CompletedProcess[str]:
     call = {"tool_name": "Bash", "tool_input": {"command": command}}
     return subprocess.run(
-        [sys.executable, str(GUARD)], input=json.dumps(call), capture_output=True, text=True, check=False
+        [sys.executable, str(GUARD_BASH_PATH)], input=json.dumps(call), capture_output=True, text=True, check=False
     )
 
 
@@ -72,5 +72,7 @@ def test_refused_with_a_reason(command: str, reason: str) -> None:
 
 
 def test_input_it_does_not_understand_is_let_through() -> None:
-    result = subprocess.run([sys.executable, str(GUARD)], input="not json", capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        [sys.executable, str(GUARD_BASH_PATH)], input="not json", capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0

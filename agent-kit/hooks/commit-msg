@@ -3,6 +3,8 @@
 # commit traces back to its task. git passes the message file as $1.
 # (Attribution trailers are kept out by Claude's managed settings, not here.)
 set -euo pipefail
+# For ShellCheck, relative to the repository root, where CI runs it:
+# shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 
 [[ "$(current_branch)" == "$TASK_BRANCH" ]] || exit 0

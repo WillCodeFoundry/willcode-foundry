@@ -3,6 +3,8 @@
 #   task branch (code checkout): code and project docs only; no task notes, no credentials.
 #   agent-notes (notes checkout): only this task's .agent/<task>/ folder; never TASK.md.
 set -euo pipefail
+# For ShellCheck, relative to the repository root, where CI runs it:
+# shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 
 check_task_branch() {

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-KIT = Path(__file__).parents[2] / "agent-kit"
+AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -46,9 +46,11 @@ def session_init(tmp_path: Path, origin: Path) -> subprocess.CompletedProcess[st
         "AGENT_REPO_URL": f"file://{origin}",
         "AGENT_PROJECT_DIR": str(tmp_path / "work" / "p"),
         "AGENT_NOTES_DIR": str(tmp_path / "work" / "p-notes"),
-        "AGENT_KIT_DIR": str(KIT),
+        "AGENT_KIT_DIR": str(AGENT_KIT_PATH),
     }
-    return subprocess.run([str(KIT / "bin" / "session-init")], env=env, capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [str(AGENT_KIT_PATH / "bin" / "session-init")], env=env, capture_output=True, text=True, check=False
+    )
 
 
 def test_a_task_without_its_branches_is_explained(tmp_path, origin) -> None:

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-KIT = Path(__file__).parents[2] / "agent-kit"
+AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 TASK = "T1"
 
 
@@ -53,7 +53,7 @@ def repo(tmp_path, monkeypatch):
     git(tmp_path, "clone", "-q", str(origin), str(code))
     git(code, "switch", "-q", f"task/{TASK}")
     git(code, "worktree", "add", "-q", "--track", "-b", "agent-notes", str(notes), "origin/agent-notes")
-    git(code, "config", "core.hooksPath", str(KIT / "hooks"))
+    git(code, "config", "core.hooksPath", str(AGENT_KIT_PATH / "hooks"))
     monkeypatch.setenv("AGENT_TASK", TASK)
     monkeypatch.setenv("AGENT_PROJECT_DIR", str(code))
     monkeypatch.setenv("AGENT_NOTES_DIR", str(notes))
@@ -153,7 +153,7 @@ def test_another_tasks_folder_is_refused(repo) -> None:
 
 def stop(active: bool = False) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(KIT / "claude" / "hooks" / "session-check")],
+        [str(AGENT_KIT_PATH / "claude" / "hooks" / "session-check")],
         input=json.dumps({"stop_hook_active": active}),
         capture_output=True,
         text=True,

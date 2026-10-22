@@ -1,16 +1,25 @@
+# Lint, types and tests on every pull request and on main. ci-gate is the one
+# check config/github-protection.yaml requires, so jobs can be added here
+# without touching the foundry's rulesets: list each new job in ci-gate's needs.
+#
+# Python comes from .python-version (the requires-python floor); the test job
+# also runs the newest Python. Actions are pinned to commit SHAs and kept
+# current by Dependabot (.github/dependabot.yml).
 name: ci
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel a pull request's superseded runs, but let every commit on main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
@@ -18,33 +27,52 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with: {python-version: "3.11", enable-cache: true}
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
       - run: uv sync --locked --group dev
+      # guard-bash is Python without a .py extension, so it is named explicitly.
       - run: uv run ruff format --check . agent-kit/claude/hooks/guard-bash
       - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
-      - run: for f in agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/commit-msg agent-kit/hooks/lib/*.sh agent-kit/claude/hooks/session-check; do bash -n "$f"; done
+      # The kit's shell scripts; session-harden and most of session-init have no
+      # tests (they need root inside a sandbox), so this is their main check.
+      # Run from the repository root: the hooks' source directives are relative to it.
+      - run: >-
+          shellcheck --severity=warning --external-sources
+          agent-kit/bin/session-init agent-kit/bin/session-harden
+          agent-kit/hooks/pre-commit agent-kit/hooks/commit-msg agent-kit/hooks/pre-push
+          agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
 
   mypy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with: {python-version: "3.11", enable-cache: true}
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
       - run: uv sync --locked --group dev
       - run: uv run mypy
 
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"] # requires-python floor, and the newest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with: {python-version: "3.11", enable-cache: true}
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: ${{ matrix.python }} # overrides .python-version
+          enable-cache: true
       - run: uv sync --locked --group dev
       - run: uv run pytest
 
@@ -53,5 +81,6 @@ jobs:
     if: always()
     needs: [lint, mypy, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'

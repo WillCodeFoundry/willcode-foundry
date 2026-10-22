@@ -145,10 +145,14 @@ Development:
 ```console
 $ uv sync --group dev
 $ uv run pytest
-$ uv run ruff check . && uv run ruff format --check . && uv run mypy
+$ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
+$ uv run mypy
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
 ```
 
-`tests/kit/` tests the kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`.
+These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/github-protection.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything. Run ShellCheck from the repository root: the hooks' `source` directives are relative to it.
+
+`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`.
 
 ## sbx requirements
 
