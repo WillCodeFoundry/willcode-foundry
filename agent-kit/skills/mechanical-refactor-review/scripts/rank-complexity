@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Rank functions by complexity, to decide where to read first in a review.
+# The ranking is a heuristic for ordering the reading, not a finding.
+#
+#   rank-complexity [--top N] PATH...     any language, via lizard: cyclomatic
+#                                         complexity (CCN), lines, and location
+#   rank-complexity --cognitive PATH...   Python only, via complexipy: cognitive
+#                                         complexity, which weights nesting
+#
+# The tools run from this skill's locked requirements.txt in a throwaway uv
+# environment (in uv's cache), so nothing is installed into the project under
+# review, and the skill's folder may be read-only. Needs uv and access to PyPI.
+set -euo pipefail
+
+requirements="$(cd "$(dirname "$0")/.." && pwd)/requirements.txt"
+run() { uv run --quiet --no-project --with-requirements "$requirements" -- "$@"; }
+
+if [[ "${1:-}" == --cognitive ]]; then
+    shift
+    run complexipy "$@"
+    exit
+fi
+
+top=20
+if [[ "${1:-}" == --top ]]; then
+    top="${2:?--top needs a number}"
+    shift 2
+fi
+if (($# == 0)); then
+    echo "usage: rank-complexity [--top N] PATH... | rank-complexity --cognitive PATH..." >&2
+    exit 2
+fi
+
+# lizard's CSV columns: NLOC, CCN, token count, parameter count, length, location, ...
+echo "CCN  NLOC  function@lines@file"
+run lizard --csv "$@" | sort -t, -k2,2nr | head -n "$top" |
+    awk -F, '{ gsub(/"/, "", $6); printf "%3s  %4s  %s\n", $2, $1, $6 }'

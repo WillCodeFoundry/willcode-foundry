@@ -12,3 +12,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # The tools the mechanical-refactor-review skill runs (requirements.in, locked
+  # with hashes in requirements.txt).
+  - package-ecosystem: pip
+    directory: /agent-kit/skills/mechanical-refactor-review
+    schedule:
+      interval: weekly

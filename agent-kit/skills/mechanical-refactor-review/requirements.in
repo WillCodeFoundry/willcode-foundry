@@ -1,0 +1,5 @@
+# Tools scripts/rank-complexity runs, at exact versions. Edit this file, then
+# regenerate the lock with hashes:
+#   uv pip compile --generate-hashes requirements.in -o requirements.txt
+lizard==1.24.2
+complexipy==8.1.0

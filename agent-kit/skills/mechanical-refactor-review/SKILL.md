@@ -1,6 +1,7 @@
 ---
 name: mechanical-refactor-review
 description: Senior-developer review of any codebase or branch, in any language, focused on naming, module and package structure, single responsibility, ports and adapters, DRY, trivial helpers and over-defensive code, ending in an agreed, mechanical refactor brief another agent can implement. Use whenever the user asks for a code review "as a senior developer", wants to find code smells, simplify or reduce complexity, clean up names or module structure, check hexagonal or clean architecture, or wants a refactor plan or brief to hand to another agent, even if they don't say "mechanical" or "brief".
+compatibility: scripts/rank-complexity needs uv and network access to PyPI; the rest of the skill needs only a shell and git.
 ---
 
 # Mechanical refactor review
@@ -23,8 +24,9 @@ The work runs in five stages. Do them in order, and **stop for the user's agreem
 - **Agree the scope.** By default review the whole branch against its base, or the whole codebase if there's no branch. If the user means only the newest changes, or only some directories, use that. If the request is ambiguous, ask once.
 - **Read every file in scope in full,** including scripts and configuration that behave like code. Read the test doubles too (fakes, mocks, stubs): they are the best evidence of where the real seams are (see the checklist).
 - **Rank where to look first.**
-  - For Python, run `scripts/complexity.py <paths…>`, plus the tools listed in `references/python.md`.
-  - For other languages, use the ecosystem's own tool if one is installed (for example a linter's complexity rule, or a cyclomatic-complexity tool), or count branches by eye in the largest functions.
+  - Run `scripts/rank-complexity <paths…>` (any language). It lists the most complex functions by cyclomatic complexity, using lizard at the version pinned in this skill's `requirements.txt`.
+  - For Python, also run `scripts/rank-complexity --cognitive <paths…>`. Cognitive complexity weights nesting, so it shows functions that are hard to read rather than merely branchy. The tools in `references/python.md` add more.
+  - If `uv` or PyPI isn't available, use the project's own linter complexity rule, or count branches by eye in the largest functions.
   - Use the ranking to decide where to read first. It is not a finding in itself.
 - **Run the project's own checks** (tests, linters, type checker, build) if you can. If the environment blocks them, say so in one line and carry on.
 

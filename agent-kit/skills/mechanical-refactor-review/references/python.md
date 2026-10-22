@@ -8,7 +8,7 @@ Use what the project already has installed before adding anything. Run each tool
 
 | Purpose | Tool | Notes |
 |---|---|---|
-| Rank functions by complexity | `scripts/complexity.py src/ scripts/` | Bundled with this skill. It also finds extensionless scripts with a python shebang |
+| Rank functions by complexity | `scripts/rank-complexity src/`, and `--cognitive` for cognitive complexity | Bundled with this skill: lizard and complexipy at pinned versions, run without installing anything into the project |
 | Complexity as lint rules | `ruff check --select C901,PLR0911,PLR0912,PLR0913,PLR0915` | Too complex, too many returns, branches, arguments or statements |
 | Uncalled functions and classes | `vulture`, plus `git grep -nw <name>` | Search before inlining or deleting: vulture misses dynamic uses (`getattr`, entry points, plugin registries) |
 | Unused imports and variables | `ruff check --select F401,F841` | Useful after moves and inlines, not for finding uncalled helpers |

@@ -164,7 +164,7 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check agent-kit/skills/*/scripts/*
 ```
 
 These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry protect check` will show the difference. Run ShellCheck from the repository root: the hooks' `source` directives are relative to it.
