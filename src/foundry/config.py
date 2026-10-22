@@ -9,57 +9,59 @@ from foundry.errors import FoundryError
 
 @dataclass(frozen=True)
 class Project:
-    name: str
+    project_name: str
     url: str
 
 
 @dataclass(frozen=True)
 class Role:
-    name: str
+    role_name: str
 
 
 @dataclass(frozen=True)
 class Config:
-    name: str
+    foundry_name: str
     projects: dict[str, Project]
     roles: dict[str, Role]
 
-    def project(self, name: str) -> Project:
+    def project(self, project_name: str) -> Project:
+        """The project of that name; raises if config/foundry.yaml doesn't list it."""
         try:
-            return self.projects[name]
+            return self.projects[project_name]
         except KeyError:
-            raise FoundryError(
-                f"unknown project {name!r}; known: {', '.join(sorted(self.projects)) or 'none'}"
-            ) from None
+            known = ", ".join(sorted(self.projects)) or "none"
+            raise FoundryError(f"unknown project {project_name!r}; known: {known}") from None
 
-    def role(self, name: str) -> Role:
+    def role(self, role_name: str) -> Role:
+        """The role of that name; raises if config/foundry.yaml doesn't list it."""
         try:
-            return self.roles[name]
+            return self.roles[role_name]
         except KeyError:
-            raise FoundryError(f"unknown role {name!r}; known: {', '.join(sorted(self.roles)) or 'none'}") from None
+            known = ", ".join(sorted(self.roles)) or "none"
+            raise FoundryError(f"unknown role {role_name!r}; known: {known}") from None
 
 
-def load(path: Path) -> Config:
-    return parse(yaml_io.load(path), source=str(path))
+def load(config_path: Path) -> Config:
+    return parse(yaml_io.load(config_path), source=str(config_path))
 
 
 def parse(raw: object, *, source: str = "config") -> Config:
     if not isinstance(raw, dict):
         raise FoundryError(f"{source}: top level must be a mapping")
-    name = raw.get("name")
-    if not isinstance(name, str) or not name:
+    foundry_name = raw.get("name")
+    if not isinstance(foundry_name, str) or not foundry_name:
         raise FoundryError(f"{source}: 'name' is required")
 
     projects: dict[str, Project] = {}
-    for key, value in (raw.get("projects") or {}).items():
+    for project_name, value in (raw.get("projects") or {}).items():
         if not isinstance(value, dict) or not isinstance(value.get("url"), str):
-            raise FoundryError(f"{source}: projects.{key} needs a 'url'")
-        projects[key] = Project(name=key, url=value["url"])
+            raise FoundryError(f"{source}: projects.{project_name} needs a 'url'")
+        projects[project_name] = Project(project_name=project_name, url=value["url"])
 
     roles: dict[str, Role] = {}
-    for key, value in (raw.get("roles") or {}).items():
+    for role_name, value in (raw.get("roles") or {}).items():
         if value:
-            raise FoundryError(f"{source}: roles.{key}: role options are not supported yet; use {{}}")
-        roles[key] = Role(name=key)
+            raise FoundryError(f"{source}: roles.{role_name}: role options are not supported yet; use {{}}")
+        roles[role_name] = Role(role_name=role_name)
 
-    return Config(name=name, projects=projects, roles=roles)
+    return Config(foundry_name=foundry_name, projects=projects, roles=roles)

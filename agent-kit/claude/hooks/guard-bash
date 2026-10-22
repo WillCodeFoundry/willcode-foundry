@@ -83,7 +83,7 @@ def short_flags(args: list[str]) -> set[str]:
     return {ch for a in args if a.startswith("-") and not a.startswith("--") for ch in a[1:]}
 
 
-def check_words(words: list[str]) -> str | None:
+def refusal_reason_for(words: list[str]) -> str | None:
     name = words[0].rsplit("/", 1)[-1]
     if name in PRIVILEGE:
         return "privilege escalation is not allowed"
@@ -106,7 +106,7 @@ def check_words(words: list[str]) -> str | None:
     return None
 
 
-def check(command: str) -> str | None:
+def refusal_reason(command: str) -> str | None:
     """The reason to refuse ``command``, or None to let it run."""
     if HOOKS_PATH.search(command):
         return "git hook configuration must not be changed"
@@ -117,7 +117,7 @@ def check(command: str) -> str | None:
     except ValueError:  # unbalanced quotes: refuse rather than guess what runs
         return "the command could not be parsed; quote it so each argument is clear"
     for words in commands:
-        reason = check_words(words)
+        reason = refusal_reason_for(words)
         if reason:
             return reason
     return None
@@ -129,7 +129,7 @@ def main() -> int:
         command = call.get("tool_input", {}).get("command", "")
     except (json.JSONDecodeError, AttributeError):
         return 0  # not a tool call we understand; don't block
-    reason = check(command) if isinstance(command, str) else None
+    reason = refusal_reason(command) if isinstance(command, str) else None
     if reason is None:
         return 0
     print(

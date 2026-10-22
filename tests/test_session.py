@@ -23,29 +23,29 @@ def test_sandbox_name_refuses_an_unusable_name() -> None:
 
 
 def doc(tmp_path: Path) -> session.EnvFile:
-    return session.env_document(
-        sandbox="dev-p-t1",
-        workspace=tmp_path / "ws",
-        kit_dir=Path("/f/agent-kit"),
+    return session.build_env_file(
+        sandbox_name="dev-p-t1",
+        workspace_path=tmp_path / "ws",
+        agent_kit_path=Path("/f/agent-kit"),
         repo_url="git@h:o/p.git",
-        role="dev",
-        task="T1",
-        project="p",
+        role_name="dev",
+        task_id="T1",
+        project_name="p",
     )
 
 
-def test_env_document(tmp_path: Path) -> None:
+def test_build_env_file(tmp_path: Path) -> None:
     d = doc(tmp_path)
-    assert session.workspace_dir(d) == tmp_path / "ws"
-    assert session.kit_dir(d) == Path("/f/agent-kit")
+    assert session.workspace_path(d) == tmp_path / "ws"
+    assert session.agent_kit_path(d) == Path("/f/agent-kit")
     assert d["additionalWorkspaces"] == [{"path": "/f/agent-kit", "readOnly": True}]
     assert d["env"] == {
-        session.ROLE: "dev",
-        session.TASK: "T1",
-        session.KIT_DIR: "/f/agent-kit",
-        session.REPO_URL: "git@h:o/p.git",
-        session.PROJECT_DIR: "/home/agent/work/p",
-        session.NOTES_DIR: "/home/agent/work/p-notes",
+        session.AGENT_ROLE_VAR: "dev",
+        session.AGENT_TASK_VAR: "T1",
+        session.AGENT_KIT_DIR_VAR: "/f/agent-kit",
+        session.AGENT_REPO_URL_VAR: "git@h:o/p.git",
+        session.AGENT_PROJECT_DIR_VAR: "/home/agent/work/p",
+        session.AGENT_NOTES_DIR_VAR: "/home/agent/work/p-notes",
     }
 
 
@@ -53,7 +53,7 @@ def test_create_session_writes_both_files_and_refuses_an_existing_dir(tmp_path: 
     d = tmp_path / "s"
     session.create_session(d, doc(tmp_path), role="dev")
     assert session.read_env_file(d)["name"] == "dev-p-t1"
-    assert yaml_io.load(d / session.RECORD_FILE) == {"role": "dev", "launches": []}
+    assert yaml_io.load(d / session.RECORD_FILE_NAME) == {"role": "dev", "launches": []}
     with pytest.raises(FoundryError, match="already exists"):
         session.create_session(d, doc(tmp_path))
 
@@ -67,7 +67,7 @@ def test_create_session_writes_both_files_and_refuses_an_existing_dir(tmp_path: 
     ],
 )
 def test_read_env_file_rejects_the_wrong_shape(tmp_path: Path, content: str) -> None:
-    (tmp_path / session.ENV_FILE).write_text(content)
+    (tmp_path / session.ENV_FILE_NAME).write_text(content)
     with pytest.raises(FoundryError, match="not a foundry sandbox environment file"):
         session.read_env_file(tmp_path)
 
@@ -76,9 +76,9 @@ def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None
     d = tmp_path / "s"
     session.create_session(d, doc(tmp_path), sandbox="s")
     first = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
-    session.record_launch(d, at=first, fresh=False)
-    session.record_launch(d, at=first.replace(hour=19), fresh=True)
-    assert yaml_io.load(d / session.RECORD_FILE) == {
+    session.record_launch(d, launched_at=first, fresh=False)
+    session.record_launch(d, launched_at=first.replace(hour=19), fresh=True)
+    assert yaml_io.load(d / session.RECORD_FILE_NAME) == {
         "sandbox": "s",
         "launches": [
             {"at": "2026-10-21T18:00:00+00:00", "fresh": False},
@@ -89,4 +89,4 @@ def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None
 
 def test_record_launch_needs_a_record(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match="is missing"):
-        session.record_launch(tmp_path, at=datetime.now(UTC), fresh=False)
+        session.record_launch(tmp_path, launched_at=datetime.now(UTC), fresh=False)

@@ -34,7 +34,7 @@ def instance(tmp_path, monkeypatch):
     def fake_run(launch: Launch) -> None:
         raise Launched(launch)
 
-    monkeypatch.setattr("foundry.agent_sandbox.run", fake_run)
+    monkeypatch.setattr("foundry.agent_sandbox.run_sandbox", fake_run)
     return tmp_path
 
 
@@ -49,29 +49,29 @@ def test_first_run_creates_the_session_named_after_the_sandbox(instance: Path) -
 
     session_dir = instance / "sessions" / "dev-tkt-store-wcf-0042"
     doc = session.read_env_file(session_dir)
-    assert got.name == doc["name"] == "dev-tkt-store-wcf-0042"
-    assert got.env_dir == session_dir
-    assert got.context == instance / "agent-kit"
-    assert got.init == (str(instance / "agent-kit" / "bin" / "session-init"),)
-    assert got.ssh_key == instance / "secrets" / "ssh" / "dev"
-    assert got.github_token_file is None
+    assert got.sandbox_name == doc["name"] == "dev-tkt-store-wcf-0042"
+    assert got.env_dir_path == session_dir
+    assert got.agent_kit_path == instance / "agent-kit"
+    assert got.init_command == (str(instance / "agent-kit" / "bin" / "session-init"),)
+    assert got.ssh_key_path == instance / "secrets" / "ssh" / "dev"
+    assert got.github_token_path is None
     assert got.agent_args == ("--continue",)
-    assert doc["env"][session.TASK] == "WCF-0042"
-    assert session.workspace_dir(doc).is_dir()
+    assert doc["env"][session.AGENT_TASK_VAR] == "WCF-0042"
+    assert session.workspace_path(doc).is_dir()
 
 
 def test_a_rerun_reattaches_with_the_same_file_and_records_each_launch(instance: Path) -> None:
     first = launch("tkt-store", "dev", "WCF-0042")
-    env_file = first.env_dir / session.ENV_FILE
+    env_file = first.env_dir_path / session.ENV_FILE_NAME
     before = env_file.read_text()
-    session.workspace_dir(session.read_env_file(first.env_dir)).rmdir()  # as if /tmp was cleared
+    session.workspace_path(session.read_env_file(first.env_dir_path)).rmdir()  # as if /tmp was cleared
 
-    second = launch("tkt-store", "dev", "WCF-0042", "--new")
+    second = launch("tkt-store", "dev", "WCF-0042", "--fresh")
 
-    assert second.env_dir == first.env_dir and second.fresh
+    assert second.env_dir_path == first.env_dir_path and second.fresh
     assert env_file.read_text() == before
-    assert session.workspace_dir(session.read_env_file(second.env_dir)).is_dir()
-    launches = yaml_io.load(first.env_dir / session.RECORD_FILE)["launches"]
+    assert session.workspace_path(session.read_env_file(second.env_dir_path)).is_dir()
+    launches = yaml_io.load(first.env_dir_path / session.RECORD_FILE_NAME)["launches"]
     assert [entry["fresh"] for entry in launches] == [False, True]
 
 
@@ -79,7 +79,7 @@ def test_a_token_file_is_passed_when_present(instance: Path) -> None:
     token = instance / "secrets" / "github" / "dev.token"
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
-    assert launch("tkt-store", "dev", "WCF-0042").github_token_file == token
+    assert launch("tkt-store", "dev", "WCF-0042").github_token_path == token
 
 
 @pytest.mark.parametrize(

@@ -20,31 +20,31 @@ class SshAddExitCode(IntEnum):
 
 
 class SshAgent:
-    """An ssh-agent bound to ``socket``, reused across launches of one sandbox."""
+    """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox."""
 
-    def __init__(self, host: HostPort, socket: Path) -> None:
+    def __init__(self, host: HostPort, socket_path: Path) -> None:
         self._host = host
-        self.socket = socket
+        self.socket_path = socket_path
 
     def ensure_running(self) -> None:
         """Start the agent unless one already answers on the socket.
 
-        The caller must have already made ``socket``'s directory private to
+        The caller must have already made ``socket_path``'s directory private to
         this user - a socket in a directory someone else controls could be
         their agent, not ours.
         """
         if self._is_running():
             return
 
-        self._host.reset_socket(self.socket)  # stale socket from a dead agent
+        self._host.reset_socket(self.socket_path)  # stale socket from a dead agent
         # The env script ssh-agent prints is ignored on purpose: nothing in
         # this process should start using the sandbox's agent by accident.
-        result = self._host.run(("ssh-agent", "-a", str(self.socket), "-s"))
+        result = self._host.run(("ssh-agent", "-a", str(self.socket_path), "-s"))
         if result.returncode != 0 or not self._is_running():
-            raise SandboxError(f"ssh-agent failed to start on {self.socket}")
+            raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
 
-    def replace_keys(self, keys: Sequence[Path]) -> None:
-        """Make ``keys`` the only keys the agent holds.
+    def replace_keys(self, key_paths: Sequence[Path]) -> None:
+        """Make the keys at ``key_paths`` the only keys the agent holds.
 
         The agent belongs to one sandbox, so emptying it first is safe, and it
         stops keys from earlier launches (such as a rotated-out key) lingering.
@@ -52,10 +52,10 @@ class SshAgent:
         result = self._ssh_add("-D")
         if result.returncode != 0:
             raise SandboxError(f"ssh-add could not empty the agent: {result.stderr.strip()}")
-        for key in keys:
-            result = self._ssh_add("-q", str(key))
+        for key_path in key_paths:
+            result = self._ssh_add("-q", str(key_path))
             if result.returncode != 0:
-                raise SandboxError(f"ssh-add failed for {key}: {result.stderr.strip()}")
+                raise SandboxError(f"ssh-add failed for {key_path}: {result.stderr.strip()}")
 
     def list_keys(self) -> list[str]:
         result = self._ssh_add("-l")
@@ -75,7 +75,7 @@ class SshAgent:
     def _ssh_add(self, *args: str) -> subprocess.CompletedProcess[str]:
         # ssh-add only needs to find itself and reach the right agent - nothing else.
         environ = self._host.environ()
-        env = {"SSH_AUTH_SOCK": str(self.socket)}
+        env = {"SSH_AUTH_SOCK": str(self.socket_path)}
         if "PATH" in environ:
             env["PATH"] = environ["PATH"]
         return self._host.run(("ssh-add", *args), env=env)

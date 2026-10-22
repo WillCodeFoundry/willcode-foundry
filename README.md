@@ -7,7 +7,7 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 ```console
 $ uv sync
 $ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
-$ uv run foundry run tkt-store dev WCF-0042 --new          # replace the sandbox with a fresh one
+$ uv run foundry run tkt-store dev WCF-0042 --fresh        # replace the sandbox with a fresh one
 $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to the agent
 ```
 
@@ -108,7 +108,7 @@ $ sbx settings unset ssh.agentSocketPath
 $ sbx daemon restart
 ```
 
-The launcher passes `--auto-approve` to `sbx env create`, `run` and `rm`, approving each environment plan on your behalf; the plans mount only `agent-kit/` read-only and an empty directory, with no host commands. `sbx env` is marked experimental by Docker; the file format is isolated in `session.env_document` so a change there is one edit.
+The launcher passes `--auto-approve` to `sbx env create`, `run` and `rm`, approving each environment plan on your behalf; the plans mount only `agent-kit/` read-only and an empty directory, with no host commands. `sbx env` is marked experimental by Docker; the file format is isolated in `session.build_env_file` so a change there is one edit.
 
 ## Where agent output lives
 

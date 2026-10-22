@@ -21,7 +21,7 @@ check_task_branch() {
             "Task notes do not belong on $TASK_BRANCH:" \
             "${notes[@]/#/    }" \
             "" \
-            "Move them to \$AGENT_NOTES_DIR/$NOTES_DIR/ and commit there on $NOTES_BRANCH." \
+            "Move them to \$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH/ and commit there on $NOTES_BRANCH." \
             "Unstage with: git restore --staged <file>"
     fi
     if ((${#credentials[@]})); then
@@ -38,15 +38,15 @@ check_notes_branch() {
     local outside=() task_md=() f
     while IFS= read -r f; do
         case "$f" in
-            "$NOTES_DIR"/TASK.md) task_md+=("$f") ;;
-            "$NOTES_DIR"/*)       ;;
+            "$TASK_NOTES_RELATIVE_PATH"/TASK.md) task_md+=("$f") ;;
+            "$TASK_NOTES_RELATIVE_PATH"/*)       ;;
             *)                    outside+=("$f") ;;
         esac
     done < <(staged_files)
 
     if ((${#outside[@]})); then
         refuse pre-commit \
-            "On $NOTES_BRANCH you may only change files inside $NOTES_DIR/:" \
+            "On $NOTES_BRANCH you may only change files inside $TASK_NOTES_RELATIVE_PATH/:" \
             "${outside[@]/#/    }" \
             "" \
             "Other folders belong to other tasks and agents." \
@@ -54,10 +54,10 @@ check_notes_branch() {
     fi
     if ((${#task_md[@]})); then
         refuse pre-commit \
-            "$NOTES_DIR/TASK.md is owned by the human and must not be modified." \
+            "$TASK_NOTES_RELATIVE_PATH/TASK.md is owned by the human and must not be modified." \
             "" \
-            "To propose changes, write them to $NOTES_DIR/TASK.proposed.md instead." \
-            "Discard your edit with: git restore --staged --worktree $NOTES_DIR/TASK.md"
+            "To propose changes, write them to $TASK_NOTES_RELATIVE_PATH/TASK.proposed.md instead." \
+            "Discard your edit with: git restore --staged --worktree $TASK_NOTES_RELATIVE_PATH/TASK.md"
     fi
 }
 

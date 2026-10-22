@@ -8,17 +8,17 @@ import yaml
 from foundry.errors import FoundryError
 
 
-def load(path: Path) -> Any:
+def load(file_path: Path) -> Any:
     try:
-        return yaml.safe_load(path.read_text())
+        return yaml.safe_load(file_path.read_text())
     except FileNotFoundError:
-        raise FoundryError(f"{path} is missing") from None
+        raise FoundryError(f"{file_path} is missing") from None
     except yaml.YAMLError as error:
-        raise FoundryError(f"{path} is not valid YAML: {error}") from None
+        raise FoundryError(f"{file_path} is not valid YAML: {error}") from None
 
 
-def dump(path: Path, data: Any) -> None:
+def dump(file_path: Path, data: Any) -> None:
     """Write atomically: a crash mid-write leaves the old file, never a partial one."""
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(yaml.safe_dump(data, sort_keys=False))
-    tmp.replace(path)
+    temporary_path = file_path.with_name(f".{file_path.name}.tmp")
+    temporary_path.write_text(yaml.safe_dump(data, sort_keys=False))
+    temporary_path.replace(file_path)

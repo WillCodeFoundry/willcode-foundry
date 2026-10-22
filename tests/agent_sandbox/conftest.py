@@ -13,8 +13,8 @@ Response = str | int | tuple[int, str]
 class ExecCalled(Exception):
     """Raised by FakeHost.exec instead of replacing the process, carrying what would have run."""
 
-    def __init__(self, cmd: tuple[str, ...], env: Mapping[str, str]) -> None:
-        self.cmd = cmd
+    def __init__(self, command: tuple[str, ...], env: Mapping[str, str]) -> None:
+        self.command = command
         self.env = env
 
 
@@ -32,8 +32,8 @@ class FakeHost(Host):
         self.calls: list[tuple[tuple[str, ...], Mapping[str, str] | None]] = []
         self.environ_value: Mapping[str, str] = {}
 
-    def run(self, cmd: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        command = tuple(cmd)
+    def run(self, command: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        command = tuple(command)
         self.calls.append((command, env))
         response = self.responses[command]
         if isinstance(response, list):
@@ -45,8 +45,8 @@ class FakeHost(Host):
             return subprocess.CompletedProcess(command, response, stdout="", stderr="")
         return subprocess.CompletedProcess(command, 0, stdout=response, stderr="")
 
-    def exec(self, cmd: Sequence[str], env: Mapping[str, str]) -> NoReturn:
-        raise ExecCalled(tuple(cmd), env)
+    def exec(self, command: Sequence[str], env: Mapping[str, str]) -> NoReturn:
+        raise ExecCalled(tuple(command), env)
 
     def environ(self) -> Mapping[str, str]:
         return self.environ_value

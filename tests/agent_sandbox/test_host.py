@@ -130,7 +130,9 @@ def test_reset_socket_refuses_a_parent_dir_owned_by_someone_else(tmp_path):
 def test_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
     host = Host(501)
 
-    assert host.socket_path(Path("/tmp/sbx-agents"), "myproj-dev") == Path("/tmp/sbx-agents-501/myproj-dev.sock")
+    assert host.ssh_agent_socket_path(Path("/tmp/sbx-agents"), "myproj-dev") == Path(
+        "/tmp/sbx-agents-501/myproj-dev.sock"
+    )
 
 
 # --- ensure_dir_exists / ensure_file_exists -------------------------------------

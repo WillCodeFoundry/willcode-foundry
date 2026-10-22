@@ -4,7 +4,7 @@
 
 TASK_BRANCH="task/$AGENT_TASK"
 NOTES_BRANCH="agent-notes"
-NOTES_DIR=".agent/$AGENT_TASK"
+TASK_NOTES_RELATIVE_PATH=".agent/$AGENT_TASK"
 
 # refuse <hook> <message...>: print a refusal that says what was wrong and
 # what to do instead, then exit non-zero.
