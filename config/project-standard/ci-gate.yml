@@ -1,0 +1,28 @@
+# The part of a project's .github/workflows/ci.yml that the foundry's rulesets
+# depend on: when the workflow runs, and the ci-gate job they require.
+# `foundry protect check` compares a project's ci.yml with this; everything
+# else in the workflow (its other jobs, permissions, concurrency) is the
+# project's own.
+#
+# To start a project's CI, copy this into its ci.yml, add its jobs above
+# ci-gate, and replace `<all other jobs>` with the list of their ids, e.g.
+# [lint, mypy, test]. check accepts the list when it names every other job in
+# the file, and shows the difference when it doesn't.
+#
+# if: always() matters: a skipped job counts as passed on GitHub, and without
+# it ci-gate is skipped whenever a job it needs fails.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ci-gate:
+    if: always()
+    needs: <all other jobs>
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: '[[ "${{ !contains(needs.*.result, ''failure'') && !contains(needs.*.result, ''cancelled'') }}" == true ]]'

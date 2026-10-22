@@ -53,7 +53,15 @@ def test_file_text_is_none_for_a_missing_file_and_errors_otherwise_still_raise()
 
     github = GitHub(runner)
     assert github.file_text("o/r", "missing") is None
-    assert github.dir_file_paths("o/r", "missing") == []
     with pytest.raises(GitHubError, match="Bad credentials") as error:
         github.file_text("o/r", "CODEOWNERS")
     assert error.value.http_status == 401
+
+
+def test_rulesets_are_the_repositorys_own_by_name() -> None:
+    from tests.fake_github import FakeGitHub
+
+    fake = FakeGitHub()
+    fake.add("o/r", {"name": "mine"})
+    fake.add("o/r", {"name": "from-the-org"}, source_type="Organization")
+    assert list(GitHub(fake).rulesets("o/r")) == ["mine"]

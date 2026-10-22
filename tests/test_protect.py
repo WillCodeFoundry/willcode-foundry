@@ -1,11 +1,14 @@
 """foundry protect check / apply, end to end against a fake GitHub."""
 
+import shutil
 from pathlib import Path
 
 import pytest
 
 from foundry import cli, github
 from tests.fake_github import FakeGitHub
+
+REPO_ROOT = Path(__file__).parents[1]
 
 CONFIG = """\
 name: test
@@ -15,7 +18,7 @@ projects:
 roles: {}
 """
 
-PROTECTION = """\
+RULESETS = """\
 rulesets:
   - name: agent-branches
     target: branch
@@ -34,14 +37,20 @@ RULESET = {
     "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
 }
 
+CI = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+
 
 @pytest.fixture
 def fake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeGitHub:
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "foundry.yaml").write_text(CONFIG)
-    (tmp_path / "config" / "github-protection.yaml").write_text(PROTECTION)
+    standard_path = tmp_path / "config" / "project-standard"
+    shutil.copytree(REPO_ROOT / "config" / "project-standard", standard_path)
+    (standard_path / "rulesets.yaml").write_text(RULESETS)
     monkeypatch.chdir(tmp_path)
     fake = FakeGitHub()
+    for slug in ("o/store", "o/site"):
+        fake.files[slug] = {".github/CODEOWNERS": "* @WillCodeCo\n", ".github/workflows/ci.yml": CI}
     monkeypatch.setattr("foundry.commands.protect.GitHub", lambda: github.GitHub(fake))
     return fake
 
@@ -51,16 +60,21 @@ def test_check_passes_when_every_project_matches(fake: FakeGitHub, capsys: pytes
     fake.add("o/site", RULESET)
 
     assert cli.main(["protect", "check"]) == 0
-    assert capsys.readouterr().out.count("ok       agent-branches") == 2
-
-
-def test_check_fails_and_says_what_is_wrong(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
-    fake.add("o/store", {**RULESET, "rules": [{"type": "deletion"}]})
-
-    assert cli.main(["protect", "check"]) == 1
     out = capsys.readouterr().out
-    assert "site (o/site)\n  missing  agent-branches" in out
-    assert "store (o/store)\n  differs  agent-branches\n           rules[non_fast_forward]: missing" in out
+    assert out.count("ok       ruleset agent-branches") == 2
+    assert out.count("ok       .github/CODEOWNERS") == 2
+
+
+def test_check_fails_and_shows_the_diff(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
+    fake.add("o/store", {**RULESET, "rules": [{"type": "deletion"}]})
+    fake.files["o/store"][".github/CODEOWNERS"] = "* @someone\n"
+
+    assert cli.main(["protect", "check", "store"]) == 1
+    out = capsys.readouterr().out
+    assert "differs  ruleset agent-branches" in out
+    assert '+      "type": "non_fast_forward"' in out
+    assert "differs  .github/CODEOWNERS" in out
+    assert "           -* @someone\n           +* @WillCodeCo" in out
 
 
 def test_check_reports_a_repo_github_refuses_and_carries_on(
@@ -74,58 +88,29 @@ def test_check_reports_a_repo_github_refuses_and_carries_on(
     assert cli.main(["protect", "check"]) == 1
     out = capsys.readouterr().out
     assert "site (o/site)\n  error    Upgrade to GitHub Pro" in out
-    assert "store (o/store)\n  ok       agent-branches" in out
+    assert "store (o/store)\n  ok       ruleset agent-branches" in out
 
 
-def test_check_only_the_named_projects(fake: FakeGitHub) -> None:
-    fake.add("o/store", RULESET)
-
-    assert cli.main(["protect", "check", "store"]) == 0
-    assert {endpoint.split("/rulesets")[0] for _, endpoint in fake.calls} == {"repos/o/store"}
-
-
-def test_dry_run_changes_nothing(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main(["protect", "apply", "--dry-run", "store"]) == 1
-    assert "would create agent-branches" in capsys.readouterr().out
-    assert [method for method, _ in fake.calls] == ["GET"]
-
-
-def test_apply_makes_check_pass(fake: FakeGitHub) -> None:
+def test_apply_creates_and_updates_rulesets_until_check_passes(
+    fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
     fake.add("o/store", {**RULESET, "enforcement": "evaluate"})
 
     assert cli.main(["protect", "apply"]) == 0
+    out = capsys.readouterr().out
+    assert "store (o/store)\n  updated  ruleset agent-branches" in out
+    assert "site (o/site)\n  created  ruleset agent-branches" in out
     assert cli.main(["protect", "check"]) == 0
+
+
+def test_apply_shows_project_files_but_never_writes_them(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
+    del fake.files["o/store"][".github/CODEOWNERS"]
+
+    assert cli.main(["protect", "apply", "store"]) == 1
+    assert "differs  .github/CODEOWNERS" in capsys.readouterr().out
+    assert [call for call in fake.calls if call[0] in {"POST", "PUT"}] == [("POST", "repos/o/store/rulesets")]
 
 
 def test_unknown_project_is_an_error(fake: FakeGitHub, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["protect", "check", "nope"]) == 1
     assert "unknown project 'nope'" in capsys.readouterr().err
-
-
-GATED_PROTECTION = """\
-rulesets:
-  - name: default-branch
-    target: branch
-    enforcement: active
-    rules:
-      - type: required_status_checks
-        parameters:
-          strict_required_status_checks_policy: true
-          required_status_checks: [{context: ci-gate, integration_id: 15368}]
-"""
-
-
-def test_project_files_are_reported_and_apply_leaves_them_to_the_project(
-    fake: FakeGitHub, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    (tmp_path / "config" / "github-protection.yaml").write_text(GATED_PROTECTION)
-
-    assert cli.main(["protect", "apply", "store"]) == 1  # rulesets created, but the project lacks ci-gate
-    out = capsys.readouterr().out
-    assert "  created  default-branch\n" in out
-    assert "  missing  required check ci-gate: no workflow" in out
-    assert "fix these in the project" in out
-
-    fake.files["o/store"] = {".github/workflows/ci.yml": "on: pull_request\njobs:\n  ci-gate: {}\n"}
-    assert cli.main(["protect", "check", "store"]) == 0
-    assert "  ok       required check ci-gate: .github/workflows/ci.yml" in capsys.readouterr().out

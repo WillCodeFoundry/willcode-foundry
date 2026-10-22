@@ -72,25 +72,14 @@ class GitHub:
             return None
         return base64.b64decode(content["content"]).decode()
 
-    def dir_file_paths(self, repo_slug: str, dir_path: str) -> list[str]:
-        """Paths of the files directly in a directory on the default branch; empty if it doesn't exist."""
-        content = self._contents(repo_slug, dir_path)
-        if not isinstance(content, list):
-            return []
-        return sorted(entry["path"] for entry in content if entry.get("type") == "file")
-
-    def default_branch(self, repo_slug: str) -> str:
-        return str(self.api("GET", f"repos/{repo_slug}")["default_branch"])
-
-    def permission(self, repo_slug: str, username: str) -> str:
-        """A user's base access to the repository: admin, write, read or none."""
-        try:
-            response = self.api("GET", f"repos/{repo_slug}/collaborators/{username}/permission")
-        except GitHubError as error:
-            if error.http_status == 404:  # not a collaborator, or no such user
-                return "none"
-            raise
-        return str(response["permission"])
+    def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
+        """The repository's own rulesets in full, by name; inherited ones are left out."""
+        summaries = self.api("GET", f"repos/{repo_slug}/rulesets?per_page=100&includes_parents=false")
+        return {
+            summary["name"]: self.api("GET", f"repos/{repo_slug}/rulesets/{summary['id']}")
+            for summary in summaries
+            if summary.get("source_type") == "Repository"
+        }
 
     def _contents(self, repo_slug: str, path: str) -> Any:
         try:

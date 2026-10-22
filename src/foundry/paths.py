@@ -42,5 +42,6 @@ def session_path(foundry_root: Path, sandbox_name: str) -> Path:
     return foundry_root / "sessions" / sandbox_name
 
 
-def github_protection_path(foundry_root: Path) -> Path:
-    return foundry_root / "config" / "github-protection.yaml"
+def project_standard_path(foundry_root: Path) -> Path:
+    """The directory holding what every project's repository must match."""
+    return foundry_root / "config" / "project-standard"
