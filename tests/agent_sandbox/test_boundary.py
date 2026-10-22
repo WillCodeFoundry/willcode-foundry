@@ -11,6 +11,8 @@ def imported_modules(module_path: Path) -> set[str]:
     for node in ast.walk(ast.parse(module_path.read_text())):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
+        # Relative imports are banned by ruff (TID252), so checking absolute
+        # imports covers every import.
         elif isinstance(node, ast.ImportFrom) and node.module is not None and node.level == 0:
             names.add(node.module)
     return names

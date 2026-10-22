@@ -33,7 +33,10 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "RUF", "PLW"]
+select = ["E", "F", "W", "I", "UP", "B", "RUF", "PLW", "TID252"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"   # the default, "parents", would still allow `from . import x`
 
 [tool.mypy]
 strict = true
