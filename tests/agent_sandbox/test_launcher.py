@@ -1,10 +1,11 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import LaunchRequest, prepare, require_safe_paths
+from foundry.agent_sandbox.launcher import LaunchRequest, prepare, require_dir, require_file, require_safe_paths
 from foundry.agent_sandbox.sbx import Sbx
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
@@ -41,7 +42,7 @@ def run_prepare(layout, host, **request) -> LaunchRequest:
     """prepare() for a launch request pointing at the layout's definition."""
     _, key, sdir, sock = layout
     launch_request = LaunchRequest(definition_dir=sdir, ssh_key_path=key, **request)
-    prepare(launch_request, SandboxDefinition.read(sdir), host, SshAgent(host, sock), Sbx(host, {}, "n", sdir))
+    prepare(launch_request, SandboxDefinition.read(sdir), SshAgent(host, sock, os.getuid()), Sbx(host, {}, "n", sdir))
     return launch_request
 
 
@@ -152,3 +153,16 @@ def test_an_empty_agent_never_counts_as_the_expected_keys(layout, host) -> None:
 
     with pytest.raises(SandboxError, match="holds no keys after loading them"):
         run_prepare(layout, host)
+
+
+def test_require_dir_accepts_a_directory_and_refuses_anything_else(tmp_path: Path) -> None:
+    require_dir(tmp_path, "workspace")
+    with pytest.raises(SandboxError, match="is not a directory"):
+        require_dir(tmp_path / "missing", "workspace")
+
+
+def test_require_file_accepts_a_file_and_refuses_a_directory(tmp_path: Path) -> None:
+    (tmp_path / "key").touch()
+    require_file(tmp_path / "key", "ssh key")
+    with pytest.raises(SandboxError, match="is not a file"):
+        require_file(tmp_path, "ssh key")

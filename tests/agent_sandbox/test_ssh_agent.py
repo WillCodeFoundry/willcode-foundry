@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
 NOT_RUNNING, NO_KEYS = 2, 1  # ssh-add -l exit codes
+OWN_UID = os.getuid()
 PERSONAL_ENV = {"PATH": "/bin", "HOME": "/home/dev", "SSH_AUTH_SOCK": "/personal.sock", "SSH_AGENT_PID": "42"}
 
 
@@ -19,7 +21,7 @@ def socket(tmp_path):
 @pytest.fixture
 def make_agent(host, socket):
     host.environ_value = PERSONAL_ENV
-    return lambda: SshAgent(host, socket)
+    return lambda uid=OWN_UID: SshAgent(host, socket, uid)
 
 
 def start(socket):
@@ -64,6 +66,50 @@ def test_removes_a_stale_socket_before_starting(host, make_agent, socket):
     make_agent().ensure_running()
 
     assert not socket.exists()
+
+
+# --- the socket's private directory, made so on every ensure_running ----------
+
+
+def test_the_sockets_directory_is_created_for_the_owner_only(host, make_agent, socket):
+    host.responses = {LIST: NO_KEYS}
+
+    make_agent().ensure_running()
+
+    assert socket.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_the_sockets_directory_has_existing_permissions_tightened(host, make_agent, socket):
+    host.responses = {LIST: NO_KEYS}
+    socket.parent.mkdir(mode=0o755)
+
+    make_agent().ensure_running()
+
+    assert socket.parent.stat().st_mode & 0o777 == 0o700
+
+
+def test_a_sockets_directory_owned_by_someone_else_is_refused(host, make_agent):
+    with pytest.raises(SandboxError, match="not a directory owned by you"):
+        make_agent(uid=os.getuid() + 1).ensure_running()
+    assert host.calls == []  # refused before asking any agent
+
+
+def test_a_sockets_directory_that_is_a_symlink_is_refused_and_its_target_untouched(make_agent, socket, tmp_path):
+    target = tmp_path / "elsewhere"
+    target.mkdir(mode=0o755)
+    socket.parent.symlink_to(target)
+
+    with pytest.raises(SandboxError, match="not a directory owned by you"):
+        make_agent().ensure_running()
+    assert target.stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.parametrize("make_path", [Path.touch, lambda path: path.symlink_to(path.with_name("missing"))])
+def test_a_sockets_directory_that_is_a_file_or_a_dangling_symlink_is_refused(make_agent, socket, make_path):
+    make_path(socket.parent)
+
+    with pytest.raises(SandboxError, match="not a directory owned by you"):
+        make_agent().ensure_running()
 
 
 @pytest.mark.parametrize("start_exit, list_after", [(0, NOT_RUNNING), (1, NO_KEYS)])

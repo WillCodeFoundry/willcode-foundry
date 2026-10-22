@@ -1,10 +1,8 @@
-"""The boundary to the host machine: every external command and filesystem privilege check goes through here."""
+"""The boundary to the host machine's processes: every external command goes through here."""
 
 import os
-import stat
 import subprocess
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import NoReturn, Protocol
 
 from foundry.agent_sandbox.errors import SandboxError
@@ -23,27 +21,8 @@ class Host(Protocol):
         """This process's own environment."""
         ...
 
-    def ensure_private_dir(self, private_dir: Path) -> None:
-        """Create private_dir as a directory only this user can use; raise if it isn't one."""
-        ...
-
-    def reset_socket(self, socket_path: Path) -> None:
-        """Make socket_path ready for a fresh ssh-agent: private parent dir, no leftover socket file."""
-        ...
-
-    def require_dir(self, target_dir: Path, what: str) -> None:
-        """Raise if target_dir is not a directory."""
-        ...
-
-    def require_file(self, file_path: Path, what: str) -> None:
-        """Raise if file_path is not a file."""
-        ...
-
 
 class SystemHost:
-    def __init__(self, uid: int) -> None:
-        self._uid = uid
-
     def run(self, command: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
@@ -61,31 +40,3 @@ class SystemHost:
 
     def environ(self) -> Mapping[str, str]:
         return os.environ
-
-    def ensure_private_dir(self, private_dir: Path) -> None:
-        """Create private_dir as a directory only this user can use, refusing one we don't own.
-
-        The sockets directory lives in /tmp, which is shared: another user could
-        create it first, or put a symlink there pointing somewhere they control.
-        """
-        try:
-            private_dir.mkdir(mode=0o700, exist_ok=True)
-            info = os.lstat(private_dir)
-            ours = stat.S_ISDIR(info.st_mode) and info.st_uid == self._uid
-        except FileExistsError:  # a file, or a dangling symlink
-            ours = False
-        if not ours:
-            raise SandboxError(f"{private_dir} is not a directory owned by you")
-        private_dir.chmod(0o700)
-
-    def reset_socket(self, socket_path: Path) -> None:
-        self.ensure_private_dir(socket_path.parent)
-        socket_path.unlink(missing_ok=True)
-
-    def require_dir(self, target_dir: Path, what: str) -> None:
-        if not target_dir.is_dir():
-            raise SandboxError(f"{what} {str(target_dir)!r} is not a directory")
-
-    def require_file(self, file_path: Path, what: str) -> None:
-        if not file_path.is_file():
-            raise SandboxError(f"{what} {str(file_path)!r} is not a file")

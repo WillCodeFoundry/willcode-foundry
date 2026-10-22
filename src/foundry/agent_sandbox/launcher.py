@@ -15,7 +15,7 @@ from typing import NoReturn
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.host import Host, SystemHost
+from foundry.agent_sandbox.host import SystemHost
 from foundry.agent_sandbox.sbx import Sbx
 from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
 
@@ -31,6 +31,16 @@ class LaunchRequest:
     """Run inside the sandbox before the agent starts; the launch aborts if it fails."""
     github_token_path: Path | None = None
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
+
+
+def require_dir(target_dir: Path, what: str) -> None:
+    if not target_dir.is_dir():
+        raise SandboxError(f"{what} {str(target_dir)!r} is not a directory")
+
+
+def require_file(file_path: Path, what: str) -> None:
+    if not file_path.is_file():
+        raise SandboxError(f"{what} {str(file_path)!r} is not a file")
 
 
 def require_safe_paths(agent_kit_dir: Path, definition_dir: Path, private_paths: Sequence[Path]) -> None:
@@ -62,13 +72,13 @@ def require_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
         )
 
 
-def prepare(request: LaunchRequest, definition: SandboxDefinition, host: Host, ssh_agent: SshAgent, sbx: Sbx) -> None:
+def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sbx: Sbx) -> None:
     """Everything up to, but not including, attaching the agent."""
-    host.require_dir(definition.agent_kit_dir, "agent kit")
-    host.require_file(request.ssh_key_path, "ssh key")
+    require_dir(definition.agent_kit_dir, "agent kit")
+    require_file(request.ssh_key_path, "ssh key")
     private_paths = [request.ssh_key_path]
     if request.github_token_path is not None:
-        host.require_file(request.github_token_path, "github token file")
+        require_file(request.github_token_path, "github token file")
         private_paths.append(request.github_token_path)
     require_safe_paths(definition.agent_kit_dir, request.definition_dir, private_paths)
 
@@ -114,12 +124,11 @@ def launch(request: LaunchRequest) -> NoReturn:
     """
     definition = SandboxDefinition.read(request.definition_dir)
     uid = os.getuid()
-    host = SystemHost(uid)
+    host = SystemHost()
     ssh_agent_socket_path = agent_socket_path(definition.name, uid)
-    ssh_agent = SshAgent(host, ssh_agent_socket_path)
+    ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    host.ensure_private_dir(ssh_agent_socket_path.parent)
-    prepare(request, definition, host, ssh_agent, sbx)
+    prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
     host.exec(sbx.attach_command(), process_env)

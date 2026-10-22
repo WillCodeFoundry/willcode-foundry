@@ -1,5 +1,7 @@
 """A dedicated ssh-agent per sandbox, reachable at a fixed socket path."""
 
+import os
+import stat
 import subprocess
 from collections.abc import Sequence
 from enum import IntEnum
@@ -12,10 +14,27 @@ from foundry.agent_sandbox.host import Host
 def agent_socket_path(sandbox_name: str, uid: int) -> Path:
     """The sandbox's ssh-agent socket: /tmp/sbx-agents-<uid>/<sandbox_name>.sock.
 
-    The directory is per user, since /tmp is shared; the launcher makes it
-    private before starting the agent.
+    The directory is per user, since /tmp is shared; SshAgent.ensure_running
+    makes it private before using it.
     """
     return Path(f"/tmp/sbx-agents-{uid}") / f"{sandbox_name}.sock"
+
+
+def _ensure_private_dir(private_dir: Path, uid: int) -> None:
+    """Create private_dir as a directory only this user can use, refusing one we don't own.
+
+    The sockets directory lives in /tmp, which is shared: another user could
+    create it first, or put a symlink there pointing somewhere they control.
+    """
+    try:
+        private_dir.mkdir(mode=0o700, exist_ok=True)
+        info = os.lstat(private_dir)
+        ours = stat.S_ISDIR(info.st_mode) and info.st_uid == uid
+    except FileExistsError:  # a file, or a dangling symlink
+        ours = False
+    if not ours:
+        raise SandboxError(f"{private_dir} is not a directory owned by you")
+    private_dir.chmod(0o700)
 
 
 class SshAddExitCode(IntEnum):
@@ -31,21 +50,23 @@ class SshAddExitCode(IntEnum):
 class SshAgent:
     """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox."""
 
-    def __init__(self, host: Host, socket_path: Path) -> None:
+    def __init__(self, host: Host, socket_path: Path, uid: int) -> None:
         self._host = host
         self.socket_path = socket_path
+        self._uid = uid
 
     def ensure_running(self) -> None:
         """Start the agent unless one already answers on the socket.
 
-        The caller must have already made ``socket_path``'s directory private to
-        this user - a socket in a directory someone else controls could be
-        their agent, not ours.
+        The socket's directory is made private to this user first, every time:
+        a socket in a directory someone else controls could be their agent,
+        not ours.
         """
+        _ensure_private_dir(self.socket_path.parent, self._uid)
         if self._is_running():
             return
 
-        self._host.reset_socket(self.socket_path)  # stale socket from a dead agent
+        self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
         # The env script ssh-agent prints is ignored on purpose: nothing in
         # this process should start using the sandbox's agent by accident.
         result = self._host.run(("ssh-agent", "-a", str(self.socket_path), "-s"))

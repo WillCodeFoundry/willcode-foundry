@@ -1,11 +1,10 @@
-import os
 import subprocess
 from collections.abc import Mapping, Sequence
 from typing import NoReturn
 
 import pytest
 
-from foundry.agent_sandbox.host import Host, SystemHost
+from foundry.agent_sandbox.host import Host
 
 Response = str | int | tuple[int, str]
 
@@ -18,7 +17,7 @@ class ExecCalled(Exception):
         self.env = env
 
 
-class FakeHost(SystemHost):
+class FakeHost:
     """Answers commands from ``responses`` and records them in ``calls``.
 
     A response is stdout (str, exit 0), an exit code (int), an (exit code,
@@ -27,7 +26,6 @@ class FakeHost(SystemHost):
     """
 
     def __init__(self) -> None:
-        super().__init__(os.getuid())
         self.responses: dict[tuple[str, ...], Response | list[Response]] = {}
         self.calls: list[tuple[tuple[str, ...], Mapping[str, str] | None]] = []
         self.environ_value: Mapping[str, str] = {}
