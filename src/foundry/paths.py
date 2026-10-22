@@ -40,3 +40,7 @@ def github_token_path(foundry_root: Path, role_name: str) -> Path:
 
 def session_path(foundry_root: Path, sandbox_name: str) -> Path:
     return foundry_root / "sessions" / sandbox_name
+
+
+def github_protection_path(foundry_root: Path) -> Path:
+    return foundry_root / "config" / "github-protection.yaml"

@@ -21,7 +21,8 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 ├── src/foundry/                  # launcher code (see below)
 ├── tests/
 ├── config/
-│   └── foundry.yaml              # instance name, projects (clone URLs), roles
+│   ├── foundry.yaml              # instance name, projects (clone URLs), roles
+│   └── github-protection.yaml    # rulesets every project's GitHub repository must have
 ├── agent-kit/                    # everything an agent is given (read-only mount)
 │   ├── AGENTS.md                 # instructions shared by every role
 │   ├── bin/
@@ -83,12 +84,32 @@ Two kinds of control, and only the first is a boundary:
 
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They exist to stop the common slips, such as reaching for `--no-verify` when a hook fails or force-pushing after a bad rebase, and to explain the rule in the refusal. What must hold whatever the agent does belongs in the rows above them, chiefly the project's GitHub rules.
 
+### Checking the GitHub rules
+
+```console
+$ uv run foundry protect check                    # every project; exit 1 if any repository falls short
+$ uv run foundry protect check tkt-store          # one project
+$ uv run foundry protect apply --dry-run          # what apply would change
+$ uv run foundry protect apply                    # create missing rulesets, update ones that differ
+```
+
+`config/github-protection.yaml` lists the rulesets, in the shape of GitHub's REST API, and is the place to change them: edit it, then `apply`. They allow no bypass, for you either:
+
+- `foundry-default-branch`: main changes only by a reviewed pull request; no force-push or deletion.
+- `foundry-agent-branches`: `task/**` and `agent-notes` take signed commits only and are never force-pushed or deleted.
+- `foundry-other-branches`: no other branch can be created, pushed or deleted, except the `feat/**` and `fix/**` prefixes left open for people.
+
+`check` compares only the fields the file sets and matches rulesets by name; rulesets on GitHub that the file doesn't name are reported and left alone, and `apply` never deletes anything. Both use the GitHub CLI signed in as you (`gh auth login`), with admin rights on the repositories; the agents' credentials are never used. Rulesets on private repositories need GitHub Pro or Team; on a free plan, GitHub refuses and `check` reports its message. GitHub can't tell one task's branch from another's, so keeping a role to its own task's branch is left to the git hooks.
+
 ## The launcher
 
 ```
 src/foundry/
 ├── cli.py              # `foundry` command; one subcommand per module in commands/
 ├── commands/run.py     # foundry run
+├── commands/protect.py # foundry protect check|apply
+├── protection.py       # loads github-protection.yaml; compares and applies rulesets
+├── github.py           # GitHub's REST API through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml
 ├── session.py          # sandbox/session naming, sbxenv.yaml, session.yaml

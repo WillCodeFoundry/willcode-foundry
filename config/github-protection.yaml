@@ -1,0 +1,66 @@
+# What every project's GitHub repository must enforce, whatever runs inside
+# a sandbox. Checked and applied by `foundry protect check|apply`.
+#
+# Each ruleset is in the shape of GitHub's REST API ("Create a repository
+# ruleset"), sent as-is by `apply` and matched to GitHub's by name. `check`
+# compares only the fields written here; ones GitHub adds are ignored.
+#
+# Nobody bypasses these, you included: change this file and apply it instead.
+# Needs a plan with rulesets on private repositories (GitHub Pro or Team).
+
+rulesets:
+  # Main changes only through a reviewed pull request. Roles are separate
+  # GitHub users, so you can approve an agent's pull request; a pull request
+  # you open yourself needs another user's approval, or set the count to 0.
+  - name: foundry-default-branch
+    target: branch
+    enforcement: active
+    bypass_actors: []
+    conditions:
+      ref_name:
+        include: ["~DEFAULT_BRANCH"]
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 1
+          dismiss_stale_reviews_on_push: true
+          require_code_owner_review: false
+          require_last_push_approval: true
+          required_review_thread_resolution: false
+
+  # The branches agents push: signed commits, never rewritten or deleted.
+  - name: foundry-agent-branches
+    target: branch
+    enforcement: active
+    bypass_actors: []
+    conditions:
+      ref_name:
+        include: ["refs/heads/task/**", "refs/heads/agent-notes"]
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: required_signatures
+
+  # Every other branch is closed, except the prefixes people work on. Agents
+  # could push to those too; their git hooks refuse it as a mistake.
+  - name: foundry-other-branches
+    target: branch
+    enforcement: active
+    bypass_actors: []
+    conditions:
+      ref_name:
+        include: ["~ALL"]
+        exclude:
+          - "~DEFAULT_BRANCH"
+          - "refs/heads/task/**"
+          - "refs/heads/agent-notes"
+          - "refs/heads/feat/**"
+          - "refs/heads/fix/**"
+    rules:
+      - type: creation
+      - type: update
+      - type: deletion
