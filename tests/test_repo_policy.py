@@ -120,15 +120,33 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
 # --- loading the policy -------------------------------------------------------------
 
 
-def test_a_policy_file_missing_or_not_what_foundry_expects_fails_with_its_path(tmp_path: Path) -> None:
+@pytest.fixture
+def policy_dir(tmp_path: Path) -> Path:
+    """A readable repo policy, for each test to break one file of."""
     (tmp_path / "rulesets.yaml").write_text("rulesets: []\n")
     (tmp_path / "ci-gate.yml").write_text("on: pull_request\njobs: {}\n")
-    with pytest.raises(FoundryError, match=r"CODEOWNERS is missing"):
-        repo_policy.load(tmp_path)
     (tmp_path / "CODEOWNERS").write_text("* @will\n")
-    (tmp_path / "rulesets.yaml").write_text("- a list\n")
-    with pytest.raises(FoundryError, match=r"not a repo policy foundry can read"):
-        repo_policy.load(tmp_path)
+    repo_policy.load(tmp_path)
+    return tmp_path
+
+
+@pytest.mark.parametrize("content", ["- a list\n", "rulesets: none\n", "other: []\n"])
+def test_a_rulesets_yaml_without_a_rulesets_list_is_named(policy_dir: Path, content: str) -> None:
+    (policy_dir / "rulesets.yaml").write_text(content)
+    with pytest.raises(FoundryError, match=rf"^{policy_dir / 'rulesets.yaml'}: needs a 'rulesets' list$"):
+        repo_policy.load(policy_dir)
+
+
+def test_a_ci_gate_yml_foundry_cannot_read_is_named(policy_dir: Path) -> None:
+    (policy_dir / "ci-gate.yml").write_text("- a list\n")
+    with pytest.raises(FoundryError, match=rf"^{policy_dir / 'ci-gate.yml'}: not a workflow fragment foundry can read"):
+        repo_policy.load(policy_dir)
+
+
+def test_a_missing_codeowners_is_named(policy_dir: Path) -> None:
+    (policy_dir / "CODEOWNERS").unlink()
+    with pytest.raises(FoundryError, match=rf"^{policy_dir / 'CODEOWNERS'} is missing$"):
+        repo_policy.load(policy_dir)
 
 
 # --- this repository --------------------------------------------------------------

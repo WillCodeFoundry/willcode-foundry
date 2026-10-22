@@ -43,13 +43,17 @@ class Deviation:
 def load(policy_dir: Path) -> RepoPolicy:
     """Read config/repo-policy/; a file that's missing or not what foundry expects fails with its path."""
     rulesets_path = policy_dir / "rulesets.yaml"
+    rulesets_document = yaml_io.load(rulesets_path)
+    if not isinstance(rulesets_document, dict) or not isinstance(rulesets_document.get("rulesets"), list):
+        raise FoundryError(f"{rulesets_path}: needs a 'rulesets' list")
+
     ci_gate_path = policy_dir / "ci-gate.yml"
     try:
-        rulesets = yaml_io.load(rulesets_path)["rulesets"]
         ci_gate = ci_gate_section(yaml_io.load(ci_gate_path))
     except (KeyError, TypeError, AttributeError) as error:
-        raise FoundryError(f"{policy_dir}: not a repo policy foundry can read ({error!r})") from None
-    return RepoPolicy(rulesets, _read_text(policy_dir / "CODEOWNERS"), ci_gate)
+        raise FoundryError(f"{ci_gate_path}: not a workflow fragment foundry can read ({error!r})") from None
+
+    return RepoPolicy(rulesets_document["rulesets"], _read_text(policy_dir / "CODEOWNERS"), ci_gate)
 
 
 def _read_text(file_path: Path) -> str:
