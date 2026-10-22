@@ -10,6 +10,7 @@ harmless. When a project really needs to differ, change the policy.
 import difflib
 import json
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,19 @@ class Deviation:
     diff: str
 
 
+class RulesetAction(StrEnum):
+    CREATED = "created"
+    UPDATED = "updated"
+
+
+@dataclass(frozen=True)
+class RulesetChange:
+    """One ruleset apply_rulesets created or updated."""
+
+    ruleset_name: str
+    action: RulesetAction
+
+
 def load(policy_dir: Path) -> RepoPolicy:
     """Read config/repo-policy/; a file that's missing or not what foundry expects fails with its path."""
     rulesets_path = policy_dir / "rulesets.yaml"
@@ -66,15 +80,34 @@ def _read_text(file_path: Path) -> str:
 def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
     """How the repository differs from the policy; empty when it conforms."""
     actual_rulesets = github.rulesets(repo_slug)
-    found = [
-        compare(f"ruleset {ruleset['name']}", restrict_to(ruleset, actual_rulesets.get(ruleset["name"])), ruleset)
-        for ruleset in policy.rulesets
-    ]
+    found = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
     found.append(compare(CODEOWNERS_PATH, github.file_text(repo_slug, CODEOWNERS_PATH), policy.codeowners))
     found.append(
         compare(CI_WORKFLOW_PATH, _project_ci_gate(github.file_text(repo_slug, CI_WORKFLOW_PATH)), policy.ci_gate)
     )
     return [deviation for deviation in found if deviation is not None]
+
+
+def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[RulesetChange]:
+    """Create the policy's rulesets the repository lacks and update those that deviate, in policy order.
+
+    Project files are never written: they're the project's to change.
+    """
+    actual_rulesets = github.rulesets(repo_slug)
+    changes = []
+    for ruleset in policy.rulesets:
+        actual = actual_rulesets.get(ruleset["name"])
+        if actual is None:
+            github.create_ruleset(repo_slug, ruleset)
+            changes.append(RulesetChange(ruleset["name"], RulesetAction.CREATED))
+        elif _ruleset_deviation(ruleset, actual) is not None:
+            github.update_ruleset(repo_slug, actual["id"], ruleset)
+            changes.append(RulesetChange(ruleset["name"], RulesetAction.UPDATED))
+    return changes
+
+
+def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:
+    return compare(f"ruleset {ruleset['name']}", restrict_to(ruleset, actual), ruleset)
 
 
 def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:

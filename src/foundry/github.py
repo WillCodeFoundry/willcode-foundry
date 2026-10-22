@@ -1,7 +1,8 @@
-"""GitHub's REST API through the `gh` command line, signed in as the person running foundry.
+"""What foundry needs from GitHub, and that implemented through the `gh` command line.
 
-The foundry never handles a token itself: `gh` holds the login. Agents'
-role credentials are never used here.
+GhCli runs as the person running foundry: `gh` holds the login, so the
+foundry never handles a token itself, and agents' role credentials are
+never used here.
 """
 
 import base64
@@ -9,7 +10,7 @@ import json
 import re
 import subprocess
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Protocol
 
 from foundry.errors import FoundryError
 
@@ -49,11 +50,29 @@ def run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedPro
         raise FoundryError("gh not found in PATH; install the GitHub CLI and run `gh auth login`") from None
 
 
-class GitHub:
+class GitHub(Protocol):
+    """The interface foundry needs from GitHub: read rulesets and files, create and update rulesets."""
+
+    def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
+        """The repository's own rulesets in full, by name; inherited ones are left out."""
+        ...
+
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+        """A file's text on the default branch, or None if there is no such file."""
+        ...
+
+    def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None: ...
+
+    def update_ruleset(self, repo_slug: str, ruleset_id: int, ruleset: dict[str, Any]) -> None: ...
+
+
+class GhCli:
+    """GitHub through `gh api`, signed in as the owner. ``runner`` is the seam for this class's own tests."""
+
     def __init__(self, runner: Runner = run_gh) -> None:
         self._runner = runner
 
-    def api(self, method: str, endpoint: str, body: object = None) -> Any:
+    def _api(self, method: str, endpoint: str, body: object = None) -> Any:
         """Call ``endpoint`` (e.g. ``repos/o/r/rulesets``) and return the decoded JSON response."""
         command = ["gh", "api", "--method", method, endpoint]
         stdin = None
@@ -66,9 +85,8 @@ class GitHub:
         return json.loads(result.stdout) if result.stdout.strip() else None
 
     def file_text(self, repo_slug: str, file_path: str) -> str | None:
-        """A file's text on the default branch, or None if there is no such file."""
         try:
-            content = self.api("GET", f"repos/{repo_slug}/contents/{file_path}")
+            content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}")
         except GitHubError as error:
             if error.http_status == 404:
                 return None
@@ -78,10 +96,15 @@ class GitHub:
         return base64.b64decode(content["content"]).decode()
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
-        """The repository's own rulesets in full, by name; inherited ones are left out."""
-        summaries = self.api("GET", f"repos/{repo_slug}/rulesets?per_page=100&includes_parents=false")
+        summaries = self._api("GET", f"repos/{repo_slug}/rulesets?per_page=100&includes_parents=false")
         return {
-            summary["name"]: self.api("GET", f"repos/{repo_slug}/rulesets/{summary['id']}")
+            summary["name"]: self._api("GET", f"repos/{repo_slug}/rulesets/{summary['id']}")
             for summary in summaries
             if summary.get("source_type") == "Repository"
         }
+
+    def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None:
+        self._api("POST", f"repos/{repo_slug}/rulesets", ruleset)
+
+    def update_ruleset(self, repo_slug: str, ruleset_id: int, ruleset: dict[str, Any]) -> None:
+        self._api("PUT", f"repos/{repo_slug}/rulesets/{ruleset_id}", ruleset)

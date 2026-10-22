@@ -6,8 +6,7 @@ import yaml
 
 from foundry import repo_policy
 from foundry.errors import FoundryError
-from foundry.github import GitHub
-from tests.fake_github import FakeGitHub
+from tests.fakes import FakeGitHub
 
 REPO_ROOT = Path(__file__).parents[1]
 POLICY = repo_policy.load(REPO_ROOT / "config" / "repo-policy")
@@ -112,9 +111,42 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
     fake = FakeGitHub()
     if ci_text is not None:
         fake.files["o/r"] = {repo_policy.CI_WORKFLOW_PATH: ci_text}
-    deviation = repo_policy.deviations(GitHub(fake), "o/r", POLICY)[-1]
+    deviation = repo_policy.deviations(fake, "o/r", POLICY)[-1]
     assert deviation.subject == repo_policy.CI_WORKFLOW_PATH
     assert deviation.diff.startswith(f"--- {repo_policy.CI_WORKFLOW_PATH} (missing)")
+
+
+# --- apply_rulesets ------------------------------------------------------------------
+
+
+def policy_of(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
+    return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate={})
+
+
+def test_apply_rulesets_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:
+    fake = FakeGitHub()
+    fake.create_ruleset("o/r", {**RULESET, "name": "second", "rules": [{"type": "deletion"}]})
+    fake.create_ruleset("o/r", {**RULESET, "name": "third"})
+    second_id = fake.ruleset_id("o/r", "second")
+    policy = policy_of({**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"})
+
+    changes = repo_policy.apply_rulesets(fake, "o/r", policy)
+
+    assert changes == [
+        repo_policy.RulesetChange("first", repo_policy.RulesetAction.CREATED),
+        repo_policy.RulesetChange("second", repo_policy.RulesetAction.UPDATED),
+    ]
+    assert fake.ruleset_id("o/r", "second") == second_id  # updated in place, not recreated
+    assert [d.subject for d in repo_policy.deviations(fake, "o/r", policy) if d.subject.startswith("ruleset")] == []
+
+
+def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
+    fake = FakeGitHub()
+    fake.create_ruleset("o/r", RULESET)
+    before = fake.rulesets("o/r")
+
+    assert repo_policy.apply_rulesets(fake, "o/r", policy_of(RULESET)) == []
+    assert fake.rulesets("o/r") == before
 
 
 # --- loading the policy -------------------------------------------------------------
@@ -158,6 +190,6 @@ def test_this_repository_conforms_to_its_own_repo_policy() -> None:
     for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
         fake.files.setdefault("o/r", {})[path] = (REPO_ROOT / path).read_text()
     for ruleset in POLICY.rulesets:
-        fake.add("o/r", ruleset)
+        fake.create_ruleset("o/r", ruleset)
 
-    assert repo_policy.deviations(GitHub(fake), "o/r", POLICY) == []
+    assert repo_policy.deviations(fake, "o/r", POLICY) == []
