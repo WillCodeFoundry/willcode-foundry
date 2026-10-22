@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Root part of session setup. Installs Claude's managed settings, then takes
 # away the agent user's ways to become root: sudo, su, and Docker, whose
-# daemon mounts this sandbox's own filesystem for anyone in its group. Run
-# once, last, via sudo from session-init; the final check fails the launch
-# if any way is left.
+# daemon mounts this sandbox's own filesystem for anyone who can reach its
+# socket. Run once, last, via sudo from session-init; the final check fails
+# the launch if sudo or su is left, and session-init checks Docker as the
+# agent on every launch.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
 
@@ -20,18 +21,32 @@ fi
 install -d -m 0755 -o root -g root /etc/claude-code
 install    -m 0644 -o root -g root "$AGENT_KIT_DIR/claude/managed-settings.json" /etc/claude-code/managed-settings.json
 
-chmod 0000 "$(readlink -f "$(command -v sudo)")"         # sudo can't run, whatever its rules say
-gpasswd -d "$agent_user" docker >/dev/null 2>&1 || true   # docker run -v /:/host is root
-passwd -l root >/dev/null                                 # su needs root's password; there is none
+chmod 0000 "$(readlink -f "$(command -v sudo)")"   # sudo can't run, whatever its rules say
+passwd -l root >/dev/null                           # su needs root's password; there is none
 
-# Verify as the agent user, with the groups a new login gets.
+# Docker: `docker run -v /:/host` is root over this sandbox. sbx gives every
+# process it starts the docker group by number, whatever /etc/group says, so
+# leaving the group changes nothing: the socket has to leave the group
+# instead. dockerd reads daemon.json each time it starts and recreates its
+# socket owned by that group; the socket that exists now changes too.
+docker_config='{"group": "root"}'
+if [[ -e /etc/docker/daemon.json && "$(cat /etc/docker/daemon.json)" != "$docker_config" ]]; then
+    echo "session-harden: FAILED, /etc/docker/daemon.json already exists; add \"group\": \"root\" to it by hand" >&2
+    exit 1
+fi
+install -d -m 0755 -o root -g root /etc/docker
+printf '%s\n' "$docker_config" > /etc/docker/daemon.json
+chmod 0644 /etc/docker/daemon.json
+if [[ -S /var/run/docker.sock ]]; then chgrp root /var/run/docker.sock; fi
+
+# Verify sudo and su as the agent user. Docker can't be checked from here: a
+# login through su gets /etc/group's groups, not the ones sbx gives the agent.
 as_agent() { su -s /bin/sh "$agent_user" -c "$1" </dev/null >/dev/null 2>&1; }
 failed=()
 as_agent 'sudo -n true' && failed+=("sudo")
 as_agent 'su root -c true' && failed+=("su to root")
-as_agent 'test -w /var/run/docker.sock' && failed+=("the Docker socket")
 if ((${#failed[@]})); then
     echo "session-harden: FAILED, $agent_user can still use: $(IFS=,; echo "${failed[*]}")" >&2
     exit 1
 fi
-echo "session-harden: managed settings installed; sudo, su and Docker removed for $agent_user"
+echo "session-harden: managed settings installed; sudo and su removed for $agent_user; Docker socket made root-only"

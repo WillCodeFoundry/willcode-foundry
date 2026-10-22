@@ -102,3 +102,15 @@ else
     echo "session-init: no sudo and no managed settings installed; cannot harden this sandbox" >&2
     exit 1
 fi
+
+# Checked here, on every launch, because this process has the groups sbx
+# gives the agent (session-harden's su-based checks don't): a Docker socket
+# the agent can reach is root over this sandbox.
+for socket in /var/run/docker.sock /var/run/docker/containerd/containerd.sock; do
+    if [[ -S "$socket" && -w "$socket" ]]; then
+        echo "session-init: the agent can use $socket, which is root over this sandbox; not starting the agent." >&2
+        echo "  A sandbox hardened before Docker's socket was made root-only needs recreating:" >&2
+        echo "  sbx env rm sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again." >&2
+        exit 1
+    fi
+done
