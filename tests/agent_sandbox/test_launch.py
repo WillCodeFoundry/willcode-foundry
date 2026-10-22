@@ -163,3 +163,20 @@ def test_prepare_never_removes_a_sandbox(layout, host) -> None:
     )
 
     assert not any(command[:3] == ("sbx", "env", "rm") for command in host.commands)
+
+
+def test_an_empty_agent_never_counts_as_the_expected_keys(layout, host) -> None:
+    # The host agent lists no keys after loading, and the sandbox's agent is
+    # empty too: the sets match, but nothing could push.
+    kit, key, sdir, sock = layout
+    host.responses = responses(key, sdir)
+    host.responses[("ssh-add", "-l")] = [0, 1]  # running; then lists no keys
+    host.responses[exec_command(sdir, "ssh-add", "-l")] = 1
+
+    with pytest.raises(SandboxError, match="holds no keys after loading them"):
+        prepare_sandbox(
+            Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key),
+            host,
+            SshAgent(host, sock),
+            Sbx(host, {}, "n", sdir),
+        )

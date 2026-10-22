@@ -54,6 +54,8 @@ def ensure_paths_safe(agent_kit_path: Path, env_dir_path: Path, private_paths: S
 def ensure_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
     """The sandbox must see exactly the keys we loaded, whatever sbx's settings claim."""
     expected = ssh_agent.list_key_fingerprints()
+    if not expected:  # a sandbox with an empty agent would otherwise match
+        raise SandboxError(f"the ssh-agent at {ssh_agent.socket_path} holds no keys after loading them")
     seen = sbx.agent_fingerprints()
     if seen != expected:
         found = "no ssh-agent" if seen is None else f"keys {sorted(seen)}"

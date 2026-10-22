@@ -47,7 +47,7 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 └── sessions/                     # untracked, written only by the launcher
     └── <sandbox>/                # one per sandbox: <role>-<project>-<task>
         ├── sbxenv.yaml           # the sandbox definition; written once, never overwritten
-        └── session.yaml          # role, task, project, creation time, one entry per launch
+        └── session.yaml          # role, task, project, creation time, one entry per launch attempt
 ```
 
 | Folder | Written by | Tracked |
@@ -63,7 +63,7 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 2. `foundry.agent_sandbox` starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from the file if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
 3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, then `session-harden`s: installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker (the `docker` group, since the sandbox's Docker daemon mounts its own filesystem). The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
-5. The launcher replaces itself with `sbx`, so it never learns how the session ended: `session.yaml` records creation and each launch, nothing more. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
+5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started: `session.yaml` records creation and each launch attempt, nothing more. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
 Preconditions the launcher does not create: the task branch `task/<task>` and a skeleton `.agent/<task>/TASK.md` on `agent-notes` must already exist on GitHub.
 

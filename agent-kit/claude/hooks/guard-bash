@@ -204,9 +204,9 @@ def refusal_reason_for(words: list[str]) -> str | None:
         push = Options(args, PUSH_VALUE_SHORT, PUSH_VALUE_LONG)
         if push.given("--no-verify"):
             return "git hooks must not be bypassed (--no-verify / -n)"
-        if push.given("--force", "--force-with-lease", "--force-if-includes", "--mirror", "--prune"):
+        if push.given("--force", "--force-with-lease", "--force-if-includes", "--mirror"):
             return "force-push is not allowed"
-        if push.given("--delete") or "d" in push.letters or any(a.startswith(":") for a in push.operands):
+        if push.given("--delete", "--prune") or "d" in push.letters or any(a.startswith(":") for a in push.operands):
             return "deleting remote branches is not allowed"
         if "f" in push.letters or any(a.startswith("+") for a in push.operands):
             return "force-push is not allowed"

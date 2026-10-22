@@ -79,6 +79,9 @@ class GitHub:
             return []
         return sorted(entry["path"] for entry in content if entry.get("type") == "file")
 
+    def default_branch(self, repo_slug: str) -> str:
+        return str(self.api("GET", f"repos/{repo_slug}")["default_branch"])
+
     def permission(self, repo_slug: str, username: str) -> str:
         """A user's base access to the repository: admin, write, read or none."""
         try:

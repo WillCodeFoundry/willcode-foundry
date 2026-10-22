@@ -205,15 +205,22 @@ def check_project_files(github: GitHub, repo_slug: str, rulesets: list[Ruleset])
 
 
 def _check_workflows_produce(github: GitHub, repo_slug: str, workflow_paths: list[str], check_name: str) -> FileCheck:
-    producers = [
-        path
-        for path in workflow_paths
-        if check_name in repo_files.pull_request_check_names(github.file_text(repo_slug, path) or "")
-    ]
     description = f"required check {check_name}"
-    if producers:
-        return FileCheck(description, True, ", ".join(producers))
-    return FileCheck(description, False, "no workflow on the default branch runs a job of that name on pull requests")
+    texts = {path: github.file_text(repo_slug, path) or "" for path in workflow_paths}
+    producers = [path for path, text in texts.items() if check_name in repo_files.pull_request_check_names(text)]
+    if not producers:
+        return FileCheck(
+            description, False, "no workflow on the default branch runs a job of that name on pull requests"
+        )
+    default_branch = github.default_branch(repo_slug)
+    problems = [
+        f"{path}: {problem}"
+        for path in producers
+        for problem in repo_files.gating_problems(texts[path], check_name, default_branch)
+    ]
+    if problems:
+        return FileCheck(description, False, "; ".join(problems))
+    return FileCheck(description, True, ", ".join(producers))
 
 
 def _check_code_owners(github: GitHub, repo_slug: str) -> FileCheck:

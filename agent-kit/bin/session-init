@@ -17,6 +17,8 @@ role_path="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
 # behaviour all come from the role's gitconfig and what it includes.
 
 git config --global include.path "$role_path/gitconfig"
+# Lets agents verify commits signed by any role, or by you.
+git config --global gpg.ssh.allowedSignersFile "$AGENT_KIT_DIR/git/allowed_signers"
 
 if [[ "$(git config --get commit.gpgsign || true)" == true ]] \
    && [[ -z "$(git config --get user.signingkey || true)" ]]; then

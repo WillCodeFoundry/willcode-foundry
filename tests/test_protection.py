@@ -125,7 +125,7 @@ GATED: protection.Ruleset = {
         },
     ],
 }
-GATE_WORKFLOW = "on: pull_request\njobs:\n  test: {}\n  ci-gate: {needs: [test]}\n"
+GATE_WORKFLOW = "on: pull_request\njobs:\n  test: {}\n  ci-gate: {if: always(), needs: [test]}\n"
 
 
 def file_checks(
@@ -225,3 +225,63 @@ def test_differences_still_catch_an_extra_or_changed_list_item() -> None:
     assert protection.differences(desired, extra) != []
     assert protection.differences(desired, changed) != []
     assert protection.differences({"include": ["a", "a"]}, {"include": ["a", "b"]}) != []
+
+
+def gate_check(workflow: str, default_branch: str = "main") -> tuple[bool, str]:
+    fake = FakeGitHub()
+    fake.files["o/r"] = {".github/workflows/ci.yml": workflow}
+    fake.default_branches["o/r"] = default_branch
+    gate_only = {"name": "g", "rules": [GATED["rules"][1]]}
+    (check,) = protection.check_project_files(GitHub(fake), "o/r", [gate_only])
+    return check.ok, check.detail
+
+
+@pytest.mark.parametrize(
+    "on",
+    [
+        "pull_request",
+        "{pull_request: {branches: [main]}}",
+        "{pull_request: {branches: ['**']}}",
+        "{pull_request: {branches: ['ma*', '!release/*']}}",
+        "{pull_request: {types: [opened, synchronize]}}",
+    ],
+)
+def test_triggers_that_always_run_on_pull_requests_into_main(on: str) -> None:
+    assert gate_check(f"on: {on}\njobs:\n  ci-gate: {{}}\n") == (True, ".github/workflows/ci.yml")
+
+
+@pytest.mark.parametrize(
+    ("on", "problem"),
+    [
+        ("{pull_request: {paths: ['src/**']}}", "has a paths filter"),
+        ("{pull_request: {paths-ignore: ['docs/**']}}", "has a paths-ignore filter"),
+        ("{pull_request: {branches-ignore: [wip]}}", "has a branches-ignore filter"),
+        ("{pull_request: {branches: [develop]}}", "branches filter leaves out main"),
+        ("{pull_request: {branches: ['**', '!main']}}", "branches filter leaves out main"),
+    ],
+)
+def test_triggers_that_can_leave_pull_requests_without_the_check(on: str, problem: str) -> None:
+    ok, detail = gate_check(f"on: {on}\njobs:\n  ci-gate: {{}}\n")
+    assert not ok and problem in detail
+
+
+def test_the_branch_filter_is_matched_against_the_actual_default_branch() -> None:
+    assert gate_check("on: {pull_request: {branches: [trunk]}}\njobs:\n  ci-gate: {}\n", "trunk")[0]
+
+
+@pytest.mark.parametrize(
+    ("job", "problem"),
+    [
+        ("{if: \"github.event_name == 'push'\"}", "has if: github.event_name == 'push'; when it skips"),
+        ("{if: success(), needs: [test]}", "has if: success()"),
+        ("{needs: [test]}", "needs other jobs but has no if: always()"),
+    ],
+)
+def test_a_gate_that_can_be_skipped_counts_as_passed_and_is_refused(job: str, problem: str) -> None:
+    ok, detail = gate_check(f"on: pull_request\njobs:\n  test: {{}}\n  ci-gate: {job}\n")
+    assert not ok and problem in detail
+
+
+def test_always_is_accepted_in_either_spelling() -> None:
+    for condition in ("always()", "${{ always() }}"):
+        assert gate_check(f"on: pull_request\njobs:\n  t: {{}}\n  ci-gate: {{if: '{condition}', needs: [t]}}\n")[0]

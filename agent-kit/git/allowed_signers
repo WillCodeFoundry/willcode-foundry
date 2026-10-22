@@ -1,12 +1,15 @@
-# Allowed signers for verifying foundry commits (git gpg.ssh.allowedSignersFile).
-# Rendered to agents/git/allowed_signers.
+# Who may sign commits on foundry projects, for git to verify signatures
+# (git log --show-signature, git verify-commit). session-init points
+# gpg.ssh.allowedSignersFile here, so agents can check each other's commits.
+# GitHub doesn't read this file: it verifies against each user's uploaded keys.
 #
-# One line per role that signs:
-#   <email> <contents of agents/roles/<role>/signing-key.pub>
-#
-# The email must match user.email in that role's gitconfig, and the key must
-# be the public half of secrets/ssh/<role>. Roles that never commit (reviewer)
-# are omitted.
+# One line per signer:  <email> <public key>
+#   - each role: the user.email and signingkey in roles/<role>/gitconfig,
+#     whose key is the public half of secrets/ssh/<role>;
+#   - you, so merges and commits of yours on main verify too.
+# Roles that share a GitHub user (planner, for now, uses architect's) share
+# a line. tests/agent_kit/test_allowed_signers.py keeps this in step with the
+# role gitconfigs.
 1413237+willcodeco@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAIp9aOYi6DQ+VgtOHA7euNh4C804/0pqCVhunqML/vM
 339205636+wc-foundry-architect@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOLi4laTSJEGrsorMiKFDVD6Ikhd/9VdVc9RJJjOLXlX
 339209782+wc-foundry-dev@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFkCHuHr5nrEjgimFKlJik2bxI4NcG0cjp6NlpSEED7z

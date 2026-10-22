@@ -84,6 +84,7 @@ REFUSED = [
     ("git push --force-with origin task/T1", "force-push"),
     ("git push --del origin other", "deleting"),
     ("git push --mirr", "force-push"),
+    ("git push --prune origin 'refs/heads/*'", "deleting"),
     ("git reset --har HEAD~1", "rewriting history"),
     # Changing the hooks path, however it's spelled.
     ("git config --global core.hooksPath /tmp/h", "hook configuration"),

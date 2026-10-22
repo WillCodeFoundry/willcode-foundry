@@ -21,6 +21,8 @@ class FakeGitHub:
         """File text by repo slug, then path on the default branch."""
         self.permissions: dict[str, dict[str, str]] = {}
         """Base access by repo slug, then username; anyone else is not a collaborator."""
+        self.default_branches: dict[str, str] = {}
+        """Default branch by repo slug; main unless set."""
         self.unavailable: dict[str, str] = {}
         """Repo slug -> the error gh prints for it, e.g. for a plan without rulesets."""
         self._next_id = 1
@@ -40,6 +42,8 @@ class FakeGitHub:
         assert list(command[:3]) == ["gh", "api", "--method"], command
         method, endpoint = command[3], command[4]
         self.calls.append((method, endpoint))
+        if re.fullmatch(r"repos/[^/]+/[^/]+", endpoint):
+            return self._ok({"default_branch": self.default_branches.get(endpoint.removeprefix("repos/"), "main")})
         permission = re.fullmatch(r"repos/([^/]+/[^/]+)/collaborators/([^/]+)/permission", endpoint)
         if permission:
             access = self.permissions.get(permission[1], {}).get(permission[2])

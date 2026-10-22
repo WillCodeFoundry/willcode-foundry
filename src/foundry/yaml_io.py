@@ -1,5 +1,7 @@
 """Reading and writing the foundry's YAML files, with errors a user can act on."""
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +20,17 @@ def load(file_path: Path) -> Any:
 
 
 def dump(file_path: Path, data: Any) -> None:
-    """Write atomically: a crash mid-write leaves the old file, never a partial one."""
-    temporary_path = file_path.with_name(f".{file_path.name}.tmp")
-    temporary_path.write_text(yaml.safe_dump(data, sort_keys=False))
-    temporary_path.replace(file_path)
+    """Write atomically: a crash mid-write leaves the old file, never a partial one.
+
+    The temporary file is unique to this write, so two writers can't share it;
+    the last to finish wins, whole.
+    """
+    descriptor, temporary_name = tempfile.mkstemp(dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp")
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w") as temporary_file:
+            temporary_file.write(yaml.safe_dump(data, sort_keys=False))
+        temporary_path.replace(file_path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise

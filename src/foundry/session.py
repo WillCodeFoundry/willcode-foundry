@@ -3,7 +3,8 @@
 ``sessions/<sandbox>/sbxenv.yaml`` is written once, when the sandbox is first
 run, and describes the sandbox for its whole life: sbx fixes a sandbox's mounts
 when it is created. ``session.yaml`` records when it was created and each
-launch since.
+launch attempt since: the launcher hands over to sbx, so it never learns
+whether a launch got as far as the agent.
 """
 
 import re
@@ -189,7 +190,11 @@ def _read_record(session_path: Path) -> dict[str, Any]:
 
 
 def record_launch(session_path: Path, *, launched_at: datetime) -> None:
-    """Append one launch to session.yaml, keeping everything already there."""
+    """Append one launch attempt to session.yaml, keeping everything already there.
+
+    Recorded before the sandbox is prepared, so it includes launches that then
+    failed: the launcher replaces itself with sbx and can't record success.
+    """
     record = _read_record(session_path)
     launches = record.get("launches") or []
     record["launches"] = [*launches, {"at": launched_at.isoformat(timespec="seconds")}]
