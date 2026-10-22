@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, running_agents
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -184,3 +184,39 @@ def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
     host.responses = {LIST: "256 SHA256:a key1 (ED25519)\n3072 SHA256:b key2 (RSA)\n"}
 
     assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
+
+
+# --- running_agents ---------------------------------------------------------
+
+PS = ("ps", "-u", str(OWN_UID), "-o", "pid=,command=")
+
+
+def test_running_agents_are_found_by_the_command_line_the_agent_is_started_with(host):
+    started = " ".join(start(agent_socket_path("dev-p-t1", OWN_UID)))
+    host.responses = {PS: f"  101 {started}\n"}
+
+    assert running_agents(host, OWN_UID) == {"dev-p-t1": 101}
+
+
+def test_running_agents_ignore_every_other_process(host):
+    host.responses = {
+        PS: "\n".join(
+            [
+                f"  101 ssh-agent -a /tmp/sbx-agents-{OWN_UID}/dev-p-t1.sock -s",
+                f"  102 ssh-agent -a /tmp/sbx-agents-{OWN_UID + 1}/qa-p-t1.sock -s",  # another user's directory
+                "  103 ssh-agent -s",  # the user's own agent
+                "  104 /usr/bin/ssh-agent -l",
+                "  105 vim notes.md",
+                f"  106 ssh-agent -a /tmp/sbx-agents-{OWN_UID}/qa-p-t2.sock -s",
+            ]
+        )
+    }
+
+    assert running_agents(host, OWN_UID) == {"dev-p-t1": 101, "qa-p-t2": 106}
+
+
+def test_running_agents_report_a_failing_ps(host):
+    host.responses = {PS: 1}
+
+    with pytest.raises(SandboxError, match="could not list running processes"):
+        running_agents(host, OWN_UID)

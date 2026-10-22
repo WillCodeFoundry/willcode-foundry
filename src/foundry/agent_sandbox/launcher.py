@@ -8,16 +8,16 @@ definition.
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sbx import Sbx
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
+from foundry.agent_sandbox.host import Host, SystemHost
+from foundry.agent_sandbox.sbx import Sbx, sandbox_statuses
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, running_agents
 
 
 @dataclass(frozen=True)
@@ -104,6 +104,26 @@ def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: Ss
             )
 
 
+def stop_idle_agents(host: Host, uid: int, process_env: Mapping[str, str], keep: str) -> list[str]:
+    """Stop the agents of sandboxes that are stopped or gone, except ``keep``'s; return their sandboxes' names.
+
+    An idle agent only holds a private key: its sandbox can't use it, and
+    launching that sandbox again starts a new agent. sbx lists every sandbox
+    its user has, so another foundry instance's running sandboxes keep theirs.
+    """
+    statuses = sandbox_statuses(host, process_env)
+    idle = {
+        sandbox_name: pid
+        for sandbox_name, pid in running_agents(host, uid).items()
+        if sandbox_name != keep and statuses.get(sandbox_name, "stopped") == "stopped"
+    }
+    for pid in idle.values():
+        # Not checked: an agent can exit between listing and stopping it, for
+        # example when two launches stop the same one.
+        host.run(("kill", str(pid)))
+    return sorted(idle)
+
+
 def describe(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
     notes = (
         f"ssh-agent:  {ssh_agent_socket_path}",
@@ -130,6 +150,8 @@ def launch(request: LaunchRequest) -> NoReturn:
     ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
+    if stopped := stop_idle_agents(host, uid, process_env, keep=definition.name):
+        print(f"==> stopped the ssh-agents of stopped or removed sandboxes: {', '.join(stopped)}", file=sys.stderr)
     prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
     host.exec(sbx.attach_command(), process_env)

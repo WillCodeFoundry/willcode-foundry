@@ -15,9 +15,38 @@ def agent_socket_path(sandbox_name: str, uid: int) -> Path:
     """The sandbox's ssh-agent socket: /tmp/sbx-agents-<uid>/<sandbox_name>.sock.
 
     The directory is per user, since /tmp is shared; SshAgent.ensure_running
-    makes it private before using it.
+    makes it private before using it. It stays in /tmp rather than the session
+    directory because a socket's path is limited to about 100 bytes.
     """
-    return Path(f"/tmp/sbx-agents-{uid}") / f"{sandbox_name}.sock"
+    return _agent_sockets_dir(uid) / f"{sandbox_name}.sock"
+
+
+def _agent_sockets_dir(uid: int) -> Path:
+    return Path(f"/tmp/sbx-agents-{uid}")
+
+
+def _start_command(socket_path: Path) -> tuple[str, ...]:
+    """How every sandbox's agent is started. running_agents recognises agents by this command line."""
+    return ("ssh-agent", "-a", str(socket_path), "-s")
+
+
+def running_agents(host: Host, uid: int) -> dict[str, int]:
+    """The running ssh-agents this launcher started for ``uid``, as sandbox name -> process id.
+
+    Each is recognised by its command line, which names its socket and so its
+    sandbox: ``ssh-agent -a /tmp/sbx-agents-<uid>/<sandbox>.sock -s``.
+    """
+    result = host.run(("ps", "-u", str(uid), "-o", "pid=,command="))
+    if result.returncode != 0:
+        raise SandboxError(f"could not list running processes: {result.stderr.strip()}")
+    head, tail = f"ssh-agent -a {_agent_sockets_dir(uid)}/", ".sock -s"
+    agents = {}
+    for line in result.stdout.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        command = command.strip()
+        if command.startswith(head) and command.endswith(tail):
+            agents[command.removeprefix(head).removesuffix(tail)] = int(pid)
+    return agents
 
 
 def _ensure_private_dir(private_dir: Path, uid: int) -> None:
@@ -69,7 +98,7 @@ class SshAgent:
         self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
         # The env script ssh-agent prints is ignored on purpose: nothing in
         # this process should start using the sandbox's agent by accident.
-        result = self._host.run(("ssh-agent", "-a", str(self.socket_path), "-s"))
+        result = self._host.run(_start_command(self.socket_path))
         if result.returncode != 0 or not self._is_running():
             raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
 

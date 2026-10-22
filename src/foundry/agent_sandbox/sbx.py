@@ -1,5 +1,6 @@
 """Docker Sandboxes (sbx), driven by a sandbox definition."""
 
+import json
 import shlex
 import subprocess
 from collections.abc import Mapping
@@ -9,6 +10,14 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.host import Host
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
+
+
+def sandbox_statuses(host: Host, process_env: Mapping[str, str]) -> dict[str, str]:
+    """Every sandbox sbx knows, as name -> status (such as "stopped"), from ``sbx ls --json``."""
+    result = host.run(("sbx", "ls", "--json"), env=process_env)
+    if result.returncode != 0:
+        raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")
+    return {sandbox["name"]: sandbox["status"] for sandbox in json.loads(result.stdout)["sandboxes"]}
 
 
 class Sbx:
