@@ -1,16 +1,15 @@
 import os
 import sys
-from pathlib import Path
 
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.host import Host
+from foundry.agent_sandbox.host import SystemHost
 
 
 @pytest.fixture
-def host() -> Host:
-    return Host(os.getuid())
+def host() -> SystemHost:
+    return SystemHost(os.getuid())
 
 
 # --- run ------------------------------------------------------------------------
@@ -29,8 +28,8 @@ def test_run_translates_a_missing_executable_into_sandboxerror(host):
 
 def test_run_passes_the_given_env_to_the_child_process(host):
     result = host.run(
-        [sys.executable, "-c", "import os; print(os.environ.get('AGENT_SANDBOX_TEST_VAR', ''), end='')"],
-        env={"AGENT_SANDBOX_TEST_VAR": "hello"},
+        [sys.executable, "-c", "import os; print(os.environ.get('AGENT_SANDBOX_TEST_VALUE', ''), end='')"],
+        env={"AGENT_SANDBOX_TEST_VALUE": "hello"},
     )
 
     assert result.stdout == "hello"
@@ -61,7 +60,7 @@ def test_private_dir_tightens_existing_permissions(host, tmp_path):
 
 
 def test_private_dir_refuses_a_directory_owned_by_someone_else(tmp_path):
-    host = Host(os.getuid() + 1)
+    host = SystemHost(os.getuid() + 1)
 
     with pytest.raises(SandboxError, match="not a directory owned by you"):
         host.ensure_private_dir(tmp_path / "sockets")
@@ -117,43 +116,32 @@ def test_reset_socket_also_makes_the_parent_dir_private(host, tmp_path):
 
 
 def test_reset_socket_refuses_a_parent_dir_owned_by_someone_else(tmp_path):
-    host = Host(os.getuid() + 1)
+    host = SystemHost(os.getuid() + 1)
     socket = tmp_path / "sockets" / "dev.sock"
 
     with pytest.raises(SandboxError, match="not a directory owned by you"):
         host.reset_socket(socket)
 
 
-# --- socket_path --------------------------------------------------------------
+# --- require_dir / require_file ------------------------------------------------
 
 
-def test_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
-    host = Host(501)
-
-    assert host.ssh_agent_socket_path(Path("/tmp/sbx-agents"), "myproj-dev") == Path(
-        "/tmp/sbx-agents-501/myproj-dev.sock"
-    )
+def test_require_dir_accepts_a_directory(host, tmp_path):
+    host.require_dir(tmp_path, "workspace")
 
 
-# --- ensure_dir_exists / ensure_file_exists -------------------------------------
-
-
-def test_ensure_dir_exists_accepts_a_directory(host, tmp_path):
-    host.ensure_dir_exists(tmp_path, "workspace")
-
-
-def test_ensure_dir_exists_refuses_a_missing_path(host, tmp_path):
+def test_require_dir_refuses_a_missing_path(host, tmp_path):
     with pytest.raises(SandboxError, match="is not a directory"):
-        host.ensure_dir_exists(tmp_path / "missing", "workspace")
+        host.require_dir(tmp_path / "missing", "workspace")
 
 
-def test_ensure_file_exists_accepts_a_file(host, tmp_path):
+def test_require_file_accepts_a_file(host, tmp_path):
     target = tmp_path / "key"
     target.touch()
 
-    host.ensure_file_exists(target, "ssh key")
+    host.require_file(target, "ssh key")
 
 
-def test_ensure_file_exists_refuses_a_directory(host, tmp_path):
+def test_require_file_refuses_a_directory(host, tmp_path):
     with pytest.raises(SandboxError, match="is not a file"):
-        host.ensure_file_exists(tmp_path, "ssh key")
+        host.require_file(tmp_path, "ssh key")

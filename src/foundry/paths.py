@@ -13,8 +13,8 @@ from foundry.errors import FoundryError
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
 
 
-def find_foundry_root(start_path: Path | None = None) -> Path:
-    here = (start_path or Path.cwd()).resolve()
+def find_foundry_root(start_dir: Path | None = None) -> Path:
+    here = (start_dir or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
         if (candidate / CONFIG_RELATIVE_PATH).is_file():
             return candidate
@@ -25,7 +25,7 @@ def config_path(foundry_root: Path) -> Path:
     return foundry_root / CONFIG_RELATIVE_PATH
 
 
-def agent_kit_path(foundry_root: Path) -> Path:
+def agent_kit_dir(foundry_root: Path) -> Path:
     return foundry_root / "agent-kit"
 
 
@@ -38,7 +38,7 @@ def github_token_path(foundry_root: Path, role_name: str) -> Path:
     return foundry_root / "secrets" / "github" / f"{role_name}.token"
 
 
-def session_path(foundry_root: Path, sandbox_name: str) -> Path:
+def session_dir(foundry_root: Path, sandbox_name: str) -> Path:
     return foundry_root / "sessions" / sandbox_name
 
 

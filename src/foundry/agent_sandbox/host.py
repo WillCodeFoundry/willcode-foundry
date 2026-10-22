@@ -10,7 +10,7 @@ from typing import NoReturn, Protocol
 from foundry.agent_sandbox.errors import SandboxError
 
 
-class HostPort(Protocol):
+class Host(Protocol):
     def run(self, command: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         """Run a command to completion, capturing its output (like subprocess.run)."""
         ...
@@ -23,28 +23,24 @@ class HostPort(Protocol):
         """This process's own environment."""
         ...
 
-    def ensure_private_dir(self, dir_path: Path) -> None:
-        """Create dir_path as a directory only this user can use; raise if it isn't one."""
+    def ensure_private_dir(self, private_dir: Path) -> None:
+        """Create private_dir as a directory only this user can use; raise if it isn't one."""
         ...
 
     def reset_socket(self, socket_path: Path) -> None:
         """Make socket_path ready for a fresh ssh-agent: private parent dir, no leftover socket file."""
         ...
 
-    def ssh_agent_socket_path(self, sockets_dir_path: Path, sandbox_name: str) -> Path:
-        """The ssh-agent socket for the sandbox, under a directory private to this user."""
+    def require_dir(self, target_dir: Path, what: str) -> None:
+        """Raise if target_dir is not a directory."""
         ...
 
-    def ensure_dir_exists(self, dir_path: Path, what: str) -> None:
-        """Raise if dir_path is not a directory."""
-        ...
-
-    def ensure_file_exists(self, file_path: Path, what: str) -> None:
+    def require_file(self, file_path: Path, what: str) -> None:
         """Raise if file_path is not a file."""
         ...
 
 
-class Host:
+class SystemHost:
     def __init__(self, uid: int) -> None:
         self._uid = uid
 
@@ -66,33 +62,30 @@ class Host:
     def environ(self) -> Mapping[str, str]:
         return os.environ
 
-    def ensure_private_dir(self, dir_path: Path) -> None:
-        """Create dir_path as a directory only this user can use, refusing one we don't own.
+    def ensure_private_dir(self, private_dir: Path) -> None:
+        """Create private_dir as a directory only this user can use, refusing one we don't own.
 
         The sockets directory lives in /tmp, which is shared: another user could
         create it first, or put a symlink there pointing somewhere they control.
         """
         try:
-            dir_path.mkdir(mode=0o700, exist_ok=True)
-            info = os.lstat(dir_path)
+            private_dir.mkdir(mode=0o700, exist_ok=True)
+            info = os.lstat(private_dir)
             ours = stat.S_ISDIR(info.st_mode) and info.st_uid == self._uid
         except FileExistsError:  # a file, or a dangling symlink
             ours = False
         if not ours:
-            raise SandboxError(f"{dir_path} is not a directory owned by you")
-        dir_path.chmod(0o700)
+            raise SandboxError(f"{private_dir} is not a directory owned by you")
+        private_dir.chmod(0o700)
 
     def reset_socket(self, socket_path: Path) -> None:
         self.ensure_private_dir(socket_path.parent)
         socket_path.unlink(missing_ok=True)
 
-    def ssh_agent_socket_path(self, sockets_dir_path: Path, sandbox_name: str) -> Path:
-        return sockets_dir_path.with_name(f"{sockets_dir_path.name}-{self._uid}") / f"{sandbox_name}.sock"
+    def require_dir(self, target_dir: Path, what: str) -> None:
+        if not target_dir.is_dir():
+            raise SandboxError(f"{what} {str(target_dir)!r} is not a directory")
 
-    def ensure_dir_exists(self, dir_path: Path, what: str) -> None:
-        if not dir_path.is_dir():
-            raise SandboxError(f"{what} {str(dir_path)!r} is not a directory")
-
-    def ensure_file_exists(self, file_path: Path, what: str) -> None:
+    def require_file(self, file_path: Path, what: str) -> None:
         if not file_path.is_file():
             raise SandboxError(f"{what} {str(file_path)!r} is not a file")

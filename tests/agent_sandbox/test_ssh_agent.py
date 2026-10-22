@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import SshAgent
+from foundry.agent_sandbox.ssh_agent import SshAgent, socket_path
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -108,24 +110,28 @@ def test_reports_a_key_that_cannot_be_added(host, make_agent, tmp_path):
         make_agent().replace_keys([tmp_path / "bad"])
 
 
-def test_lists_keys(host, make_agent):
+def test_lists_key_fingerprints(host, make_agent):
     host.responses = {LIST: "256 SHA256:a key1 (ED25519)\n256 SHA256:b key2 (ED25519)\n"}
 
-    assert make_agent().list_keys() == ["256 SHA256:a key1 (ED25519)", "256 SHA256:b key2 (ED25519)"]
+    assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
 
 
-def test_lists_no_keys_for_an_empty_agent(host, make_agent):
+def test_lists_no_fingerprints_for_an_empty_agent(host, make_agent):
     host.responses = {LIST: NO_KEYS}
 
-    assert make_agent().list_keys() == []
+    assert make_agent().list_key_fingerprints() == set()
 
 
-def test_lists_no_keys_when_the_exit_code_says_so_even_with_stdout(host, make_agent):
+def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host, make_agent):
     # A real ssh-add never does this; the point is to pin the check on the exit
     # code itself, not on stdout happening to be empty for NO_KEYS in other tests.
     host.responses = {LIST: (NO_KEYS, "256 SHA256:a key1 (ED25519)\n")}
 
-    assert make_agent().list_keys() == []
+    assert make_agent().list_key_fingerprints() == set()
+
+
+def test_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
+    assert socket_path("myproj-dev", 501) == Path("/tmp/sbx-agents-501/myproj-dev.sock")
 
 
 def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):

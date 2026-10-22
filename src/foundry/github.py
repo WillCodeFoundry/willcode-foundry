@@ -67,7 +67,12 @@ class GitHub:
 
     def file_text(self, repo_slug: str, file_path: str) -> str | None:
         """A file's text on the default branch, or None if there is no such file."""
-        content = self._contents(repo_slug, file_path)
+        try:
+            content = self.api("GET", f"repos/{repo_slug}/contents/{file_path}")
+        except GitHubError as error:
+            if error.http_status == 404:
+                return None
+            raise
         if not isinstance(content, dict) or content.get("type") != "file":
             return None
         return base64.b64decode(content["content"]).decode()
@@ -80,11 +85,3 @@ class GitHub:
             for summary in summaries
             if summary.get("source_type") == "Repository"
         }
-
-    def _contents(self, repo_slug: str, path: str) -> Any:
-        try:
-            return self.api("GET", f"repos/{repo_slug}/contents/{path}")
-        except GitHubError as error:
-            if error.http_status == 404:
-                return None
-            raise

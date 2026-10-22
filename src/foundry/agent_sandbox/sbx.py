@@ -1,4 +1,4 @@
-"""Docker Sandboxes (sbx), driven by a sandbox environment file."""
+"""Docker Sandboxes (sbx), driven by a sandbox definition."""
 
 import shlex
 import subprocess
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_keys import GITHUB_HOST_KEYS
-from foundry.agent_sandbox.host import HostPort
+from foundry.agent_sandbox.host import Host
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
 
 
@@ -22,7 +22,7 @@ class Sbx:
     another socket.
     """
 
-    def __init__(self, host: HostPort, process_env: Mapping[str, str], sandbox_name: str, definition_dir: Path) -> None:
+    def __init__(self, host: Host, process_env: Mapping[str, str], sandbox_name: str, definition_dir: Path) -> None:
         self._host = host
         self._process_env = process_env
         self.sandbox_name = sandbox_name
@@ -40,13 +40,13 @@ class Sbx:
         return self.exec_in_sandbox("true").returncode == 0
 
     def create(self) -> None:
-        """Create the sandbox from its environment file without attaching."""
+        """Create the sandbox from its definition without attaching."""
         result = self._sbx("env", "create", "--auto-approve", str(self.definition_dir))
         if result.returncode != 0:
             raise SandboxError(f"sbx env create failed: {result.stderr.strip()}")
 
     def exec_in_sandbox(self, *command: str) -> subprocess.CompletedProcess[str]:
-        """Run a command inside the sandbox, with the environment file's variables set."""
+        """Run a command inside the sandbox, with the definition's variables set."""
         return self._sbx("env", "exec", str(self.definition_dir), "--", *command)
 
     def ensure_github_ssh_allowed(self) -> None:
@@ -91,7 +91,7 @@ class Sbx:
             return None
         raise SandboxError(f"could not list the sandbox's keys: {result.stderr.strip()}")
 
-    def run_command(self, agent_args: Sequence[str]) -> tuple[str, ...]:
+    def attach_command(self, agent_args: Sequence[str]) -> tuple[str, ...]:
         """The ``sbx env run`` command that attaches the agent to the existing sandbox."""
         command = ("sbx", "env", "run", "--auto-approve", str(self.definition_dir))
         return (*command, "--", *agent_args) if agent_args else command

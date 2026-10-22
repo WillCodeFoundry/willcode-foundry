@@ -7,8 +7,8 @@ from foundry.errors import FoundryError
 def test_parse_minimal() -> None:
     cfg = config.parse({"name": "x", "projects": {"p": {"url": "git@h:o/p.git"}}, "roles": {"dev": {}, "qa": None}})
     assert cfg.project("p").url == "git@h:o/p.git"
-    assert cfg.role("dev").role_name == "dev"
-    assert cfg.role("qa").role_name == "qa"
+    assert cfg.role("dev").name == "dev"
+    assert cfg.role("qa").name == "qa"
 
 
 def test_unknown_project_and_role_are_reported() -> None:

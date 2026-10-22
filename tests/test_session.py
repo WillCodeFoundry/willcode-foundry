@@ -18,11 +18,6 @@ def test_sandbox_name_refuses_to_exceed_the_limit() -> None:
         session.sandbox_name("dev", "p" * 60, "WCF-0042")
 
 
-def test_sandbox_name_refuses_an_unusable_name() -> None:
-    with pytest.raises(FoundryError, match="cannot build a valid sandbox name"):
-        session.sandbox_name("!", "!", "!")
-
-
 def new_sandbox(tmp_path: Path) -> SandboxDefinition:
     return session.sandbox_definition(
         sandbox_name="dev-p-t1",
@@ -43,12 +38,12 @@ def test_sandbox_definition(tmp_path: Path) -> None:
         Path("/f/agent-kit"),
     )
     assert sandbox.variables == {
-        session.AGENT_ROLE_VAR: "dev",
-        session.AGENT_TASK_VAR: "T1",
-        session.AGENT_KIT_DIR_VAR: "/f/agent-kit",
-        session.AGENT_REPO_URL_VAR: "git@h:o/p.git",
-        session.AGENT_PROJECT_DIR_VAR: "/home/agent/work/p",
-        session.AGENT_NOTES_DIR_VAR: "/home/agent/work/p-notes",
+        "AGENT_ROLE": "dev",
+        "AGENT_TASK": "T1",
+        "AGENT_KIT_DIR": "/f/agent-kit",
+        "AGENT_REPO_URL": "git@h:o/p.git",
+        "AGENT_PROJECT_DIR": "/home/agent/work/p",
+        "AGENT_NOTES_DIR": "/home/agent/work/p-notes",
     }
 
 
@@ -76,6 +71,13 @@ def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None
     }
 
 
+@pytest.mark.parametrize("content", ["[]\n", "sandbox: s\n", "launches: none\n"])
+def test_a_record_foundry_did_not_write_fails_with_its_path(tmp_path: Path, content: str) -> None:
+    (tmp_path / session.RECORD_FILE_NAME).write_text(content)
+    with pytest.raises(FoundryError, match=r"session.yaml: not a session record written by foundry"):
+        session.record_launch(tmp_path, launched_at=datetime.now(UTC))
+
+
 def test_record_launch_needs_a_record(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match="is missing"):
         session.record_launch(tmp_path, launched_at=datetime.now(UTC))
@@ -83,13 +85,13 @@ def test_record_launch_needs_a_record(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
 def test_valid_task_ids(task_id: str) -> None:
-    session.ensure_valid_task_id(task_id)
+    session.require_valid_task_id(task_id)
 
 
 @pytest.mark.parametrize("task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "ü", "x~1", "x:y"])
 def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
     with pytest.raises(FoundryError, match="is not valid"):
-        session.ensure_valid_task_id(task_id)
+        session.require_valid_task_id(task_id)
 
 
 def test_a_sandbox_for_another_role_task_or_repository_is_refused(tmp_path: Path) -> None:

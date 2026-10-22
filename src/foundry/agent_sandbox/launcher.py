@@ -16,12 +16,9 @@ from typing import NoReturn
 from foundry.agent_sandbox import definition
 from foundry.agent_sandbox.definition import DEFINITION_FILE_NAME, SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.host import Host, HostPort
+from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.sbx import Sbx
-from foundry.agent_sandbox.ssh_agent import SshAgent
-
-SSH_AGENT_SOCKETS_DIR_PATH = Path("/tmp/sbx-agents")
-"""Base directory for ssh-agent sockets; Host.ssh_agent_socket_path makes it private per-uid."""
+from foundry.agent_sandbox.ssh_agent import SshAgent, socket_path
 
 
 @dataclass(frozen=True)
@@ -67,13 +64,13 @@ def require_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
         )
 
 
-def prepare(request: LaunchRequest, sandbox: SandboxDefinition, host: HostPort, ssh_agent: SshAgent, sbx: Sbx) -> None:
+def prepare(request: LaunchRequest, sandbox: SandboxDefinition, host: Host, ssh_agent: SshAgent, sbx: Sbx) -> None:
     """Everything up to, but not including, attaching the agent."""
-    host.ensure_dir_exists(sandbox.agent_kit_dir, "agent kit")
-    host.ensure_file_exists(request.ssh_key_path, "ssh key")
+    host.require_dir(sandbox.agent_kit_dir, "agent kit")
+    host.require_file(request.ssh_key_path, "ssh key")
     private_paths = [request.ssh_key_path]
     if request.github_token_path is not None:
-        host.ensure_file_exists(request.github_token_path, "github token file")
+        host.require_file(request.github_token_path, "github token file")
         private_paths.append(request.github_token_path)
     require_safe_paths(sandbox.agent_kit_dir, request.definition_dir, private_paths)
 
@@ -118,12 +115,13 @@ def launch(request: LaunchRequest) -> NoReturn:
     Raises SandboxError if anything before the hand-over fails.
     """
     sandbox = definition.read(request.definition_dir)
-    host = Host(os.getuid())
-    ssh_agent_socket_path = host.ssh_agent_socket_path(SSH_AGENT_SOCKETS_DIR_PATH, sandbox.name)
+    uid = os.getuid()
+    host = SystemHost(uid)
+    ssh_agent_socket_path = socket_path(sandbox.name, uid)
     ssh_agent = SshAgent(host, ssh_agent_socket_path)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, sandbox.name, request.definition_dir)
     host.ensure_private_dir(ssh_agent_socket_path.parent)
     prepare(request, sandbox, host, ssh_agent, sbx)
     print(describe(request, sandbox, ssh_agent_socket_path), file=sys.stderr)
-    host.exec(sbx.run_command(request.agent_args), process_env)
+    host.exec(sbx.attach_command(request.agent_args), process_env)

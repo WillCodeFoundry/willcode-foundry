@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Adds a "Task: <task>" trailer to every commit on the task branch, so each
 # code commit traces back to its task without the agent having to remember.
-# Unlike commit-msg, this runs even with --no-verify. git passes the message
-# file as $1.
+# This runs even with --no-verify. git passes the message file as $1.
 set -euo pipefail
 # For ShellCheck, relative to the repository root, where CI runs it:
 # shellcheck source=agent-kit/hooks/lib/common.sh

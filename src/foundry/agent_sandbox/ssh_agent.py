@@ -6,7 +6,16 @@ from enum import IntEnum
 from pathlib import Path
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.host import HostPort
+from foundry.agent_sandbox.host import Host
+
+
+def socket_path(sandbox_name: str, uid: int) -> Path:
+    """The sandbox's ssh-agent socket: /tmp/sbx-agents-<uid>/<sandbox_name>.sock.
+
+    The directory is per user, since /tmp is shared; the launcher makes it
+    private before starting the agent.
+    """
+    return Path(f"/tmp/sbx-agents-{uid}") / f"{sandbox_name}.sock"
 
 
 class SshAddExitCode(IntEnum):
@@ -22,7 +31,7 @@ class SshAddExitCode(IntEnum):
 class SshAgent:
     """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox."""
 
-    def __init__(self, host: HostPort, socket_path: Path) -> None:
+    def __init__(self, host: Host, socket_path: Path) -> None:
         self._host = host
         self.socket_path = socket_path
 
@@ -57,12 +66,12 @@ class SshAgent:
             if result.returncode != 0:
                 raise SandboxError(f"ssh-add failed for {key_path}: {result.stderr.strip()}")
 
-    def list_keys(self) -> list[str]:
-        result = self._ssh_add("-l")
-        return result.stdout.splitlines() if result.returncode == SshAddExitCode.HAS_KEYS else []
-
     def list_key_fingerprints(self) -> set[str]:
-        return {self.parse_fingerprint(line) for line in self.list_keys() if line.strip()}
+        """Fingerprints of the keys the agent holds; empty if none, or if it doesn't answer."""
+        result = self._ssh_add("-l")
+        if result.returncode != SshAddExitCode.HAS_KEYS:
+            return set()
+        return {self.parse_fingerprint(line) for line in result.stdout.splitlines() if line.strip()}
 
     @staticmethod
     def parse_fingerprint(ssh_add_line: str) -> str:

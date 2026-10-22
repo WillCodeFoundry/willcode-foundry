@@ -58,7 +58,7 @@ def test_first_run_creates_the_session_named_after_the_sandbox(instance: Path) -
     assert got.ssh_key_path == instance / "secrets" / "ssh" / "dev"
     assert got.github_token_path is None
     assert got.agent_args == ("--continue",)
-    assert sandbox.variables[session.AGENT_TASK_VAR] == "WCF-0042"
+    assert sandbox.variables["AGENT_TASK"] == "WCF-0042"
     assert sandbox.workspace_dir.is_dir()
 
 

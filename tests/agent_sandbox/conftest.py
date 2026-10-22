@@ -5,7 +5,7 @@ from typing import NoReturn
 
 import pytest
 
-from foundry.agent_sandbox.host import Host, HostPort
+from foundry.agent_sandbox.host import Host, SystemHost
 
 Response = str | int | tuple[int, str]
 
@@ -18,7 +18,7 @@ class ExecCalled(Exception):
         self.env = env
 
 
-class FakeHost(Host):
+class FakeHost(SystemHost):
     """Answers commands from ``responses`` and records them in ``calls``.
 
     A response is stdout (str, exit 0), an exit code (int), an (exit code,
@@ -59,5 +59,5 @@ class FakeHost(Host):
 @pytest.fixture
 def host() -> FakeHost:
     host = FakeHost()
-    _: HostPort = host
+    _: Host = host
     return host

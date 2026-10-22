@@ -9,13 +9,13 @@ from foundry.errors import FoundryError
 
 @dataclass(frozen=True)
 class Project:
-    project_name: str
+    name: str
     url: str
 
 
 @dataclass(frozen=True)
 class Role:
-    role_name: str
+    name: str
 
 
 @dataclass(frozen=True)
@@ -56,12 +56,12 @@ def parse(raw: object, *, source: str = "config") -> Config:
     for project_name, value in (raw.get("projects") or {}).items():
         if not isinstance(value, dict) or not isinstance(value.get("url"), str):
             raise FoundryError(f"{source}: projects.{project_name} needs a 'url'")
-        projects[project_name] = Project(project_name=project_name, url=value["url"])
+        projects[project_name] = Project(name=project_name, url=value["url"])
 
     roles: dict[str, Role] = {}
     for role_name, value in (raw.get("roles") or {}).items():
         if value:
             raise FoundryError(f"{source}: roles.{role_name}: role options are not supported yet; use {{}}")
-        roles[role_name] = Role(role_name=role_name)
+        roles[role_name] = Role(name=role_name)
 
     return Config(foundry_name=foundry_name, projects=projects, roles=roles)
