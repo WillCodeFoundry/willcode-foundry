@@ -36,8 +36,6 @@ class Launch:
     github_token_path: Path | None = None
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
     agent_args: tuple[str, ...] = ()
-    fresh: bool = False
-    """Remove an existing sandbox of this name first."""
 
 
 def ensure_paths_safe(agent_kit_path: Path, env_dir_path: Path, private_paths: Sequence[Path]) -> None:
@@ -81,8 +79,6 @@ def prepare_sandbox(launch: Launch, host: HostPort, ssh_agent: SshAgent, sbx: Sb
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([launch.ssh_key_path])
 
-    if launch.fresh and sbx.start_if_exists():
-        sbx.remove()
     if not sbx.start_if_exists():
         sbx.create()
     sbx.ensure_github_ssh_allowed()

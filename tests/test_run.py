@@ -68,13 +68,13 @@ def test_a_rerun_reattaches_with_the_same_file_and_records_each_launch(instance:
     before = env_file.read_text()
     session.workspace_path(session.read_env_file(first.env_dir_path)).rmdir()  # as if /tmp was cleared
 
-    second = launch("tkt-store", "dev", "WCF-0042", "--fresh")
+    second = launch("tkt-store", "dev", "WCF-0042")
 
-    assert second.env_dir_path == first.env_dir_path and second.fresh
+    assert second.env_dir_path == first.env_dir_path
     assert env_file.read_text() == before
     assert session.workspace_path(session.read_env_file(second.env_dir_path)).is_dir()
     launches = yaml_io.load(first.env_dir_path / session.RECORD_FILE_NAME)["launches"]
-    assert [entry["fresh"] for entry in launches] == [False, True]
+    assert len(launches) == 2
 
 
 def test_a_token_file_is_passed_when_present(instance: Path) -> None:

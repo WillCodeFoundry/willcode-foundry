@@ -76,20 +76,20 @@ def test_record_launch_appends_and_keeps_existing_fields(tmp_path: Path) -> None
     d = tmp_path / "s"
     session.create_session(d, doc(tmp_path), sandbox="s")
     first = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
-    session.record_launch(d, launched_at=first, fresh=False)
-    session.record_launch(d, launched_at=first.replace(hour=19), fresh=True)
+    session.record_launch(d, launched_at=first)
+    session.record_launch(d, launched_at=first.replace(hour=19))
     assert yaml_io.load(d / session.RECORD_FILE_NAME) == {
         "sandbox": "s",
         "launches": [
-            {"at": "2026-10-21T18:00:00+00:00", "fresh": False},
-            {"at": "2026-10-21T19:00:00+00:00", "fresh": True},
+            {"at": "2026-10-21T18:00:00+00:00"},
+            {"at": "2026-10-21T19:00:00+00:00"},
         ],
     }
 
 
 def test_record_launch_needs_a_record(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match="is missing"):
-        session.record_launch(tmp_path, launched_at=datetime.now(UTC), fresh=False)
+        session.record_launch(tmp_path, launched_at=datetime.now(UTC))
 
 
 @pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])

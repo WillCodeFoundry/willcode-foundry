@@ -14,7 +14,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser = subparsers.add_parser(
         "run",
         help="start or re-attach to a sandboxed agent",
-        usage="foundry run PROJECT ROLE TASK [--fresh] [-- AGENT_ARGS...]",
+        usage="foundry run PROJECT ROLE TASK [-- AGENT_ARGS...]",
         description=(
             "Start the sandbox for ROLE on TASK in PROJECT, or re-attach to it if it already exists. "
             "Arguments after '--' go to the agent."
@@ -23,7 +23,6 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser.add_argument("project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")
     parser.add_argument("role_name", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
     parser.add_argument("task_id", metavar="TASK", help="task id, e.g. WCF-0042")
-    parser.add_argument("--fresh", action="store_true", help="remove the existing sandbox first and start a new one")
     parser.set_defaults(func=main)
 
 
@@ -45,7 +44,7 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
     # The workspace is an empty temporary directory; recreate it if the OS has
     # cleared it since the sandbox was created (after a reboot, say).
     session.workspace_path(env_file).mkdir(parents=True, exist_ok=True)
-    session.record_launch(session_path, launched_at=launched_at, fresh=args.fresh)
+    session.record_launch(session_path, launched_at=launched_at)
 
     github_token_path = paths.github_token_path(foundry_root, role.role_name)
     agent_kit_path = session.agent_kit_path(env_file)
@@ -58,7 +57,6 @@ def main(args: argparse.Namespace, agent_args: tuple[str, ...]) -> NoReturn:
             init_command=(str(agent_kit_path / "bin" / "session-init"),),
             github_token_path=github_token_path if github_token_path.is_file() else None,
             agent_args=agent_args,
-            fresh=args.fresh,
         )
     )
 

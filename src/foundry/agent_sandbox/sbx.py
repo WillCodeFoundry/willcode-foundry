@@ -48,11 +48,6 @@ class Sbx:
         if result.returncode != 0:
             raise SandboxError(f"sbx env create failed: {result.stderr.strip()}")
 
-    def remove(self) -> None:
-        result = self._sbx("env", "rm", "--auto-approve", str(self.env_dir_path))
-        if result.returncode != 0:
-            raise SandboxError(f"sbx env rm failed: {result.stderr.strip()}")
-
     def exec_in_sandbox(self, *command: str) -> subprocess.CompletedProcess[str]:
         """Run a command inside the sandbox, with the environment file's variables set."""
         return self._sbx("env", "exec", str(self.env_dir_path), "--", *command)

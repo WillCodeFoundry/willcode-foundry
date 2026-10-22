@@ -188,9 +188,9 @@ def _read_record(session_path: Path) -> dict[str, Any]:
     return record
 
 
-def record_launch(session_path: Path, *, launched_at: datetime, fresh: bool) -> None:
+def record_launch(session_path: Path, *, launched_at: datetime) -> None:
     """Append one launch to session.yaml, keeping everything already there."""
     record = _read_record(session_path)
     launches = record.get("launches") or []
-    record["launches"] = [*launches, {"at": launched_at.isoformat(timespec="seconds"), "fresh": fresh}]
+    record["launches"] = [*launches, {"at": launched_at.isoformat(timespec="seconds")}]
     yaml_io.dump(session_path / RECORD_FILE_NAME, record)

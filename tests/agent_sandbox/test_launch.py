@@ -95,26 +95,6 @@ def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> Non
     assert cmds.index(exec_command(sdir, "/k/bin/session-init")) > cmds.index(exec_command(sdir, "ssh-add", "-l"))
 
 
-def test_prepare_fresh_removes_the_existing_sandbox_first(layout, host) -> None:
-    kit, key, sdir, sock = layout
-    host.responses = responses(key, sdir)
-    host.responses[exec_command(sdir, "true")] = [0, 1, 0]  # exists; gone after rm; created
-    host.responses[("sbx", "env", "rm", "--auto-approve", str(sdir))] = ""
-    host.responses[("sbx", "env", "create", "--auto-approve", str(sdir))] = ""
-
-    prepare_sandbox(
-        Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key, fresh=True),
-        host,
-        SshAgent(host, sock),
-        Sbx(host, {}, "n", sdir),
-    )
-
-    cmds = host.commands
-    assert cmds.index(("sbx", "env", "rm", "--auto-approve", str(sdir))) < cmds.index(
-        ("sbx", "env", "create", "--auto-approve", str(sdir))
-    )
-
-
 def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path) -> None:
     kit, key, sdir, sock = layout
     token_file = tmp_path / "secrets dir" / "dev.token"
@@ -169,3 +149,17 @@ def test_run_command_auto_approve_and_pass_agent_args(tmp_path: Path, host) -> N
     sbx = Sbx(host, {}, "n", tmp_path)
     assert sbx.run_command(()) == ("sbx", "env", "run", "--auto-approve", str(tmp_path))
     assert sbx.run_command(("--continue",))[-2:] == ("--", "--continue")
+
+
+def test_prepare_never_removes_a_sandbox(layout, host) -> None:
+    kit, key, sdir, sock = layout
+    host.responses = responses(key, sdir)
+
+    prepare_sandbox(
+        Launch(sandbox_name="n", env_dir_path=sdir, agent_kit_path=kit, ssh_key_path=key),
+        host,
+        SshAgent(host, sock),
+        Sbx(host, {}, "n", sdir),
+    )
+
+    assert not any(command[:3] == ("sbx", "env", "rm") for command in host.commands)

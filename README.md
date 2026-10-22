@@ -7,7 +7,6 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 ```console
 $ uv sync
 $ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
-$ uv run foundry run tkt-store dev WCF-0042 --fresh        # replace the sandbox with a fresh one
 $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to the agent
 ```
 
@@ -60,7 +59,7 @@ $ uv run foundry run tkt-store dev WCF-0042 -- --continue  # args after -- go to
 
 ## How a session runs
 
-1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it writes `sessions/<sandbox>/sbxenv.yaml` and `session.yaml`; later runs reuse that file and re-attach, since sbx fixes a sandbox's mounts when it is created. sbx requires a primary workspace, so the environment file names an empty temporary directory (recreated if the OS clears it); nothing is put in it. The only real mount is `agent-kit/`, read-only, and the `env` block carries `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
+1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it writes `sessions/<sandbox>/sbxenv.yaml` and `session.yaml`; later runs reuse that file and re-attach, since sbx fixes a sandbox's mounts when it is created. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm sessions/<sandbox>`, then delete `sessions/<sandbox>/`. sbx requires a primary workspace, so the environment file names an empty temporary directory (recreated if the OS clears it); nothing is put in it. The only real mount is `agent-kit/`, read-only, and the `env` block carries `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
 2. `foundry.agent_sandbox` starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from the file if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
 3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, then `session-harden`s: installs Claude's managed settings and removes sudo. The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
@@ -133,7 +132,7 @@ src/foundry/
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry
     ├── launch.py       # the sequence in step 2–3 above
-    ├── sbx.py          # sbx env create/exec/run/rm, policy, known hosts, secrets
+    ├── sbx.py          # sbx env create/exec/run, policy, known hosts, secrets
     ├── ssh_agent.py    # private agent, one key, fingerprint check
     ├── host.py         # the boundary to the host: commands and filesystem checks
     └── github_keys.py  # GitHub's published host keys, pinned
@@ -165,7 +164,7 @@ $ sbx settings unset ssh.agentSocketPath
 $ sbx daemon restart
 ```
 
-The launcher passes `--auto-approve` to `sbx env create`, `run` and `rm`, approving each environment plan on your behalf; the plans mount only `agent-kit/` read-only and an empty directory, with no host commands. `sbx env` is marked experimental by Docker; the file format is isolated in `session.build_env_file` so a change there is one edit.
+The launcher passes `--auto-approve` to `sbx env create` and `run`, approving each environment plan on your behalf; the plans mount only `agent-kit/` read-only and an empty directory, with no host commands. `sbx env` is marked experimental by Docker; the file format is isolated in `session.build_env_file` so a change there is one edit.
 
 ## Where agent output lives
 
