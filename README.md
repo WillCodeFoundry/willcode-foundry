@@ -7,6 +7,7 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 ```console
 $ uv sync
 $ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
+$ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.
@@ -79,7 +80,7 @@ The words used here, and in the code:
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
 
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
-2. `foundry.agent_sandbox` first stops the ssh-agents of sandboxes that are stopped or removed: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents-<uid>/<sandbox>.sock -s`) with `sbx ls --json`, and stops each whose sandbox is missing or `stopped`, except the one being launched. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
+2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents-<uid>/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`, except the one being launched. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
 3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, then `session-harden`s: installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), and `session-init` checks on every launch, with the agent's own groups, that it can't be used. The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
@@ -144,6 +145,7 @@ src/foundry/
 ├── cli.py              # `foundry` command; one subcommand per module in commands/
 ├── commands/run.py     # foundry run
 ├── commands/repos.py   # foundry repos check [--fix]
+├── commands/prune.py   # foundry prune
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
@@ -153,10 +155,11 @@ src/foundry/
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
     ├── launcher.py     # LaunchRequest and launch(): the sequence in steps 2–3 above
+    ├── pruning.py      # prune(): what stopped or removed sandboxes leave behind (their ssh-agents)
     ├── definition.py   # the sandbox definition: sbxenv.yaml, the only place that knows sbx's format
     ├── sbx.py          # sbx env create/exec/run, policy, known hosts, secrets
-    ├── ssh_agent.py    # private agent, one key, fingerprint check
-    ├── host.py         # the boundary to the host's processes: run, exec, environ
+    ├── ssh_agent.py    # private agent, one key, fingerprint check; finding and killing foundry's agents
+    ├── host.py         # the boundary to the host's processes: run, exec, environ, list and kill
     └── github_keys.py  # GitHub's published host keys, pinned
 ```
 

@@ -16,8 +16,9 @@ from typing import NoReturn
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, kill_ssh_agents
+from foundry.agent_sandbox.pruning import kill_unused_ssh_agents
+from foundry.agent_sandbox.sbx import Sbx
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
 
 
 @dataclass(frozen=True)
@@ -130,12 +131,7 @@ def launch(request: LaunchRequest) -> NoReturn:
     ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    # An agent whose sandbox is stopped or removed only holds a private key:
-    # its sandbox can't use it, and launching that sandbox again starts a new
-    # one. sbx lists every sandbox its user has, so another foundry instance's
-    # live sandboxes keep their agents.
-    live_sandboxes = list_live_sandboxes(host, process_env) | {definition.name}
-    if killed := kill_ssh_agents(host, uid, keep=live_sandboxes):
+    if killed := kill_unused_ssh_agents(host, uid, process_env, also_keep={definition.name}):
         print(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(killed)}", file=sys.stderr)
     prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
