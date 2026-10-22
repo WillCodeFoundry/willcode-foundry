@@ -19,7 +19,7 @@ def git(cwd: Path, *args: str) -> None:
 
 
 @pytest.fixture
-def origin(tmp_path, monkeypatch) -> Path:
+def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A repository with only main: no task branch, no agent-notes."""
     home = tmp_path / "home"
     home.mkdir()
