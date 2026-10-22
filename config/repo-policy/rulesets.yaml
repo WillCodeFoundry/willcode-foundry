@@ -1,9 +1,9 @@
 # The rulesets every project's GitHub repository must have, whatever runs
 # inside a sandbox: part of the repo policy, with CODEOWNERS and ci-gate.yml
-# beside it. Checked and applied by `foundry protect check|apply`.
+# beside it. Checked by `foundry repos check`, and applied by its --fix.
 #
 # Each ruleset is in the shape of GitHub's REST API ("Create a repository
-# ruleset"), sent as-is by `apply` and matched to GitHub's by name. `check`
+# ruleset"), sent as-is by `check --fix` and matched to GitHub's by name. `check`
 # compares only the fields written here; ones GitHub adds are ignored. If
 # GitHub fills in a default field and check keeps showing it, add it here.
 #

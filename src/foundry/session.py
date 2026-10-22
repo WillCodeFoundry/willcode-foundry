@@ -62,7 +62,7 @@ def sandbox_definition(
 ) -> SandboxDefinition:
     """The definition for a new sandbox: the agent kit mounted, and the variables the kit's scripts read.
 
-    ``workspace_dir`` is an empty temporary directory; the project is cloned
+    ``workspace_dir`` is the session's empty workspace; the project is cloned
     inside the sandbox by session-init, into the checkout directories below.
     The variable names are the contract with AGENTS.md and the kit's scripts.
     """
