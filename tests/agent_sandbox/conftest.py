@@ -29,6 +29,12 @@ class FakeHost:
         self.responses: dict[tuple[str, ...], Response | list[Response]] = {}
         self.calls: list[tuple[tuple[str, ...], Mapping[str, str] | None]] = []
         self.environ_value: Mapping[str, str] = {}
+        self.processes: list[tuple[int, str]] = []
+        """What list_processes returns, for any uid."""
+        self.killed: list[int] = []
+        """The process ids kill_process was given, in order."""
+        self.gone: set[int] = set()
+        """Process ids kill_process raises ProcessLookupError for."""
 
     def run(self, command: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -48,6 +54,14 @@ class FakeHost:
 
     def environ(self) -> Mapping[str, str]:
         return self.environ_value
+
+    def list_processes(self, uid: int) -> list[tuple[int, str]]:
+        return list(self.processes)
+
+    def kill_process(self, pid: int) -> None:
+        if pid in self.gone:
+            raise ProcessLookupError(pid)
+        self.killed.append(pid)
 
     @property
     def commands(self) -> list[tuple[str, ...]]:

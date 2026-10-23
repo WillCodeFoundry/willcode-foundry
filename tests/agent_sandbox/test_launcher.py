@@ -5,8 +5,14 @@ import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import LaunchRequest, prepare, require_dir, require_file, require_safe_paths
-from foundry.agent_sandbox.sbx import Sbx
+from foundry.agent_sandbox.launcher import (
+    LaunchRequest,
+    prepare,
+    require_dir,
+    require_file,
+    require_safe_paths,
+)
+from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
 FP = "256 SHA256:abc comment (ED25519)"
@@ -174,3 +180,28 @@ def test_a_session_whose_workspace_is_gone_is_refused(layout, host, tmp_path) ->
     (tmp_path / "ws").rmdir()
     with pytest.raises(SandboxError, match=r"workspace '.*ws' is not a directory"):
         run_prepare(layout, host)
+
+
+# --- list_live_sandboxes ------------------------------------------------------
+
+SBX_LS = ("sbx", "ls", "--json")
+SBX_LS_JSON = """{
+  "sandboxes": [
+    {"name": "dev-p-running", "id": "1", "agent": "claude", "status": "running", "workspaces": []},
+    {"name": "dev-p-stopped", "id": "2", "agent": "claude", "status": "stopped", "workspaces": []},
+    {"name": "dev-p-starting", "id": "3", "agent": "claude", "status": "starting", "workspaces": []}
+  ]
+}"""
+
+
+def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:
+    host.responses = {SBX_LS: SBX_LS_JSON}
+
+    assert list_live_sandboxes(host, {}) == {"dev-p-running", "dev-p-starting"}
+
+
+def test_a_failing_sbx_ls_is_reported(host) -> None:
+    host.responses = {SBX_LS: 1}
+
+    with pytest.raises(SandboxError, match="sbx ls failed"):
+        list_live_sandboxes(host, {})

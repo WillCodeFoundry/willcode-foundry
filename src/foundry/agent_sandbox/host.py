@@ -1,6 +1,7 @@
 """The boundary to the host machine's processes: every external command goes through here."""
 
 import os
+import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from typing import NoReturn, Protocol
@@ -19,6 +20,14 @@ class Host(Protocol):
 
     def environ(self) -> Mapping[str, str]:
         """This process's own environment."""
+        ...
+
+    def list_processes(self, uid: int) -> list[tuple[int, str]]:
+        """Every process of ``uid``, as (process id, command line)."""
+        ...
+
+    def kill_process(self, pid: int) -> None:
+        """Send SIGTERM; raises ProcessLookupError if there's no such process."""
         ...
 
 
@@ -40,3 +49,16 @@ class SystemHost:
 
     def environ(self) -> Mapping[str, str]:
         return os.environ
+
+    def list_processes(self, uid: int) -> list[tuple[int, str]]:
+        result = self.run(("ps", "-u", str(uid), "-o", "pid=,command="))
+        if result.returncode != 0:
+            raise SandboxError(f"could not list running processes: {result.stderr.strip()}")
+        processes = []
+        for line in result.stdout.splitlines():
+            pid, _, command = line.strip().partition(" ")
+            processes.append((int(pid), command.strip()))
+        return processes
+
+    def kill_process(self, pid: int) -> None:
+        os.kill(pid, signal.SIGTERM)
