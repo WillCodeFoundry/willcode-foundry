@@ -75,9 +75,9 @@ The words used here, and in the code:
 | **sandbox definition** | `sbxenv.yaml`, written once; what sbx creates the sandbox from |
 | **session** | The host directory `sessions/<sandbox>/`: the sandbox definition and the empty workspace |
 | **launch** | One attempt to start or re-attach to a sandbox |
-| **repo policy** | What every project's GitHub repository must match: an `agent-notes` branch, rulesets, CODEOWNERS, the `ci-gate` section of `ci.yml` |
+| **repo policy** | What every project's GitHub repository must match: rulesets, CODEOWNERS, the `ci-gate` section of `ci.yml` |
 | **deviation** | One way a repository differs from the repo policy, with its diff |
-| **change** | One thing `foundry repo check --fix` created or updated: the `agent-notes` branch, or a ruleset |
+| **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
 
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
@@ -86,7 +86,7 @@ The words used here, and in the code:
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.fix` and `deviations`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
+Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create` and `ensure_notes_branch`, `repo_policy.apply_rulesets` and `deviations`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
@@ -123,7 +123,9 @@ $ uv run foundry repo check tkt-store             # one project
 $ uv run foundry repo check --fix                 # first create agent-notes if missing and create or update the rulesets
 ```
 
-Every project's repository must match the repo policy in `config/repo-policy/`: it must have an `agent-notes` branch (`--fix` creates it with no history of its own, holding only `.agent/README.md`), and its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` section of its `.github/workflows/ci.yml`, which the rulesets depend on. `check` compares rather than analyses: anything different is a deviation, shown as a diff from the repository to the policy, even when it's harmless. A repository with none prints `conforms`. When a project really needs to differ, change the policy.
+`check` also checks that every project's repository has an `agent-notes` branch, which every task's notes go on: it's not part of the repo policy, but `foundry task create` needs it, and `--fix` creates it with no history of its own, holding only `.agent/README.md`.
+
+Every project's repository must match the repo policy in `config/repo-policy/`: its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` section of its `.github/workflows/ci.yml`, which the rulesets depend on. `check` compares rather than analyses: anything different is a deviation, shown as a diff from the repository to the policy, even when it's harmless. A repository with none prints `conforms`. When a project really needs to differ, change the policy.
 
 `rulesets.yaml` lists the rulesets, in the shape of GitHub's REST API; edit it, then run `check --fix`. Repository admins (you) bypass them; agents' users, with write access only, can't:
 
@@ -148,8 +150,8 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
-├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, fixes agent-notes and rulesets
-├── task.py             # creating a task: its branch and TASK.md; the agent-notes branch's name and first file
+├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
+├── task.py             # creating a task (its branch and TASK.md), and ensuring agent-notes exists
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml

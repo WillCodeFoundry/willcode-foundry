@@ -100,14 +100,18 @@ class GhCli:
             raise GitHubError(result.stderr.strip().removeprefix("gh: ") or f"gh api {endpoint} failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
-    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
-        ref = f"?ref={branch}" if branch else ""
+    def _get_or_none(self, endpoint: str) -> Any:
+        """GET ``endpoint``; None if GitHub answers 404."""
         try:
-            content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}{ref}")
+            return self._api("GET", endpoint)
         except GitHubError as error:
             if error.http_status == 404:
                 return None
             raise
+
+    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
+        ref = f"?ref={branch}" if branch else ""
+        content = self._get_or_none(f"repos/{repo_slug}/contents/{file_path}{ref}")
         if not isinstance(content, dict) or content.get("type") != "file":
             return None
         return base64.b64decode(content["content"]).decode()
@@ -130,13 +134,8 @@ class GhCli:
         return str(self._api("GET", f"repos/{repo_slug}")["default_branch"])
 
     def branch_head(self, repo_slug: str, branch: str) -> str | None:
-        try:
-            ref = self._api("GET", f"repos/{repo_slug}/git/ref/heads/{branch}")
-        except GitHubError as error:
-            if error.http_status == 404:
-                return None
-            raise
-        return str(ref["object"]["sha"])
+        ref = self._get_or_none(f"repos/{repo_slug}/git/ref/heads/{branch}")
+        return None if ref is None else str(ref["object"]["sha"])
 
     def create_branch(self, repo_slug: str, branch: str, sha: str) -> None:
         self._api("POST", f"repos/{repo_slug}/git/refs", {"ref": f"refs/heads/{branch}", "sha": sha})

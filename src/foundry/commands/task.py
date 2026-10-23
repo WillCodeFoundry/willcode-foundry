@@ -6,7 +6,6 @@ from pathlib import Path
 from foundry import config, paths, task
 from foundry.errors import FoundryError
 from foundry.github import GhCli, repo_slug_from_url
-from foundry.task import NOTES_BRANCH, CreatedTask
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -36,10 +35,10 @@ def create_main(args: argparse.Namespace) -> int:
     return 0
 
 
-def report(project_name: str, task_id: str, created: CreatedTask) -> list[str]:
+def report(project_name: str, task_id: str, created: task.CreatedTask) -> list[str]:
     return [
         f"created task {task_id} in {project_name}",
-        f"  branch   {created.task_branch}, from {created.base_branch}",
-        f"  TASK.md  {created.task_md_path} on {NOTES_BRANCH}",
+        f"  branch   {created.branch}, from {created.base_branch}",
+        f"  TASK.md  {created.task_md_path} on {task.NOTES_BRANCH}",
         f"run it with: foundry run {project_name} ROLE {task_id}",
     ]
