@@ -6,6 +6,7 @@ import yaml
 
 from foundry import repo_policy
 from foundry.errors import FoundryError
+from foundry.task import NOTES_BRANCH, NOTES_README
 from tests.fakes import FakeGitHub
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -116,37 +117,59 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
     assert deviation.diff.startswith(f"--- {repo_policy.CI_WORKFLOW_PATH} (missing)")
 
 
-# --- apply_rulesets ------------------------------------------------------------------
+# --- agent-notes and fix -----------------------------------------------------------
 
 
 def policy_of(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
     return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate={})
 
 
-def test_apply_rulesets_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:
-    fake = FakeGitHub()
-    fake.create_ruleset("o/r", {**RULESET, "name": "second", "rules": [{"type": "deletion"}]})
-    fake.create_ruleset("o/r", {**RULESET, "name": "third"})
-    second_id = fake.ruleset_id("o/r", "second")
+def with_notes(github: FakeGitHub) -> FakeGitHub:
+    github.branches["o/r"] = {"main": "base-sha", NOTES_BRANCH: "notes-sha"}
+    return github
+
+
+def test_a_missing_agent_notes_branch_is_a_deviation() -> None:
+    deviation = repo_policy.deviations(FakeGitHub(), "o/r", policy_of())[0]
+
+    assert deviation.subject == "branch agent-notes"
+    assert deviation.diff.startswith("--- branch agent-notes (missing)")
+
+
+def test_fix_creates_agent_notes_with_nothing_but_its_readme() -> None:
+    github = FakeGitHub()
+
+    changes = repo_policy.fix(github, "o/r", policy_of())
+
+    assert changes == [repo_policy.Change("branch agent-notes", repo_policy.ChangeAction.CREATED)]
+    assert github.branch_files["o/r"][NOTES_BRANCH] == NOTES_README
+    assert "branch agent-notes" not in [d.subject for d in repo_policy.deviations(github, "o/r", policy_of())]
+
+
+def test_fix_creates_the_missing_rulesets_and_updates_the_deviating_in_policy_order() -> None:
+    github = with_notes(FakeGitHub())
+    github.create_ruleset("o/r", {**RULESET, "name": "second", "rules": [{"type": "deletion"}]})
+    github.create_ruleset("o/r", {**RULESET, "name": "third"})
+    second_id = github.ruleset_id("o/r", "second")
     policy = policy_of({**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"})
 
-    changes = repo_policy.apply_rulesets(fake, "o/r", policy)
+    changes = repo_policy.fix(github, "o/r", policy)
 
     assert changes == [
-        repo_policy.RulesetChange("first", repo_policy.RulesetAction.CREATED),
-        repo_policy.RulesetChange("second", repo_policy.RulesetAction.UPDATED),
+        repo_policy.Change("ruleset first", repo_policy.ChangeAction.CREATED),
+        repo_policy.Change("ruleset second", repo_policy.ChangeAction.UPDATED),
     ]
-    assert fake.ruleset_id("o/r", "second") == second_id  # updated in place, not recreated
-    assert [d.subject for d in repo_policy.deviations(fake, "o/r", policy) if d.subject.startswith("ruleset")] == []
+    assert github.ruleset_id("o/r", "second") == second_id  # updated in place, not recreated
+    assert [d.subject for d in repo_policy.deviations(github, "o/r", policy) if d.subject.startswith("ruleset")] == []
 
 
-def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
-    fake = FakeGitHub()
-    fake.create_ruleset("o/r", RULESET)
-    before = fake.rulesets("o/r")
+def test_fix_leaves_what_matches_alone() -> None:
+    github = with_notes(FakeGitHub())
+    github.create_ruleset("o/r", RULESET)
+    before = github.rulesets("o/r")
 
-    assert repo_policy.apply_rulesets(fake, "o/r", policy_of(RULESET)) == []
-    assert fake.rulesets("o/r") == before
+    assert repo_policy.fix(github, "o/r", policy_of(RULESET)) == []
+    assert github.rulesets("o/r") == before
 
 
 # --- loading the policy -------------------------------------------------------------
@@ -186,7 +209,7 @@ def test_a_missing_codeowners_is_named(policy_dir: Path) -> None:
 
 def test_this_repository_conforms_to_its_own_repo_policy() -> None:
     """The foundry is one of its own projects: its CODEOWNERS and ci.yml keep the policy honest."""
-    fake = FakeGitHub()
+    fake = with_notes(FakeGitHub())
     for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
         fake.files.setdefault("o/r", {})[path] = (REPO_ROOT / path).read_text()
     for ruleset in POLICY.rulesets:

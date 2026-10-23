@@ -2,9 +2,10 @@
 
 config/repo-policy/ holds the rulesets, the CODEOWNERS file and the ci-gate
 section of ci.yml (when it runs, and its ci-gate job) that the rulesets
-depend on. A repository is checked by comparing it with these, not by
-analysing what it has: anything different is a deviation, even when
-harmless. When a project really needs to differ, change the policy.
+depend on; the repository must also have an agent-notes branch. A repository
+is checked by comparing it with these, not by analysing what it has: anything
+different is a deviation, even when harmless. When a project really needs to
+differ, change the policy.
 """
 
 import difflib
@@ -19,6 +20,7 @@ import yaml
 from foundry import yaml_io
 from foundry.errors import FoundryError
 from foundry.github import GitHub
+from foundry.task import NOTES_BRANCH, NOTES_README
 
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
@@ -41,17 +43,17 @@ class Deviation:
     diff: str
 
 
-class RulesetAction(StrEnum):
+class ChangeAction(StrEnum):
     CREATED = "created"
     UPDATED = "updated"
 
 
 @dataclass(frozen=True)
-class RulesetChange:
-    """One ruleset apply_rulesets created or updated."""
+class Change:
+    """One thing fix created or updated, such as "ruleset foundry-tags"."""
 
-    ruleset_name: str
-    action: RulesetAction
+    subject: str
+    action: ChangeAction
 
 
 def load(policy_dir: Path) -> RepoPolicy:
@@ -79,8 +81,10 @@ def _read_text(file_path: Path) -> str:
 
 def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
     """How the repository differs from the policy; empty when it conforms."""
+    has_notes = github.branch_head(repo_slug, NOTES_BRANCH) is not None
+    found = [compare(f"branch {NOTES_BRANCH}", NOTES_BRANCH if has_notes else None, NOTES_BRANCH)]
     actual_rulesets = github.rulesets(repo_slug)
-    found = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
+    found += [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
     found.append(compare(CODEOWNERS_PATH, github.file_text(repo_slug, CODEOWNERS_PATH), policy.codeowners))
     found.append(
         compare(CI_WORKFLOW_PATH, _project_ci_gate(github.file_text(repo_slug, CI_WORKFLOW_PATH)), policy.ci_gate)
@@ -88,21 +92,24 @@ def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Devia
     return [deviation for deviation in found if deviation is not None]
 
 
-def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[RulesetChange]:
-    """Create the policy's rulesets the repository lacks and update those that deviate, in policy order.
+def fix(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Change]:
+    """Create agent-notes if missing, then the rulesets the repository lacks and update those that deviate.
 
     Project files are never written: they're the project's to change.
     """
-    actual_rulesets = github.rulesets(repo_slug)
     changes = []
+    if github.branch_head(repo_slug, NOTES_BRANCH) is None:
+        github.create_orphan_branch(repo_slug, NOTES_BRANCH, NOTES_README, f"Start {NOTES_BRANCH}")
+        changes.append(Change(f"branch {NOTES_BRANCH}", ChangeAction.CREATED))
+    actual_rulesets = github.rulesets(repo_slug)
     for ruleset in policy.rulesets:
         actual = actual_rulesets.get(ruleset["name"])
         if actual is None:
             github.create_ruleset(repo_slug, ruleset)
-            changes.append(RulesetChange(ruleset["name"], RulesetAction.CREATED))
+            changes.append(Change(f"ruleset {ruleset['name']}", ChangeAction.CREATED))
         elif _ruleset_deviation(ruleset, actual) is not None:
             github.update_ruleset(repo_slug, actual["id"], ruleset)
-            changes.append(RulesetChange(ruleset["name"], RulesetAction.UPDATED))
+            changes.append(Change(f"ruleset {ruleset['name']}", ChangeAction.UPDATED))
     return changes
 
 

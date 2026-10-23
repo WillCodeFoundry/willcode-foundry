@@ -101,3 +101,53 @@ def test_rulesets_are_the_repositorys_own_by_name() -> None:
     )
 
     assert GhCli(gh).rulesets("o/r") == {"mine": {"id": 1, "name": "mine", "enforcement": "active"}}
+
+
+# --- branches and files ---------------------------------------------------------
+
+
+def test_file_text_reads_another_branch_by_ref() -> None:
+    gh = RecordedGh({"repos/o/r/contents/a.md?ref=agent-notes": ok({"type": "file", "content": "aGk="})})
+
+    assert GhCli(gh).file_text("o/r", "a.md", "agent-notes") == "hi"
+
+
+def test_branch_head_is_the_sha_or_none_for_a_missing_branch() -> None:
+    gh = RecordedGh(
+        {
+            "repos/o/r/git/ref/heads/main": ok({"object": {"sha": "abc"}}),
+            "repos/o/r/git/ref/heads/gone": failed("gh: Not Found (HTTP 404)"),
+        }
+    )
+
+    assert GhCli(gh).branch_head("o/r", "main") == "abc"
+    assert GhCli(gh).branch_head("o/r", "gone") is None
+
+
+def test_default_branch_comes_from_the_repository() -> None:
+    assert GhCli(RecordedGh({"repos/o/r": ok({"default_branch": "trunk"})})).default_branch("o/r") == "trunk"
+
+
+def test_create_file_puts_base64_content_on_the_branch() -> None:
+    gh = RecordedGh({"repos/o/r/contents/.agent/T1/TASK.md": ok({})})
+
+    GhCli(gh).create_file("o/r", "agent-notes", ".agent/T1/TASK.md", "hi", "Add task T1")
+
+    assert json.loads(gh.calls[0][1] or "") == {"message": "Add task T1", "content": "aGk=", "branch": "agent-notes"}
+
+
+def test_create_orphan_branch_makes_a_parentless_commit_of_the_files_and_points_the_branch_at_it() -> None:
+    gh = RecordedGh(
+        {
+            "repos/o/r/git/trees": ok({"sha": "tree-sha"}),
+            "repos/o/r/git/commits": ok({"sha": "commit-sha"}),
+            "repos/o/r/git/refs": ok({}),
+        }
+    )
+
+    GhCli(gh).create_orphan_branch("o/r", "agent-notes", {".agent/README.md": "notes\n"}, "Start agent-notes")
+
+    bodies = [json.loads(stdin or "") for _, stdin in gh.calls]
+    assert bodies[0] == {"tree": [{"path": ".agent/README.md", "mode": "100644", "type": "blob", "content": "notes\n"}]}
+    assert bodies[1] == {"message": "Start agent-notes", "tree": "tree-sha", "parents": []}
+    assert bodies[2] == {"ref": "refs/heads/agent-notes", "sha": "commit-sha"}

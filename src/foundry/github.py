@@ -9,7 +9,7 @@ import base64
 import json
 import re
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol
 
 from foundry.errors import FoundryError
@@ -51,14 +51,30 @@ def run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedPro
 
 
 class GitHub(Protocol):
-    """The interface foundry needs from GitHub: read rulesets and files, create and update rulesets."""
+    """The interface foundry needs from GitHub: rulesets, branches and files."""
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
         """The repository's own rulesets in full, by name; inherited ones are left out."""
         ...
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
-        """A file's text on the default branch, or None if there is no such file."""
+    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
+        """A file's text on ``branch`` (default: the default branch), or None if there is no such file."""
+        ...
+
+    def default_branch(self, repo_slug: str) -> str: ...
+
+    def branch_head(self, repo_slug: str, branch: str) -> str | None:
+        """The commit sha ``branch`` points at, or None if there is no such branch."""
+        ...
+
+    def create_branch(self, repo_slug: str, branch: str, sha: str) -> None: ...
+
+    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], message: str) -> None:
+        """Create ``branch`` with one commit holding only ``files`` (path -> text), sharing no history."""
+        ...
+
+    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, message: str) -> None:
+        """Commit a new file to ``branch``; GitHub refuses one that already exists."""
         ...
 
     def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None: ...
@@ -84,9 +100,10 @@ class GhCli:
             raise GitHubError(result.stderr.strip().removeprefix("gh: ") or f"gh api {endpoint} failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
+        ref = f"?ref={branch}" if branch else ""
         try:
-            content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}")
+            content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}{ref}")
         except GitHubError as error:
             if error.http_status == 404:
                 return None
@@ -108,3 +125,32 @@ class GhCli:
 
     def update_ruleset(self, repo_slug: str, ruleset_id: int, ruleset: dict[str, Any]) -> None:
         self._api("PUT", f"repos/{repo_slug}/rulesets/{ruleset_id}", ruleset)
+
+    def default_branch(self, repo_slug: str) -> str:
+        return str(self._api("GET", f"repos/{repo_slug}")["default_branch"])
+
+    def branch_head(self, repo_slug: str, branch: str) -> str | None:
+        try:
+            ref = self._api("GET", f"repos/{repo_slug}/git/ref/heads/{branch}")
+        except GitHubError as error:
+            if error.http_status == 404:
+                return None
+            raise
+        return str(ref["object"]["sha"])
+
+    def create_branch(self, repo_slug: str, branch: str, sha: str) -> None:
+        self._api("POST", f"repos/{repo_slug}/git/refs", {"ref": f"refs/heads/{branch}", "sha": sha})
+
+    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], message: str) -> None:
+        blobs = [{"path": path, "mode": "100644", "type": "blob", "content": text} for path, text in files.items()]
+        tree = self._api("POST", f"repos/{repo_slug}/git/trees", {"tree": blobs})
+        commit = self._api(
+            "POST", f"repos/{repo_slug}/git/commits", {"message": message, "tree": tree["sha"], "parents": []}
+        )
+        self.create_branch(repo_slug, branch, commit["sha"])
+
+    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, message: str) -> None:
+        content = base64.b64encode(text.encode()).decode()
+        self._api(
+            "PUT", f"repos/{repo_slug}/contents/{file_path}", {"message": message, "content": content, "branch": branch}
+        )

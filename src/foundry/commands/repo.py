@@ -1,18 +1,18 @@
-"""foundry repos check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
+"""foundry repo check: how each project's repository deviates from the repo policy, and --fix for what it can."""
 
 import argparse
 
 from foundry import config, paths, repo_policy
 from foundry.github import GhCli, GitHubError, repo_slug_from_url
-from foundry.repo_policy import Deviation, RulesetChange
+from foundry.repo_policy import Change, Deviation
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     parser = subparsers.add_parser(
-        "repos",
+        "repo",
         help="check projects' GitHub repositories against the repo policy",
         description=(
-            "Compare each project's GitHub rulesets, CODEOWNERS and ci.yml with config/repo-policy/. "
+            "Compare each project's rulesets, agent-notes branch, CODEOWNERS and ci.yml with config/repo-policy/. "
             "Uses the GitHub CLI (gh), signed in as you."
         ),
     )
@@ -24,7 +24,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     check.add_argument(
         "--fix",
         action="store_true",
-        help="first create or update the rulesets to match; project files are reported, never written",
+        help="first create agent-notes if missing and create or update the rulesets; project files are never written",
     )
     check.set_defaults(func=check_main)
 
@@ -40,7 +40,7 @@ def check_main(args: argparse.Namespace) -> int:
     for project_name in args.project_names or sorted(foundry_config.projects):
         repo_slug = repo_slug_from_url(foundry_config.project(project_name).url)
         try:
-            changes = repo_policy.apply_rulesets(github, repo_slug, policy) if args.fix else []
+            changes = repo_policy.fix(github, repo_slug, policy) if args.fix else []
             deviations = repo_policy.deviations(github, repo_slug, policy)
         except GitHubError as error:
             print(f"{project_name} ({repo_slug})\n  error    {error}")
@@ -51,10 +51,10 @@ def check_main(args: argparse.Namespace) -> int:
     return 0 if all_conform else 1
 
 
-def report(project_name: str, repo_slug: str, changes: list[RulesetChange], deviations: list[Deviation]) -> list[str]:
+def report(project_name: str, repo_slug: str, changes: list[Change], deviations: list[Deviation]) -> list[str]:
     """The lines check prints for one project: what --fix changed, then 'conforms' or each deviation's diff."""
     lines = [f"{project_name} ({repo_slug})"]
-    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in changes]
+    lines += [f"  {change.action:<8} {change.subject}" for change in changes]
     if not deviations:
         lines.append("  conforms")
     for deviation in deviations:

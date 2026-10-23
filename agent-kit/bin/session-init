@@ -47,7 +47,7 @@ git show-ref -q --verify "refs/remotes/origin/task/$AGENT_TASK" || missing+=("br
 git show-ref -q --verify refs/remotes/origin/agent-notes || missing+=("branch agent-notes")
 if ((${#missing[@]})); then
     echo "session-init: task $AGENT_TASK has not been created on $AGENT_REPO_URL: missing ${missing[*]}." >&2
-    echo "  Create the task branch from main and push .agent/$AGENT_TASK/TASK.md on agent-notes, then run again." >&2
+    echo "  Create it with: foundry task create <project> $AGENT_TASK <TASK.md file> (and foundry repo check --fix for agent-notes), then run again." >&2
     exit 1
 fi
 

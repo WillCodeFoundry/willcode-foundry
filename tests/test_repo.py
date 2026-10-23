@@ -1,8 +1,8 @@
-"""foundry repos check: its report, and its arguments."""
+"""foundry repo check: its report, and its arguments."""
 
 from foundry import cli
-from foundry.commands.repos import report
-from foundry.repo_policy import Deviation, RulesetAction, RulesetChange
+from foundry.commands.repo import report
+from foundry.repo_policy import Change, ChangeAction, Deviation
 
 
 def test_a_conforming_repository() -> None:
@@ -11,12 +11,12 @@ def test_a_conforming_repository() -> None:
 
 def test_what_fix_changed_comes_before_the_result() -> None:
     changes = [
-        RulesetChange("agent-branches", RulesetAction.CREATED),
-        RulesetChange("tags", RulesetAction.UPDATED),
+        Change("branch agent-notes", ChangeAction.CREATED),
+        Change("ruleset tags", ChangeAction.UPDATED),
     ]
     assert report("store", "o/store", changes, []) == [
         "store (o/store)",
-        "  created  ruleset agent-branches",
+        "  created  branch agent-notes",
         "  updated  ruleset tags",
         "  conforms",
     ]
@@ -35,6 +35,6 @@ def test_each_deviation_with_its_diff_indented() -> None:
 
 
 def test_fix_and_project_names_parse() -> None:
-    args = cli.build_parser().parse_args(["repos", "check", "--fix", "store"])
+    args = cli.build_parser().parse_args(["repo", "check", "--fix", "store"])
     assert (args.fix, args.project_names) == (True, ["store"])
-    assert cli.build_parser().parse_args(["repos", "check"]).fix is False
+    assert cli.build_parser().parse_args(["repo", "check"]).fix is False
