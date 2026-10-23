@@ -3,7 +3,9 @@
 import os
 import stat
 import subprocess
+import time
 from collections.abc import Collection, Sequence
+from datetime import timedelta
 from enum import IntEnum
 from pathlib import Path
 
@@ -30,6 +32,31 @@ def _start_command(socket_path: Path) -> tuple[str, ...]:
     return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
+RECENTLY_USED_WITHIN = timedelta(minutes=10)
+"""kill_ssh_agents spares an agent a launch prepared this recently: its sandbox may not be live yet.
+
+That covers the slow steps between preparing the agent and the sandbox
+starting: creating it (an image pull, the first time) and session-init.
+"""
+
+
+def _is_recently_used(socket_path: Path) -> bool:
+    """Whether a launch prepared this agent within RECENTLY_USED_WITHIN; ensure_running touches its socket.
+
+    A missing socket counts as not recent: nothing can reach that agent.
+    """
+    try:
+        age_seconds = time.time() - socket_path.stat().st_mtime
+    except FileNotFoundError:
+        return False
+    return age_seconds < RECENTLY_USED_WITHIN.total_seconds()
+
+
+def parse_fingerprint(ssh_add_line: str) -> str:
+    """The fingerprint from one ``ssh-add -l`` line: ``<bits> <fingerprint> <comment> (<type>)``."""
+    return ssh_add_line.split()[1]
+
+
 def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
     """The running ssh-agents this launcher started for ``uid``, as sandbox name -> process id.
 
@@ -45,13 +72,14 @@ def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
 
 
 def kill_ssh_agents(host: Host, uid: int, *, keep: Collection[str]) -> list[str]:
-    """Kill every ssh-agent this launcher started for ``uid``, except those of the sandboxes in ``keep``.
+    """Kill every ssh-agent this launcher started for ``uid``, except the kept sandboxes' and recently used ones.
 
-    Returns the sandbox names whose agents were killed. An agent removes its
-    own socket when it stops.
+    An agent a launch prepared within RECENTLY_USED_WITHIN is spared, since
+    its sandbox may not be live yet. Returns the sandbox names whose agents
+    were killed. An agent removes its own socket when it stops.
     """
     agents = list_ssh_agents(host, uid)
-    killed = sorted(name for name in agents if name not in keep)
+    killed = sorted(name for name in agents if name not in keep and not _is_recently_used(agent_socket_path(name, uid)))
     for name in killed:
         host.kill_process(agents[name])
     return killed
@@ -100,15 +128,16 @@ class SshAgent:
         not ours.
         """
         _ensure_private_dir(self.socket_path.parent, self._uid)
-        if self._is_running():
-            return
-
-        self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
-        # The env script ssh-agent prints is ignored on purpose: nothing in
-        # this process should start using the sandbox's agent by accident.
-        result = self._host.run(_start_command(self.socket_path))
-        if result.returncode != 0 or not self._is_running():
-            raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
+        if not self._is_running():
+            self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
+            # The env script ssh-agent prints is ignored on purpose: nothing in
+            # this process should start using the sandbox's agent by accident.
+            result = self._host.run(_start_command(self.socket_path))
+            if result.returncode != 0 or not self._is_running():
+                raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
+        # Marks the agent as just used by a launch, so kill_ssh_agents spares it
+        # until its sandbox is live.
+        self.socket_path.touch()
 
     def replace_keys(self, key_paths: Sequence[Path]) -> None:
         """Make the keys at ``key_paths`` the only keys the agent holds.
@@ -129,12 +158,7 @@ class SshAgent:
         result = self._ssh_add("-l")
         if result.returncode != SshAddExitCode.HAS_KEYS:
             return set()
-        return {self.parse_fingerprint(line) for line in result.stdout.splitlines() if line.strip()}
-
-    @staticmethod
-    def parse_fingerprint(ssh_add_line: str) -> str:
-        """The fingerprint from one ``ssh-add -l`` line: ``<bits> <fingerprint> <comment> (<type>)``."""
-        return ssh_add_line.split()[1]
+        return {parse_fingerprint(line) for line in result.stdout.splitlines() if line.strip()}
 
     def _is_running(self) -> bool:
         return self._ssh_add("-l").returncode in (SshAddExitCode.HAS_KEYS, SshAddExitCode.NO_KEYS)

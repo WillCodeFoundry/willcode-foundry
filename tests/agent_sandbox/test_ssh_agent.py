@@ -1,10 +1,18 @@
 import os
+import time
 from pathlib import Path
 
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, kill_ssh_agents, list_ssh_agents
+from foundry.agent_sandbox.ssh_agent import (
+    RECENTLY_USED_WITHIN,
+    SshAgent,
+    _is_recently_used,
+    agent_socket_path,
+    kill_ssh_agents,
+    list_ssh_agents,
+)
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -61,11 +69,23 @@ def test_reuses_a_running_agent(host, make_agent):
 def test_removes_a_stale_socket_before_starting(host, make_agent, socket):
     host.responses = {LIST: [NOT_RUNNING, NO_KEYS], start(socket): 0}
     socket.parent.mkdir(mode=0o700)
-    socket.touch()  # left behind by a dead agent
+    socket.write_text("stale")  # left behind by a dead agent
 
     make_agent().ensure_running()
 
-    assert not socket.exists()
+    assert not socket.exists() or socket.read_text() != "stale"  # (the fake agent leaves no socket of its own)
+
+
+def test_a_reused_agent_is_marked_as_recently_used(host, make_agent, socket):
+    host.responses = {LIST: NO_KEYS}
+    socket.parent.mkdir(mode=0o700)
+    socket.touch()
+    an_hour_ago = time.time() - 3600
+    os.utime(socket, (an_hour_ago, an_hour_ago))
+
+    make_agent().ensure_running()
+
+    assert _is_recently_used(socket)
 
 
 # --- the socket's private directory, made so on every ensure_running ----------
@@ -226,3 +246,26 @@ def test_nothing_is_killed_when_every_agent_is_kept(host):
 
     assert kill_ssh_agents(host, OWN_UID, keep={"dev-p-live"}) == []
     assert host.killed == []
+
+
+# --- recently used ------------------------------------------------------------
+
+
+def test_a_socket_touched_just_now_is_recently_used(tmp_path):
+    socket = tmp_path / "dev.sock"
+    socket.touch()
+
+    assert _is_recently_used(socket)
+
+
+def test_a_socket_older_than_the_window_is_not_recently_used(tmp_path):
+    socket = tmp_path / "dev.sock"
+    socket.touch()
+    old = time.time() - RECENTLY_USED_WITHIN.total_seconds() - 60
+    os.utime(socket, (old, old))
+
+    assert not _is_recently_used(socket)
+
+
+def test_a_missing_socket_is_not_recently_used(tmp_path):
+    assert not _is_recently_used(tmp_path / "dev.sock")

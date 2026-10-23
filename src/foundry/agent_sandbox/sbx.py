@@ -9,7 +9,7 @@ from pathlib import Path
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.host import Host
-from foundry.agent_sandbox.ssh_agent import SshAddExitCode, SshAgent
+from foundry.agent_sandbox.ssh_agent import SshAddExitCode, parse_fingerprint
 
 
 def list_live_sandboxes(host: Host, process_env: Mapping[str, str]) -> set[str]:
@@ -97,7 +97,7 @@ class Sbx:
         """Fingerprints of the keys the sandbox's agent offers, or None if no agent reaches it."""
         result = self.exec_in_sandbox("ssh-add", "-l")
         if result.returncode == SshAddExitCode.HAS_KEYS:
-            return {SshAgent.parse_fingerprint(line) for line in result.stdout.splitlines() if line.strip()}
+            return {parse_fingerprint(line) for line in result.stdout.splitlines() if line.strip()}
         if result.returncode == SshAddExitCode.NO_KEYS:
             return set()
         if result.returncode == SshAddExitCode.NO_AGENT:
