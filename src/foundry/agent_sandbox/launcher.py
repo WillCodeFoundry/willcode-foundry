@@ -131,7 +131,7 @@ def launch(request: LaunchRequest) -> NoReturn:
     ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    if killed := kill_unused_ssh_agents(host, uid, AGENT_SOCKETS_DIR, process_env, also_keep={definition.name}):
+    if killed := kill_unused_ssh_agents(host, uid, AGENT_SOCKETS_DIR, process_env):
         print(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(killed)}", file=sys.stderr)
     prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)

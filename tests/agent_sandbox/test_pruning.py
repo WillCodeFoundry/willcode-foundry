@@ -14,8 +14,7 @@ SBX_LS = ("sbx", "ls", "--json")
 SBX_LS_JSON = """{
   "sandboxes": [
     {"name": "dev-p-running", "id": "1", "agent": "claude", "status": "running", "workspaces": []},
-    {"name": "dev-p-stopped", "id": "2", "agent": "claude", "status": "stopped", "workspaces": []},
-    {"name": "dev-p-launching", "id": "3", "agent": "claude", "status": "stopped", "workspaces": []}
+    {"name": "dev-p-stopped", "id": "2", "agent": "claude", "status": "stopped", "workspaces": []}
   ]
 }"""
 
@@ -39,16 +38,6 @@ def test_agents_of_stopped_or_removed_sandboxes_are_killed(host, tmp_path) -> No
 
     assert killed == ["dev-p-removed", "dev-p-stopped"]
     assert sorted(host.killed) == [102, 103]
-
-
-def test_also_keep_spares_a_sandbox_that_is_not_live_yet(host, tmp_path) -> None:
-    host.responses = {SBX_LS: SBX_LS_JSON}
-    host.processes = agent_processes(tmp_path, "dev-p-launching", "dev-p-stopped")
-
-    killed = kill_unused_ssh_agents(host, UID, tmp_path, {}, also_keep={"dev-p-launching"})
-
-    assert killed == ["dev-p-stopped"]
-    assert host.killed == [102]
 
 
 def test_nothing_is_killed_when_sbx_ls_fails(host, tmp_path) -> None:

@@ -1,7 +1,7 @@
 """Cleaning up what stopped or removed sandboxes leave behind on this machine."""
 
 import os
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,19 +18,12 @@ class Pruned:
     """Names of the sandboxes whose ssh-agents were killed."""
 
 
-def kill_unused_ssh_agents(
-    host: Host,
-    uid: int,
-    sockets_dir: Path,
-    process_env: Mapping[str, str],
-    *,
-    also_keep: Collection[str] = (),
-) -> list[str]:
-    """Kill the ssh-agents of sandboxes that aren't live, except ``also_keep``'s; return their names.
+def kill_unused_ssh_agents(host: Host, uid: int, sockets_dir: Path, process_env: Mapping[str, str]) -> list[str]:
+    """Kill the ssh-agents of sandboxes that aren't live; return their names.
 
     sbx lists all its user's sandboxes, so other foundry instances' live sandboxes keep their agents.
     """
-    return kill_ssh_agents(host, uid, sockets_dir, keep=list_live_sandboxes(host, process_env) | set(also_keep))
+    return kill_ssh_agents(host, uid, sockets_dir, keep=list_live_sandboxes(host, process_env))
 
 
 def prune() -> Pruned:
