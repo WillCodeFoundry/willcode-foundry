@@ -27,7 +27,7 @@ class Host(Protocol):
         ...
 
     def kill_process(self, pid: int) -> None:
-        """Ask a process to stop (SIGTERM). One that has already exited counts as stopped."""
+        """Send SIGTERM; raises ProcessLookupError if there's no such process."""
         ...
 
 
@@ -61,7 +61,4 @@ class SystemHost:
         return processes
 
     def kill_process(self, pid: int) -> None:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:  # already exited, e.g. stopped by another launch
-            pass
+        os.kill(pid, signal.SIGTERM)

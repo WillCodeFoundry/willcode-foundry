@@ -13,11 +13,7 @@ from foundry.agent_sandbox.ssh_agent import SshAddExitCode, parse_fingerprint
 
 
 def list_live_sandboxes(host: Host, process_env: Mapping[str, str]) -> set[str]:
-    """Names of the sandboxes sbx lists that aren't stopped, from ``sbx ls --json``.
-
-    Any status but "stopped" counts as live, so a sandbox that is starting
-    keeps what it needs.
-    """
+    """Names of the sandboxes ``sbx ls --json`` lists with any status but "stopped"."""
     result = host.run(("sbx", "ls", "--json"), env=process_env)
     if result.returncode != 0:
         raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")

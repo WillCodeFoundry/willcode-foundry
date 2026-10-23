@@ -5,7 +5,6 @@ import stat
 import subprocess
 import time
 from collections.abc import Collection, Sequence
-from datetime import timedelta
 from enum import IntEnum
 from pathlib import Path
 
@@ -28,28 +27,15 @@ def _agent_sockets_dir(uid: int) -> Path:
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
-    """How every sandbox's agent is started. list_ssh_agents recognises agents by this command line."""
+    """How every agent is started; list_ssh_agents relies on this command line."""
     return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
-RECENTLY_USED_WITHIN = timedelta(minutes=10)
-"""kill_ssh_agents spares an agent a launch prepared this recently: its sandbox may not be live yet.
-
-That covers the slow steps between preparing the agent and the sandbox
-starting: creating it (an image pull, the first time) and session-init.
-"""
+RECENTLY_TOUCHED_SECONDS = 600  # covers a launch's sandbox creation and session-init
 
 
-def _is_recently_used(socket_path: Path) -> bool:
-    """Whether a launch prepared this agent within RECENTLY_USED_WITHIN; ensure_running touches its socket.
-
-    A missing socket counts as not recent: nothing can reach that agent.
-    """
-    try:
-        age_seconds = time.time() - socket_path.stat().st_mtime
-    except FileNotFoundError:
-        return False
-    return age_seconds < RECENTLY_USED_WITHIN.total_seconds()
+def _is_recently_touched(path: Path) -> bool:
+    return time.time() - path.stat().st_mtime < RECENTLY_TOUCHED_SECONDS
 
 
 def parse_fingerprint(ssh_add_line: str) -> str:
@@ -58,11 +44,7 @@ def parse_fingerprint(ssh_add_line: str) -> str:
 
 
 def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
-    """The running ssh-agents this launcher started for ``uid``, as sandbox name -> process id.
-
-    Each is recognised by its command line, which names its socket and so its
-    sandbox: ``ssh-agent -a /tmp/sbx-agents-<uid>/<sandbox>.sock -s``.
-    """
+    """This launcher's running ssh-agents for ``uid``, as sandbox name -> pid, found by their command line."""
     head, tail = f"ssh-agent -a {_agent_sockets_dir(uid)}/", ".sock -s"
     return {
         command.removeprefix(head).removesuffix(tail): pid
@@ -72,16 +54,17 @@ def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
 
 
 def kill_ssh_agents(host: Host, uid: int, *, keep: Collection[str]) -> list[str]:
-    """Kill every ssh-agent this launcher started for ``uid``, except the kept sandboxes' and recently used ones.
+    """Kill this launcher's ssh-agents for ``uid``, except the kept sandboxes' and recently launched ones.
 
-    An agent a launch prepared within RECENTLY_USED_WITHIN is spared, since
-    its sandbox may not be live yet. Returns the sandbox names whose agents
-    were killed. An agent removes its own socket when it stops.
+    Returns the killed agents' sandbox names. An agent without a socket is unreachable, so it is killed too.
     """
     agents = list_ssh_agents(host, uid)
-    killed = sorted(name for name in agents if name not in keep and not _is_recently_used(agent_socket_path(name, uid)))
-    for name in killed:
-        host.kill_process(agents[name])
+    killed = []
+    for name in sorted(agents):
+        socket = agent_socket_path(name, uid)
+        if name not in keep and not (socket.exists() and _is_recently_touched(socket)):
+            host.kill_process(agents[name])
+            killed.append(name)
     return killed
 
 
@@ -121,23 +104,15 @@ class SshAgent:
         self._uid = uid
 
     def ensure_running(self) -> None:
-        """Start the agent unless one already answers on the socket.
-
-        The socket's directory is made private to this user first, every time:
-        a socket in a directory someone else controls could be their agent,
-        not ours.
-        """
+        """Start the agent unless one already answers on the socket, which lives in a directory private to us."""
         _ensure_private_dir(self.socket_path.parent, self._uid)
         if not self._is_running():
             self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
-            # The env script ssh-agent prints is ignored on purpose: nothing in
-            # this process should start using the sandbox's agent by accident.
+            # Its env script is ignored, so this process never uses the sandbox's agent.
             result = self._host.run(_start_command(self.socket_path))
             if result.returncode != 0 or not self._is_running():
                 raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
-        # Marks the agent as just used by a launch, so kill_ssh_agents spares it
-        # until its sandbox is live.
-        self.socket_path.touch()
+        self.socket_path.touch()  # kill_ssh_agents spares it until the sandbox is live
 
     def replace_keys(self, key_paths: Sequence[Path]) -> None:
         """Make the keys at ``key_paths`` the only keys the agent holds.

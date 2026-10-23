@@ -1,9 +1,4 @@
-"""Cleaning up what sandboxes leave behind on this machine.
-
-prune() covers what agent_sandbox owns: today, the ssh-agents of sandboxes
-that are stopped or removed. Each kind of cleanup reports what it removed
-in Pruned.
-"""
+"""Cleaning up what stopped or removed sandboxes leave behind on this machine."""
 
 import os
 from collections.abc import Collection, Mapping
@@ -25,12 +20,9 @@ class Pruned:
 def kill_unused_ssh_agents(
     host: Host, uid: int, process_env: Mapping[str, str], *, also_keep: Collection[str] = ()
 ) -> list[str]:
-    """Kill the ssh-agents of sandboxes that are stopped or removed, except ``also_keep``'s; return their names.
+    """Kill the ssh-agents of sandboxes that aren't live, except ``also_keep``'s; return their names.
 
-    An agent whose sandbox isn't live only holds a private key: its sandbox
-    can't use it, and launching that sandbox again starts a new one. sbx
-    lists every sandbox its user has, so another foundry instance's live
-    sandboxes keep their agents.
+    sbx lists all its user's sandboxes, so other foundry instances' live sandboxes keep their agents.
     """
     return kill_ssh_agents(host, uid, keep=list_live_sandboxes(host, process_env) | set(also_keep))
 

@@ -62,8 +62,9 @@ def test_kill_process_stops_a_running_process(host):
     assert child.wait(timeout=10) == -signal.SIGTERM
 
 
-def test_kill_process_counts_an_exited_process_as_stopped(host):
+def test_kill_process_raises_for_a_process_that_has_gone(host):
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait()
 
-    host.kill_process(child.pid)  # no error
+    with pytest.raises(ProcessLookupError):
+        host.kill_process(child.pid)
