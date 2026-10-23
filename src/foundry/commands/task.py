@@ -13,7 +13,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     actions = parser.add_subparsers(dest="action", required=True)
     create = actions.add_parser(
         "create",
-        help="create task/TASK from the default branch, with FILE as its TASK.md on agent-notes",
+        help="create task/TASK from the default branch, with FILE as its TASK.md on agent-notes (created if missing)",
         description="Uses the GitHub CLI (gh), signed in as you. Refuses a task that already exists.",
     )
     create.add_argument("project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")
@@ -30,15 +30,10 @@ def create_main(args: argparse.Namespace) -> int:
         task_md = args.task_md_path.read_text()
     except FileNotFoundError:
         raise FoundryError(f"{args.task_md_path} is missing") from None
-    created = task.create(GhCli(), repo_slug_from_url(project.url), args.task_id, task_md)
-    print("\n".join(report(project.name, args.task_id, created)))
+    task.create(GhCli(), repo_slug_from_url(project.url), args.task_id, task_md)
+    print("\n".join(report(project.name, args.task_id)))
     return 0
 
 
-def report(project_name: str, task_id: str, created: task.CreatedTask) -> list[str]:
-    return [
-        f"created task {task_id} in {project_name}",
-        f"  branch   {created.branch}, from {created.base_branch}",
-        f"  TASK.md  {created.task_md_path} on {task.NOTES_BRANCH}",
-        f"run it with: foundry run {project_name} ROLE {task_id}",
-    ]
+def report(project_name: str, task_id: str) -> list[str]:
+    return [f"created task {task_id} in {project_name}", f"run it with: foundry run {project_name} ROLE {task_id}"]

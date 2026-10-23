@@ -9,7 +9,7 @@ import base64
 import json
 import re
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 from foundry.errors import FoundryError
@@ -69,11 +69,11 @@ class GitHub(Protocol):
 
     def create_branch(self, repo_slug: str, branch: str, sha: str) -> None: ...
 
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], message: str) -> None:
-        """Create ``branch`` with one commit holding only ``files`` (path -> text), sharing no history."""
+    def create_orphan_branch(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
+        """Create ``branch`` whose one commit holds only this file, sharing no history with other branches."""
         ...
 
-    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, message: str) -> None:
+    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
         """Commit a new file to ``branch``; GitHub refuses one that already exists."""
         ...
 
@@ -140,16 +140,14 @@ class GhCli:
     def create_branch(self, repo_slug: str, branch: str, sha: str) -> None:
         self._api("POST", f"repos/{repo_slug}/git/refs", {"ref": f"refs/heads/{branch}", "sha": sha})
 
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], message: str) -> None:
-        blobs = [{"path": path, "mode": "100644", "type": "blob", "content": text} for path, text in files.items()]
-        tree = self._api("POST", f"repos/{repo_slug}/git/trees", {"tree": blobs})
-        commit = self._api(
-            "POST", f"repos/{repo_slug}/git/commits", {"message": message, "tree": tree["sha"], "parents": []}
-        )
+    def create_orphan_branch(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
+        blob = {"path": file_path, "mode": "100644", "type": "blob", "content": text}
+        tree = self._api("POST", f"repos/{repo_slug}/git/trees", {"tree": [blob]})
+        commit_body = {"message": commit_message, "tree": tree["sha"], "parents": []}
+        commit = self._api("POST", f"repos/{repo_slug}/git/commits", commit_body)
         self.create_branch(repo_slug, branch, commit["sha"])
 
-    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, message: str) -> None:
+    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
         content = base64.b64encode(text.encode()).decode()
-        self._api(
-            "PUT", f"repos/{repo_slug}/contents/{file_path}", {"message": message, "content": content, "branch": branch}
-        )
+        body = {"message": commit_message, "content": content, "branch": branch}
+        self._api("PUT", f"repos/{repo_slug}/contents/{file_path}", body)

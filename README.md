@@ -86,11 +86,11 @@ The words used here, and in the code:
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create` and `ensure_notes_branch`, `repo_policy.apply_rulesets` and `deviations`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
+Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.apply_rulesets` and `deviations`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
-Preconditions the launcher does not create: the project's `agent-notes` branch, which `foundry repo check --fix` creates, and the task itself, which `foundry task create PROJECT TASK FILE` creates: the branch `task/<task>` from the default branch, and the file as `.agent/<task>/TASK.md` on `agent-notes`. It refuses a task that already exists, and a repository without `agent-notes`.
+Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK FILE` creates on GitHub: the branch `task/<task>` from the default branch, and the file as `.agent/<task>/TASK.md` on `agent-notes`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists.
 
 ## What protects what
 
@@ -120,10 +120,8 @@ Force-pushes, deletions, history rewrites and pushes elsewhere are left to the r
 ```console
 $ uv run foundry repo check                       # every project: 'conforms', or each deviation's diff; exit 1 if any
 $ uv run foundry repo check tkt-store             # one project
-$ uv run foundry repo check --fix                 # first create agent-notes if missing and create or update the rulesets
+$ uv run foundry repo check --fix                 # first create or update the rulesets to match, then check
 ```
-
-`check` also checks that every project's repository has an `agent-notes` branch, which every task's notes go on: it's not part of the repo policy, but `foundry task create` needs it, and `--fix` creates it with no history of its own, holding only `.agent/README.md`.
 
 Every project's repository must match the repo policy in `config/repo-policy/`: its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` section of its `.github/workflows/ci.yml`, which the rulesets depend on. `check` compares rather than analyses: anything different is a deviation, shown as a diff from the repository to the policy, even when it's harmless. A repository with none prints `conforms`. When a project really needs to differ, change the policy.
 
@@ -151,7 +149,7 @@ src/foundry/
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
-├── task.py             # creating a task (its branch and TASK.md), and ensuring agent-notes exists
+├── task.py             # creating a task: its branch, and its TASK.md on agent-notes (an orphan, created by the first task)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml

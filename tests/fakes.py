@@ -1,7 +1,6 @@
 """Fakes for the foundry package's interfaces. agent_sandbox's are in tests/agent_sandbox/conftest.py."""
 
 import copy
-from collections.abc import Mapping
 from typing import Any
 
 from foundry.github import GitHub, GitHubError
@@ -45,11 +44,11 @@ class FakeGitHub:
             raise GitHubError("Reference already exists (HTTP 422)")
         branches[branch] = sha
 
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], message: str) -> None:
+    def create_orphan_branch(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
         self.create_branch(repo_slug, branch, f"orphan-{branch}")
-        self.branch_files.setdefault(repo_slug, {})[branch] = dict(files)
+        self.branch_files.setdefault(repo_slug, {})[branch] = {file_path: text}
 
-    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, message: str) -> None:
+    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
         if branch not in self.branches.get(repo_slug, {}):
             raise GitHubError("Branch not found (HTTP 404)")
         files = self.branch_files.setdefault(repo_slug, {}).setdefault(branch, {})
