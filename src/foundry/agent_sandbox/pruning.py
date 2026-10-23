@@ -7,7 +7,7 @@ from pathlib import Path
 
 from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.sbx import list_live_sandboxes
-from foundry.agent_sandbox.ssh_agent import agent_sockets_dir, kill_ssh_agents
+from foundry.agent_sandbox.ssh_agent import AGENT_SOCKETS_DIR, kill_ssh_agents
 
 
 @dataclass(frozen=True)
@@ -36,5 +36,4 @@ def kill_unused_ssh_agents(
 def prune() -> Pruned:
     """Composition root: everything agent_sandbox can clean up on this machine."""
     host = SystemHost()
-    uid = os.getuid()
-    return Pruned(ssh_agents=kill_unused_ssh_agents(host, uid, agent_sockets_dir(uid), host.environ()))
+    return Pruned(ssh_agents=kill_unused_ssh_agents(host, os.getuid(), AGENT_SOCKETS_DIR, host.environ()))

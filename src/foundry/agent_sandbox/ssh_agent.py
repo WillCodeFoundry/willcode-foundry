@@ -11,10 +11,7 @@ from pathlib import Path
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host
 
-
-def agent_sockets_dir(uid: int) -> Path:
-    """Per user, since /tmp is shared; not the session directory, whose paths are too long for a socket."""
-    return Path(f"/tmp/sbx-agents-{uid}")
+AGENT_SOCKETS_DIR = Path("/tmp/sbx-agents")  # session paths are too long for a socket; one user per machine
 
 
 def agent_socket_path(sockets_dir: Path, sandbox_name: str) -> Path:

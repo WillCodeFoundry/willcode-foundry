@@ -6,10 +6,10 @@ import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.ssh_agent import (
+    AGENT_SOCKETS_DIR,
     RECENTLY_TOUCHED_SECONDS,
     SshAgent,
     agent_socket_path,
-    agent_sockets_dir,
     kill_ssh_agents,
     list_ssh_agents,
 )
@@ -196,8 +196,8 @@ def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host,
     assert make_agent().list_key_fingerprints() == set()
 
 
-def test_agent_sockets_are_per_user_and_named_for_the_sandbox():
-    assert agent_socket_path(agent_sockets_dir(501), "myproj-dev") == Path("/tmp/sbx-agents-501/myproj-dev.sock")
+def test_agent_sockets_are_named_for_the_sandbox():
+    assert agent_socket_path(AGENT_SOCKETS_DIR, "myproj-dev") == Path("/tmp/sbx-agents/myproj-dev.sock")
 
 
 def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
