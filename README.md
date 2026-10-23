@@ -6,7 +6,7 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 
 ```console
 $ uv sync
-$ uv run foundry task create tkt-store WCF-0042 WCF-0042.md  # create the task: its branch, and the file as its TASK.md
+$ uv run foundry task create tkt-store WCF-0042            # create the task: its branch, and its notes from config/task-template/
 $ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
 ```
@@ -22,10 +22,14 @@ $ uv run foundry prune                                     # kill the ssh-agents
 ├── tests/
 ├── config/
 │   ├── foundry.yaml              # instance name, projects (clone URLs), roles
-│   └── repo-policy/              # what every project's repository must match (foundry repo check)
-│       ├── rulesets.yaml         # GitHub rulesets, in the REST API's shape
-│       ├── CODEOWNERS            # the project's .github/CODEOWNERS, verbatim
-│       └── ci-gate.yml           # the on: block and ci-gate job its ci.yml must have
+│   ├── repo-policy/              # what every project's repository must match (foundry repo check)
+│   │   ├── rulesets.yaml         # GitHub rulesets, in the REST API's shape
+│   │   ├── CODEOWNERS            # the project's .github/CODEOWNERS, verbatim
+│   │   └── ci-gate.yml           # the on: block and ci-gate job its ci.yml must have
+│   └── task-template/            # what a new task's .agent/<task>/ starts with (foundry task create)
+│       ├── TASK.md               # the skeleton the human, or the planner's TASK.proposed.md, fills in
+│       ├── PROGRESS.md           # the sections AGENTS.md requires
+│       └── LEARNINGS.md
 ├── agent-kit/                    # everything an agent is given (read-only mount)
 │   ├── AGENTS.md                 # instructions shared by every role
 │   ├── bin/
@@ -90,7 +94,7 @@ Each command has a composition root that builds the real dependencies (`run.main
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
-Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK FILE` creates on GitHub: the branch `task/<task>` from the default branch, and the file as `.agent/<task>/TASK.md` on `agent-notes`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists.
+Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates on GitHub: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`). Then write the task in its `TASK.md`, there or by applying the planner's `TASK.proposed.md`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. It writes twice, the notes then the branch, so if the second write fails, delete `.agent/<task>/` on `agent-notes` before running it again.
 
 ## What protects what
 
@@ -149,7 +153,7 @@ src/foundry/
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
-├── task.py             # creating a task: its branch, and its TASK.md on agent-notes (an orphan, created by the first task)
+├── task.py             # creating a task: its branch, and its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml

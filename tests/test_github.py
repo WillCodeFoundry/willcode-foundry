@@ -128,15 +128,26 @@ def test_default_branch_comes_from_the_repository() -> None:
     assert GhCli(RecordedGh({"repos/o/r": ok({"default_branch": "trunk"})})).default_branch("o/r") == "trunk"
 
 
-def test_create_file_puts_base64_content_on_the_branch() -> None:
-    gh = RecordedGh({"repos/o/r/contents/.agent/T1/TASK.md": ok({})})
+def test_commit_files_adds_one_commit_on_top_of_the_branch() -> None:
+    gh = RecordedGh(
+        {
+            "repos/o/r/git/ref/heads/agent-notes": ok({"object": {"sha": "head-sha"}}),
+            "repos/o/r/git/commits/head-sha": ok({"tree": {"sha": "head-tree"}}),
+            "repos/o/r/git/trees": ok({"sha": "tree-sha"}),
+            "repos/o/r/git/commits": ok({"sha": "commit-sha"}),
+            "repos/o/r/git/refs/heads/agent-notes": ok({}),
+        }
+    )
 
-    GhCli(gh).create_file("o/r", "agent-notes", ".agent/T1/TASK.md", "hi", "Add task T1")
+    GhCli(gh).commit_files("o/r", "agent-notes", {".agent/T1/TASK.md": "# T1\n"}, "Add task T1")
 
-    assert json.loads(gh.calls[0][1] or "") == {"message": "Add task T1", "content": "aGk=", "branch": "agent-notes"}
+    bodies = {command[4]: json.loads(stdin) for command, stdin in gh.calls if stdin}
+    assert bodies["repos/o/r/git/trees"]["base_tree"] == "head-tree"
+    assert bodies["repos/o/r/git/commits"]["parents"] == ["head-sha"]
+    assert bodies["repos/o/r/git/refs/heads/agent-notes"] == {"sha": "commit-sha"}
 
 
-def test_create_orphan_branch_makes_a_parentless_commit_of_the_file_and_points_the_branch_at_it() -> None:
+def test_create_orphan_branch_makes_a_parentless_commit_of_the_files_and_points_the_branch_at_it() -> None:
     gh = RecordedGh(
         {
             "repos/o/r/git/trees": ok({"sha": "tree-sha"}),
@@ -145,7 +156,7 @@ def test_create_orphan_branch_makes_a_parentless_commit_of_the_file_and_points_t
         }
     )
 
-    GhCli(gh).create_orphan_branch("o/r", "agent-notes", ".agent/T1/TASK.md", "# T1\n", "Add task T1")
+    GhCli(gh).create_orphan_branch("o/r", "agent-notes", {".agent/T1/TASK.md": "# T1\n"}, "Add task T1")
 
     bodies = [json.loads(stdin or "") for _, stdin in gh.calls]
     assert bodies[0] == {"tree": [{"path": ".agent/T1/TASK.md", "mode": "100644", "type": "blob", "content": "# T1\n"}]}

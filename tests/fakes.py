@@ -1,6 +1,7 @@
 """Fakes for the foundry package's interfaces. agent_sandbox's are in tests/agent_sandbox/conftest.py."""
 
 import copy
+from collections.abc import Mapping
 from typing import Any
 
 from foundry.github import GitHub, GitHubError
@@ -44,17 +45,14 @@ class FakeGitHub:
             raise GitHubError("Reference already exists (HTTP 422)")
         branches[branch] = sha
 
-    def create_orphan_branch(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
+    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
         self.create_branch(repo_slug, branch, f"orphan-{branch}")
-        self.branch_files.setdefault(repo_slug, {})[branch] = {file_path: text}
+        self.branch_files.setdefault(repo_slug, {})[branch] = dict(files)
 
-    def create_file(self, repo_slug: str, branch: str, file_path: str, text: str, commit_message: str) -> None:
+    def commit_files(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
         if branch not in self.branches.get(repo_slug, {}):
-            raise GitHubError("Branch not found (HTTP 404)")
-        files = self.branch_files.setdefault(repo_slug, {}).setdefault(branch, {})
-        if file_path in files:
-            raise GitHubError('"sha" wasn\'t supplied (HTTP 422)')
-        files[file_path] = text
+            raise GitHubError("Not Found (HTTP 404)")
+        self.branch_files.setdefault(repo_slug, {}).setdefault(branch, {}).update(files)
 
     def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None:
         self.stored_rulesets.setdefault(repo_slug, {})[ruleset["name"]] = {
