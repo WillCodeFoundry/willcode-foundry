@@ -8,8 +8,8 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.ssh_agent import (
     RECENTLY_TOUCHED_SECONDS,
     SshAgent,
-    _is_recently_touched,
     agent_socket_path,
+    agent_sockets_dir,
     kill_ssh_agents,
     list_ssh_agents,
 )
@@ -85,7 +85,7 @@ def test_a_reused_agent_is_touched(host, make_agent, socket):
 
     make_agent().ensure_running()
 
-    assert _is_recently_touched(socket)
+    assert time.time() - socket.stat().st_mtime < 60
 
 
 # --- the socket's private directory, made so on every ensure_running ----------
@@ -196,8 +196,8 @@ def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host,
     assert make_agent().list_key_fingerprints() == set()
 
 
-def test_agent_socket_path_is_private_to_the_uid_and_named_for_the_sandbox():
-    assert agent_socket_path("myproj-dev", 501) == Path("/tmp/sbx-agents-501/myproj-dev.sock")
+def test_agent_sockets_are_per_user_and_named_for_the_sandbox():
+    assert agent_socket_path(agent_sockets_dir(501), "myproj-dev") == Path("/tmp/sbx-agents-501/myproj-dev.sock")
 
 
 def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
@@ -209,64 +209,63 @@ def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
 # --- list_ssh_agents / kill_ssh_agents --------------------------------------
 
 
-def agent_process(pid: int, sandbox_name: str, uid: int = OWN_UID) -> tuple[int, str]:
-    return (pid, " ".join(start(agent_socket_path(sandbox_name, uid))))
+def agent_process(pid, sockets_dir, sandbox_name):
+    return (pid, " ".join(start(agent_socket_path(sockets_dir, sandbox_name))))
 
 
-def test_ssh_agents_are_found_by_the_command_line_they_are_started_with(host):
-    host.processes = [agent_process(101, "dev-p-t1")]
+def socket_touched(sockets_dir, sandbox_name, seconds_ago):
+    socket = agent_socket_path(sockets_dir, sandbox_name)
+    socket.touch()
+    os.utime(socket, (time.time() - seconds_ago,) * 2)
 
-    assert list_ssh_agents(host, OWN_UID) == {"dev-p-t1": 101}
+
+OLD = RECENTLY_TOUCHED_SECONDS + 60
 
 
-def test_listing_ignores_every_other_process(host):
+def test_ssh_agents_are_found_by_the_command_line_they_are_started_with(host, tmp_path):
+    host.processes = [agent_process(101, tmp_path, "dev-p-t1")]
+
+    assert list_ssh_agents(host, OWN_UID, tmp_path) == {"dev-p-t1": 101}
+
+
+def test_listing_ignores_every_other_process(host, tmp_path):
     host.processes = [
-        agent_process(101, "dev-p-t1"),
-        agent_process(102, "qa-p-t1", uid=OWN_UID + 1),  # another user's sockets directory
+        agent_process(101, tmp_path, "dev-p-t1"),
+        agent_process(102, tmp_path / "elsewhere", "qa-p-t1"),
         (103, "ssh-agent -s"),  # the user's own agent
-        (104, "/usr/bin/ssh-agent -l"),
-        (105, "vim notes.md"),
-        agent_process(106, "qa-p-t2"),
+        (104, "vim notes.md"),
+        agent_process(105, tmp_path, "qa-p-t2"),
     ]
 
-    assert list_ssh_agents(host, OWN_UID) == {"dev-p-t1": 101, "qa-p-t2": 106}
+    assert list_ssh_agents(host, OWN_UID, tmp_path) == {"dev-p-t1": 101, "qa-p-t2": 105}
 
 
-def test_every_agent_is_killed_except_those_kept(host):
-    host.processes = [agent_process(101, "dev-p-live"), agent_process(102, "dev-p-b"), agent_process(103, "dev-p-a")]
+def test_agents_with_old_sockets_are_killed_except_those_kept(host, tmp_path):
+    host.processes = [agent_process(101, tmp_path, "dev-p-kept"), agent_process(102, tmp_path, "dev-p-old")]
+    for name in ("dev-p-kept", "dev-p-old"):
+        socket_touched(tmp_path, name, OLD)
 
-    killed = kill_ssh_agents(host, OWN_UID, keep={"dev-p-live", "dev-p-not-running"})
-
-    assert killed == ["dev-p-a", "dev-p-b"]
-    assert sorted(host.killed) == [102, 103]
+    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep={"dev-p-kept"}) == ["dev-p-old"]
+    assert host.killed == [102]
 
 
-def test_nothing_is_killed_when_every_agent_is_kept(host):
-    host.processes = [agent_process(101, "dev-p-live")]
+def test_a_recently_launched_agent_is_spared(host, tmp_path):
+    host.processes = [agent_process(101, tmp_path, "dev-p-new")]
+    socket_touched(tmp_path, "dev-p-new", 5)
 
-    assert kill_ssh_agents(host, OWN_UID, keep={"dev-p-live"}) == []
+    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep=set()) == []
     assert host.killed == []
 
 
-# --- recently touched ----------------------------------------------------------
+def test_an_agent_that_stopped_meanwhile_is_skipped(host, tmp_path):
+    host.processes = [
+        agent_process(101, tmp_path, "dev-p-no-socket"),
+        agent_process(102, tmp_path, "dev-p-gone"),
+        agent_process(103, tmp_path, "dev-p-old"),
+    ]
+    socket_touched(tmp_path, "dev-p-gone", OLD)
+    socket_touched(tmp_path, "dev-p-old", OLD)
+    host.gone = {102}
 
-
-def test_a_file_touched_just_now_is_recent(tmp_path):
-    path = tmp_path / "dev.sock"
-    path.touch()
-
-    assert _is_recently_touched(path)
-
-
-def test_a_file_older_than_the_window_is_not_recent(tmp_path):
-    path = tmp_path / "dev.sock"
-    path.touch()
-    old = time.time() - RECENTLY_TOUCHED_SECONDS - 60
-    os.utime(path, (old, old))
-
-    assert not _is_recently_touched(path)
-
-
-def test_a_missing_file_raises(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        _is_recently_touched(tmp_path / "dev.sock")
+    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep=set()) == ["dev-p-old"]
+    assert host.killed == [103]

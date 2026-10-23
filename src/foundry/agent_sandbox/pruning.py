@@ -3,10 +3,11 @@
 import os
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.sbx import list_live_sandboxes
-from foundry.agent_sandbox.ssh_agent import kill_ssh_agents
+from foundry.agent_sandbox.ssh_agent import agent_sockets_dir, kill_ssh_agents
 
 
 @dataclass(frozen=True)
@@ -18,16 +19,22 @@ class Pruned:
 
 
 def kill_unused_ssh_agents(
-    host: Host, uid: int, process_env: Mapping[str, str], *, also_keep: Collection[str] = ()
+    host: Host,
+    uid: int,
+    sockets_dir: Path,
+    process_env: Mapping[str, str],
+    *,
+    also_keep: Collection[str] = (),
 ) -> list[str]:
     """Kill the ssh-agents of sandboxes that aren't live, except ``also_keep``'s; return their names.
 
     sbx lists all its user's sandboxes, so other foundry instances' live sandboxes keep their agents.
     """
-    return kill_ssh_agents(host, uid, keep=list_live_sandboxes(host, process_env) | set(also_keep))
+    return kill_ssh_agents(host, uid, sockets_dir, keep=list_live_sandboxes(host, process_env) | set(also_keep))
 
 
 def prune() -> Pruned:
     """Composition root: everything agent_sandbox can clean up on this machine."""
     host = SystemHost()
-    return Pruned(ssh_agents=kill_unused_ssh_agents(host, os.getuid(), host.environ()))
+    uid = os.getuid()
+    return Pruned(ssh_agents=kill_unused_ssh_agents(host, uid, agent_sockets_dir(uid), host.environ()))

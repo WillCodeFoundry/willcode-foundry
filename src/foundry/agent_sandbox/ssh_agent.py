@@ -12,18 +12,13 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host
 
 
-def agent_socket_path(sandbox_name: str, uid: int) -> Path:
-    """The sandbox's ssh-agent socket: /tmp/sbx-agents-<uid>/<sandbox_name>.sock.
-
-    The directory is per user, since /tmp is shared; SshAgent.ensure_running
-    makes it private before using it. It stays in /tmp rather than the session
-    directory because a socket's path is limited to about 100 bytes.
-    """
-    return _agent_sockets_dir(uid) / f"{sandbox_name}.sock"
-
-
-def _agent_sockets_dir(uid: int) -> Path:
+def agent_sockets_dir(uid: int) -> Path:
+    """Per user, since /tmp is shared; not the session directory, whose paths are too long for a socket."""
     return Path(f"/tmp/sbx-agents-{uid}")
+
+
+def agent_socket_path(sockets_dir: Path, sandbox_name: str) -> Path:
+    return sockets_dir / f"{sandbox_name}.sock"
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
@@ -34,37 +29,34 @@ def _start_command(socket_path: Path) -> tuple[str, ...]:
 RECENTLY_TOUCHED_SECONDS = 600  # covers a launch's sandbox creation and session-init
 
 
-def _is_recently_touched(path: Path) -> bool:
-    return time.time() - path.stat().st_mtime < RECENTLY_TOUCHED_SECONDS
-
-
 def parse_fingerprint(ssh_add_line: str) -> str:
     """The fingerprint from one ``ssh-add -l`` line: ``<bits> <fingerprint> <comment> (<type>)``."""
     return ssh_add_line.split()[1]
 
 
-def list_ssh_agents(host: Host, uid: int) -> dict[str, int]:
+def list_ssh_agents(host: Host, uid: int, sockets_dir: Path) -> dict[str, int]:
     """This launcher's running ssh-agents for ``uid``, as sandbox name -> pid, found by their command line."""
-    head, tail = f"ssh-agent -a {_agent_sockets_dir(uid)}/", ".sock -s"
-    return {
-        command.removeprefix(head).removesuffix(tail): pid
-        for pid, command in host.list_processes(uid)
-        if command.startswith(head) and command.endswith(tail)
-    }
+    agents = {}
+    for pid, command in host.list_processes(uid):
+        if command.startswith("ssh-agent -a ") and command.endswith(" -s"):
+            socket = Path(command.removeprefix("ssh-agent -a ").removesuffix(" -s"))
+            if socket.parent == sockets_dir and socket.suffix == ".sock":
+                agents[socket.stem] = pid
+    return agents
 
 
-def kill_ssh_agents(host: Host, uid: int, *, keep: Collection[str]) -> list[str]:
-    """Kill this launcher's ssh-agents for ``uid``, except the kept sandboxes' and recently launched ones.
-
-    Returns the killed agents' sandbox names. An agent without a socket is unreachable, so it is killed too.
-    """
-    agents = list_ssh_agents(host, uid)
+def kill_ssh_agents(host: Host, uid: int, sockets_dir: Path, *, keep: Collection[str]) -> list[str]:
+    """Kill this launcher's ssh-agents for ``uid``, except the kept sandboxes' and recently launched ones."""
+    agents = list_ssh_agents(host, uid, sockets_dir)
     killed = []
-    for name in sorted(agents):
-        socket = agent_socket_path(name, uid)
-        if name not in keep and not (socket.exists() and _is_recently_touched(socket)):
+    for name in sorted(agents.keys() - set(keep)):
+        try:
+            if time.time() - agent_socket_path(sockets_dir, name).stat().st_mtime < RECENTLY_TOUCHED_SECONDS:
+                continue  # launched recently: its sandbox may not be live yet
             host.kill_process(agents[name])
-            killed.append(name)
+        except (FileNotFoundError, ProcessLookupError):
+            continue  # the agent stopped meanwhile, removing its socket
+        killed.append(name)
     return killed
 
 

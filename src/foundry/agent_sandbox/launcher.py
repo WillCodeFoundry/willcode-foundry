@@ -18,7 +18,7 @@ from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import SystemHost
 from foundry.agent_sandbox.pruning import kill_unused_ssh_agents
 from foundry.agent_sandbox.sbx import Sbx
-from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path
+from foundry.agent_sandbox.ssh_agent import SshAgent, agent_socket_path, agent_sockets_dir
 
 
 @dataclass(frozen=True)
@@ -127,11 +127,12 @@ def launch(request: LaunchRequest) -> NoReturn:
     definition = SandboxDefinition.read(request.definition_dir)
     uid = os.getuid()
     host = SystemHost()
-    ssh_agent_socket_path = agent_socket_path(definition.name, uid)
+    sockets_dir = agent_sockets_dir(uid)
+    ssh_agent_socket_path = agent_socket_path(sockets_dir, definition.name)
     ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
     process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    if killed := kill_unused_ssh_agents(host, uid, process_env, also_keep={definition.name}):
+    if killed := kill_unused_ssh_agents(host, uid, sockets_dir, process_env, also_keep={definition.name}):
         print(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(killed)}", file=sys.stderr)
     prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
