@@ -1,36 +1,41 @@
-"""A shallow clone of a project's repository in a scratch directory, made and pushed with git as the person running
-foundry: only the branches needed are fetched, one commit deep."""
+"""GitClone: a shallow clone of a project's repository, in a folder you give it, made and pushed with git and
+your own access. It speaks in branches and files; the git details (fetching one commit deep, the remote's
+name, refspecs) stay inside it."""
 
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 
 from foundry.errors import FoundryError
 
-REMOTE_NAME = "origin"
+_REMOTE_NAME = "origin"
 
 
 class GitClone:
-    """A clone of the repository at a URL, in ``work_dir``, holding nothing until branches are fetched.
+    """A clone of the repository at a URL, in a folder you give it, holding nothing until a branch is checked out.
 
-    ``env`` is the environment git runs in: it carries the person's git config (identity, signing) and SSH agent.
+    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
+    writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
+    commit deep.
+
+    ``env`` is the environment git runs in: it carries your git config (identity, signing) and SSH agent.
     """
 
     def __init__(self, work_dir: Path, env: Mapping[str, str]) -> None:
-        self.work_dir = work_dir
+        self._work_dir = work_dir
         self._env = dict(env)
 
     @classmethod
     def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "GitClone":
-        """Create an empty repository in ``work_dir``, an existing empty directory, with ``url`` as its remote."""
+        """Create an empty repository in ``work_dir``, an existing empty folder, with ``url`` as its remote."""
         clone = cls(work_dir, env)
         clone._git("init", "--quiet")
-        clone._git("remote", "add", REMOTE_NAME, url)
+        clone._git("remote", "add", _REMOTE_NAME, url)
         return clone
 
     def default_branch(self) -> str | None:
         """The remote's default branch, or None for a repository with no commits yet."""
-        for line in self._git("ls-remote", "--symref", REMOTE_NAME, "HEAD").splitlines():
+        for line in self._git("ls-remote", "--symref", _REMOTE_NAME, "HEAD").splitlines():
             if line.startswith("ref: "):
                 return line.removeprefix("ref: refs/heads/").partition("\t")[0]
         return None
@@ -39,36 +44,61 @@ class GitClone:
         """The names of the remote's branches."""
         return [
             line.partition("\t")[2].removeprefix("refs/heads/")
-            for line in self._git("ls-remote", "--heads", REMOTE_NAME).splitlines()
+            for line in self._git("ls-remote", "--heads", _REMOTE_NAME).splitlines()
         ]
 
-    def fetch(self, branch: str) -> None:
-        """Fetch ``branch``'s latest commit, as origin/<branch>."""
-        self._git("fetch", "--quiet", "--depth=1", REMOTE_NAME, branch)
+    def check_out(self, branch: str) -> None:
+        """Check out ``branch``: its latest commit if the remote has it, otherwise a start with no history or files."""
+        if branch in self.branches():
+            self._fetch(branch)
+            self._git("switch", "--quiet", branch)
+        else:
+            self._git("switch", "--quiet", "--orphan", branch)
 
-    def switch(self, branch: str) -> None:
-        """Check out a fetched branch."""
-        self._git("switch", "--quiet", branch)
+    def exists(self, path: str) -> bool:
+        """Whether ``path``, relative to the repository root, exists in the checked-out files."""
+        return (self._work_dir / path).exists()
 
-    def switch_orphan(self, branch: str) -> None:
-        """Start ``branch`` with no history and no files."""
-        self._git("switch", "--quiet", "--orphan", branch)
+    def write(self, files: Mapping[str, str]) -> None:
+        """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
 
-    def commit(self, path: str, message: str) -> None:
-        """Commit everything under ``path`` (relative to ``work_dir``)."""
-        self._git("add", "--", path)
+        Nothing is staged or committed.
+        """
+        for path, text in files.items():
+            file_path = self._work_dir / path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(text)
+
+    def commit(self, message: str) -> None:
+        """Commit everything changed in the checked-out files."""
+        self._git("add", "--all")
         self._git("commit", "--quiet", "--message", message)
 
-    def push_atomic(self, branch_sources: Mapping[str, str]) -> None:
-        """Push each local revision to its remote branch, all or none: branch name -> revision, e.g. origin/main."""
-        refspecs = [f"{revision}:refs/heads/{branch}" for branch, revision in branch_sources.items()]
-        self._git("push", "--quiet", "--atomic", REMOTE_NAME, *refspecs)
+    def push_atomic(self, *, from_remote: Mapping[str, str], from_local: Collection[str]) -> None:
+        """Push branches together, all or none, never forced.
+
+        ``from_remote`` points each new branch on the remote at one of the remote's existing branches:
+        {"task/t1": "main"}. ``from_local`` pushes each local branch to the same name on the remote.
+        """
+        if not from_remote and not from_local:
+            raise ValueError("push_atomic needs at least one branch to push")
+        for source in dict.fromkeys(from_remote.values()):
+            self._fetch(source)
+        refspecs = [
+            *(f"refs/remotes/{_REMOTE_NAME}/{source}:refs/heads/{branch}" for branch, source in from_remote.items()),
+            *(f"refs/heads/{branch}:refs/heads/{branch}" for branch in from_local),
+        ]
+        self._git("push", "--quiet", "--atomic", _REMOTE_NAME, *refspecs)
+
+    def _fetch(self, branch: str) -> None:
+        """Fetch ``branch``'s latest commit, as refs/remotes/origin/<branch>."""
+        self._git("fetch", "--quiet", "--depth=1", _REMOTE_NAME, branch)
 
     def _git(self, *args: str) -> str:
-        """Run git in ``work_dir`` and return its output; raise with git's message if it fails."""
+        """Run git in the clone's folder and return its output; raise with git's message if it fails."""
         try:
             result = subprocess.run(
-                ["git", "-C", str(self.work_dir), *args], check=False, capture_output=True, text=True, env=self._env
+                ["git", "-C", str(self._work_dir), *args], check=False, capture_output=True, text=True, env=self._env
             )
         except FileNotFoundError:
             raise FoundryError("git not found in PATH") from None

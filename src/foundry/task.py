@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Final
 
 from foundry.errors import FoundryError
-from foundry.git_clone import REMOTE_NAME, GitClone
+from foundry.git_clone import GitClone
 
 # The branch holding every task's notes, each in its own folder (Task.notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
@@ -83,18 +83,9 @@ def create(clone: GitClone, task: Task, template: Mapping[str, str]) -> None:
     if default_branch is None or default_branch not in branches:  # a repository with no commits yet
         raise FoundryError(f"the repository has no commits to branch {task.branch} from")
 
-    if NOTES_BRANCH in branches:
-        clone.fetch(NOTES_BRANCH)
-        clone.switch(NOTES_BRANCH)
-    else:
-        clone.switch_orphan(NOTES_BRANCH)
-    notes_dir = clone.work_dir / task.notes_dir
-    try:
-        notes_dir.mkdir(parents=True)
-    except FileExistsError:
-        raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.notes_dir}/") from None
-    for name, text in template.items():
-        (notes_dir / name).write_text(text)
-    clone.commit(task.notes_dir, f"Add task {task.id}")
-    clone.fetch(default_branch)
-    clone.push_atomic({task.branch: f"{REMOTE_NAME}/{default_branch}", NOTES_BRANCH: NOTES_BRANCH})
+    clone.check_out(NOTES_BRANCH)  # started with no history if it doesn't exist: the first task creates it
+    if clone.exists(task.notes_dir):
+        raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.notes_dir}/")
+    clone.write({f"{task.notes_dir}/{name}": text for name, text in template.items()})
+    clone.commit(f"Add task {task.id}")
+    clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
