@@ -78,6 +78,7 @@ The words used here, and in the code:
 | **project** | A repository agents work on, listed in `config/foundry.yaml` |
 | **role**, **task** | Who the agent is (`agent-kit/roles/<role>/`), and the work it's given: its branch `task/<task>` and its task notes, which always include its `TASK.md` |
 | **task notes** | A task's own folder on `agent-notes`, `.agent/<task>/`: its `TASK.md`, written by you, or by the planner once you approve its draft, and what every role working on the task records there, each only in its own task's folder |
+| **notes root** | `.agent/` on `agent-notes`, where every task's notes sit; nothing under it belongs on a task branch |
 | **sandbox** | The sbx environment for one role, project and task |
 | **sandbox definition** | `sbxenv.yaml`, written once; what sbx creates the sandbox from |
 | **session** | The host directory `sessions/<sandbox>/`: the sandbox definition and the empty workspace |
