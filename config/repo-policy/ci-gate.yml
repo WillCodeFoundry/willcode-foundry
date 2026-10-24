@@ -1,6 +1,6 @@
 # The ci-gate section of a project's .github/workflows/ci.yml, which the rulesets
 # depend on: when the workflow runs, and the ci-gate job they require.
-# `foundry repos check` compares a project's ci.yml with this; everything
+# `foundry repo check` compares a project's ci.yml with this; everything
 # else in the workflow (its other jobs, permissions, concurrency) is the
 # project's own.
 #

@@ -1,7 +1,7 @@
-"""foundry repos check: its report, and its arguments."""
+"""foundry repo check: its report, and its arguments."""
 
 from foundry import cli
-from foundry.commands.repos import report
+from foundry.commands.repo import report
 from foundry.repo_policy import Deviation, RulesetAction, RulesetChange
 
 
@@ -35,6 +35,6 @@ def test_each_deviation_with_its_diff_indented() -> None:
 
 
 def test_fix_and_project_names_parse() -> None:
-    args = cli.build_parser().parse_args(["repos", "check", "--fix", "store"])
+    args = cli.build_parser().parse_args(["repo", "check", "--fix", "store"])
     assert (args.fix, args.project_names) == (True, ["store"])
-    assert cli.build_parser().parse_args(["repos", "check"]).fix is False
+    assert cli.build_parser().parse_args(["repo", "check"]).fix is False

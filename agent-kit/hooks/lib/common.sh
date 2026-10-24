@@ -1,13 +1,12 @@
 # shellcheck shell=bash
 # Shared helpers for foundry git hooks. Sourced, not executed.
-
-: "${AGENT_TASK:?AGENT_TASK is not set; hooks only run inside a foundry session}"
-
-# Used by the hooks that source this file, which ShellCheck can't see from here.
-# shellcheck disable=SC2034
-TASK_BRANCH="task/$AGENT_TASK"
-NOTES_BRANCH="agent-notes"
-TASK_NOTES_RELATIVE_PATH=".agent/$AGENT_TASK"
+#
+# The task's names (TASK_BRANCH, NOTES_BRANCH, TASK_NOTES_RELATIVE_PATH, ...)
+# come from lib/task.sh, found next to this file rather than through the
+# hook's $0, so it doesn't matter which hook sources this.
+# For ShellCheck, relative to the repository root, where CI runs it:
+# shellcheck source=agent-kit/lib/task.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../lib/task.sh"
 
 # refuse <hook> <message...>: print a refusal that says what was wrong and
 # what to do instead, then exit non-zero.

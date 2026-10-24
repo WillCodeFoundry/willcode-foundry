@@ -5,16 +5,17 @@ import pytest
 from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.errors import FoundryError
+from foundry.task import Task
 
 
 def test_sandbox_name_is_stable_and_sbx_safe() -> None:
-    assert session.sandbox_name("dev", "tkt-store", "WCF-0042") == "dev-tkt-store-wcf-0042"
-    assert session.sandbox_name("dev", "Tkt Store!", "T 1") == "dev-tkt-store-t-1"
+    assert session.sandbox_name("dev", "tkt-store", Task("WCF-0042")) == "dev-tkt-store-wcf-0042"
+    assert session.sandbox_name("dev", "Tkt Store!", Task("T1")) == "dev-tkt-store-t1"
 
 
 def test_sandbox_name_refuses_to_exceed_the_limit() -> None:
     with pytest.raises(FoundryError, match="over 64 characters"):
-        session.sandbox_name("dev", "p" * 60, "WCF-0042")
+        session.sandbox_name("dev", "p" * 60, Task("wcf-0042"))
 
 
 def new_definition(tmp_path: Path) -> SandboxDefinition:
@@ -24,7 +25,7 @@ def new_definition(tmp_path: Path) -> SandboxDefinition:
         agent_kit_dir=Path("/f/agent-kit"),
         repo_url="git@h:o/p.git",
         role_name="dev",
-        task_id="T1",
+        task=Task("T1"),
         project_name="p",
     )
 
@@ -38,7 +39,7 @@ def test_sandbox_definition(tmp_path: Path) -> None:
     )
     assert definition.variables == {
         "AGENT_ROLE": "dev",
-        "AGENT_TASK": "T1",
+        "AGENT_TASK": "t1",
         "AGENT_KIT_DIR": "/f/agent-kit",
         "AGENT_REPO_URL": "git@h:o/p.git",
         "AGENT_PROJECT_DIR": "/home/agent/work/p",
@@ -54,7 +55,7 @@ def test_create_writes_the_definition_and_creates_the_workspace(tmp_path: Path) 
         agent_kit_dir=Path("/f/agent-kit"),
         repo_url="git@h:o/p.git",
         role_name="dev",
-        task_id="T1",
+        task=Task("T1"),
         project_name="p",
     )
     session.create(session_dir, definition)
@@ -69,21 +70,14 @@ def test_create_refuses_an_existing_directory(tmp_path: Path) -> None:
         session.create(tmp_path / "s", new_definition(tmp_path))
 
 
-@pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
-def test_valid_task_ids(task_id: str) -> None:
-    session.require_valid_task_id(task_id)
-
-
-@pytest.mark.parametrize("task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "ü", "x~1", "x:y"])
-def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
-    with pytest.raises(FoundryError, match="is not valid"):
-        session.require_valid_task_id(task_id)
-
-
 def test_a_sandbox_for_another_role_task_or_repository_is_refused(tmp_path: Path) -> None:
-    definition = new_definition(tmp_path)  # role dev, task T1, repo git@h:o/p.git
-    session.require_same_sandbox(definition, role_name="dev", task_id="T1", repo_url="git@h:o/p.git")
-    for mismatch in ({"task_id": "t1"}, {"role_name": "qa"}, {"repo_url": "git@h:o/q.git"}):
-        wanted = {"role_name": "dev", "task_id": "T1", "repo_url": "git@h:o/p.git", **mismatch}
+    definition = new_definition(tmp_path)  # role dev, task t1, repo git@h:o/p.git
+    session.require_same_sandbox(definition, role_name="dev", task=Task("T1"), repo_url="git@h:o/p.git")
+    mismatches: list[tuple[str, Task, str]] = [
+        ("dev", Task("t2"), "git@h:o/p.git"),
+        ("qa", Task("t1"), "git@h:o/p.git"),
+        ("dev", Task("t1"), "git@h:o/q.git"),
+    ]
+    for role_name, task, repo_url in mismatches:
         with pytest.raises(FoundryError, match="already exists for a different role, task or repository"):
-            session.require_same_sandbox(definition, **wanted)
+            session.require_same_sandbox(definition, role_name=role_name, task=task, repo_url=repo_url)

@@ -47,6 +47,11 @@ def workspace_dir(foundry_root: Path, sandbox_name: str) -> Path:
     return session_dir(foundry_root, sandbox_name) / "workspace"
 
 
+def task_template_dir(foundry_root: Path) -> Path:
+    """What `foundry task create` copies into a new task's .agent/<task>/ on agent-notes."""
+    return foundry_root / "config" / "task-template"
+
+
 def repo_policy_dir(foundry_root: Path) -> Path:
     """The directory holding what every project's repository must match."""
     return foundry_root / "config" / "repo-policy"
