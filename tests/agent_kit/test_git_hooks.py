@@ -218,9 +218,9 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     commit(notes, "T1: progress")
     decision = json.loads(stop().stdout)
     assert decision["decision"] == "block"
-    assert "code checkout has uncommitted changes" in decision["reason"]
+    assert "code checkout has uncommitted changes; notes checkout" in decision["reason"]
     assert "notes checkout has commits not pushed" in decision["reason"]
-    assert '(see "Git rules" in AGENTS.md)' in decision["reason"]
+    assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
 
 
 def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:
