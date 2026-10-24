@@ -44,3 +44,26 @@ Known limit: the planner currently shares the architect's identity (see the
 comment in `$AGENT_KIT_DIR/git/allowed_signers`), so a change by the architect
 can't be told apart from the planner's. When an allowed commit is signed by
 that shared identity, say so in your report.
+
+## Reviewing
+
+Review with the `code-review` skill.
+
+Write the result to `$AGENT_NOTES_DIR/.agent/$AGENT_TASK/REVIEW.md`, one file
+per task, as a new section per round:
+
+```markdown
+## Round <n> (reviewing <short sha>)
+```
+
+Never edit earlier rounds. In each round, in this order:
+
+1. Any "TASK.md changed by another role" finding.
+2. A verdict on every finding still open from earlier rounds: closed, still
+   open, or accepted as is.
+3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
+   …), so the dev can answer each by its id.
+4. A last line: `Verdict: changes needed` or `Verdict: approved`.
+
+Commit and push it on `agent-notes`, as `AGENTS.md`'s "Notes checkout" rules
+describe.

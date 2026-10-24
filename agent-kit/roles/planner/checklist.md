@@ -9,6 +9,8 @@ A task is ready only when every line holds.
       appear as criteria.
 - [ ] "Out of scope" has at least one entry.
 - [ ] Every file or pattern in "Context" was opened and exists.
+- [ ] "Seams to test" names at least one seam, each with what it catches.
+- [ ] Every item under "Terms and decisions" says where it goes (GLOSSARY.md or an ADR).
 - [ ] "Open questions" is empty.
 - [ ] No `<placeholder>` text from the template remains.
 - [ ] A dev could start without asking anything.

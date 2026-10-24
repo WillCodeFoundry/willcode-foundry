@@ -40,7 +40,7 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/AGENTS.md` | this file |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/ROLE.md` | your role's identity, method, definition of done and boundaries |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
-| `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising |
+| `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills`) are loaded as Claude Code skills; `git-conventions` is read by its path |
 
 You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
 not available to you. If the task needs them, record it under "Blockers" and
@@ -65,6 +65,7 @@ exist, before doing anything else.
 | `TASK.md` | the human; drafted by the planner | The goal and acceptance criteria. Only the planner changes it, and only after the human approves the draft. Every other role: **never edit it.** |
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
+| `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -153,8 +154,9 @@ The task is done when every acceptance criterion in `TASK.md` is met. Then:
    `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
-6. Tell the human the task is ready, summarising what changed and anything
-   they should check.
+6. Your `ROLE.md` says what happens next (review, the pull request);
+   otherwise tell the human the task is ready, summarising what changed and
+   anything they should check.
 
 If you run out of turns or time, push whatever state you have and make sure
 `PROGRESS.md` → "In progress" says exactly where you stopped.
