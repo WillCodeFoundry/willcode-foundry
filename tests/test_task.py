@@ -185,6 +185,8 @@ def test_create_takes_a_project_and_a_task() -> None:
 
 
 def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
-    clone = GitClone.init(str(tmp_path / "origin.git"), tmp_path, git_env)
+    clone_dir = tmp_path / "clone"  # GitClone.init needs an empty folder; tmp_path holds git_env's home/
+    clone_dir.mkdir()
+    clone = GitClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
     with pytest.raises(ValueError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])

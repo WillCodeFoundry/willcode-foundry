@@ -3,7 +3,7 @@ your own access. It speaks in branches and files; the git details (fetching one 
 name, refspecs) stay inside it."""
 
 import subprocess
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 from foundry.errors import FoundryError
@@ -49,7 +49,7 @@ class GitClone:
 
     def check_out(self, branch: str) -> None:
         """Check out ``branch``: its latest commit if the remote has it, otherwise a start with no history or files."""
-        if branch in self.branches():
+        if branch in self.branches():  # listed here on purpose, so callers needn't say whether it exists
             self._fetch(branch)
             self._git("switch", "--quiet", branch)
         else:
@@ -74,7 +74,7 @@ class GitClone:
         self._git("add", "--all")
         self._git("commit", "--quiet", "--message", message)
 
-    def push_atomic(self, *, from_remote: Mapping[str, str], from_local: Collection[str]) -> None:
+    def push_atomic(self, *, from_remote: Mapping[str, str], from_local: list[str]) -> None:
         """Push branches together, all or none, never forced.
 
         ``from_remote`` points each new branch on the remote at one of the remote's existing branches:
