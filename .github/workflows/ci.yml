@@ -45,6 +45,7 @@ jobs:
           agent-kit/bin/session-init agent-kit/bin/session-harden
           agent-kit/hooks/pre-commit agent-kit/hooks/prepare-commit-msg agent-kit/hooks/pre-push
           agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
+          agent-kit/skills/mechanical-refactor-review/scripts/rank-complexity
 
   mypy:
     runs-on: ubuntu-latest
