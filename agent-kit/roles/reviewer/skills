@@ -1,0 +1,3 @@
+# The reviewer role's skills, linked into ~/.claude/skills/ at every launch (bin/link-skills).
+code-review
+codebase-design

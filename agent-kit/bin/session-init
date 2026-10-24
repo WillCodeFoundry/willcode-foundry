@@ -90,6 +90,10 @@ mkdir -p "$HOME/.claude"
     import_path "$task_md_path"
 } > "$HOME/.claude/CLAUDE.md"
 
+# The role's skills, as Claude Code skills: links into ~/.claude/skills/,
+# remade at every launch so a changed list takes effect.
+"$AGENT_KIT_DIR/bin/link-skills"
+
 echo "session-init: checkouts ready"
 git -C "$AGENT_PROJECT_DIR" status -sb | head -1
 git -C "$AGENT_NOTES_DIR"   status -sb | head -1

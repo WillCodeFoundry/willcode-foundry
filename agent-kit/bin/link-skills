@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Link the role's skills into ~/.claude/skills/, where Claude Code loads them.
+# Run by session-init at every launch. The role's skills are the names in
+# roles/$AGENT_ROLE/skills, one per line ('#' starts a comment); no list
+# means no skills. Symbolic links not on the list are removed; real folders
+# in ~/.claude/skills/ are never touched.
+set -euo pipefail
+: "${AGENT_KIT_DIR:?}" "${AGENT_ROLE:?}"
+
+list_path="$AGENT_KIT_DIR/roles/$AGENT_ROLE/skills"
+skills_dir="$HOME/.claude/skills"
+
+names=()
+if [[ -f "$list_path" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        name="${line%%#*}"
+        name="${name//[[:space:]]/}"
+        [[ -n "$name" ]] || continue
+        # Checked before anything changes, so a bad list leaves the links as they were.
+        if [[ ! -f "$AGENT_KIT_DIR/skills/$name/SKILL.md" ]]; then
+            echo "link-skills: $list_path lists $name, but $AGENT_KIT_DIR/skills/$name has no SKILL.md" >&2
+            exit 1
+        fi
+        names+=("$name")
+    done < "$list_path"
+fi
+
+mkdir -p "$skills_dir"
+for entry in "$skills_dir"/*; do
+    [[ -L "$entry" ]] && rm -f "$entry"
+done
+for name in "${names[@]}"; do
+    ln -sfn "$AGENT_KIT_DIR/skills/$name" "$skills_dir/$name"
+done
+
+echo "link-skills: ${#names[@]} skill(s) for $AGENT_ROLE${names[*]:+: ${names[*]}}"
