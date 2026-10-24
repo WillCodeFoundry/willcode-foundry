@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # What each checkout may commit, so tasks don't step on each other:
-#   task branch: no task notes (they belong on agent-notes);
-#   agent-notes: only this task's .agent/<task>/ folder, never its TASK.md.
-# Commits on any other branch are left alone: they can't be pushed.
+#   task branch: no task notes: anything under .agent/, or named like a file in
+#                this task's notes folder ($AGENT_NOTES_DIR/<that folder>);
+#   agent-notes: only this task's .agent/<task>/ folder.
+# The notes folder starts as a copy of config/task-template/, so the template
+# stays the only list of note names. Commits on any other branch are left
+# alone: they can't be pushed.
 set -euo pipefail
+: "${AGENT_NOTES_DIR:?AGENT_NOTES_DIR is not set; hooks only run inside a foundry session}"
 # For ShellCheck, relative to the repository root, where CI runs it:
 # shellcheck source=agent-kit/hooks/lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
@@ -11,18 +15,19 @@ source "$(dirname "$0")/lib/common.sh"
 refused=()
 case "$(current_branch)" in
     "$TASK_BRANCH")
+        # Read at commit time; if the folder doesn't exist, only the .agent/ rule applies.
+        notes_path="$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH"
         while IFS= read -r f; do
-            case "$f" in .agent/*|*/.agent/*|TASK.md|*/TASK.md|PROGRESS.md|*/PROGRESS.md|LEARNINGS.md|*/LEARNINGS.md)
-                refused+=("$f") ;; esac
+            if [[ "$f" == .agent/* || "$f" == */.agent/* || -f "$notes_path/$(basename "$f")" ]]; then
+                refused+=("$f")
+            fi
         done < <(staged_files)
         rule="Task notes belong on $NOTES_BRANCH, in \$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH/, not on $TASK_BRANCH:" ;;
     "$NOTES_BRANCH")
         while IFS= read -r f; do
-            if [[ "$f" != "$TASK_NOTES_RELATIVE_PATH"/* || "$f" == "$TASK_NOTES_RELATIVE_PATH/TASK.md" ]]; then
-                refused+=("$f")
-            fi
+            [[ "$f" == "$TASK_NOTES_RELATIVE_PATH"/* ]] || refused+=("$f")
         done < <(staged_files)
-        rule="On $NOTES_BRANCH you may only change files in $TASK_NOTES_RELATIVE_PATH/, and never its TASK.md:" ;;
+        rule="On $NOTES_BRANCH you may only change files in $TASK_NOTES_RELATIVE_PATH/:" ;;
     *) exit 0 ;;
 esac
 

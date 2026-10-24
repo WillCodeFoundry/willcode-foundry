@@ -125,6 +125,38 @@ def test_notes_on_the_task_branch_are_refused(repo) -> None:
     assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
 
 
+def test_a_file_named_like_one_in_the_tasks_notes_folder_is_refused(repo) -> None:
+    code, notes = repo
+    (notes / ".agent" / "T1" / "PROGRESS.md").write_text("# Progress\n")
+    change(code, "PROGRESS.md")
+    result = commit(code, "progress")
+    assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
+
+
+def test_a_file_named_like_none_in_the_tasks_notes_folder_is_accepted(repo) -> None:
+    code, _ = repo
+    change(code, "NOTES.md")
+    result = commit(code, "notes")
+    assert result.returncode == 0, result.stderr
+
+
+def test_without_the_notes_folder_only_agent_paths_are_refused(repo, monkeypatch, tmp_path) -> None:
+    code, _ = repo
+    monkeypatch.setenv("AGENT_NOTES_DIR", str(tmp_path / "missing"))
+    change(code, "TASK.md")
+    assert commit(code, "no notes folder to compare with").returncode == 0
+    change(code, ".agent/T1/PROGRESS.md")
+    assert commit(code, "still notes").returncode != 0
+
+
+def test_a_commit_without_agent_notes_dir_is_refused(repo, monkeypatch) -> None:
+    code, _ = repo
+    monkeypatch.delenv("AGENT_NOTES_DIR")
+    change(code, "NOTES.md")
+    result = commit(code, "notes")
+    assert result.returncode != 0 and "AGENT_NOTES_DIR is not set" in result.stderr
+
+
 def test_push_of_the_task_branch_is_accepted_but_other_refs_are_refused(repo) -> None:
     code, _ = repo
     change(code, "hello.sh")
@@ -145,12 +177,12 @@ def test_notes_in_own_folder_are_accepted_without_a_task_trailer(repo) -> None:
     assert git(notes, "push", "-q", "origin", "agent-notes", check=False).returncode == 0
 
 
-def test_task_md_is_refused(repo) -> None:
+def test_a_changed_task_md_is_accepted(repo) -> None:
     _, notes = repo
     (notes / ".agent" / "T1" / "TASK.md").write_text("changed\n")
     git(notes, "add", ".agent/T1/TASK.md")
-    result = commit(notes, "T1: edit")
-    assert result.returncode != 0 and "never its TASK.md" in result.stderr
+    result = commit(notes, "T1: write the task")
+    assert result.returncode == 0, result.stderr
 
 
 def test_another_tasks_folder_is_refused(repo) -> None:
