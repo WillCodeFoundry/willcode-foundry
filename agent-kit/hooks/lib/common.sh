@@ -1,10 +1,10 @@
 # shellcheck shell=bash
 # Shared helpers for foundry git hooks. Sourced, not executed.
+# Its variables are used by the hooks that source it, which ShellCheck can't see from here.
+# shellcheck disable=SC2034
 
 : "${AGENT_TASK:?AGENT_TASK is not set; hooks only run inside a foundry session}"
 
-# Used by the hooks that source this file, which ShellCheck can't see from here.
-# shellcheck disable=SC2034
 TASK_BRANCH="task/$AGENT_TASK"
 NOTES_BRANCH="agent-notes"
 TASK_NOTES_RELATIVE_PATH=".agent/$AGENT_TASK"
