@@ -5,7 +5,7 @@
 # The sandbox has no host checkout: the project is cloned here from
 # $AGENT_REPO_URL into $AGENT_PROJECT_DIR. Assumes `foundry task create` has
 # already created the task: its branch, and its notes folder, holding its
-# TASK.md, on the notes branch (names from lib/task.sh). Anything missing is
+# TASK.md, on `agent-notes` (names from lib/task.sh). Anything missing is
 # an error, not something to create here.
 set -euo pipefail
 : "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_REPO_URL:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
@@ -45,7 +45,7 @@ git config core.hooksPath "$AGENT_KIT_DIR/hooks"   # read-only mount: agents can
 git fetch origin
 
 # The task must already exist on origin: created with its branch and a TASK.md
-# on the notes branch before any agent runs. Say so plainly rather than let git fail.
+# on `agent-notes` before any agent runs. Say so plainly rather than let git fail.
 missing=()
 git show-ref -q --verify "refs/remotes/origin/$TASK_BRANCH" || missing+=("branch $TASK_BRANCH")
 git show-ref -q --verify "refs/remotes/origin/$NOTES_BRANCH" || missing+=("branch $NOTES_BRANCH")
