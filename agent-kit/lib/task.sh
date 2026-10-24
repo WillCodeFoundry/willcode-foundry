@@ -11,5 +11,6 @@
 
 TASK_BRANCH="task/$AGENT_TASK"                                # where the task's code is written
 NOTES_BRANCH="agent-notes"                                    # every task's notes, each in its own folder
-TASK_NOTES_RELATIVE_PATH=".agent/$AGENT_TASK"                 # this task's folder on $NOTES_BRANCH
+NOTES_ROOT=".agent"                                           # where every task's notes folder sits, on $NOTES_BRANCH
+TASK_NOTES_RELATIVE_PATH="$NOTES_ROOT/$AGENT_TASK"            # this task's folder on $NOTES_BRANCH
 TASK_FILE_RELATIVE_PATH="$TASK_NOTES_RELATIVE_PATH/TASK.md"   # the TASK.md every task has

@@ -14,7 +14,8 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     actions = parser.add_subparsers(dest="action", required=True)
     create = actions.add_parser(
         "create",
-        help="create task/TASK from the default branch, and .agent/TASK/ on agent-notes from config/task-template/",
+        help=f"create task/TASK from the default branch, and {task.NOTES_ROOT}/TASK/ on agent-notes "
+        "from config/task-template/",
         description="Uses git, with your own access to the project's repository. Refuses a task that already exists.",
     )
     create.add_argument("project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml")

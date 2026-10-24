@@ -16,6 +16,8 @@ from foundry.git_clone import GitClone
 
 # The branch holding every task's notes, each in its own folder (Task.notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
+# Where every task's notes folder sits, on NOTES_BRANCH.
+NOTES_ROOT: Final = ".agent"
 # The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
 
@@ -53,7 +55,7 @@ class Task:
     @property
     def notes_dir(self) -> str:
         """The task's notes folder on NOTES_BRANCH, relative to the repository root. Holds its TASK_FILE."""
-        return f".agent/{self.id}"
+        return f"{NOTES_ROOT}/{self.id}"
 
 
 def load_template(template_dir: Path) -> dict[str, str]:

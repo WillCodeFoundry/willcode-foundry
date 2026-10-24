@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from foundry import yaml_io
-from foundry.task import NOTES_BRANCH, TASK_FILE, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, TASK_FILE, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 TASK_SH = REPO_ROOT / "agent-kit" / "lib" / "task.sh"
@@ -18,7 +18,8 @@ RULESETS = REPO_ROOT / "config" / "repo-policy" / "rulesets.yaml"
 def source_task_sh(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     script = (
         'source "$1"; '
-        'printf "%s\\n" "$TASK_BRANCH" "$NOTES_BRANCH" "$TASK_NOTES_RELATIVE_PATH" "$TASK_FILE_RELATIVE_PATH"'
+        'printf "%s\\n" "$TASK_BRANCH" "$NOTES_BRANCH" "$NOTES_ROOT" '
+        '"$TASK_NOTES_RELATIVE_PATH" "$TASK_FILE_RELATIVE_PATH"'
     )
     return subprocess.run(
         ["bash", "-c", script, "bash", str(TASK_SH)], env=env, capture_output=True, text=True, check=False
@@ -32,6 +33,7 @@ def test_the_agent_kit_names_a_task_as_task_py_does() -> None:
     assert result.stdout.splitlines() == [
         Task("t1").branch,
         NOTES_BRANCH,
+        NOTES_ROOT,
         Task("t1").notes_dir,
         f"{Task('t1').notes_dir}/{TASK_FILE}",
     ]
