@@ -16,7 +16,7 @@ from foundry.git_clone import GitClone
 
 # The branch holding every task's notes, each in its own folder (Task.notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
-# The notes file every task has: what the task is, written by you.
+# The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
 
 # A task id becomes the git branch task/<id>, so it must be a valid ref

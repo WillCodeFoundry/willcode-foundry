@@ -27,7 +27,7 @@ $ uv run foundry prune                                     # kill the ssh-agents
 │   │   ├── CODEOWNERS            # the project's .github/CODEOWNERS, verbatim
 │   │   └── ci-gate.yml           # the on: block and ci-gate job its ci.yml must have
 │   └── task-template/            # what a new task's .agent/<task>/ starts with (foundry task create)
-│       ├── TASK.md               # the skeleton the human, or the planner's TASK.proposed.md, fills in
+│       ├── TASK.md               # the skeleton the planner fills in once you approve its draft, or you do
 │       ├── PROGRESS.md           # the sections AGENTS.md requires
 │       └── LEARNINGS.md
 ├── agent-kit/                    # everything an agent is given (read-only mount)
@@ -76,7 +76,7 @@ The words used here, and in the code:
 |---|---|
 | **project** | A repository agents work on, listed in `config/foundry.yaml` |
 | **role**, **task** | Who the agent is (`agent-kit/roles/<role>/`), and the work it's given: its branch `task/<task>` and its task notes, which always include its `TASK.md` |
-| **task notes** | A task's own folder on `agent-notes`, `.agent/<task>/`: its `TASK.md`, written by you, and what every role working on the task records there, each only in its own task's folder |
+| **task notes** | A task's own folder on `agent-notes`, `.agent/<task>/`: its `TASK.md`, written by you, or by the planner once you approve its draft, and what every role working on the task records there, each only in its own task's folder |
 | **sandbox** | The sbx environment for one role, project and task |
 | **sandbox definition** | `sbxenv.yaml`, written once; what sbx creates the sandbox from |
 | **session** | The host directory `sessions/<sandbox>/`: the sandbox definition and the empty workspace |
@@ -97,7 +97,7 @@ Each command has a composition root that builds the real dependencies (`run.main
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
-Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`; a template without a `TASK.md` is refused). Task ids are lowercased, by `foundry task create` and `foundry run` alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md`, there or by applying the planner's `TASK.proposed.md`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
+Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`; a template without a `TASK.md` is refused). Task ids are lowercased, by `foundry task create` and `foundry run` alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md` yourself, or run the planner, which drafts it with you and writes it once you approve. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
 
 ## What protects what
 
@@ -116,7 +116,7 @@ Two kinds of control, and only the first is a boundary:
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
 - `pre-push`: push only `task/<this task>` and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another.
-- `pre-commit`: no task notes on the task branch; on `agent-notes`, only this task's `.agent/<task>/` folder, never its `TASK.md`.
+- `pre-commit`: no task notes on the task branch (anything under `.agent/`, or named like a file in the task's notes folder); on `agent-notes`, only this task's `.agent/<task>/` folder.
 - `prepare-commit-msg`: adds the `Task: <task>` trailer to commits on the task branch, so agents don't have to; `--no-verify` doesn't skip it.
 - `guard-bash`: refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the hooks above.
 
@@ -209,6 +209,6 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task-id>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `TASK.proposed.md` | all roles, each only in its own task folder |
+| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md` | all roles, each only in its own task folder |
 
-`TASK.md` is owned by the human. The planner, the one interactive role, improves it by writing `TASK.proposed.md` for the human to apply.
+`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made.
