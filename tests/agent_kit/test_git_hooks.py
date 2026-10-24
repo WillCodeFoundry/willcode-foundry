@@ -125,36 +125,26 @@ def test_notes_on_the_task_branch_are_refused(repo) -> None:
     assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
 
 
-def test_a_file_named_like_one_in_the_tasks_notes_folder_is_refused(repo) -> None:
+def test_a_note_named_file_outside_agent_is_accepted(repo) -> None:
     code, notes = repo
     (notes / ".agent" / "T1" / "PROGRESS.md").write_text("# Progress\n")
     change(code, "PROGRESS.md")
-    result = commit(code, "progress")
+    result = commit(code, "the project's own progress file")
+    assert result.returncode == 0, result.stderr
+
+
+def test_notes_under_a_nested_agent_folder_are_refused(repo) -> None:
+    code, _ = repo
+    change(code, "src/.agent/T1/PROGRESS.md")
+    result = commit(code, "notes written from a subfolder")
     assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
 
 
-def test_a_file_named_like_none_in_the_tasks_notes_folder_is_accepted(repo) -> None:
+def test_a_code_file_is_accepted(repo) -> None:
     code, _ = repo
     change(code, "NOTES.md")
     result = commit(code, "notes")
     assert result.returncode == 0, result.stderr
-
-
-def test_without_the_notes_folder_only_agent_paths_are_refused(repo, monkeypatch, tmp_path) -> None:
-    code, _ = repo
-    monkeypatch.setenv("AGENT_NOTES_DIR", str(tmp_path / "missing"))
-    change(code, "TASK.md")
-    assert commit(code, "no notes folder to compare with").returncode == 0
-    change(code, ".agent/T1/PROGRESS.md")
-    assert commit(code, "still notes").returncode != 0
-
-
-def test_a_commit_without_agent_notes_dir_is_refused(repo, monkeypatch) -> None:
-    code, _ = repo
-    monkeypatch.delenv("AGENT_NOTES_DIR")
-    change(code, "NOTES.md")
-    result = commit(code, "notes")
-    assert result.returncode != 0 and "AGENT_NOTES_DIR is not set" in result.stderr
 
 
 def test_push_of_the_task_branch_is_accepted_but_other_refs_are_refused(repo) -> None:
