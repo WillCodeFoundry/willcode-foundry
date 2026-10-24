@@ -6,8 +6,8 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 
 ```console
 $ uv sync
-$ uv run foundry task create tkt-store WCF-0042            # create the task: its branch, and its notes from config/task-template/
-$ uv run foundry run tkt-store dev WCF-0042                # start the dev role on task WCF-0042, or re-attach
+$ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
+$ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
 ```
 
@@ -46,6 +46,7 @@ $ uv run foundry prune                                     # kill the ssh-agents
 │   │   ├── prepare-commit-msg    # adds the Task: trailer on the task branch
 │   │   ├── pre-push              # only this task's branch and agent-notes
 │   │   └── lib/common.sh         # shared helpers
+│   ├── lib/task.sh               # a task's branch and notes names, from AGENT_TASK; agrees with task.py's Task (a test checks)
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
 │   │   ├── gitconfig             # name, email, key::signing key; includes ../../git/gitconfig
@@ -74,7 +75,8 @@ The words used here, and in the code:
 | Term | Means |
 |---|---|
 | **project** | A repository agents work on, listed in `config/foundry.yaml` |
-| **role**, **task** | Who the agent is (`agent-kit/roles/<role>/`), and the work it's given (`task/<task>` and its `TASK.md`) |
+| **role**, **task** | Who the agent is (`agent-kit/roles/<role>/`), and the work it's given: its branch `task/<task>` and its task notes, which always include its `TASK.md` |
+| **task notes** | A task's own folder on `agent-notes`, `.agent/<task>/`: its `TASK.md`, written by you, and what every role working on the task records there, each only in its own task's folder |
 | **sandbox** | The sbx environment for one role, project and task |
 | **sandbox definition** | `sbxenv.yaml`, written once; what sbx creates the sandbox from |
 | **session** | The host directory `sessions/<sandbox>/`: the sandbox definition and the empty workspace |
@@ -95,7 +97,7 @@ Each command has a composition root that builds the real dependencies (`run.main
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
-Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`). Then write the task in its `TASK.md`, there or by applying the planner's `TASK.proposed.md`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
+Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`; a template without a `TASK.md` is refused). Task ids are lowercased, by `foundry task create` and `foundry run` alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md`, there or by applying the planner's `TASK.proposed.md`. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
 
 ## What protects what
 
@@ -154,12 +156,12 @@ src/foundry/
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
-├── task.py             # creating a task: its branch, and its notes from the template (agent-notes, an orphan, is created by the first)
+├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── git_clone.py        # GitClone: a shallow scratch clone of a project's repository, through git
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml
-├── session.py          # sandbox naming and task ids, the definition's variables, creating a session
+├── session.py          # sandbox naming, the definition's variables, creating a session
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
@@ -181,12 +183,12 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check agent-kit/lib/task.sh
 ```
 
-These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the hooks' `source` directives are relative to it.
+These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the kit's `source` directives are relative to it.
 
-`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`.
+`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that `task.py`, `agent-kit/lib/task.sh` and `config/repo-policy/rulesets.yaml` name a task's branches and notes alike.
 
 ## sbx requirements
 

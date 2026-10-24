@@ -60,13 +60,13 @@ warning, since a brief window without limiting is cheaper than an outage.
 
 Rejected failing closed (503): it turns every cache blip into downtime.
 
-Task: WCF-0042
+Task: wcf-0042
 ```
 
 ```
 test(api): cover Retry-After header on 429 responses
 
-Task: WCF-0042
+Task: wcf-0042
 ```
 
 ### Avoid
@@ -83,7 +83,7 @@ Same rules as a commit summary: imperative, under 72 characters, typed and
 scoped. If the PR has one commit, reuse its summary. Prefix the task id:
 
 ```
-[WCF-0042] feat(api): rate-limit unauthenticated requests
+[wcf-0042] feat(api): rate-limit unauthenticated requests
 ```
 
 ### Description
