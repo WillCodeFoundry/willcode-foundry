@@ -220,6 +220,7 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     assert decision["decision"] == "block"
     assert "code checkout has uncommitted changes" in decision["reason"]
     assert "notes checkout has commits not pushed" in decision["reason"]
+    assert '(see "Git rules" in AGENTS.md)' in decision["reason"]
 
 
 def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:

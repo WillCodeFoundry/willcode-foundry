@@ -33,5 +33,5 @@ if ((${#problems[@]} == 0)); then
     exit 0
 fi
 
-reason="Cannot end the session yet: $(IFS=';'; echo "${problems[*]}"). Commit and push both checkouts (see AGENTS.md section 4), update PROGRESS.md, then finish."
+reason="Cannot end the session yet: $(IFS=';'; echo "${problems[*]}"). Commit and push both checkouts (see \"Git rules\" in AGENTS.md), update PROGRESS.md, then finish."
 python3 -c 'import json,sys; print(json.dumps({"decision":"block","reason":sys.argv[1]}))' "$reason"
