@@ -28,7 +28,7 @@ def create_main(args: argparse.Namespace) -> int:
     project = config.load(paths.config_path(foundry_root)).project(args.project_name)
     template = task.load_template(paths.task_template_dir(foundry_root))
     with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
-        task.create(GitClone.init(project.url, Path(scratch_dir), os.environ), args.task_id, template)
+        task.create(GitClone.init(project.url, Path(scratch_dir), os.environ), task.Task(args.task_id), template)
     print("\n".join(report(project.name, args.task_id)))
     return 0
 

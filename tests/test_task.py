@@ -1,6 +1,7 @@
 """foundry/task.py against a real repository on disk, and the `foundry task create` command's report and arguments."""
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from foundry import cli, task
 from foundry.commands.task import report
 from foundry.errors import FoundryError
 from foundry.git_clone import GitClone
+from foundry.task import Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
 
@@ -37,19 +39,19 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
     (seed_dir / "README.md").write_text("code\n")
     git(git_env, "-C", str(seed_dir), "add", ".")
     git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "init")
-    git(git_env, "-C", str(seed_dir), "switch", "--quiet", "--orphan", task.AGENT_NOTES_BRANCH)
-    (seed_dir / ".agent" / "T0").mkdir(parents=True)
-    (seed_dir / ".agent" / "T0" / "TASK.md").write_text("an earlier task\n")
+    git(git_env, "-C", str(seed_dir), "switch", "--quiet", "--orphan", task.NOTES_BRANCH)
+    (seed_dir / ".agent" / "t0").mkdir(parents=True)
+    (seed_dir / ".agent" / "t0" / "TASK.md").write_text("an earlier task\n")
     git(git_env, "-C", str(seed_dir), "add", ".agent")
     git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "T0")
-    git(git_env, "-C", str(seed_dir), "push", "--quiet", str(origin_dir), "main", task.AGENT_NOTES_BRANCH)
+    git(git_env, "-C", str(seed_dir), "push", "--quiet", str(origin_dir), "main", task.NOTES_BRANCH)
     return origin_dir
 
 
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> None:
     scratch_dir = origin_dir.parent / f"scratch-{task_id}"
     scratch_dir.mkdir()
-    task.create(GitClone.init(str(origin_dir), scratch_dir, git_env), task_id, TEMPLATE)
+    task.create(GitClone.init(str(origin_dir), scratch_dir, git_env), Task(task_id), TEMPLATE)
 
 
 def files_on(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
@@ -61,61 +63,78 @@ def head(origin_dir: Path, git_env: dict[str, str], branch: str) -> str:
     return git(git_env, f"--git-dir={origin_dir}", "rev-parse", f"refs/heads/{branch}")
 
 
+# --- Task -----------------------------------------------------------------------
+
+
+def test_a_task_is_its_lowercased_id_its_branch_and_its_notes_folder() -> None:
+    a_task = Task("WCF-0042")
+    assert (a_task.id, a_task.branch, a_task.notes_dir) == ("wcf-0042", "task/wcf-0042", ".agent/wcf-0042")
+    assert a_task == Task("wcf-0042")
+
+
+@pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
+def test_valid_task_ids(task_id: str) -> None:
+    assert Task(task_id).id == task_id.lower()
+
+
+@pytest.mark.parametrize(
+    "task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "X.LOCK", "ü", "x~1", "x:y"]
+)
+def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
+    with pytest.raises(FoundryError, match=re.escape(f"task id {task_id!r} is not valid")):
+        Task(task_id)
+
+
 # --- create ---------------------------------------------------------------------
 
 
 def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_notes_folder(origin_dir, git_env) -> None:
-    notes_before = head(origin_dir, git_env, task.AGENT_NOTES_BRANCH)
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     create(origin_dir, git_env)
 
-    assert head(origin_dir, git_env, "task/T1") == head(origin_dir, git_env, "main")
-    assert files_on(origin_dir, git_env, task.AGENT_NOTES_BRANCH) == {
-        ".agent/T0/TASK.md": "an earlier task\n",
-        ".agent/T1/PROGRESS.md": "# Progress\n",
-        ".agent/T1/TASK.md": "# Task <id>: <title>\n",
+    assert head(origin_dir, git_env, "task/t1") == head(origin_dir, git_env, "main")
+    assert files_on(origin_dir, git_env, task.NOTES_BRANCH) == {
+        ".agent/t0/TASK.md": "an earlier task\n",
+        ".agent/t1/PROGRESS.md": "# Progress\n",
+        ".agent/t1/TASK.md": "# Task <id>: <title>\n",
     }
-    notes_parent = git(git_env, f"--git-dir={origin_dir}", "rev-parse", f"{task.AGENT_NOTES_BRANCH}^")
+    notes_parent = git(git_env, f"--git-dir={origin_dir}", "rev-parse", f"{task.NOTES_BRANCH}^")
     assert notes_parent == notes_before
 
 
 def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(origin_dir, git_env) -> None:
-    git(git_env, f"--git-dir={origin_dir}", "branch", "--quiet", "-D", task.AGENT_NOTES_BRANCH)
+    git(git_env, f"--git-dir={origin_dir}", "branch", "--quiet", "-D", task.NOTES_BRANCH)
 
     create(origin_dir, git_env)
 
-    assert files_on(origin_dir, git_env, task.AGENT_NOTES_BRANCH) == {
-        ".agent/T1/PROGRESS.md": "# Progress\n",
-        ".agent/T1/TASK.md": "# Task <id>: <title>\n",
+    assert files_on(origin_dir, git_env, task.NOTES_BRANCH) == {
+        ".agent/t1/PROGRESS.md": "# Progress\n",
+        ".agent/t1/TASK.md": "# Task <id>: <title>\n",
     }
-    assert git(git_env, f"--git-dir={origin_dir}", "rev-list", "--count", task.AGENT_NOTES_BRANCH) == "1"
+    assert git(git_env, f"--git-dir={origin_dir}", "rev-list", "--count", task.NOTES_BRANCH) == "1"
 
 
 def test_an_existing_task_branch_is_refused_and_nothing_is_written(origin_dir, git_env) -> None:
-    git(git_env, f"--git-dir={origin_dir}", "branch", "task/T1", "main")
-    notes_before = head(origin_dir, git_env, task.AGENT_NOTES_BRANCH)
+    git(git_env, f"--git-dir={origin_dir}", "branch", "task/t1", "main")
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
-    with pytest.raises(FoundryError, match=r"^task T1 already exists: there is a task/T1 branch$"):
+    with pytest.raises(FoundryError, match=r"^task t1 already exists: there is a task/t1 branch$"):
         create(origin_dir, git_env)
-    assert head(origin_dir, git_env, task.AGENT_NOTES_BRANCH) == notes_before
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
 def test_an_existing_notes_folder_is_refused_and_no_branch_is_made(origin_dir, git_env) -> None:
-    with pytest.raises(FoundryError, match=r"^task T0 already exists: agent-notes has .agent/T0/$"):
+    with pytest.raises(FoundryError, match=r"^task t0 already exists: agent-notes has .agent/t0/$"):
         create(origin_dir, git_env, "T0")
-    assert "task/T0" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
-
-
-def test_an_invalid_task_id_is_refused(origin_dir, git_env) -> None:
-    with pytest.raises(FoundryError, match="task id 'bad id' is not valid"):
-        create(origin_dir, git_env, "bad id")
+    assert "task/t0" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
 
 
 def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> None:
     empty_dir = tmp_path / "empty.git"
     git(git_env, "init", "--quiet", "--bare", str(empty_dir))
 
-    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/T1 from$"):
+    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/t1 from$"):
         create(empty_dir, git_env)
 
 
@@ -134,6 +153,15 @@ def test_the_template_is_every_file_directly_in_its_folder(tmp_path: Path) -> No
     (tmp_path / "drafts" / "ignored.md").write_text("no\n")
 
     assert task.load_template(tmp_path) == {"PROGRESS.md": "# Progress\n", "TASK.md": "# Task\n"}
+
+
+def test_a_template_without_a_task_md_is_refused(tmp_path: Path) -> None:
+    template_dir = tmp_path / "task-template"
+    template_dir.mkdir()
+    (template_dir / "PROGRESS.md").write_text("# Progress\n")
+
+    with pytest.raises(FoundryError, match=r"task-template has no TASK\.md; every task needs one$"):
+        task.load_template(template_dir)
 
 
 def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:

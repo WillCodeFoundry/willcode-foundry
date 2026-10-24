@@ -69,17 +69,6 @@ def test_create_refuses_an_existing_directory(tmp_path: Path) -> None:
         session.create(tmp_path / "s", new_definition(tmp_path))
 
 
-@pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
-def test_valid_task_ids(task_id: str) -> None:
-    session.require_valid_task_id(task_id)
-
-
-@pytest.mark.parametrize("task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "ü", "x~1", "x:y"])
-def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
-    with pytest.raises(FoundryError, match="is not valid"):
-        session.require_valid_task_id(task_id)
-
-
 def test_a_sandbox_for_another_role_task_or_repository_is_refused(tmp_path: Path) -> None:
     definition = new_definition(tmp_path)  # role dev, task T1, repo git@h:o/p.git
     session.require_same_sandbox(definition, role_name="dev", task_id="T1", repo_url="git@h:o/p.git")

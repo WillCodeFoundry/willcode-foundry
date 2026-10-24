@@ -12,15 +12,12 @@ from typing import Final
 
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.errors import FoundryError
+from foundry.task import Task
 
 # sbx accepts letters, digits, '.', '+', '-'. The name also names an
 # ssh-agent socket, whose path length is limited.
 MAX_SANDBOX_NAME_LENGTH: Final = 64
 _SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
-
-# A task id becomes the git branch task/<id>, so it must be a valid ref
-# component as well as readable: WCF-0042, fix-login.2.
-_TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 # Inside the sandbox: where session-init clones the project. Nothing on the
 # host corresponds to this path; it assumes the template's `agent` user.
@@ -32,12 +29,8 @@ def _slug(text: str) -> str:
 
 
 def require_valid_task_id(task_id: str) -> None:
-    """Raise unless ``task_id`` is letters, digits, '.', '_' or '-', and makes a valid branch name."""
-    if not _TASK_ID.fullmatch(task_id) or ".." in task_id or task_id.endswith((".", ".lock")):
-        raise FoundryError(
-            f"task id {task_id!r} is not valid: use letters, digits, '.', '_' and '-', "
-            "starting with a letter or digit (e.g. WCF-0042)"
-        )
+    """Raise unless ``task_id`` is a valid task id (see Task)."""
+    Task(task_id)
 
 
 def sandbox_name(role_name: str, project_name: str, task_id: str) -> str:
