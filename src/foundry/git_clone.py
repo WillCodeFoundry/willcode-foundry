@@ -16,28 +16,25 @@ class GitClone:
 
     Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
     writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
-    commit deep. Every commit is signed with ``signing_key``, an SSH public key whose private half is in the
-    SSH agent.
+    commit deep. Every commit is signed with SSH, using the signing key in your git config.
 
-    ``env`` is the environment git runs in: it carries your git config (identity) and SSH agent.
+    ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
     """
 
-    def __init__(self, work_dir: Path, env: Mapping[str, str], signing_key: str) -> None:
+    def __init__(self, work_dir: Path, env: Mapping[str, str]) -> None:
         self._work_dir = work_dir
         self._env = dict(env)
-        self._signing_key = signing_key
 
     @classmethod
-    def init(cls, url: str, work_dir: Path, env: Mapping[str, str], *, signing_key: str) -> "GitClone":
+    def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "GitClone":
         """Create an empty repository in ``work_dir``, an existing empty folder, with ``url`` as its remote.
 
-        It signs every commit with ``signing_key``, through the SSH agent, whatever your own git config says.
+        It signs every commit, with SSH (not GPG, which allowed_signers can't verify) and your user.signingkey.
         """
-        clone = cls(work_dir, env, signing_key)
+        clone = cls(work_dir, env)
         clone._git("init", "--quiet")
         clone._git("remote", "add", _REMOTE_NAME, url)
         clone._git("config", "gpg.format", "ssh")
-        clone._git("config", "user.signingkey", f"key::{signing_key}")
         clone._git("config", "commit.gpgsign", "true")
         return clone
 
@@ -78,14 +75,14 @@ class GitClone:
             file_path.write_text(text)
 
     def commit(self, message: str) -> None:
-        """Commit everything changed in the checked-out files, signed with the signing key."""
+        """Commit everything changed in the checked-out files, signed with your signing key."""
         self._git("add", "--all")
         try:
             self._git("commit", "--quiet", "--message", message)
         except FoundryError as error:
             raise FoundryError(
-                f"{error}\n  commits are signed with {self._signing_key}: check your ssh-agent holds its private half "
-                "(ssh-add -L lists it)"
+                f"{error}\n  commits are signed with SSH: set user.signingkey in your global git config to your "
+                "public key, as in agent-kit/git/allowed_signers, and check your ssh-agent holds it (ssh-add -L)"
             ) from None
 
     def push_atomic(self, *, from_remote: Mapping[str, str], from_local: list[str]) -> None:

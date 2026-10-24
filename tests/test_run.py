@@ -11,7 +11,6 @@ from foundry.task import Task
 
 CONFIG = """\
 name: test
-signing_key: ssh-ed25519 AAAATESTKEY
 projects:
   tkt-store: {url: "git@github.com:o/tkt-store.git"}
   foundry: {url: "git@github.com:o/foundry.git"}

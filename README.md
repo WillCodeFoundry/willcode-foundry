@@ -11,7 +11,7 @@ $ uv run foundry run tkt-store dev wcf-0042                # start the dev role 
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
 ```
 
-`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`, with your SSH public key as `signing_key` (as in `agent-kit/git/allowed_signers`; its private half must be in your ssh-agent), which signs the commits foundry makes as you; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.
+`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.
 
 ## Layout
 
@@ -87,7 +87,7 @@ The words used here, and in the code:
 | **deviation** | One way a repository differs from the repo policy, with its diff |
 | **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
-| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with your `signing_key`, and pushes branches together |
+| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
 
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
 2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`; one a launch prepared in the last 10 minutes is spared. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
@@ -213,10 +213,15 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | `task/<task-id>` | Code and project documentation | dev, qa |
 | `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md` | all roles, each only in its own task folder |
 
-`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. `foundry task create` signs the commit that creates the task with your `signing_key`, and refuses to create it if that key isn't in your ssh-agent. Sign the commits you make yourself on `agent-notes` too, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. Git signs with SSH only once it knows the format and the key, whose public half is your line in `allowed_signers`. Set them in your own clone of the project's repository, where you commit to `agent-notes`, so other repositories on your machine are left as they are:
+`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Your commits on `agent-notes` are signed with SSH, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. `foundry task create` always signs the commit that creates the task, with SSH and your `user.signingkey`, and refuses to create the task if it can't. Name your key in your global git config; that alone turns signing on nowhere:
+
+```console
+$ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in allowed_signers; its private half in your ssh-agent
+```
+
+Then, in your own clone of the project's repository, where you commit to `agent-notes`, turn SSH signing on for that clone only:
 
 ```console
 $ git config gpg.format ssh
-$ git config user.signingkey ~/.ssh/id_ed25519.pub   # your signing key's public half
-$ git config commit.gpgsign true                     # or sign one commit with git commit -S
+$ git config commit.gpgsign true   # or sign one commit with git commit -S
 ```

@@ -22,19 +22,17 @@ SIGNER = """#!/bin/sh
 while [ $# -gt 1 ]; do case "$1" in -f) key="$2"; shift 2 ;; *) shift ;; esac; done
 printf '%s\\n' "-----BEGIN SSH SIGNATURE-----" "$(cat "$key")" "-----END SSH SIGNATURE-----" > "$1.sig"
 """
-# A signer that can't sign, as ssh-keygen when the agent doesn't hold the key.
-FAILING_SIGNER = """#!/bin/sh
-echo "Couldn't find key in agent" >&2
-exit 1
-"""
 
 
-def install_signer(home_dir: Path, script: str) -> None:
+def write_gitconfig(home_dir: Path, *, signing_key: str | None = SIGNING_KEY) -> None:
+    """Your git config: an identity, your signing key unless None, and SIGNER standing in for ssh-keygen."""
     signer = home_dir / "signer"
-    signer.write_text(script)
+    signer.write_text(SIGNER)
     signer.chmod(0o755)
-    with (home_dir / ".gitconfig").open("a") as gitconfig:
-        gitconfig.write(f'[gpg "ssh"]\n\tprogram = {signer}\n')
+    user = "[user]\n\tname = Owner\n\temail = owner@example.com\n"
+    if signing_key is not None:
+        user += f"\tsigningkey = key::{signing_key}\n"
+    (home_dir / ".gitconfig").write_text(f'{user}[gpg "ssh"]\n\tprogram = {signer}\n')
 
 
 @pytest.fixture
@@ -42,8 +40,7 @@ def git_env(tmp_path: Path) -> dict[str, str]:
     """git with a throwaway identity, and none of the developer's own config."""
     home_dir = tmp_path / "home"
     home_dir.mkdir()
-    (home_dir / ".gitconfig").write_text("[user]\n\tname = Owner\n\temail = owner@example.com\n")
-    install_signer(home_dir, SIGNER)
+    write_gitconfig(home_dir)
     return {"PATH": os.environ["PATH"], "HOME": str(home_dir), "GIT_CONFIG_NOSYSTEM": "1"}
 
 
@@ -73,7 +70,7 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> None:
     scratch_dir = origin_dir.parent / f"scratch-{task_id}"
     scratch_dir.mkdir()
-    clone = GitClone.init(str(origin_dir), scratch_dir, git_env, signing_key=SIGNING_KEY)
+    clone = GitClone.init(str(origin_dir), scratch_dir, git_env)
     task.create(clone, Task(task_id), TEMPLATE)
 
 
@@ -138,18 +135,18 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
     assert git(git_env, f"--git-dir={origin_dir}", "rev-list", "--count", task.NOTES_BRANCH) == "1"
 
 
-def test_the_tasks_notes_commit_is_signed_with_the_signing_key(origin_dir, git_env) -> None:
+def test_the_tasks_notes_commit_is_signed_with_your_signing_key(origin_dir, git_env) -> None:
     create(origin_dir, git_env)
 
     commit = git(git_env, f"--git-dir={origin_dir}", "cat-file", "commit", task.NOTES_BRANCH)
     assert f"gpgsig -----BEGIN SSH SIGNATURE-----\n {SIGNING_KEY}\n" in commit
 
 
-def test_a_commit_that_cant_be_signed_is_refused_and_nothing_is_pushed(origin_dir, git_env) -> None:
-    install_signer(Path(git_env["HOME"]), FAILING_SIGNER)
+def test_without_a_signing_key_nothing_is_pushed(origin_dir, git_env) -> None:
+    write_gitconfig(Path(git_env["HOME"]), signing_key=None)
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
-    with pytest.raises(FoundryError, match=r"(?s)^git commit failed: .*Couldn't find key in agent.*ssh-add -L"):
+    with pytest.raises(FoundryError, match=r"(?s)^git commit failed: .*user\.signingkey.*ssh-add -L"):
         create(origin_dir, git_env)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
     assert "task/t1" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
@@ -227,6 +224,6 @@ def test_create_takes_a_project_and_a_task() -> None:
 def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
     clone_dir = tmp_path / "clone"  # GitClone.init needs an empty folder; tmp_path holds git_env's home/
     clone_dir.mkdir()
-    clone = GitClone.init(str(tmp_path / "origin.git"), clone_dir, git_env, signing_key=SIGNING_KEY)
+    clone = GitClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
     with pytest.raises(ValueError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])
