@@ -36,13 +36,13 @@ class Task:
     id: str
 
     def __post_init__(self) -> None:
-        task_id = self.id.lower()
-        if not _TASK_ID.fullmatch(task_id) or ".." in task_id or task_id.endswith((".", ".lock")):
+        lowered = self.id.lower()
+        if not _TASK_ID.fullmatch(lowered) or ".." in lowered or lowered.endswith((".", ".lock")):
             raise FoundryError(
                 f"task id {self.id!r} is not valid: use letters, digits, '.', '_' and '-', "
                 "starting with a letter or digit (e.g. wcf-0042)"
             )
-        object.__setattr__(self, "id", task_id)
+        object.__setattr__(self, "id", lowered)
 
     @property
     def branch(self) -> str:
