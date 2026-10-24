@@ -14,7 +14,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     actions = parser.add_subparsers(dest="action", required=True)
     create = actions.add_parser(
         "create",
-        help=f"create task/TASK from the default branch, and {task.NOTES_ROOT}/TASK/ on agent-notes "
+        help=f"create task/TASK from the default branch, and {task.NOTES_ROOT}/TASK/ on {task.NOTES_BRANCH} "
         "from config/task-template/",
         description="Uses git, with your own access to the project's repository. Refuses a task that already exists.",
     )
