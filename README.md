@@ -9,9 +9,10 @@ $ uv sync
 $ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
 $ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
+$ uv run foundry skills update                             # reinstall the agent kit's copied skills from skills.lock
 ```
 
-`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`.
+`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
 
 ## Layout
 
@@ -34,6 +35,7 @@ $ uv run foundry prune                                     # kill the ssh-agents
 │   ├── AGENTS.md                 # instructions shared by every role
 │   ├── bin/
 │   │   ├── session-init          # clones the project, sets up checkouts, hooks, identity; runs hardening
+│   │   ├── link-skills           # links the role's skills into ~/.claude/skills/
 │   │   ├── session-harden        # root step: installs Claude's managed settings; removes sudo and su; makes the Docker socket root-only
 │   ├── claude/
 │   │   ├── managed-settings.json # Claude Code policy: only these hooks and permissions apply
@@ -52,7 +54,13 @@ $ uv run foundry prune                                     # kill the ssh-agents
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
 │   │   ├── gitconfig             # name, email, key::signing key; includes ../../git/gitconfig
 │   │   ├── memory/               # curated knowledge, one file per topic
-│   └── skills/<name>/SKILL.md    # reusable procedures
+│   │   └── skills                # the role's skill names, one per line; '#' starts a comment
+│   └── skills/
+│       ├── skills.lock           # the source repository, commit, and each skill's path
+│       ├── LICENSE-mattpocock    # copied from the source repository at that commit
+│       ├── patches/<skill>.patch # the foundry's changes to each copied skill
+│       ├── git-conventions/      # the foundry's own skill: commit messages and pull request titles
+│       └── tdd/, codebase-design/, …  # written by foundry skills update; never edited by hand
 ├── secrets/                      # untracked except .gitkeep
 │   ├── ssh/<role>, <role>.pub
 │   └── github/<role>.token       # optional
@@ -87,11 +95,11 @@ The words used here, and in the code:
 | **deviation** | One way a repository differs from the repo policy, with its diff |
 | **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
-| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
+| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), or checks out a commit, writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
 
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
 2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`; one a launch prepared in the last 10 minutes is spared. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
-3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, then `session-harden`s: installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), and `session-init` checks on every launch, with the agent's own groups, that it can't be used. The launch aborts if any step fails.
+3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, links the role's skills into `~/.claude/skills/` (see [Skills](#skills)), then `session-harden`s: installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), and `session-init` checks on every launch, with the agent's own groups, that it can't be used. The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
@@ -157,6 +165,8 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
+├── commands/skills.py  # foundry skills update
+├── skills.py           # skills.lock, and installing the agent kit's copied skills from the source at its commit
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
@@ -192,6 +202,15 @@ These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.py
 
 `tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that `task.py`, `agent-kit/lib/task.sh` and `config/repo-policy/rulesets.yaml` name a task's branches and notes alike.
 
+## Skills
+
+Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each is attributed in its `SKILL.md`'s frontmatter (`metadata.source`), in `agent-kit/skills/LICENSE-mattpocock`, the licence copied from the source, and in `agent-kit/skills/skills.lock`, which pins the commit they were copied from. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
+
+Each role's skills are listed in `agent-kit/roles/<role>/skills`; `session-init` links them into the agent's `~/.claude/skills/` at every launch, so Claude Code loads them as skills. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are `agent-kit/skills/patches/<skill>.patch`, applied by `foundry skills update`, so an update keeps them.
+
+- **To update:** change `commit` in `skills.lock`, run `uv run foundry skills update`, review the diff and commit. A patch that no longer applies fails the update, naming the skill, and nothing is installed.
+- **To change an adaptation:** never edit an installed skill's folder. Copy the skill's folder as the source has it (without `agents/`) aside, twice; edit one copy; from `agent-kit/skills/` run `git diff --no-index <pristine> <edited>`, rewrite its paths to be relative to the skill's folder (`a/SKILL.md`, `b/SKILL.md`), save it as `patches/<skill>.patch`, then run the command.
+
 ## sbx requirements
 
 SSH agent forwarding must be on and not pinned to a fixed socket:
@@ -211,7 +230,7 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task-id>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md` | all roles, each only in its own task folder |
+| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | all roles, each only in its own task folder |
 
 `TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Your commits on `agent-notes` are signed with SSH, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. `foundry task create` always signs the commit that creates the task, with SSH and your `user.signingkey`, and refuses to create the task if it can't. Name your key in your global git config; that alone turns signing on nowhere:
 
