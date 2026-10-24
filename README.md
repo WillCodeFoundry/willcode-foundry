@@ -213,10 +213,10 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | `task/<task-id>` | Code and project documentation | dev, qa |
 | `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md` | all roles, each only in its own task folder |
 
-`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Sign your own commits on `agent-notes`, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. Git signs with SSH only once it knows the format and the key, whose public half is your line in `allowed_signers`:
+`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Sign your own commits on `agent-notes`, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. Git signs with SSH only once it knows the format and the key, whose public half is your line in `allowed_signers`. Set them in your own clone of the project's repository, where you commit to `agent-notes`, so other repositories on your machine are left as they are:
 
 ```console
-$ git config --global gpg.format ssh
-$ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your signing key's public half
-$ git config --global commit.gpgsign true                     # or sign one commit with git commit -S
+$ git config gpg.format ssh
+$ git config user.signingkey ~/.ssh/id_ed25519.pub   # your signing key's public half
+$ git config commit.gpgsign true                     # or sign one commit with git commit -S
 ```
