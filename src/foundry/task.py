@@ -29,14 +29,15 @@ _TASK_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
 class Task:
     """A task, named by its id: Task("WCF-0042").id is "wcf-0042".
 
-    The id is lowercased, then must be letters, digits, '.', '_' or '-' and make a valid branch
-    name; otherwise FoundryError.
+    The id must be ASCII; it is lowercased, then must be letters, digits, '.', '_' or '-' and make a
+    valid branch name; otherwise FoundryError.
     """
 
     id: str
 
     def __post_init__(self) -> None:
-        lowered = self.id.lower()
+        # ASCII first: lower() turns a few other letters into ASCII ones (the Kelvin sign into k).
+        lowered = self.id.lower() if self.id.isascii() else ""
         if not _TASK_ID.fullmatch(lowered) or ".." in lowered or lowered.endswith((".", ".lock")):
             raise FoundryError(
                 f"task id {self.id!r} is not valid: use letters, digits, '.', '_' and '-', "

@@ -78,7 +78,7 @@ def test_valid_task_ids(task_id: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "X.LOCK", "ü", "x~1", "x:y"]
+    "task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "X.LOCK", "ü", "x~1", "x:y", "\u212a1"]
 )
 def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
     with pytest.raises(FoundryError, match=re.escape(f"task id {task_id!r} is not valid")):

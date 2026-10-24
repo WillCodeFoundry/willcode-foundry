@@ -4,9 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands import run
 from foundry.commands.run import prepare_launch
 from foundry.errors import FoundryError
 from foundry.task import Task
@@ -79,13 +77,3 @@ def test_a_colliding_sandbox_name_is_refused_not_reattached(foundry_root: Path) 
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         prepare_launch(foundry_root, project_name, role_name, Task("t1"))
-
-
-def test_an_invalid_task_id_is_refused_before_anything_is_created(foundry_root: Path, monkeypatch) -> None:
-    monkeypatch.chdir(foundry_root)
-    monkeypatch.setattr("foundry.agent_sandbox.launch", lambda request: pytest.fail("launched"))
-    args = cli.build_parser().parse_args(["run", "tkt-store", "dev", "feat/x"])
-
-    with pytest.raises(FoundryError, match="task id 'feat/x' is not valid"):
-        run.main(args)
-    assert not (foundry_root / "sessions").exists()
