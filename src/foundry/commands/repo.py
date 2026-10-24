@@ -1,4 +1,4 @@
-"""foundry repos check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
+"""foundry repo check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
 
 import argparse
 
@@ -9,7 +9,7 @@ from foundry.repo_policy import Deviation, RulesetChange
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     parser = subparsers.add_parser(
-        "repos",
+        "repo",
         help="check projects' GitHub repositories against the repo policy",
         description=(
             "Compare each project's GitHub rulesets, CODEOWNERS and ci.yml with config/repo-policy/. "

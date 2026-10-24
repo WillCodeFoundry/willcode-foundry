@@ -125,6 +125,28 @@ def test_notes_on_the_task_branch_are_refused(repo) -> None:
     assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
 
 
+def test_a_note_named_file_outside_agent_is_accepted(repo) -> None:
+    code, notes = repo
+    (notes / ".agent" / "T1" / "PROGRESS.md").write_text("# Progress\n")
+    change(code, "PROGRESS.md")
+    result = commit(code, "the project's own progress file")
+    assert result.returncode == 0, result.stderr
+
+
+def test_notes_under_a_nested_agent_folder_are_refused(repo) -> None:
+    code, _ = repo
+    change(code, "src/.agent/T1/PROGRESS.md")
+    result = commit(code, "notes written from a subfolder")
+    assert result.returncode != 0 and "Task notes belong on agent-notes" in result.stderr
+
+
+def test_a_code_file_is_accepted(repo) -> None:
+    code, _ = repo
+    change(code, "NOTES.md")
+    result = commit(code, "notes")
+    assert result.returncode == 0, result.stderr
+
+
 def test_push_of_the_task_branch_is_accepted_but_other_refs_are_refused(repo) -> None:
     code, _ = repo
     change(code, "hello.sh")
@@ -145,12 +167,12 @@ def test_notes_in_own_folder_are_accepted_without_a_task_trailer(repo) -> None:
     assert git(notes, "push", "-q", "origin", "agent-notes", check=False).returncode == 0
 
 
-def test_task_md_is_refused(repo) -> None:
+def test_a_changed_task_md_is_accepted(repo) -> None:
     _, notes = repo
     (notes / ".agent" / "T1" / "TASK.md").write_text("changed\n")
     git(notes, "add", ".agent/T1/TASK.md")
-    result = commit(notes, "T1: edit")
-    assert result.returncode != 0 and "never its TASK.md" in result.stderr
+    result = commit(notes, "T1: write the task")
+    assert result.returncode == 0, result.stderr
 
 
 def test_another_tasks_folder_is_refused(repo) -> None:
@@ -186,8 +208,9 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     commit(notes, "T1: progress")
     decision = json.loads(stop().stdout)
     assert decision["decision"] == "block"
-    assert "code checkout has uncommitted changes" in decision["reason"]
+    assert "code checkout has uncommitted changes; notes checkout" in decision["reason"]
     assert "notes checkout has commits not pushed" in decision["reason"]
+    assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
 
 
 def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:

@@ -1,28 +1,33 @@
 #!/usr/bin/env bash
 # What each checkout may commit, so tasks don't step on each other:
-#   task branch: no task notes (they belong on agent-notes);
-#   agent-notes: only this task's .agent/<task>/ folder, never its TASK.md.
+#   task branch: no task notes: nothing under the notes root (.agent/), at any
+#                depth, so notes written from a subfolder are caught too;
+#   agent-notes: only this task's .agent/<task>/ folder.
 # Commits on any other branch are left alone: they can't be pushed.
 set -euo pipefail
 # For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/hooks/lib/common.sh
-source "$(dirname "$0")/lib/common.sh"
+# shellcheck source=agent-kit/lib/task.sh
+source "$(dirname "$0")/../lib/task.sh"
+# shellcheck source=agent-kit/lib/hooks.sh
+source "$(dirname "$0")/../lib/hooks.sh"
+
+# Paths staged for the commit being made.
+staged_files() { git diff --cached --name-only --diff-filter=ACMRD; }
 
 refused=()
 case "$(current_branch)" in
     "$TASK_BRANCH")
         while IFS= read -r f; do
-            case "$f" in .agent/*|*/.agent/*|TASK.md|*/TASK.md|PROGRESS.md|*/PROGRESS.md|LEARNINGS.md|*/LEARNINGS.md)
-                refused+=("$f") ;; esac
+            if [[ "$f" == "$NOTES_ROOT"/* || "$f" == */"$NOTES_ROOT"/* ]]; then
+                refused+=("$f")
+            fi
         done < <(staged_files)
         rule="Task notes belong on $NOTES_BRANCH, in \$AGENT_NOTES_DIR/$TASK_NOTES_RELATIVE_PATH/, not on $TASK_BRANCH:" ;;
     "$NOTES_BRANCH")
         while IFS= read -r f; do
-            if [[ "$f" != "$TASK_NOTES_RELATIVE_PATH"/* || "$f" == "$TASK_NOTES_RELATIVE_PATH/TASK.md" ]]; then
-                refused+=("$f")
-            fi
+            [[ "$f" == "$TASK_NOTES_RELATIVE_PATH"/* ]] || refused+=("$f")
         done < <(staged_files)
-        rule="On $NOTES_BRANCH you may only change files in $TASK_NOTES_RELATIVE_PATH/, and never its TASK.md:" ;;
+        rule="On $NOTES_BRANCH you may only change files in $TASK_NOTES_RELATIVE_PATH/:" ;;
     *) exit 0 ;;
 esac
 

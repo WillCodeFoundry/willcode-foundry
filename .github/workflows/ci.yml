@@ -39,12 +39,12 @@ jobs:
       - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
       # The kit's shell scripts; session-harden and most of session-init have no
       # tests (they need root inside a sandbox), so this is their main check.
-      # Run from the repository root: the hooks' source directives are relative to it.
+      # Run from the repository root: the kit's source directives are relative to it.
       - run: >-
           shellcheck --severity=warning --external-sources
           agent-kit/bin/session-init agent-kit/bin/session-harden
           agent-kit/hooks/pre-commit agent-kit/hooks/prepare-commit-msg agent-kit/hooks/pre-push
-          agent-kit/hooks/lib/common.sh agent-kit/claude/hooks/session-check
+          agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh
 
   mypy:
     runs-on: ubuntu-latest

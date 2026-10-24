@@ -8,7 +8,7 @@ Three instruction sources apply, in this order of precedence:
 
 1. The project's own `AGENTS.md` at the repo root wins for anything about the
    code: how to build, test, structure and style it.
-2. Your role's `ROLE.md` (in the `agent-kit` directory, see section 1) wins over this file for
+2. Your role's `ROLE.md` (in the `agent-kit` directory, see "Know your environment") wins over this file for
    how you work.
 3. This file covers everything else.
 
@@ -62,7 +62,7 @@ exist, before doing anything else.
 
 | File | Owner | Rules |
 |---|---|---|
-| `TASK.md` | the human | The goal and acceptance criteria. **Never edit it.** |
+| `TASK.md` | the human; drafted by the planner | The goal and acceptance criteria. Only the planner changes it, and only after the human approves the draft. Every other role: **never edit it.** |
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 
@@ -128,7 +128,7 @@ For each step:
 4. Update `PROGRESS.md` (and `LEARNINGS.md` if you learned something), then
    commit in the notes checkout.
 
-Push both regularly, not only at the end (see section 4). A good rhythm is
+Push both regularly, not only at the end (see "Git rules"). A good rhythm is
 after every meaningful step, and always before anything risky or long.
 
 ### Stay in scope
@@ -175,9 +175,7 @@ git push -u origin task/$AGENT_TASK
 ```
 
 - Only code and project documentation go here.
-- Never commit task notes here: no `.agent/` folder, no `TASK.md`,
-  `PROGRESS.md` or `LEARNINGS.md`. They are ignored in this checkout and
-  hooks will refuse them.
+- Never commit task notes here. The hooks refuse anything under `.agent/`.
 - Never touch any branch other than `task/$AGENT_TASK`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
