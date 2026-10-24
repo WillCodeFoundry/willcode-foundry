@@ -1,7 +1,6 @@
 """Fakes for the foundry package's interfaces. agent_sandbox's are in tests/agent_sandbox/conftest.py."""
 
 import copy
-from collections.abc import Mapping
 from typing import Any
 
 from foundry.github import GitHub, GitHubError
@@ -17,10 +16,6 @@ class FakeGitHub:
         """File text by repo slug, then path on the default branch."""
         self.unavailable: dict[str, str] = {}
         """Repo slug -> the message GitHub refuses it with, e.g. for a plan without rulesets."""
-        self.branches: dict[str, dict[str, str]] = {}
-        """Branch heads by repo slug, then branch name. The default branch is "main"."""
-        self.branch_files: dict[str, dict[str, dict[str, str]]] = {}
-        """File text on other branches: by repo slug, then branch, then path."""
         self._next_id = 1
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
@@ -28,31 +23,8 @@ class FakeGitHub:
             raise GitHubError(self.unavailable[repo_slug])
         return copy.deepcopy(self.stored_rulesets.get(repo_slug, {}))
 
-    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
-        if branch is None:
-            return self.files.get(repo_slug, {}).get(file_path)
-        return self.branch_files.get(repo_slug, {}).get(branch, {}).get(file_path)
-
-    def default_branch(self, repo_slug: str) -> str:
-        return "main"
-
-    def branch_head(self, repo_slug: str, branch: str) -> str | None:
-        return self.branches.get(repo_slug, {}).get(branch)
-
-    def create_branch(self, repo_slug: str, branch: str, sha: str) -> None:
-        branches = self.branches.setdefault(repo_slug, {})
-        if branch in branches:
-            raise GitHubError("Reference already exists (HTTP 422)")
-        branches[branch] = sha
-
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        self.create_branch(repo_slug, branch, f"orphan-{branch}")
-        self.branch_files.setdefault(repo_slug, {})[branch] = dict(files)
-
-    def commit_files(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        if branch not in self.branches.get(repo_slug, {}):
-            raise GitHubError("Not Found (HTTP 404)")
-        self.branch_files.setdefault(repo_slug, {}).setdefault(branch, {}).update(files)
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+        return self.files.get(repo_slug, {}).get(file_path)
 
     def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None:
         self.stored_rulesets.setdefault(repo_slug, {})[ruleset["name"]] = {

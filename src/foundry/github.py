@@ -9,7 +9,7 @@ import base64
 import json
 import re
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 from foundry.errors import FoundryError
@@ -51,30 +51,14 @@ def run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedPro
 
 
 class GitHub(Protocol):
-    """The interface foundry needs from GitHub: rulesets, branches and files."""
+    """The interface foundry needs from GitHub: read rulesets and files, create and update rulesets."""
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
         """The repository's own rulesets in full, by name; inherited ones are left out."""
         ...
 
-    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
-        """A file's text on ``branch`` (default: the default branch), or None if there is no such file."""
-        ...
-
-    def default_branch(self, repo_slug: str) -> str: ...
-
-    def branch_head(self, repo_slug: str, branch: str) -> str | None:
-        """The commit sha ``branch`` points at, or None if there is no such branch."""
-        ...
-
-    def create_branch(self, repo_slug: str, branch: str, sha: str) -> None: ...
-
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        """Create ``branch`` whose one commit holds only ``files`` (path -> text), sharing no history."""
-        ...
-
-    def commit_files(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        """Add one commit to ``branch`` that writes ``files`` (path -> text), replacing any already there."""
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+        """A file's text on the default branch, or None if there is no such file."""
         ...
 
     def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None: ...
@@ -100,18 +84,13 @@ class GhCli:
             raise GitHubError(result.stderr.strip().removeprefix("gh: ") or f"gh api {endpoint} failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
-    def _get_or_none(self, endpoint: str) -> Any:
-        """GET ``endpoint``; None if GitHub answers 404."""
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
         try:
-            return self._api("GET", endpoint)
+            content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}")
         except GitHubError as error:
             if error.http_status == 404:
                 return None
             raise
-
-    def file_text(self, repo_slug: str, file_path: str, branch: str | None = None) -> str | None:
-        ref = f"?ref={branch}" if branch else ""
-        content = self._get_or_none(f"repos/{repo_slug}/contents/{file_path}{ref}")
         if not isinstance(content, dict) or content.get("type") != "file":
             return None
         return base64.b64decode(content["content"]).decode()
@@ -129,39 +108,3 @@ class GhCli:
 
     def update_ruleset(self, repo_slug: str, ruleset_id: int, ruleset: dict[str, Any]) -> None:
         self._api("PUT", f"repos/{repo_slug}/rulesets/{ruleset_id}", ruleset)
-
-    def default_branch(self, repo_slug: str) -> str:
-        return str(self._api("GET", f"repos/{repo_slug}")["default_branch"])
-
-    def branch_head(self, repo_slug: str, branch: str) -> str | None:
-        ref = self._get_or_none(f"repos/{repo_slug}/git/ref/heads/{branch}")
-        return None if ref is None else str(ref["object"]["sha"])
-
-    def create_branch(self, repo_slug: str, branch: str, sha: str) -> None:
-        self._api("POST", f"repos/{repo_slug}/git/refs", {"ref": f"refs/heads/{branch}", "sha": sha})
-
-    def create_orphan_branch(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        self.create_branch(repo_slug, branch, self._create_commit(repo_slug, files, commit_message, parent_sha=None))
-
-    def commit_files(self, repo_slug: str, branch: str, files: Mapping[str, str], commit_message: str) -> None:
-        head_sha = self._api("GET", f"repos/{repo_slug}/git/ref/heads/{branch}")["object"]["sha"]
-        commit_sha = self._create_commit(repo_slug, files, commit_message, parent_sha=head_sha)
-        self._api("PATCH", f"repos/{repo_slug}/git/refs/heads/{branch}", {"sha": commit_sha})
-
-    def _create_commit(
-        self, repo_slug: str, files: Mapping[str, str], commit_message: str, *, parent_sha: str | None
-    ) -> str:
-        """A commit writing ``files`` on top of ``parent_sha``'s tree, or a parentless one holding only them."""
-        tree_body: dict[str, Any] = {
-            "tree": [{"path": path, "mode": "100644", "type": "blob", "content": text} for path, text in files.items()]
-        }
-        if parent_sha is not None:
-            tree_body["base_tree"] = self._api("GET", f"repos/{repo_slug}/git/commits/{parent_sha}")["tree"]["sha"]
-        tree = self._api("POST", f"repos/{repo_slug}/git/trees", tree_body)
-        parents = [] if parent_sha is None else [parent_sha]
-        commit = self._api(
-            "POST",
-            f"repos/{repo_slug}/git/commits",
-            {"message": commit_message, "tree": tree["sha"], "parents": parents},
-        )
-        return str(commit["sha"])

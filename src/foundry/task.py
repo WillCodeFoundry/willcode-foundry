@@ -1,11 +1,11 @@
-"""Tasks on a project's GitHub repository: a task/<id> branch, and .agent/<id>/ on agent-notes, from a template."""
+"""Tasks on a project's repository: a task/<id> branch, and .agent/<id>/ on agent-notes, from a template."""
 
 from collections.abc import Mapping
 from pathlib import Path
 
 from foundry import session
 from foundry.errors import FoundryError
-from foundry.github import GitHub
+from foundry.git_remote import GitRemote
 
 AGENT_NOTES_BRANCH = "agent-notes"
 
@@ -18,31 +18,27 @@ def load_template(template_dir: Path) -> dict[str, str]:
         raise FoundryError(f"{template_dir} is missing") from None
 
 
-def create(github: GitHub, repo_slug: str, task_id: str, template: Mapping[str, str]) -> None:
+def create(remote: GitRemote, task_id: str, template: Mapping[str, str]) -> None:
     """Create task/<id> from the default branch and copy ``template`` into .agent/<id>/ on agent-notes.
 
-    Refuses if the task exists. agent-notes is created for the first task, as an orphan branch: it
-    shares no history with the code.
+    Both branches are pushed at once, so either both change or neither does. Refuses if the task
+    exists. agent-notes is created for the first task, as an orphan branch: it shares no history
+    with the code.
     """
     session.require_valid_task_id(task_id)
     task_branch = f"task/{task_id}"
-    files = {f".agent/{task_id}/{name}": text for name, text in template.items()}
-    has_agent_notes_branch = github.branch_head(repo_slug, AGENT_NOTES_BRANCH) is not None
-    existing_paths = [
-        path
-        for path in files
-        if has_agent_notes_branch and github.file_text(repo_slug, path, AGENT_NOTES_BRANCH) is not None
-    ]
-    if github.branch_head(repo_slug, task_branch) is not None or existing_paths:
-        raise FoundryError(f"task {task_id} already exists on {repo_slug}")
-    default_branch = github.default_branch(repo_slug)
-    base_sha = github.branch_head(repo_slug, default_branch)
-    if base_sha is None:  # a repository with no commits yet
-        raise FoundryError(f"{repo_slug} has no commits on {default_branch} to branch {task_branch} from")
+    notes_dir = f".agent/{task_id}"
+    default_branch = remote.default_branch()
+    branch_heads = remote.branch_heads()
+    if task_branch in branch_heads:
+        raise FoundryError(f"task {task_id} already exists: there is a {task_branch} branch")
+    if default_branch is None or default_branch not in branch_heads:  # a repository with no commits yet
+        raise FoundryError(f"the repository has no commits to branch {task_branch} from")
 
-    commit_message = f"Add task {task_id}"
-    if has_agent_notes_branch:
-        github.commit_files(repo_slug, AGENT_NOTES_BRANCH, files, commit_message)
-    else:
-        github.create_orphan_branch(repo_slug, AGENT_NOTES_BRANCH, files, commit_message)
-    github.create_branch(repo_slug, task_branch, base_sha)
+    base_sha = remote.fetch_commit(default_branch)
+    notes_sha = remote.fetch_tree(AGENT_NOTES_BRANCH) if AGENT_NOTES_BRANCH in branch_heads else None
+    if notes_sha is not None and remote.paths(notes_sha, notes_dir):
+        raise FoundryError(f"task {task_id} already exists: {AGENT_NOTES_BRANCH} has {notes_dir}/")
+    files = {f"{notes_dir}/{name}": text for name, text in template.items()}
+    commit_sha = remote.commit_files(files, f"Add task {task_id}", parent_sha=notes_sha)
+    remote.push_atomic({task_branch: base_sha, AGENT_NOTES_BRANCH: commit_sha})
