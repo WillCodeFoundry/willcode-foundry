@@ -33,6 +33,6 @@ if ((${#problems[@]} == 0)); then
     exit 0
 fi
 
-found="$(printf '%s; ' "${problems[@]}")"
-reason="Cannot end the session yet: ${found%; }. Commit and push that work (see \"Git rules\" in AGENTS.md), then finish."
+problem_summary="$(printf '%s; ' "${problems[@]}")"
+reason="Cannot end the session yet: ${problem_summary%; }. Commit and push that work (see \"Git rules\" in AGENTS.md), then finish."
 python3 -c 'import json,sys; print(json.dumps({"decision":"block","reason":sys.argv[1]}))' "$reason"
