@@ -1,6 +1,11 @@
 # Instance registry. The launcher refuses projects and roles not listed here.
 name: willcode-foundry
 
+# Your SSH public key, as in agent-kit/git/allowed_signers. foundry signs the
+# commits it makes as you (foundry task create) with it; its private half must
+# be in your ssh-agent.
+signing_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAIp9aOYi6DQ+VgtOHA7euNh4C804/0pqCVhunqML/vM
+
 projects:
   # <name>: { url: <ssh clone url> }   -- used as `foundry run <name> <role> [task]`
   tkt-store:

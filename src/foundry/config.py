@@ -1,4 +1,4 @@
-"""config/foundry.yaml: the instance's registry of projects and roles."""
+"""config/foundry.yaml: the instance's registry of projects and roles, and your signing key."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +21,7 @@ class Role:
 @dataclass(frozen=True)
 class Config:
     foundry_name: str
+    signing_key: str  # your SSH public key, as in agent-kit/git/allowed_signers: signs commits foundry makes as you
     projects: dict[str, Project]
     roles: dict[str, Role]
 
@@ -51,6 +52,12 @@ def parse(raw: object, *, source: str = "config") -> Config:
     foundry_name = raw.get("name")
     if not isinstance(foundry_name, str) or not foundry_name:
         raise FoundryError(f"{source}: 'name' is required")
+    signing_key = raw.get("signing_key")
+    if not isinstance(signing_key, str) or not signing_key:
+        raise FoundryError(
+            f"{source}: 'signing_key' is required: your SSH public key (ssh-ed25519 AAAA...), "
+            "as in agent-kit/git/allowed_signers, whose private half is in your ssh-agent"
+        )
 
     projects: dict[str, Project] = {}
     for project_name, value in (raw.get("projects") or {}).items():
@@ -64,4 +71,4 @@ def parse(raw: object, *, source: str = "config") -> Config:
             raise FoundryError(f"{source}: roles.{role_name}: role options are not supported yet; use {{}}")
         roles[role_name] = Role(name=role_name)
 
-    return Config(foundry_name=foundry_name, projects=projects, roles=roles)
+    return Config(foundry_name=foundry_name, signing_key=signing_key, projects=projects, roles=roles)

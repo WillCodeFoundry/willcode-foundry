@@ -26,11 +26,13 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def create_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, task template and repository, in a scratch clone."""
     foundry_root = paths.find_foundry_root()
-    project = config.load(paths.config_path(foundry_root)).project(args.project_name)
+    foundry_config = config.load(paths.config_path(foundry_root))
+    project = foundry_config.project(args.project_name)
     new_task = task.Task(args.task_id)
     template = task.load_template(paths.task_template_dir(foundry_root))
     with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
-        task.create(GitClone.init(project.url, Path(scratch_dir), os.environ), new_task, template)
+        clone = GitClone.init(project.url, Path(scratch_dir), os.environ, signing_key=foundry_config.signing_key)
+        task.create(clone, new_task, template)
     print("\n".join(report(project.name, new_task)))
     return 0
 
