@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from foundry import config, paths, task
-from foundry.git_remote import GitRemote
+from foundry.git_clone import GitClone
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -23,12 +23,12 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def create_main(args: argparse.Namespace) -> int:
-    """Composition root: the real config, task template and repository, through a scratch repository."""
+    """Composition root: the real config, task template and repository, in a scratch clone."""
     foundry_root = paths.find_foundry_root()
     project = config.load(paths.config_path(foundry_root)).project(args.project_name)
     template = task.load_template(paths.task_template_dir(foundry_root))
     with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
-        task.create(GitRemote.init(project.url, Path(scratch_dir), os.environ), args.task_id, template)
+        task.create(GitClone.init(project.url, Path(scratch_dir), os.environ), args.task_id, template)
     print("\n".join(report(project.name, args.task_id)))
     return 0
 

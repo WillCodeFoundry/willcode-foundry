@@ -9,7 +9,7 @@ import pytest
 from foundry import cli, task
 from foundry.commands.task import report
 from foundry.errors import FoundryError
-from foundry.git_remote import GitRemote
+from foundry.git_clone import GitClone
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
 
@@ -48,7 +48,8 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
 
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> None:
     scratch_dir = origin_dir.parent / f"scratch-{task_id}"
-    task.create(GitRemote.init(str(origin_dir), scratch_dir, git_env), task_id, TEMPLATE)
+    scratch_dir.mkdir()
+    task.create(GitClone.init(str(origin_dir), scratch_dir, git_env), task_id, TEMPLATE)
 
 
 def files_on(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
