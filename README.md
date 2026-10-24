@@ -117,7 +117,7 @@ Two kinds of control, and only the first is a boundary:
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
 - `pre-push`: push only `task/<this task>` and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another.
-- `pre-commit`: no task notes on the task branch (anything under `.agent/`, or named like a file in the task's notes folder); on `agent-notes`, only this task's `.agent/<task>/` folder.
+- `pre-commit`: no task notes on the task branch (anything under `.agent/`); on `agent-notes`, only this task's `.agent/<task>/` folder.
 - `prepare-commit-msg`: adds the `Task: <task>` trailer to commits on the task branch, so agents don't have to; `--no-verify` doesn't skip it.
 - `guard-bash`: refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the hooks above.
 
@@ -212,4 +212,4 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | `task/<task-id>` | Code and project documentation | dev, qa |
 | `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md` | all roles, each only in its own task folder |
 
-`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made.
+`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Sign your own commits on `agent-notes`, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. Set `git config commit.gpgsign true` with your SSH signing key, or commit with `git commit -S`.

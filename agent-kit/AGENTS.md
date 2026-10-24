@@ -175,9 +175,7 @@ git push -u origin task/$AGENT_TASK
 ```
 
 - Only code and project documentation go here.
-- Never commit task notes here. The hooks refuse them: anything under
-  `.agent/`, and any file named like one in your task's notes folder
-  (`$AGENT_NOTES_DIR/.agent/$AGENT_TASK/`), such as `PROGRESS.md`.
+- Never commit task notes here. The hooks refuse anything under `.agent/`.
 - Never touch any branch other than `task/$AGENT_TASK`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
