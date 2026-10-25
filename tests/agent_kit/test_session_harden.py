@@ -1,8 +1,9 @@
 """agent-kit/bin/session-harden: its refusal to run outside a sandbox, its verify mode's refusal to run
-as root, and the checks in agent-kit/lib/hardening.sh that `session-harden --verify` runs.
+as root, and the checks `session-harden --verify` runs.
 
 Root mode removes sudo from the machine it runs on, so it is only run as far as its refusal. The
-checks are run against sockets, files and stand-in commands of each test's own.
+checks are run from the sourced script, which only defines its functions, against sockets, files and
+stand-in commands of each test's own.
 """
 
 import os
@@ -17,7 +18,6 @@ import pytest
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 SESSION_HARDEN = AGENT_KIT_PATH / "bin" / "session-harden"
-HARDENING_LIB = AGENT_KIT_PATH / "lib" / "hardening.sh"
 KIT_SETTINGS = AGENT_KIT_PATH / "claude" / "managed-settings.json"
 
 needs_non_root = pytest.mark.skipif(
@@ -61,14 +61,28 @@ def test_verify_on_a_machine_that_isnt_a_hardened_sandbox_refuses_to_start_the_a
     assert "managed settings" in result.stderr
 
 
+def test_sourcing_session_harden_only_defines_its_functions() -> None:
+    """The tests below source it: neither mode may run, even without AGENT_KIT_DIR."""
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1" && declare -F', "bash", str(SESSION_HARDEN)],
+        env={"PATH": os.environ["PATH"]},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert (result.returncode, result.stderr) == (0, "")
+    assert {"harden", "verify", "hardening_check_sudo"} <= {line.split()[-1] for line in result.stdout.splitlines()}
+
+
 # --- the checks ---------------------------------------------------------------------
 
 
 def run_check(check: str, *args: str, bin_dir: Path | None = None) -> subprocess.CompletedProcess[str]:
-    """Run one check from lib/hardening.sh; ``bin_dir``'s commands come first on PATH."""
+    """Run one check from the sourced session-harden; ``bin_dir``'s commands come first on PATH."""
     path = os.environ["PATH"] if bin_dir is None else f"{bin_dir}:{os.environ['PATH']}"
     return subprocess.run(
-        ["bash", "-c", 'source "$0"; "$@"', str(HARDENING_LIB), check, *args],
+        ["bash", "-c", 'source "$1"; shift; "$@"', "bash", str(SESSION_HARDEN), check, *args],
         env={"PATH": path},
         capture_output=True,
         text=True,
