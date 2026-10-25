@@ -5,8 +5,8 @@ import argparse
 from foundry import config, paths, repo_policy
 from foundry.config import Project
 from foundry.errors import FoundryError
-from foundry.github import GhCli, GitHub, repo_slug_from_url
-from foundry.repo_policy import ProjectCheck, RepoPolicy
+from foundry.github import GhCli, repo_slug_from_url
+from foundry.repo_policy import ProjectCheck
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -41,19 +41,13 @@ def check_main(args: argparse.Namespace) -> int:
     all_conform = True
     for project_name in args.project_names or sorted(foundry_config.projects):
         project = foundry_config.project(project_name)
-        result = check_one_project(policy, github, project, fix=args.fix)
+        if args.fix:
+            result = repo_policy.fix_project(github, project.url, policy)
+        else:
+            result = repo_policy.check_project(github, project.url, policy)
         print("\n".join(report(project, result)))
         all_conform = all_conform and result.conforms
     return 0 if all_conform else 1
-
-
-def check_one_project(policy: RepoPolicy, github: GitHub, project: Project, *, fix: bool) -> ProjectCheck:
-    """Check one project's repository; a URL that isn't GitHub's is part of the result, like a GitHub error."""
-    try:
-        repo_slug = repo_slug_from_url(project.url)
-    except FoundryError as error:
-        return ProjectCheck([], [], error=str(error))
-    return repo_policy.check_project(github, repo_slug, policy, fix=fix)
 
 
 def report(project: Project, result: ProjectCheck) -> list[str]:

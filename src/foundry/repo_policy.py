@@ -19,7 +19,7 @@ import yaml
 
 from foundry import yaml_io
 from foundry.errors import FoundryError
-from foundry.github import GitHub, GitHubError
+from foundry.github import GitHub, repo_slug_from_url
 
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
@@ -108,8 +108,8 @@ def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterat
 
 @dataclass(frozen=True)
 class ProjectCheck:
-    """What checking one repository found: the ruleset changes --fix made, then its deviations, or why it
-    couldn't be checked. Changes made before an error are kept."""
+    """What checking or fixing one repository found: the ruleset changes a fix made, then its deviations, or
+    why it couldn't be checked. Changes made before an error are kept."""
 
     changes: list[RulesetChange]
     deviations: list[Deviation]
@@ -120,15 +120,28 @@ class ProjectCheck:
         return self.error is None and not self.deviations
 
 
-def check_project(github: GitHub, repo_slug: str, policy: RepoPolicy, *, fix: bool) -> ProjectCheck:
-    """Apply the rulesets first if ``fix``, then list the deviations; a GitHub error is part of the result."""
+def check_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectCheck:
+    """How the repository at ``repo_url`` deviates from the policy; changes nothing.
+
+    A URL that isn't a GitHub repository's, or a GitHub error, is part of the result, not raised.
+    """
+    try:
+        return ProjectCheck([], deviations(github, repo_slug_from_url(repo_url), policy))
+    except FoundryError as error:
+        return ProjectCheck([], [], error=str(error))
+
+
+def fix_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectCheck:
+    """Create or update the repository's rulesets to match the policy, then list the deviations left.
+
+    Changes made before an error are kept in the result, with the error, as in check_project.
+    """
     changes: list[RulesetChange] = []
     try:
-        if fix:
-            for change in apply_rulesets(github, repo_slug, policy):
-                changes.append(change)
+        repo_slug = repo_slug_from_url(repo_url)
+        changes.extend(apply_rulesets(github, repo_slug, policy))  # takes each change as it's made
         return ProjectCheck(changes, deviations(github, repo_slug, policy))
-    except GitHubError as error:
+    except FoundryError as error:
         return ProjectCheck(changes, [], error=str(error))
 
 

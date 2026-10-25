@@ -150,6 +150,17 @@ def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
     assert fake.rulesets("o/r") == before
 
 
+URL = "git@github.com:o/r.git"
+
+
+def conforming(fake: FakeGitHub, repo_slug: str = "o/r") -> None:
+    """Give the repository exactly what the policy asks for, as this repository has it."""
+    for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
+        fake.files.setdefault(repo_slug, {})[path] = (REPO_ROOT / path).read_text()
+    for ruleset in POLICY.rulesets:
+        fake.create_ruleset(repo_slug, ruleset)
+
+
 class FileReadFails(FakeGitHub):
     """GitHub that makes ruleset changes, then fails reading a file."""
 
@@ -157,32 +168,71 @@ class FileReadFails(FakeGitHub):
         raise GitHubError("Server Error (HTTP 502)")
 
 
-def test_check_project_keeps_the_changes_fix_made_before_github_failed() -> None:
-    fake = FileReadFails()
+def test_check_project_on_a_conforming_repository() -> None:
+    fake = FakeGitHub()
+    conforming(fake)
 
-    result = repo_policy.check_project(fake, "o/r", policy_of(RULESET), fix=True)
+    result = repo_policy.check_project(fake, URL, POLICY)
 
-    assert result == repo_policy.ProjectCheck(
-        [repo_policy.RulesetChange("agent-branches", repo_policy.RulesetAction.CREATED)],
-        [],
-        error="Server Error (HTTP 502)",
-    )
-    assert not result.conforms
-    assert "agent-branches" in fake.rulesets("o/r")
+    assert result == repo_policy.ProjectCheck([], []) and result.conforms
 
 
-def test_check_project_without_fix_changes_nothing() -> None:
+def test_check_project_lists_deviations_and_changes_nothing() -> None:
     fake = FakeGitHub()
 
-    result = repo_policy.check_project(fake, "o/r", policy_of(RULESET), fix=False)
+    result = repo_policy.check_project(fake, URL, policy_of(RULESET))
 
-    assert result.changes == [] and result.error is None
+    assert result.changes == [] and result.error is None and not result.conforms
     assert [d.subject for d in result.deviations] == [
         "ruleset agent-branches",
         ".github/CODEOWNERS",
         ".github/workflows/ci.yml",
     ]
     assert fake.rulesets("o/r") == {}
+
+
+def test_a_github_error_is_the_result_not_raised() -> None:
+    fake = FakeGitHub()
+    fake.unavailable["o/r"] = "Upgrade to GitHub Pro to use rulesets (HTTP 403)"
+
+    for result in (repo_policy.check_project(fake, URL, POLICY), repo_policy.fix_project(fake, URL, POLICY)):
+        assert result == repo_policy.ProjectCheck([], [], error="Upgrade to GitHub Pro to use rulesets (HTTP 403)")
+
+
+def test_a_url_that_is_not_githubs_is_the_result_not_raised() -> None:
+    url = "https://gitlab.com/o/p.git"
+
+    for result in (
+        repo_policy.check_project(FakeGitHub(), url, POLICY),
+        repo_policy.fix_project(FakeGitHub(), url, POLICY),
+    ):
+        assert result.error == f"{url!r} is not a GitHub repository URL" and not result.conforms
+
+
+def test_fix_project_creates_the_missing_rulesets_then_conforms() -> None:
+    fake = FakeGitHub()
+    conforming(fake)
+    fake.stored_rulesets["o/r"] = {}  # every ruleset missing
+
+    result = repo_policy.fix_project(fake, URL, POLICY)
+
+    assert result.changes == [
+        repo_policy.RulesetChange(ruleset["name"], repo_policy.RulesetAction.CREATED) for ruleset in POLICY.rulesets
+    ]
+    assert result.deviations == [] and result.conforms
+
+
+def test_fix_project_keeps_the_changes_made_before_github_failed() -> None:
+    fake = FileReadFails()
+
+    result = repo_policy.fix_project(fake, URL, policy_of(RULESET))
+
+    assert result == repo_policy.ProjectCheck(
+        [repo_policy.RulesetChange("agent-branches", repo_policy.RulesetAction.CREATED)],
+        [],
+        error="Server Error (HTTP 502)",
+    )
+    assert "agent-branches" in fake.rulesets("o/r")
 
 
 # --- loading the policy -------------------------------------------------------------

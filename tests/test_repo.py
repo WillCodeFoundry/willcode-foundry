@@ -1,86 +1,11 @@
-"""foundry repo check: check_one_project against FakeGitHub, its report, and its arguments."""
+"""foundry repo check: its report, and its arguments."""
 
-from pathlib import Path
-
-from foundry import cli, repo_policy
-from foundry.commands.repo import check_one_project, report
+from foundry import cli
+from foundry.commands.repo import report
 from foundry.config import Project
 from foundry.repo_policy import Deviation, ProjectCheck, RulesetAction, RulesetChange
-from tests.fakes import FakeGitHub
-
-REPO_ROOT = Path(__file__).parents[1]
-POLICY = repo_policy.load(REPO_ROOT / "config" / "repo-policy")
-
-
-def conforming(fake: FakeGitHub, repo_slug: str) -> None:
-    """Give the repository exactly what the policy asks for, as this repository has it."""
-    for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
-        fake.files.setdefault(repo_slug, {})[path] = (REPO_ROOT / path).read_text()
-    for ruleset in POLICY.rulesets:
-        fake.create_ruleset(repo_slug, ruleset)
-
 
 STORE = Project(name="store", url="git@github.com:o/store.git")
-
-
-def check(fake: FakeGitHub, project: Project = STORE, *, fix: bool = False):
-    """The project's printed lines, and whether it conforms."""
-    result = check_one_project(POLICY, fake, project, fix=fix)
-    return report(project, result), result.conforms
-
-
-# --- check_one_project ----------------------------------------------------------
-
-
-def test_a_conforming_project() -> None:
-    fake = FakeGitHub()
-    conforming(fake, "o/store")
-
-    assert check(fake) == (["store (o/store)", "  conforms"], True)
-
-
-def test_a_deviating_project() -> None:
-    fake = FakeGitHub()
-    conforming(fake, "o/store")
-    fake.files["o/store"][repo_policy.CODEOWNERS_PATH] = "* @someone\n"
-
-    lines, conforms = check(fake)
-
-    assert lines[:2] == ["store (o/store)", "  differs  .github/CODEOWNERS"] and not conforms
-
-
-def test_a_project_github_refuses_is_reported_not_raised() -> None:
-    fake = FakeGitHub()
-    fake.unavailable["o/store"] = "Upgrade to GitHub Pro to use rulesets (HTTP 403)"
-
-    assert check(fake) == (
-        ["store (o/store)", "  error    Upgrade to GitHub Pro to use rulesets (HTTP 403)"],
-        False,
-    )
-
-
-def test_fix_creates_the_missing_rulesets_reports_them_then_conforms() -> None:
-    fake = FakeGitHub()
-    conforming(fake, "o/store")
-    fake.stored_rulesets["o/store"] = {}  # every ruleset missing
-
-    assert check(fake, fix=True) == (
-        [
-            "store (o/store)",
-            *[f"  created  ruleset {ruleset['name']}" for ruleset in POLICY.rulesets],
-            "  conforms",
-        ],
-        True,
-    )
-
-
-def test_a_project_whose_url_is_not_githubs_is_reported_not_raised() -> None:
-    elsewhere = Project(name="elsewhere", url="https://gitlab.com/o/p.git")
-
-    assert check(FakeGitHub(), elsewhere) == (
-        ["elsewhere", "  error    'https://gitlab.com/o/p.git' is not a GitHub repository URL"],
-        False,
-    )
 
 
 # --- report ---------------------------------------------------------------------
@@ -131,3 +56,8 @@ def test_fix_and_project_names_parse() -> None:
     args = cli.build_parser().parse_args(["repo", "check", "--fix", "store"])
     assert (args.fix, args.project_names) == (True, ["store"])
     assert cli.build_parser().parse_args(["repo", "check"]).fix is False
+
+
+def test_a_project_whose_url_is_not_githubs_has_no_repo_in_its_header() -> None:
+    elsewhere = Project(name="elsewhere", url="https://gitlab.com/o/p.git")
+    assert report(elsewhere, ProjectCheck([], [], error="not GitHub")) == ["elsewhere", "  error    not GitHub"]
