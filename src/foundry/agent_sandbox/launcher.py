@@ -62,10 +62,8 @@ def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: Ss
     _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
-    if not sandbox.start_if_exists():
-        sandbox.create()
-    sandbox.allow_github_ssh()
-    sandbox.trust_github_host_keys()
+    sandbox.ensure_running()
+    sandbox.give_github_ssh_access()
     sandbox.set_github_token_file(request.github_token_path)
     _require_forwarded_keys(ssh_agent, sandbox)
     if request.init_command:

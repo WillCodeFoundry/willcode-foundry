@@ -20,20 +20,12 @@ from foundry.agent_sandbox.ssh_agent import SshAddExitCode, parse_fingerprint
 class Sandbox(Protocol):
     """The sandbox one launch prepares, as the launcher needs it; SbxCli is the real one."""
 
-    def start_if_exists(self) -> bool:
-        """True if the sandbox exists; a stopped one is started."""
+    def ensure_running(self) -> None:
+        """Start the sandbox, creating it from its definition if it doesn't exist; never attaches."""
         ...
 
-    def create(self) -> None:
-        """Create the sandbox from its definition, without attaching."""
-        ...
-
-    def allow_github_ssh(self) -> None:
-        """Let the sandbox reach github.com:22, for git over SSH."""
-        ...
-
-    def trust_github_host_keys(self) -> None:
-        """Trust GitHub's published host keys inside, so the first SSH connection doesn't stop to ask."""
+    def give_github_ssh_access(self) -> None:
+        """Let git over SSH reach github.com from inside, without stopping to ask about GitHub's host key."""
         ...
 
     def set_github_token_file(self, github_token_path: Path | None) -> None:
@@ -68,22 +60,22 @@ class SbxCli:
         self._definition_dir = definition_dir
         self._sbx_env = _sbx_env(host.environ(), ssh_agent_socket_path)
 
-    def start_if_exists(self) -> bool:
-        """True if the sandbox exists. A stopped sandbox is started, since reaching it starts it."""
-        return self.run(("true",)).returncode == 0
-
-    def create(self) -> None:
+    def ensure_running(self) -> None:
+        """Reaching a stopped sandbox starts it; one that can't be reached doesn't exist, so it is created."""
+        if self.run(("true",)).returncode == 0:
+            return
         result = self._sbx("env", "create", "--auto-approve", str(self._definition_dir))
         if result.returncode != 0:
             raise SandboxError(f"sbx env create failed: {result.stderr.strip()}")
 
-    def allow_github_ssh(self) -> None:
-        """sbx denies non-HTTP(S) TCP by default; git over SSH needs this route."""
+    def give_github_ssh_access(self) -> None:
+        """sbx denies non-HTTP(S) TCP by default, so github.com:22 is allowed; then GitHub's host keys are trusted."""
         result = self._sbx("policy", "allow", "network", "--sandbox", self._sandbox_name, "github.com:22")
         if result.returncode != 0:
             raise SandboxError(f"sbx policy allow failed: {result.stderr.strip()}")
+        self._trust_github_host_keys()
 
-    def trust_github_host_keys(self) -> None:
+    def _trust_github_host_keys(self) -> None:
         setup = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts"
         seed_one = "(grep -qxF '{key}' ~/.ssh/known_hosts || echo '{key}' >> ~/.ssh/known_hosts)"
         script = " && ".join((setup, *(seed_one.format(key=key) for key in GITHUB_HOST_KEYS)))

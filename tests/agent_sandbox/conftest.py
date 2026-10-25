@@ -95,24 +95,18 @@ class FakeSandbox:
     ) -> None:
         self.exists = exists
         self.created = False
-        self.github_ssh_allowed = False
-        self.github_host_keys_trusted = False
+        self.has_github_ssh_access = False
         self.github_token_file: Path | None = None
         self.commands_run: list[tuple[str, ...]] = []
         self._forwarded_key_fingerprints = forwarded_key_fingerprints
         self._exit_codes_by_command = dict(exit_codes_by_command or {})
 
-    def start_if_exists(self) -> bool:
-        return self.exists
+    def ensure_running(self) -> None:
+        self.created = not self.exists
+        self.exists = True
 
-    def create(self) -> None:
-        self.exists = self.created = True
-
-    def allow_github_ssh(self) -> None:
-        self.github_ssh_allowed = True
-
-    def trust_github_host_keys(self) -> None:
-        self.github_host_keys_trusted = True
+    def give_github_ssh_access(self) -> None:
+        self.has_github_ssh_access = True
 
     def set_github_token_file(self, github_token_path: Path | None) -> None:
         self.github_token_file = github_token_path

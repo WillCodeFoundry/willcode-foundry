@@ -74,7 +74,7 @@ def test_a_missing_sandbox_is_created_and_given_github_access(layout, ssh_agent,
     run_prepare(layout, ssh_agent, sandbox)
 
     assert sandbox.created
-    assert sandbox.github_ssh_allowed and sandbox.github_host_keys_trusted
+    assert sandbox.has_github_ssh_access
 
 
 def test_an_existing_sandbox_is_reused(layout, ssh_agent, make_reachable_sandbox) -> None:
@@ -83,7 +83,7 @@ def test_an_existing_sandbox_is_reused(layout, ssh_agent, make_reachable_sandbox
     run_prepare(layout, ssh_agent, sandbox)
 
     assert not sandbox.created
-    assert sandbox.github_ssh_allowed and sandbox.github_host_keys_trusted
+    assert sandbox.has_github_ssh_access
 
 
 def test_the_sandbox_gets_the_token_file_and_a_launch_without_one_takes_it_away(
@@ -143,10 +143,8 @@ def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
     """The launcher never removes a sandbox; adding a step to the port should be a decision."""
     steps = {name for name in vars(Sandbox) if not name.startswith("_")}
     assert steps == {
-        "start_if_exists",
-        "create",
-        "allow_github_ssh",
-        "trust_github_host_keys",
+        "ensure_running",
+        "give_github_ssh_access",
         "set_github_token_file",
         "forwarded_key_fingerprints",
         "run",

@@ -33,51 +33,57 @@ def exec_in(definition_dir: Path, *command: str) -> tuple[str, ...]:
 def test_every_call_carries_the_sandboxs_socket_never_the_personal_ssh_agent(
     host, sbx_cli: SbxCli, definition_dir: Path
 ) -> None:
-    host.responses = {
-        exec_in(definition_dir, "true"): 0,
-        ("sbx", "policy", "allow", "network", "--sandbox", "n", "github.com:22"): "",
-    }
-    sbx_cli.start_if_exists()
-    sbx_cli.allow_github_ssh()
-    assert [env for _, env in host.calls] == [ENV, ENV]
+    host.responses = defaultdict(str)  # every command succeeds
+    sbx_cli.ensure_running()
+    sbx_cli.give_github_ssh_access()
+    assert [env for _, env in host.calls] == [ENV] * len(host.calls)
 
 
-@pytest.mark.parametrize(("exit_code", "exists"), [(0, True), (1, False)])
-def test_start_if_exists_reaches_the_sandbox(host, sbx_cli: SbxCli, definition_dir: Path, exit_code, exists) -> None:
-    host.responses = {exec_in(definition_dir, "true"): exit_code}
-    assert sbx_cli.start_if_exists() is exists
+def create(definition_dir: Path) -> tuple[str, ...]:
+    return ("sbx", "env", "create", "--auto-approve", str(definition_dir))
 
 
-def test_create_creates_from_the_definition_without_attaching(host, sbx_cli: SbxCli, definition_dir: Path) -> None:
-    host.responses = {("sbx", "env", "create", "--auto-approve", str(definition_dir)): ""}
-    sbx_cli.create()
-    assert host.commands == [("sbx", "env", "create", "--auto-approve", str(definition_dir))]
+def test_a_sandbox_it_can_reach_is_started_not_created(host, sbx_cli: SbxCli, definition_dir: Path) -> None:
+    host.responses = {exec_in(definition_dir, "true"): 0}
+    sbx_cli.ensure_running()
+    assert host.commands == [exec_in(definition_dir, "true")]
+
+
+def test_a_sandbox_it_cannot_reach_is_created_from_the_definition_without_attaching(
+    host, sbx_cli: SbxCli, definition_dir: Path
+) -> None:
+    host.responses = {exec_in(definition_dir, "true"): 1, create(definition_dir): ""}
+    sbx_cli.ensure_running()
+    assert host.commands == [exec_in(definition_dir, "true"), create(definition_dir)]
 
 
 def test_a_failing_create_is_reported(host, sbx_cli: SbxCli, definition_dir: Path) -> None:
-    host.responses = {("sbx", "env", "create", "--auto-approve", str(definition_dir)): 1}
+    host.responses = {exec_in(definition_dir, "true"): 1, create(definition_dir): 1}
     with pytest.raises(SandboxError, match="sbx env create failed"):
-        sbx_cli.create()
+        sbx_cli.ensure_running()
 
 
-def test_github_ssh_is_allowed_by_policy(host, sbx_cli: SbxCli) -> None:
-    allow = ("sbx", "policy", "allow", "network", "--sandbox", "n", "github.com:22")
-    host.responses = {allow: ""}
-    sbx_cli.allow_github_ssh()
-    assert host.commands == [allow]
-    host.responses = {allow: 1}
-    with pytest.raises(SandboxError, match="sbx policy allow failed"):
-        sbx_cli.allow_github_ssh()
+ALLOW_GITHUB_SSH = ("sbx", "policy", "allow", "network", "--sandbox", "n", "github.com:22")
 
 
-def test_githubs_host_keys_are_seeded_into_known_hosts(host, sbx_cli: SbxCli, definition_dir: Path) -> None:
+def test_github_ssh_access_is_the_policy_route_then_githubs_host_keys(
+    host, sbx_cli: SbxCli, definition_dir: Path
+) -> None:
     host.responses = defaultdict(str)  # whatever the script, it succeeds
 
-    sbx_cli.trust_github_host_keys()
+    sbx_cli.give_github_ssh_access()
 
-    ((*shell, script),) = host.commands
+    allow, (*shell, script) = host.commands
+    assert allow == ALLOW_GITHUB_SSH
     assert tuple(shell) == exec_in(definition_dir, "sh", "-c")
     assert all(key in script for key in GITHUB_HOST_KEYS)
+
+
+def test_a_refused_policy_route_is_reported_before_touching_known_hosts(host, sbx_cli: SbxCli) -> None:
+    host.responses = {ALLOW_GITHUB_SSH: 1}
+    with pytest.raises(SandboxError, match="sbx policy allow failed"):
+        sbx_cli.give_github_ssh_access()
+    assert host.commands == [ALLOW_GITHUB_SSH]
 
 
 CLEAR_TOKEN = ("sbx", "secret", "rm", "github", "--sandbox", "n", "-f")
