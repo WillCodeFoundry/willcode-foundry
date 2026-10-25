@@ -2,7 +2,10 @@
 
 import subprocess
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import NoReturn
+
+from foundry.agent_sandbox.sandbox import Sandbox
 
 Response = str | int | tuple[int, str]
 
@@ -64,3 +67,60 @@ class FakeHost:
     @property
     def commands(self) -> list[tuple[str, ...]]:
         return [command for command, _ in self.calls]
+
+
+class Attached(Exception):
+    """Raised by FakeSandbox.attach instead of handing this process over."""
+
+
+class FakeSandbox:
+    """A sandbox in memory, as agent_sandbox.sandbox.Sandbox describes it.
+
+    A test sets up what the sandbox is like (whether it exists, what keys reach it, which commands
+    fail inside), then checks where it ended up.
+    """
+
+    def __init__(
+        self,
+        *,
+        exists: bool = False,
+        forwarded_key_fingerprints: set[str] | None = None,
+        exit_codes_by_command: Mapping[tuple[str, ...], int] | None = None,
+    ) -> None:
+        self.exists = exists
+        self.created = False
+        self.github_ssh_allowed = False
+        self.github_host_keys_trusted = False
+        self.github_token_file: Path | None = None
+        self.commands_run: list[tuple[str, ...]] = []
+        self._forwarded_key_fingerprints = forwarded_key_fingerprints
+        self._exit_codes_by_command = dict(exit_codes_by_command or {})
+
+    def start_if_exists(self) -> bool:
+        return self.exists
+
+    def create(self) -> None:
+        self.exists = self.created = True
+
+    def allow_github_ssh(self) -> None:
+        self.github_ssh_allowed = True
+
+    def trust_github_host_keys(self) -> None:
+        self.github_host_keys_trusted = True
+
+    def set_github_token_file(self, github_token_path: Path | None) -> None:
+        self.github_token_file = github_token_path
+
+    def forwarded_key_fingerprints(self) -> set[str] | None:
+        return None if self._forwarded_key_fingerprints is None else set(self._forwarded_key_fingerprints)
+
+    def run(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        command = tuple(command)
+        self.commands_run.append(command)
+        return subprocess.CompletedProcess(command, self._exit_codes_by_command.get(command, 0), stdout="", stderr="")
+
+    def attach(self) -> NoReturn:
+        raise Attached()
+
+
+_: type[Sandbox] = FakeSandbox  # FakeSandbox implements the port

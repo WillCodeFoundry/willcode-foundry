@@ -1,172 +1,198 @@
+"""prepare: what a launch does to the sandbox, against a FakeSandbox, with a real SshAgent over a FakeHost.
+
+The sbx command line behind each step is SbxCli's, tested in test_sandbox.py.
+"""
+
 import os
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.launcher import LaunchRequest, prepare
-from foundry.agent_sandbox.sandbox import SbxCli
+from foundry.agent_sandbox.sandbox import Sandbox
 from foundry.agent_sandbox.ssh_agent import SshAgent
+from tests.agent_sandbox.fakes import FakeHost, FakeSandbox
 
-FP = "256 SHA256:abc comment (ED25519)"
-TOKEN = "ghp_never_in_a_command_line"
+KEY_FINGERPRINT = "SHA256:abc"
 
 
-class Responses(dict):  # type: ignore[type-arg]
-    """FakeHost responses that also accept any `sh -c` known_hosts script."""
-
-    def __init__(self, sdir: Path, base: dict) -> None:  # type: ignore[type-arg]
-        super().__init__(base)
-        self._sh = ("sbx", "env", "exec", str(sdir), "--", "sh", "-c")
-
-    def __missing__(self, key):
-        if key[:7] == self._sh:
-            return ""
-        raise KeyError(key)
+class Layout(NamedTuple):
+    agent_kit_dir: Path
+    ssh_key_path: Path
+    definition_dir: Path
+    ssh_agent_socket_path: Path
 
 
 @pytest.fixture
-def layout(tmp_path):
+def layout(tmp_path: Path) -> Layout:
+    """An agent kit, a key, and a session whose definition points at them."""
     kit = tmp_path / "kit"
     kit.mkdir()
     key = tmp_path / "key"
     key.write_text("k")
-    sdir = tmp_path / "s"
-    sdir.mkdir()
+    definition_dir = tmp_path / "s"
+    definition_dir.mkdir()
     (tmp_path / "ws").mkdir()
-    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(sdir)
-    return kit, key, sdir, tmp_path / "n.sock"
+    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(definition_dir)
+    return Layout(kit, key, definition_dir, tmp_path / "sockets" / "n.sock")
 
 
-def run_prepare(layout, host, **request) -> LaunchRequest:
-    """prepare() for a launch request pointing at the layout's definition."""
-    _, key, sdir, sock = layout
-    launch_request = LaunchRequest(**{"definition_dir": sdir, "ssh_key_path": key, **request})
-    sandbox = SbxCli(host, sandbox_name="n", definition_dir=sdir, ssh_agent_socket_path=sock)
-    prepare(launch_request, SandboxDefinition.read(sdir), SshAgent(host, sock, os.getuid()), sandbox)
-    return launch_request
-
-
-def exec_command(sdir: Path, *command: str) -> tuple[str, ...]:
-    return ("sbx", "env", "exec", str(sdir), "--", *command)
-
-
-def responses(key: Path, sdir: Path) -> Responses:
-    """The calls every prepare() makes once the agent is up and the sandbox exists."""
-    base = {
-        ("ssh-add", "-l"): [0, FP],
+@pytest.fixture
+def ssh_agent(host: FakeHost, layout: Layout) -> SshAgent:
+    """An ssh-agent already running, holding the layout's key once loaded: three ssh-add calls, answered."""
+    host.responses = {
+        ("ssh-add", "-l"): (0, f"256 {KEY_FINGERPRINT} comment (ED25519)"),
         ("ssh-add", "-D"): "",
-        ("ssh-add", "-q", str(key)): "",
-        exec_command(sdir, "true"): 0,
-        ("sbx", "policy", "allow", "network", "--sandbox", "n", "github.com:22"): "",
-        ("sbx", "secret", "rm", "github", "--sandbox", "n", "-f"): "",
-        exec_command(sdir, "ssh-add", "-l"): FP,
+        ("ssh-add", "-q", str(layout.ssh_key_path)): "",
     }
-    return Responses(sdir, base)
+    return SshAgent(host, layout.ssh_agent_socket_path, os.getuid())
 
 
-def test_a_secret_inside_the_agent_kit_is_refused(layout, host) -> None:
-    kit, _key, _sdir, _sock = layout
-    (kit / "key").write_text("k")
-    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
-        run_prepare(layout, host, ssh_key_path=kit / "key")
+def run_prepare(layout: Layout, ssh_agent: SshAgent, sandbox: FakeSandbox, **request) -> None:
+    """prepare() for a launch request pointing at the layout's definition and key."""
+    launch_request = LaunchRequest(
+        **{"definition_dir": layout.definition_dir, "ssh_key_path": layout.ssh_key_path, **request}
+    )
+    prepare(launch_request, SandboxDefinition.read(layout.definition_dir), ssh_agent, sandbox)
 
 
-def test_a_token_file_inside_the_agent_kit_is_refused(layout, host) -> None:
-    kit, _key, _sdir, _sock = layout
-    (kit / "token").write_text("t")
-    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
-        run_prepare(layout, host, github_token_path=kit / "token")
+def reachable_sandbox(**state) -> FakeSandbox:
+    """A sandbox that the ssh-agent's key reaches, as it should."""
+    return FakeSandbox(forwarded_key_fingerprints={KEY_FINGERPRINT}, **state)
 
 
-def test_a_definition_inside_the_agent_kit_is_refused(layout, host, tmp_path) -> None:
-    kit, key, _sdir, sock = layout
-    inside = kit / "s"
-    inside.mkdir()
-    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(inside)
-    with pytest.raises(SandboxError, match="the sandbox could rewrite it"):
-        run_prepare((kit, key, inside, sock), host)
+# --- what prepare does ------------------------------------------------------------
 
 
-def test_an_agent_kit_path_with_a_colon_is_refused(layout, host, tmp_path) -> None:
-    _kit, _key, sdir, _sock = layout
-    colon_kit = tmp_path / "a:b"
-    colon_kit.mkdir()
-    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=colon_kit, variables={}).write(sdir)
-    with pytest.raises(SandboxError, match="contains ':'"):
-        run_prepare(layout, host)
+def test_a_missing_sandbox_is_created_and_given_github_access(layout, ssh_agent) -> None:
+    sandbox = reachable_sandbox()
+
+    run_prepare(layout, ssh_agent, sandbox)
+
+    assert sandbox.created
+    assert sandbox.github_ssh_allowed and sandbox.github_host_keys_trusted
 
 
-def test_a_missing_ssh_key_is_refused(layout, host, tmp_path) -> None:
-    with pytest.raises(SandboxError, match=r"ssh key '.*' is not a file"):
-        run_prepare(layout, host, ssh_key_path=tmp_path / "missing")
+def test_an_existing_sandbox_is_reused(layout, ssh_agent) -> None:
+    sandbox = reachable_sandbox(exists=True)
+
+    run_prepare(layout, ssh_agent, sandbox)
+
+    assert not sandbox.created
+    assert sandbox.github_ssh_allowed and sandbox.github_host_keys_trusted
 
 
-def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> None:
-    _kit, key, sdir, sock = layout
-    host.responses = responses(key, sdir)
-    host.responses[("ssh-add", "-l")] = [2, 0, FP]  # no agent; started; listing
-    host.responses[("ssh-agent", "-a", str(sock), "-s")] = ""
-    host.responses[exec_command(sdir, "true")] = [1, 0]  # absent, then present
-    host.responses[("sbx", "env", "create", "--auto-approve", str(sdir))] = ""
-    host.responses[exec_command(sdir, "/k/bin/session-init")] = ""
+def test_the_sandbox_gets_the_token_file_and_a_launch_without_one_takes_it_away(layout, ssh_agent, tmp_path) -> None:
+    token_file = tmp_path / "dev.token"
+    token_file.write_text("t")
+    sandbox = reachable_sandbox(exists=True)
 
-    run_prepare(layout, host, init_command=("/k/bin/session-init",))
+    run_prepare(layout, ssh_agent, sandbox, github_token_path=token_file)
+    assert sandbox.github_token_file == token_file
 
-    cmds = host.commands
-    assert ("sbx", "env", "create", "--auto-approve", str(sdir)) in cmds
-    assert cmds.index(exec_command(sdir, "/k/bin/session-init")) > cmds.index(exec_command(sdir, "ssh-add", "-l"))
+    run_prepare(layout, ssh_agent, sandbox)
+    assert sandbox.github_token_file is None
 
 
-def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path) -> None:
-    _kit, key, sdir, _sock = layout
-    token_file = tmp_path / "secrets dir" / "dev.token"
-    token_file.parent.mkdir()
-    token_file.write_text(TOKEN)
-    set_token = ("sbx", "secret", "set", "github", "--sandbox", "n", "--command", f"cat '{token_file}'")
-    host.responses = responses(key, sdir)
-    host.responses[set_token] = ""
+def test_init_runs_once_the_sandbox_sees_the_key(layout, ssh_agent) -> None:
+    sandbox = reachable_sandbox()
 
-    run_prepare(layout, host, github_token_path=token_file)
+    run_prepare(layout, ssh_agent, sandbox, init_command=("/k/bin/session-init",))
 
-    cmds = host.commands
-    assert cmds.index(("sbx", "secret", "rm", "github", "--sandbox", "n", "-f")) < cmds.index(set_token)
-    assert not any(TOKEN in " ".join(command) for command in cmds)
+    assert sandbox.commands_run == [("/k/bin/session-init",)]
 
 
-def test_prepare_aborts_when_init_fails(layout, host) -> None:
-    _kit, key, sdir, _sock = layout
-    host.responses = responses(key, sdir)
-    host.responses[exec_command(sdir, "init")] = (1, "boom")
+@pytest.mark.parametrize(
+    ("forwarded_key_fingerprints", "found"),
+    [(None, "no ssh-agent"), ({"SHA256:other"}, "keys"), (set(), "keys")],
+)
+def test_init_never_runs_when_the_sandbox_sees_other_keys(layout, ssh_agent, forwarded_key_fingerprints, found):
+    sandbox = FakeSandbox(forwarded_key_fingerprints=forwarded_key_fingerprints)
 
-    with pytest.raises(SandboxError, match="init failed"):
-        run_prepare(layout, host, init_command=("init",))
-
-
-def test_prepare_never_removes_a_sandbox(layout, host) -> None:
-    _kit, key, sdir, _sock = layout
-    host.responses = responses(key, sdir)
-
-    run_prepare(layout, host)
-
-    assert not any(command[:3] == ("sbx", "env", "rm") for command in host.commands)
+    with pytest.raises(SandboxError, match=f"the sandbox sees {found}"):
+        run_prepare(layout, ssh_agent, sandbox, init_command=("/k/bin/session-init",))
+    assert sandbox.commands_run == []
 
 
-def test_an_empty_agent_never_counts_as_the_expected_keys(layout, host) -> None:
-    # The host agent lists no keys after loading, and the sandbox's agent is
-    # empty too: the sets match, but nothing could push.
-    _kit, key, sdir, _sock = layout
-    host.responses = responses(key, sdir)
-    host.responses[("ssh-add", "-l")] = [0, 1]  # running; then lists no keys
-    host.responses[exec_command(sdir, "ssh-add", "-l")] = 1
+def test_an_empty_ssh_agent_never_counts_as_the_expected_keys(layout, ssh_agent, host) -> None:
+    # The host's ssh-agent lists no keys after loading, and the sandbox's is empty too:
+    # the sets match, but nothing could push.
+    host.responses[("ssh-add", "-l")] = [0, 1]  # running; then holding no keys
+    sandbox = FakeSandbox(forwarded_key_fingerprints=set())
 
     with pytest.raises(SandboxError, match="holds no keys after loading them"):
-        run_prepare(layout, host)
+        run_prepare(layout, ssh_agent, sandbox)
 
 
-def test_a_session_whose_workspace_is_gone_is_refused(layout, host, tmp_path) -> None:
+def test_prepare_aborts_when_init_fails(layout, ssh_agent) -> None:
+    sandbox = reachable_sandbox(exit_codes_by_command={("init",): 1})
+
+    with pytest.raises(SandboxError, match=r"init failed \(init\)"):
+        run_prepare(layout, ssh_agent, sandbox, init_command=("init",))
+
+
+def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
+    """The launcher never removes a sandbox; adding a step to the port should be a decision."""
+    steps = {name for name in vars(Sandbox) if not name.startswith("_")}
+    assert steps == {
+        "start_if_exists",
+        "create",
+        "allow_github_ssh",
+        "trust_github_host_keys",
+        "set_github_token_file",
+        "forwarded_key_fingerprints",
+        "run",
+        "attach",
+    }
+
+
+# --- layouts prepare refuses, before touching anything ------------------------------
+
+
+def test_a_secret_inside_the_agent_kit_is_refused(layout, ssh_agent) -> None:
+    (layout.agent_kit_dir / "key").write_text("k")
+    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
+        run_prepare(layout, ssh_agent, FakeSandbox(), ssh_key_path=layout.agent_kit_dir / "key")
+
+
+def test_a_token_file_inside_the_agent_kit_is_refused(layout, ssh_agent) -> None:
+    (layout.agent_kit_dir / "token").write_text("t")
+    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
+        run_prepare(layout, ssh_agent, FakeSandbox(), github_token_path=layout.agent_kit_dir / "token")
+
+
+def test_a_definition_inside_the_agent_kit_is_refused(layout, ssh_agent, tmp_path) -> None:
+    inside = layout.agent_kit_dir / "s"
+    inside.mkdir()
+    definition = SandboxDefinition(
+        name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=layout.agent_kit_dir, variables={}
+    )
+    definition.write(inside)
+    with pytest.raises(SandboxError, match="the sandbox could rewrite it"):
+        run_prepare(layout._replace(definition_dir=inside), ssh_agent, FakeSandbox())
+
+
+def test_an_agent_kit_path_with_a_colon_is_refused(layout, ssh_agent, tmp_path) -> None:
+    colon_kit = tmp_path / "a:b"
+    colon_kit.mkdir()
+    definition = SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=colon_kit, variables={})
+    definition.write(layout.definition_dir)
+    with pytest.raises(SandboxError, match="contains ':'"):
+        run_prepare(layout, ssh_agent, FakeSandbox())
+
+
+def test_a_missing_ssh_key_is_refused(layout, ssh_agent, tmp_path) -> None:
+    with pytest.raises(SandboxError, match=r"ssh key '.*' is not a file"):
+        run_prepare(layout, ssh_agent, FakeSandbox(), ssh_key_path=tmp_path / "missing")
+
+
+def test_a_session_whose_workspace_is_gone_is_refused(layout, ssh_agent, tmp_path) -> None:
     # A session from before the workspace moved into it, its /tmp workspace since cleared.
     (tmp_path / "ws").rmdir()
+    sandbox = FakeSandbox()
     with pytest.raises(SandboxError, match=r"workspace '.*ws' is not a directory"):
-        run_prepare(layout, host)
+        run_prepare(layout, ssh_agent, sandbox)
+    assert not sandbox.created
