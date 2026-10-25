@@ -44,7 +44,7 @@ jobs:
           shellcheck --severity=warning --external-sources
           agent-kit/bin/session-init agent-kit/bin/session-harden
           agent-kit/hooks/pre-commit agent-kit/hooks/prepare-commit-msg agent-kit/hooks/pre-push
-          agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh
+          agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh
           scripts/update-skills
 
   mypy:

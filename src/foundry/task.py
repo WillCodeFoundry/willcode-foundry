@@ -57,6 +57,11 @@ class Task:
         """The task's notes folder on NOTES_BRANCH, relative to the repository root. Holds its TASK_FILE."""
         return f"{NOTES_ROOT}/{self.id}"
 
+    @property
+    def task_file(self) -> str:
+        """The task's TASK_FILE on NOTES_BRANCH, relative to the repository root."""
+        return f"{self.notes_dir}/{TASK_FILE}"
+
 
 def load_template(template_dir: Path) -> dict[str, str]:
     """Every file directly in ``template_dir``, by name: what a new task's notes folder starts with.

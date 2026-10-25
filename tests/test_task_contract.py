@@ -1,47 +1,58 @@
-"""A task's names agree everywhere they are spelled out: Task in src/foundry/task.py, the agent kit's
-agent-kit/lib/task.sh, and the rulesets in config/repo-policy/rulesets.yaml that protect a task's branches."""
+"""A task's names reach everywhere they are needed from Task in src/foundry/task.py: into the
+sandbox as the AGENT_* variables the session sets, which the agent kit reads, and into the
+rulesets in config/repo-policy/rulesets.yaml, which must spell them out for GitHub."""
 
-import os
-import subprocess
+import re
+from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
 from foundry import yaml_io
-from foundry.task import NOTES_BRANCH, NOTES_ROOT, TASK_FILE, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
-TASK_SH = REPO_ROOT / "agent-kit" / "lib" / "task.sh"
+AGENT_KIT = REPO_ROOT / "agent-kit"
 RULESETS = REPO_ROOT / "config" / "repo-policy" / "rulesets.yaml"
 
 
-def source_task_sh(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    script = (
-        'source "$1"; '
-        'printf "%s\\n" "$TASK_BRANCH" "$NOTES_BRANCH" "$NOTES_ROOT" '
-        '"$TASK_NOTES_RELATIVE_PATH" "$TASK_FILE_RELATIVE_PATH"'
-    )
-    return subprocess.run(
-        ["bash", "-c", script, "bash", str(TASK_SH)], env=env, capture_output=True, text=True, check=False
-    )
+def agent_kit_files() -> list[Path]:
+    """Every text file in the agent kit: its scripts, and the instructions the agent reads."""
+    files = []
+    for path in sorted(AGENT_KIT.rglob("*")):
+        if path.is_file():
+            try:
+                path.read_text()
+            except UnicodeDecodeError:
+                continue
+            files.append(path)
+    return files
 
 
-def test_the_agent_kit_names_a_task_as_task_py_does() -> None:
-    result = source_task_sh({"PATH": os.environ["PATH"], "AGENT_TASK": "t1"})
+def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
+    sandbox_variables: Callable[[Task], dict[str, str]],
+) -> None:
+    variables = sandbox_variables(Task("t1"))
+    used = {
+        (name, str(path.relative_to(REPO_ROOT)))
+        for path in agent_kit_files()
+        for name in re.findall(r"\bAGENT_[A-Z_]+\b", path.read_text())
+    }
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        Task("t1").branch,
-        NOTES_BRANCH,
-        NOTES_ROOT,
-        Task("t1").notes_dir,
-        f"{Task('t1').notes_dir}/{TASK_FILE}",
+    assert [(name, where) for name, where in sorted(used) if name not in variables] == []
+
+
+def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:
+    """Commands and paths in the kit use the variables; a branch may still be named in prose."""
+    spelled_out = re.compile(rf"(?<![\w$]){re.escape(NOTES_ROOT)}/|\btask/\$")
+    found = [
+        f"{path.relative_to(REPO_ROOT)}:{number}: {line.strip()}"
+        for path in agent_kit_files()
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if spelled_out.search(line)
     ]
 
-
-def test_the_agent_kit_refuses_to_name_a_task_without_its_id() -> None:
-    result = source_task_sh({"PATH": os.environ["PATH"]})
-    assert result.returncode != 0 and "AGENT_TASK is not set" in result.stderr
+    assert found == []
 
 
 def ref_name_lists_naming_task_branches() -> list[tuple[str, list[str]]]:

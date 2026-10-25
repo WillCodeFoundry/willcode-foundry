@@ -26,12 +26,17 @@ paths.
 | `AGENT_NOTES_DIR` | the notes checkout, a git worktree of the same repo |
 | `AGENT_REPO_URL` | the project repository on GitHub; your checkout was cloned from it |
 | `AGENT_KIT_DIR` | the `agent-kit` directory: shared instructions, roles, skills, memory. Mounted read-only. |
+| `AGENT_TASK_BRANCH` | your task's branch, where the code goes |
+| `AGENT_NOTES_BRANCH` | the branch holding every task's notes |
+| `AGENT_NOTES_ROOT` | the folder on that branch where every task's notes sit; never on the task branch |
+| `AGENT_TASK_NOTES` | your task's notes folder, relative to the notes checkout |
+| `AGENT_TASK_FILE` | your task's `TASK.md`, relative to the notes checkout |
 
 | What | Where | Branch |
 |---|---|---|
-| Code checkout | `$AGENT_PROJECT_DIR` | `task/$AGENT_TASK` |
-| Notes checkout | `$AGENT_NOTES_DIR` | `agent-notes` |
-| Your task's notes | `$AGENT_NOTES_DIR/.agent/$AGENT_TASK/` | `agent-notes` |
+| Code checkout | `$AGENT_PROJECT_DIR` | `$AGENT_TASK_BRANCH` |
+| Notes checkout | `$AGENT_NOTES_DIR` | `$AGENT_NOTES_BRANCH` |
+| Your task's notes | `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/` | `$AGENT_NOTES_BRANCH` |
 
 The `agent-kit` directory contains:
 
@@ -125,7 +130,7 @@ For each step:
 1. Make the change in the code checkout, with tests as the project requires.
 2. Run the project's checks (tests, lint) and make them pass. Never change a
    test only to make it pass.
-3. Commit the code on `task/$AGENT_TASK` with a message that says why.
+3. Commit the code on `$AGENT_TASK_BRANCH` with a message that says why.
 4. Update `PROGRESS.md` (and `LEARNINGS.md` if you learned something), then
    commit in the notes checkout.
 
@@ -163,7 +168,7 @@ If you run out of turns or time, push whatever state you have and make sure
 
 ## 4. Git rules
 
-### Code checkout (`task/$AGENT_TASK`)
+### Code checkout (`$AGENT_TASK_BRANCH`)
 
 Write commit messages as `$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`
 describes: a typed summary and a body saying why. A `Task: $AGENT_TASK`
@@ -173,12 +178,12 @@ trailer is added for you on this branch; you don't need to write it. No
 ```bash
 git add <files>
 git commit -m "feat(scope): summary of the change" -m "Why it was needed."
-git push -u origin task/$AGENT_TASK
+git push -u origin "$AGENT_TASK_BRANCH"
 ```
 
 - Only code and project documentation go here.
-- Never commit task notes here. The hooks refuse anything under `.agent/`.
-- Never touch any branch other than `task/$AGENT_TASK`.
+- Never commit task notes here. The hooks refuse anything under `$AGENT_NOTES_ROOT/`.
+- Never touch any branch other than `$AGENT_TASK_BRANCH`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
   has moved and conflicts, note it in Blockers and ask.
@@ -187,12 +192,12 @@ git push -u origin task/$AGENT_TASK
 
 ```bash
 cd "$AGENT_NOTES_DIR"
-git add ".agent/$AGENT_TASK/" && git commit -m "$AGENT_TASK: progress"
-git pull --rebase origin agent-notes
-git push origin agent-notes
+git add "$AGENT_TASK_NOTES/" && git commit -m "$AGENT_TASK: progress"
+git pull --rebase origin "$AGENT_NOTES_BRANCH"
+git push origin "$AGENT_NOTES_BRANCH"
 ```
 
-- Only change files inside `.agent/$AGENT_TASK/`. Other agents use this branch
+- Only change files inside `$AGENT_TASK_NOTES/`. Other agents use this branch
   for their own tasks at the same time; hooks refuse changes to anything else.
 - Always `pull --rebase` before pushing. Because every agent touches only its
   own folder, this never conflicts.
@@ -251,6 +256,6 @@ Asking early is always better than guessing.
 - [ ] Project checks pass on the last code commit
 - [ ] `PROGRESS.md` reflects exactly where things stand, including next steps
 - [ ] New learnings appended to `LEARNINGS.md`
-- [ ] Code committed and pushed on `task/$AGENT_TASK`
+- [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
 - [ ] Notes committed and pushed on `agent-notes`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation

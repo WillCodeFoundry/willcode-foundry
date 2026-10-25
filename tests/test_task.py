@@ -88,7 +88,12 @@ def head(origin_dir: Path, git_env: dict[str, str], branch: str) -> str:
 
 def test_a_task_is_its_lowercased_id_its_branch_and_its_notes_folder() -> None:
     a_task = Task("WCF-0042")
-    assert (a_task.id, a_task.branch, a_task.notes_dir) == ("wcf-0042", "task/wcf-0042", ".agent/wcf-0042")
+    assert (a_task.id, a_task.branch, a_task.notes_dir, a_task.task_file) == (
+        "wcf-0042",
+        "task/wcf-0042",
+        ".agent/wcf-0042",
+        ".agent/wcf-0042/TASK.md",
+    )
     assert a_task == Task("wcf-0042")
 
 
