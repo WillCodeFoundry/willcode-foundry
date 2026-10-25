@@ -2,25 +2,14 @@
 
 from pathlib import Path
 
-import pytest
-
-from foundry import cli, config, repo_policy
-from foundry.commands.repo import CheckedProject, check_one_project, report
-from foundry.errors import FoundryError
+from foundry import cli, repo_policy
+from foundry.commands.repo import check_one_project, report
+from foundry.config import Project
 from foundry.repo_policy import Deviation, ProjectCheck, RulesetAction, RulesetChange
 from tests.fakes import FakeGitHub
 
 REPO_ROOT = Path(__file__).parents[1]
 POLICY = repo_policy.load(REPO_ROOT / "config" / "repo-policy")
-CONFIG = config.parse(
-    {
-        "name": "test",
-        "projects": {
-            "store": {"url": "git@github.com:o/store.git"},
-        },
-        "roles": {},
-    }
-)
 
 
 def conforming(fake: FakeGitHub, repo_slug: str) -> None:
@@ -31,10 +20,13 @@ def conforming(fake: FakeGitHub, repo_slug: str) -> None:
         fake.create_ruleset(repo_slug, ruleset)
 
 
-def check(fake: FakeGitHub, project_name: str, *, fix: bool = False, foundry_config: config.Config = CONFIG):
+STORE = Project(name="store", url="git@github.com:o/store.git")
+
+
+def check(fake: FakeGitHub, project: Project = STORE, *, fix: bool = False):
     """The project's printed lines, and whether it conforms."""
-    project = check_one_project(foundry_config, POLICY, fake, project_name, fix=fix)
-    return report(project), project.result.conforms
+    result = check_one_project(POLICY, fake, project, fix=fix)
+    return report(project, result), result.conforms
 
 
 # --- check_one_project ----------------------------------------------------------
@@ -44,7 +36,7 @@ def test_a_conforming_project() -> None:
     fake = FakeGitHub()
     conforming(fake, "o/store")
 
-    assert check(fake, "store") == (["store (o/store)", "  conforms"], True)
+    assert check(fake) == (["store (o/store)", "  conforms"], True)
 
 
 def test_a_deviating_project() -> None:
@@ -52,7 +44,7 @@ def test_a_deviating_project() -> None:
     conforming(fake, "o/store")
     fake.files["o/store"][repo_policy.CODEOWNERS_PATH] = "* @someone\n"
 
-    lines, conforms = check(fake, "store")
+    lines, conforms = check(fake)
 
     assert lines[:2] == ["store (o/store)", "  differs  .github/CODEOWNERS"] and not conforms
 
@@ -61,7 +53,7 @@ def test_a_project_github_refuses_is_reported_not_raised() -> None:
     fake = FakeGitHub()
     fake.unavailable["o/store"] = "Upgrade to GitHub Pro to use rulesets (HTTP 403)"
 
-    assert check(fake, "store") == (
+    assert check(fake) == (
         ["store (o/store)", "  error    Upgrade to GitHub Pro to use rulesets (HTTP 403)"],
         False,
     )
@@ -72,7 +64,7 @@ def test_fix_creates_the_missing_rulesets_reports_them_then_conforms() -> None:
     conforming(fake, "o/store")
     fake.stored_rulesets["o/store"] = {}  # every ruleset missing
 
-    assert check(fake, "store", fix=True) == (
+    assert check(fake, fix=True) == (
         [
             "store (o/store)",
             *[f"  created  ruleset {ruleset['name']}" for ruleset in POLICY.rulesets],
@@ -82,17 +74,10 @@ def test_fix_creates_the_missing_rulesets_reports_them_then_conforms() -> None:
     )
 
 
-def test_an_unknown_project_name_is_refused() -> None:
-    with pytest.raises(FoundryError, match="unknown project 'nope'"):
-        check(FakeGitHub(), "nope")
-
-
 def test_a_project_whose_url_is_not_githubs_is_reported_not_raised() -> None:
-    foundry_config = config.parse(
-        {"name": "test", "projects": {"elsewhere": {"url": "https://gitlab.com/o/p.git"}}, "roles": {}}
-    )
+    elsewhere = Project(name="elsewhere", url="https://gitlab.com/o/p.git")
 
-    assert check(FakeGitHub(), "elsewhere", foundry_config=foundry_config) == (
+    assert check(FakeGitHub(), elsewhere) == (
         ["elsewhere", "  error    'https://gitlab.com/o/p.git' is not a GitHub repository URL"],
         False,
     )
@@ -102,7 +87,7 @@ def test_a_project_whose_url_is_not_githubs_is_reported_not_raised() -> None:
 
 
 def test_a_conforming_repository() -> None:
-    assert report(CheckedProject("store", "o/store", ProjectCheck([], []))) == ["store (o/store)", "  conforms"]
+    assert report(STORE, ProjectCheck([], [])) == ["store (o/store)", "  conforms"]
 
 
 def test_what_fix_changed_comes_before_the_result() -> None:
@@ -110,7 +95,7 @@ def test_what_fix_changed_comes_before_the_result() -> None:
         RulesetChange("agent-branches", RulesetAction.CREATED),
         RulesetChange("tags", RulesetAction.UPDATED),
     ]
-    assert report(CheckedProject("store", "o/store", ProjectCheck(changes, []))) == [
+    assert report(STORE, ProjectCheck(changes, [])) == [
         "store (o/store)",
         "  created  ruleset agent-branches",
         "  updated  ruleset tags",
@@ -120,7 +105,7 @@ def test_what_fix_changed_comes_before_the_result() -> None:
 
 def test_each_deviation_with_its_diff_indented() -> None:
     deviation = Deviation(".github/CODEOWNERS", "--- a\n+++ b\n-* @someone\n+* @will\n")
-    assert report(CheckedProject("store", "o/store", ProjectCheck([], [deviation]))) == [
+    assert report(STORE, ProjectCheck([], [deviation])) == [
         "store (o/store)",
         "  differs  .github/CODEOWNERS",
         "           --- a",
@@ -132,7 +117,7 @@ def test_each_deviation_with_its_diff_indented() -> None:
 
 def test_an_error_follows_the_changes_made_before_it() -> None:
     changes = [RulesetChange("agent-branches", RulesetAction.CREATED)]
-    assert report(CheckedProject("store", "o/store", ProjectCheck(changes, [], error="boom (HTTP 502)"))) == [
+    assert report(STORE, ProjectCheck(changes, [], error="boom (HTTP 502)")) == [
         "store (o/store)",
         "  created  ruleset agent-branches",
         "  error    boom (HTTP 502)",

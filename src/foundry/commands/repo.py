@@ -1,10 +1,9 @@
 """foundry repo check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
 
 import argparse
-from typing import NamedTuple
 
 from foundry import config, paths, repo_policy
-from foundry.config import Config
+from foundry.config import Project
 from foundry.errors import FoundryError
 from foundry.github import GhCli, GitHub, repo_slug_from_url
 from foundry.repo_policy import ProjectCheck, RepoPolicy
@@ -41,39 +40,29 @@ def check_main(args: argparse.Namespace) -> int:
 
     all_conform = True
     for project_name in args.project_names or sorted(foundry_config.projects):
-        project = check_one_project(foundry_config, policy, github, project_name, fix=args.fix)
-        print("\n".join(report(project)))
-        all_conform = all_conform and project.result.conforms
+        project = foundry_config.project(project_name)
+        result = check_one_project(policy, github, project, fix=args.fix)
+        print("\n".join(report(project, result)))
+        all_conform = all_conform and result.conforms
     return 0 if all_conform else 1
 
 
-class CheckedProject(NamedTuple):
-    name: str
-    repo_slug: str | None
-    """None when the project's URL isn't a GitHub repository's; the result says why."""
-    result: ProjectCheck
-
-
-def check_one_project(
-    foundry_config: Config, policy: RepoPolicy, github: GitHub, project_name: str, *, fix: bool
-) -> CheckedProject:
-    """Check one project's repository; a URL that isn't GitHub's is part of the result, like a GitHub error.
-
-    Raises FoundryError for a project config/foundry.yaml doesn't list.
-    """
-    project = foundry_config.project(project_name)
+def check_one_project(policy: RepoPolicy, github: GitHub, project: Project, *, fix: bool) -> ProjectCheck:
+    """Check one project's repository; a URL that isn't GitHub's is part of the result, like a GitHub error."""
     try:
         repo_slug = repo_slug_from_url(project.url)
     except FoundryError as error:
-        return CheckedProject(project_name, None, ProjectCheck([], [], error=str(error)))
-    return CheckedProject(project_name, repo_slug, repo_policy.check_project(github, repo_slug, policy, fix=fix))
+        return ProjectCheck([], [], error=str(error))
+    return repo_policy.check_project(github, repo_slug, policy, fix=fix)
 
 
-def report(project: CheckedProject) -> list[str]:
+def report(project: Project, result: ProjectCheck) -> list[str]:
     """The lines check prints for one project: its header, what --fix changed, then its error, 'conforms', or
     each deviation's diff."""
-    result = project.result
-    lines = [project.name if project.repo_slug is None else f"{project.name} ({project.repo_slug})"]
+    try:
+        lines = [f"{project.name} ({repo_slug_from_url(project.url)})"]
+    except FoundryError:
+        lines = [project.name]  # the result's error says why
     lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
     if result.error is not None:
         return [*lines, f"  error    {result.error}"]
