@@ -94,7 +94,6 @@ def test_the_init_command_runs_the_agent_kit_the_sandbox_was_created_with(tmp_pa
     assert opened.init_command == (str(tmp_path / "before" / "agent-kit" / "bin" / "session-init"),)
 
 
-@pytest.mark.xfail(strict=True, reason="a session folder left without its definition is refused")
 def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> None:
     (tmp_path / "sessions" / "dev-tkt-store-wcf-0042" / "workspace").mkdir(parents=True)
 
@@ -102,3 +101,14 @@ def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> No
 
     assert opened.created
     assert opened.definition == SandboxDefinition.read(opened.dir)
+
+
+@pytest.mark.parametrize("leftover", ["workspace/notes.txt", "notes.txt"])
+def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_path: Path, leftover: str) -> None:
+    session_dir = tmp_path / "sessions" / "dev-tkt-store-wcf-0042"
+    (session_dir / "workspace").mkdir(parents=True)
+    (session_dir / leftover).write_text("x")
+
+    with pytest.raises(FoundryError, match="holds more than an empty workspace"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("WCF-0042"))
+    assert not (session_dir / SandboxDefinition.FILE_NAME).exists()

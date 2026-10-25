@@ -36,7 +36,7 @@ class Session:
     dir: Path
     definition: SandboxDefinition
     created: bool
-    """True when this call created the session."""
+    """True when this call created the session, or finished one a stopped launch left without its definition."""
 
     @property
     def init_command(self) -> tuple[str, ...]:
@@ -53,8 +53,9 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     """The session for this role on this task in this project, created the first time.
 
     Raises FoundryError if the sandbox name would be too long, if the session
-    directory exists without its definition, or if the existing definition was
-    written for another role, task or repository.
+    directory exists without its definition but holds more than an empty
+    workspace, or if the existing definition was written for another role,
+    task or repository.
     """
     sandbox_name = _sandbox_name(role.name, project.name, task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
@@ -126,15 +127,26 @@ def _sandbox_definition(
 def _create(session_dir: Path, definition: SandboxDefinition) -> None:
     """Create the session directory with its empty workspace, then the sandbox definition.
 
-    Refuses if the directory already exists, so an existing sandbox's
-    definition is never rewritten.
+    The definition is written last, so a session with one is complete. A
+    directory without one, left by a launch that stopped before writing it,
+    is finished if it holds nothing but an empty workspace, and refused if it
+    holds anything else, so nothing it holds is overwritten or mounted.
     """
-    try:
-        session_dir.mkdir(parents=True)
-    except FileExistsError:
-        raise FoundryError(f"session directory {session_dir} already exists") from None
-    definition.workspace_dir.mkdir()
+    if session_dir.exists() and not _holds_only_an_empty_workspace(session_dir, definition.workspace_dir):
+        raise FoundryError(
+            f"session directory {session_dir} exists without its {SandboxDefinition.FILE_NAME} "
+            "and holds more than an empty workspace/; check what is in it, delete it, and launch again"
+        )
+    definition.workspace_dir.mkdir(parents=True, exist_ok=True)
     definition.write(session_dir)
+
+
+def _holds_only_an_empty_workspace(session_dir: Path, workspace_dir: Path) -> bool:
+    if not session_dir.is_dir():
+        return False
+    return all(
+        entry == workspace_dir and entry.is_dir() and not any(entry.iterdir()) for entry in session_dir.iterdir()
+    )
 
 
 def _require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task: Task, repo_url: str) -> None:
