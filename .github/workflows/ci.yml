@@ -37,8 +37,8 @@ jobs:
       # guard-bash is Python without a .py extension, so it is named explicitly.
       - run: uv run ruff format --check . agent-kit/claude/hooks/guard-bash
       - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
-      # The kit's shell scripts, and scripts/update-skills; session-harden and most of session-init have no
-      # tests (they need root inside a sandbox), so this is their main check.
+      # The kit's shell scripts, and scripts/update-skills. session-harden's root mode has no tests (it
+      # changes the machine it runs on), so this is its main check; its --verify checks are tested.
       # Run from the repository root: the kit's source directives are relative to it.
       - run: >-
           shellcheck --severity=warning --external-sources
