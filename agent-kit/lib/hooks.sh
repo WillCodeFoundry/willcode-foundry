@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 # Helpers the git hooks share, so every refusal has the same shape: what was
-# wrong, then what to do instead. Sourced, not executed. A task's names come
-# from the sandbox's AGENT_* variables.
+# wrong, then what to do instead. Sourced, not executed.
 
 # refuse <hook> <message...>: print a refusal that says what was wrong and
 # what to do instead, then exit non-zero.

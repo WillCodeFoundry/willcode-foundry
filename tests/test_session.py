@@ -1,5 +1,6 @@
-"""Sessions, through open_or_create against a foundry root under tmp_path."""
+"""Sessions, through open_or_create against a foundry root under tmp_path; and SessionVariables."""
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
+from foundry.session import SessionVariables
 from foundry.task import Task
 
 TKT_STORE = Project(name="tkt-store", url="git@github.com:o/tkt-store.git")
@@ -97,6 +99,7 @@ def test_the_init_command_runs_the_agent_kit_the_sandbox_was_created_with(tmp_pa
     opened = session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task("t1"))
 
     assert opened.init_command == (str(tmp_path / "before" / "agent-kit" / "bin" / "session-init"),)
+    assert opened.variables.agent_kit_dir == tmp_path / "before" / "agent-kit"  # what the sandbox was told
 
 
 def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> None:
@@ -117,3 +120,64 @@ def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_
     with pytest.raises(FoundryError, match="holds more than an empty workspace"):
         session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("WCF-0042"))
     assert not (session_dir / SandboxDefinition.FILE_NAME).exists()
+
+
+# --- session variables ---------------------------------------------------------
+
+
+def test_the_session_carries_its_variables(tmp_path: Path) -> None:
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("WCF-0042"))
+
+    assert opened.variables == SessionVariables(
+        role_name="dev",
+        task=Task("wcf-0042"),
+        repo_url="git@github.com:o/tkt-store.git",
+        agent_kit_dir=tmp_path / "agent-kit",
+        project_dir="/home/agent/work/tkt-store",
+    )
+    assert opened.variables.as_env() == opened.definition.variables
+
+
+def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
+    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1")).variables
+
+    assert SessionVariables.from_env(variables.as_env()) == variables
+
+
+def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
+    """Rewrite a session's definition with some variables changed, or removed where None: an older foundry's."""
+    definition = SandboxDefinition.read(session_dir)
+    variables = {**definition.variables, **change}
+    kept = {name: value for name, value in variables.items() if value is not None}
+    dataclasses.replace(definition, variables=kept).write(session_dir)
+
+
+def test_a_sandbox_created_without_a_variable_is_refused_naming_it(tmp_path: Path) -> None:
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1"))
+    rewrite_variables(opened.dir, {"AGENT_TASK_FILE": None, "AGENT_NOTES_ROOT": None})
+
+    with pytest.raises(FoundryError, match=r"missing AGENT_NOTES_ROOT, AGENT_TASK_FILE\).*sbx env rm --force"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1"))
+
+
+def test_a_sandbox_created_with_another_name_is_refused_naming_both(tmp_path: Path) -> None:
+    """Its hooks would guard the old branch, so it is recreated rather than reused."""
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1"))
+    rewrite_variables(opened.dir, {"AGENT_NOTES_BRANCH": "notes"})
+
+    with pytest.raises(FoundryError, match="AGENT_NOTES_BRANCH='notes', now 'agent-notes'"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1"))
+
+
+def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
+    variables = SessionVariables(
+        role_name="dev", task=Task("t1"), repo_url="u", agent_kit_dir=Path("/kit"), project_dir="/w/p"
+    )
+
+    assert variables.is_same_sandbox(dataclasses.replace(variables, agent_kit_dir=Path("/moved"), project_dir="/w/q"))
+    for other in (
+        dataclasses.replace(variables, role_name="qa"),
+        dataclasses.replace(variables, task=Task("t2")),
+        dataclasses.replace(variables, repo_url="v"),
+    ):
+        assert not variables.is_same_sandbox(other)

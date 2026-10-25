@@ -1,6 +1,9 @@
 """A task's names reach everywhere they are needed from Task in src/foundry/task.py: into the
 sandbox as the AGENT_* variables the session sets, which the agent kit reads, and into the
-rulesets in config/repo-policy/rulesets.yaml, which must spell them out for GitHub."""
+rulesets in config/repo-policy/rulesets.yaml, which must spell them out for GitHub.
+
+The variables are held in both directions: the kit uses none the session doesn't set, the
+session sets none the kit doesn't read, and AGENTS.md lists exactly the ones it sets."""
 
 import re
 from collections.abc import Callable
@@ -9,10 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from foundry import yaml_io
+from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 AGENT_KIT = REPO_ROOT / "agent-kit"
+AGENTS_MD = AGENT_KIT / "AGENTS.md"
 RULESETS = REPO_ROOT / "config" / "repo-policy" / "rulesets.yaml"
 
 
@@ -30,9 +35,9 @@ def agent_kit_files() -> list[Path]:
 
 
 def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
-    sandbox_variables: Callable[[Task], dict[str, str]],
+    session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    variables = sandbox_variables(Task("t1"))
+    variables = session_variables(Task("t1")).as_env()
     used = {
         (name, str(path.relative_to(REPO_ROOT)))
         for path in agent_kit_files()
@@ -40,6 +45,23 @@ def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
     }
 
     assert [(name, where) for name, where in sorted(used) if name not in variables] == []
+
+
+def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
+    session_variables: Callable[[Task], SessionVariables],
+) -> None:
+    """Outside AGENTS.md, which documents them all: a variable only it names is read by nothing."""
+    kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path != AGENTS_MD)
+
+    assert [name for name in session_variables(Task("t1")).as_env() if not re.search(rf"\b{name}\b", kit_text)] == []
+
+
+def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
+    session_variables: Callable[[Task], SessionVariables],
+) -> None:
+    listed = re.findall(r"^\| `(AGENT_[A-Z_]+)` \|", AGENTS_MD.read_text(), flags=re.MULTILINE)
+
+    assert sorted(listed) == sorted(session_variables(Task("t1")).as_env())
 
 
 def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:

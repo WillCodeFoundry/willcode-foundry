@@ -1,8 +1,8 @@
 """Tasks on a project's repository: what a task's names are, and creating one from the task template.
 
-Task is the one place a task's names are spelled out in Python; agent-kit/lib/task.sh is its
-equivalent in the agent kit, and tests/test_task_contract.py holds the two, and the rulesets, to
-the same names.
+Task is the one place a task's names are spelled out. They reach the agent kit as session
+variables (SessionVariables in session.py), so the kit derives none itself, and
+tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 
 import re
