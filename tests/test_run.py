@@ -7,6 +7,7 @@ import pytest
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch
 from foundry.errors import FoundryError
+from foundry.session import SessionVariables
 from foundry.task import Task
 
 CONFIG = """\
@@ -31,7 +32,7 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
     assert request.definition_dir == session_dir
-    assert SandboxDefinition.read(session_dir).variables["AGENT_TASK"] == "wcf-0042"
+    assert SessionVariables.from_env(SandboxDefinition.read(session_dir).variables).task == Task("wcf-0042")
     assert request.init_command == (str(foundry_root / "agent-kit" / "bin" / "session-init"),)
     assert request.ssh_key_path == foundry_root / "secrets" / "ssh" / "dev"
     assert request.github_token_path is None
