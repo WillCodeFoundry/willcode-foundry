@@ -9,6 +9,7 @@ harmless. When a project really needs to differ, change the policy.
 
 import difflib
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -18,7 +19,7 @@ import yaml
 
 from foundry import yaml_io
 from foundry.errors import FoundryError
-from foundry.github import GitHub
+from foundry.github import GitHub, GitHubError
 
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
@@ -88,22 +89,47 @@ def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Devia
     return [deviation for deviation in found if deviation is not None]
 
 
-def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[RulesetChange]:
+def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[RulesetChange]:
     """Create the policy's rulesets the repository lacks and update those that deviate, in policy order.
 
-    Project files are never written: they're the project's to change.
+    Yields each change once GitHub has made it, so a caller keeps the changes made before a
+    failure. Project files are never written: they're the project's to change.
     """
     actual_rulesets = github.rulesets(repo_slug)
-    changes = []
     for ruleset in policy.rulesets:
         actual = actual_rulesets.get(ruleset["name"])
         if actual is None:
             github.create_ruleset(repo_slug, ruleset)
-            changes.append(RulesetChange(ruleset["name"], RulesetAction.CREATED))
+            yield RulesetChange(ruleset["name"], RulesetAction.CREATED)
         elif _ruleset_deviation(ruleset, actual) is not None:
             github.update_ruleset(repo_slug, actual["id"], ruleset)
-            changes.append(RulesetChange(ruleset["name"], RulesetAction.UPDATED))
-    return changes
+            yield RulesetChange(ruleset["name"], RulesetAction.UPDATED)
+
+
+@dataclass(frozen=True)
+class ProjectCheck:
+    """What checking one repository found: the ruleset changes --fix made, then its deviations, or why it
+    couldn't be checked. Changes made before an error are kept."""
+
+    changes: list[RulesetChange]
+    deviations: list[Deviation]
+    error: str | None = None
+
+    @property
+    def conforms(self) -> bool:
+        return self.error is None and not self.deviations
+
+
+def check_project(github: GitHub, repo_slug: str, policy: RepoPolicy, *, fix: bool) -> ProjectCheck:
+    """Apply the rulesets first if ``fix``, then list the deviations; a GitHub error is part of the result."""
+    changes: list[RulesetChange] = []
+    try:
+        if fix:
+            for change in apply_rulesets(github, repo_slug, policy):
+                changes.append(change)
+        return ProjectCheck(changes, deviations(github, repo_slug, policy))
+    except GitHubError as error:
+        return ProjectCheck(changes, [], error=str(error))
 
 
 def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:

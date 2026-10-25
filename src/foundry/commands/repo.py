@@ -1,10 +1,13 @@
 """foundry repo check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
 
 import argparse
+from collections.abc import Callable
 
 from foundry import config, paths, repo_policy
-from foundry.github import GhCli, GitHubError, repo_slug_from_url
-from foundry.repo_policy import Deviation, RulesetChange
+from foundry.config import Config
+from foundry.errors import FoundryError
+from foundry.github import GhCli, GitHub, repo_slug_from_url
+from foundry.repo_policy import ProjectCheck, RepoPolicy
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -32,32 +35,55 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def check_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, policy and GitHub; exit 0 only if every project conforms."""
     foundry_root = paths.find_foundry_root()
-    foundry_config = config.load(paths.config_path(foundry_root))
-    policy = repo_policy.load(paths.repo_policy_dir(foundry_root))
-    github = GhCli()
+    return check_projects(
+        config.load(paths.config_path(foundry_root)),
+        repo_policy.load(paths.repo_policy_dir(foundry_root)),
+        GhCli(),
+        args.project_names,
+        fix=args.fix,
+    )
 
+
+def check_projects(
+    foundry_config: Config,
+    policy: RepoPolicy,
+    github: GitHub,
+    project_names: list[str],
+    *,
+    fix: bool,
+    emit: Callable[[str], None] = print,
+) -> int:
+    """Check each project, named or all in name order, emitting its report as it goes; 0 only if all conform.
+
+    A project's header is emitted before GitHub is asked about it, so a slow one shows which it is.
+    A project that can't be checked is reported, and the rest are still checked.
+    """
     all_conform = True
-    for project_name in args.project_names or sorted(foundry_config.projects):
-        repo_slug = repo_slug_from_url(foundry_config.project(project_name).url)
+    for project_name in project_names or sorted(foundry_config.projects):
+        project = foundry_config.project(project_name)
         try:
-            changes = repo_policy.apply_rulesets(github, repo_slug, policy) if args.fix else []
-            deviations = repo_policy.deviations(github, repo_slug, policy)
-        except GitHubError as error:
-            print(f"{project_name} ({repo_slug})\n  error    {error}")
+            repo_slug = repo_slug_from_url(project.url)
+        except FoundryError as error:
+            emit(project_name)
+            emit(f"  error    {error}")
             all_conform = False
             continue
-        print("\n".join(report(project_name, repo_slug, changes, deviations)))
-        all_conform = all_conform and not deviations
+        emit(f"{project_name} ({repo_slug})")
+        result = repo_policy.check_project(github, repo_slug, policy, fix=fix)
+        for line in report(result):
+            emit(line)
+        all_conform = all_conform and result.conforms
     return 0 if all_conform else 1
 
 
-def report(project_name: str, repo_slug: str, changes: list[RulesetChange], deviations: list[Deviation]) -> list[str]:
-    """The lines check prints for one project: what --fix changed, then 'conforms' or each deviation's diff."""
-    lines = [f"{project_name} ({repo_slug})"]
-    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in changes]
-    if not deviations:
+def report(result: ProjectCheck) -> list[str]:
+    """The lines under a project's header: what --fix changed, then its error, 'conforms', or each deviation's diff."""
+    lines = [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
+    if result.error is not None:
+        return [*lines, f"  error    {result.error}"]
+    if not result.deviations:
         lines.append("  conforms")
-    for deviation in deviations:
+    for deviation in result.deviations:
         lines.append(f"  differs  {deviation.subject}")
         lines += [f"           {line}" for line in deviation.diff.splitlines()]
     return lines

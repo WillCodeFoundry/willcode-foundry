@@ -6,6 +6,7 @@ import yaml
 
 from foundry import repo_policy
 from foundry.errors import FoundryError
+from foundry.github import GitHubError
 from tests.fakes import FakeGitHub
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -130,7 +131,7 @@ def test_apply_rulesets_creates_the_missing_and_updates_the_deviating_in_policy_
     second_id = fake.ruleset_id("o/r", "second")
     policy = policy_of({**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"})
 
-    changes = repo_policy.apply_rulesets(fake, "o/r", policy)
+    changes = list(repo_policy.apply_rulesets(fake, "o/r", policy))
 
     assert changes == [
         repo_policy.RulesetChange("first", repo_policy.RulesetAction.CREATED),
@@ -145,8 +146,43 @@ def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
     fake.create_ruleset("o/r", RULESET)
     before = fake.rulesets("o/r")
 
-    assert repo_policy.apply_rulesets(fake, "o/r", policy_of(RULESET)) == []
+    assert list(repo_policy.apply_rulesets(fake, "o/r", policy_of(RULESET))) == []
     assert fake.rulesets("o/r") == before
+
+
+class FileReadFails(FakeGitHub):
+    """GitHub that makes ruleset changes, then fails reading a file."""
+
+    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+        raise GitHubError("Server Error (HTTP 502)")
+
+
+def test_check_project_keeps_the_changes_fix_made_before_github_failed() -> None:
+    fake = FileReadFails()
+
+    result = repo_policy.check_project(fake, "o/r", policy_of(RULESET), fix=True)
+
+    assert result == repo_policy.ProjectCheck(
+        [repo_policy.RulesetChange("agent-branches", repo_policy.RulesetAction.CREATED)],
+        [],
+        error="Server Error (HTTP 502)",
+    )
+    assert not result.conforms
+    assert "agent-branches" in fake.rulesets("o/r")
+
+
+def test_check_project_without_fix_changes_nothing() -> None:
+    fake = FakeGitHub()
+
+    result = repo_policy.check_project(fake, "o/r", policy_of(RULESET), fix=False)
+
+    assert result.changes == [] and result.error is None
+    assert [d.subject for d in result.deviations] == [
+        "ruleset agent-branches",
+        ".github/CODEOWNERS",
+        ".github/workflows/ci.yml",
+    ]
+    assert fake.rulesets("o/r") == {}
 
 
 # --- loading the policy -------------------------------------------------------------
