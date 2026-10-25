@@ -32,28 +32,14 @@ def prepare_launch(foundry_root: Path, project_name: str, role_name: str, task: 
     foundry_config = config.load(paths.config_path(foundry_root))
     project = foundry_config.project(project_name)
     role = foundry_config.role(role_name)
-    sandbox_name = session.sandbox_name(role.name, project.name, task)
-    session_dir = paths.session_dir(foundry_root, sandbox_name)
-
-    if not (session_dir / agent_sandbox.SandboxDefinition.FILE_NAME).is_file():
-        new_definition = session.sandbox_definition(
-            sandbox_name=sandbox_name,
-            workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
-            agent_kit_dir=paths.agent_kit_dir(foundry_root),
-            repo_url=project.url,
-            role_name=role.name,
-            task=task,
-            project_name=project.name,
-        )
-        session.create(session_dir, new_definition)
-        print(f"==> session:   {session_dir} (new)", file=sys.stderr)
-    definition = agent_sandbox.SandboxDefinition.read(session_dir)
-    session.require_same_sandbox(definition, role_name=role.name, task=task, repo_url=project.url)
+    opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
+    if opened.created:
+        print(f"==> session:   {opened.dir} (new)", file=sys.stderr)
 
     github_token_path = paths.github_token_path(foundry_root, role.name)
     return agent_sandbox.LaunchRequest(
-        definition_dir=session_dir,
+        definition_dir=opened.dir,
         ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
-        init_command=(str(definition.agent_kit_dir / "bin" / "session-init"),),
+        init_command=opened.init_command,
         github_token_path=github_token_path if github_token_path.is_file() else None,
     )

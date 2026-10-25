@@ -1,4 +1,4 @@
-"""Where things are in a foundry instance. The only module that builds these paths.
+"""Where things are in a foundry instance. The only module that knows the instance layout.
 
 Every function takes the foundry root and returns a path; none of them
 checks that the path exists. ``find_foundry_root`` locates the root by
@@ -11,6 +11,8 @@ from pathlib import Path
 from foundry.errors import FoundryError
 
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
+SESSION_INIT_RELATIVE_PATH = Path("bin") / "session-init"
+"""Inside an agent kit: what a sandbox runs before its agent starts."""
 
 
 def find_foundry_root(start_dir: Path | None = None) -> Path:
