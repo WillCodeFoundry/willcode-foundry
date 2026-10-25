@@ -77,3 +77,12 @@ def test_a_colliding_sandbox_name_is_refused_not_reattached(foundry_root: Path) 
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         prepare_launch(foundry_root, project_name, role_name, Task("t1"))
+
+
+@pytest.mark.xfail(strict=True, reason="a session folder left without its definition is refused")
+def test_a_session_left_without_its_definition_is_finished(foundry_root: Path) -> None:
+    (foundry_root / "sessions" / "dev-tkt-store-wcf-0042" / "workspace").mkdir(parents=True)
+
+    request = prepare_launch(foundry_root, "tkt-store", "dev", Task("WCF-0042"))
+
+    assert SandboxDefinition.read(request.definition_dir).name == "dev-tkt-store-wcf-0042"
