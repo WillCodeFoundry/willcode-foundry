@@ -3,14 +3,19 @@
 ``sessions/<sandbox>/`` holds the sandbox definition, written once when the
 sandbox is first launched (SandboxDefinition knows its format), and the
 empty ``workspace/`` directory sbx requires as the sandbox's primary
-workspace.
+workspace. ``open_or_create`` is the whole interface: it names the sandbox,
+creates its session the first time, and on every later launch reads the
+definition back and refuses one written for another role, task or repository.
 """
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from foundry import paths
 from foundry.agent_sandbox import SandboxDefinition
+from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import Task
 
@@ -24,11 +29,59 @@ _SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
 SANDBOX_WORK_DIR: Final = "/home/agent/work"
 
 
+@dataclass(frozen=True)
+class Session:
+    """One sandbox's session: its directory and the sandbox definition in it."""
+
+    dir: Path
+    definition: SandboxDefinition
+    created: bool
+    """True when this call created the session."""
+
+    @property
+    def init_command(self) -> tuple[str, ...]:
+        """session-init, from the agent kit this sandbox was created with.
+
+        sbx fixes mounts when it creates a sandbox, so this is the kit recorded
+        in the definition, not the foundry's current one: a moved foundry still
+        finds the kit its existing sandboxes mount.
+        """
+        return (str(self.definition.agent_kit_dir / paths.SESSION_INIT_RELATIVE_PATH),)
+
+
+def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:
+    """The session for this role on this task in this project, created the first time.
+
+    Raises FoundryError if the sandbox name would be too long, if the session
+    directory exists without its definition, or if the existing definition was
+    written for another role, task or repository.
+    """
+    sandbox_name = _sandbox_name(role.name, project.name, task)
+    session_dir = paths.session_dir(foundry_root, sandbox_name)
+    created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
+    if created:
+        _create(
+            session_dir,
+            _sandbox_definition(
+                sandbox_name=sandbox_name,
+                workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
+                agent_kit_dir=paths.agent_kit_dir(foundry_root),
+                repo_url=project.url,
+                role_name=role.name,
+                task=task,
+                project_name=project.name,
+            ),
+        )
+    definition = SandboxDefinition.read(session_dir)
+    _require_same_sandbox(definition, role_name=role.name, task=task, repo_url=project.url)
+    return Session(dir=session_dir, definition=definition, created=created)
+
+
 def _slug(text: str) -> str:
     return _SBX_UNSAFE_CHARACTERS.sub("-", text).strip("-").lower()
 
 
-def sandbox_name(role_name: str, project_name: str, task: Task) -> str:
+def _sandbox_name(role_name: str, project_name: str, task: Task) -> str:
     """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
     if len(name) > MAX_SANDBOX_NAME_LENGTH:
@@ -38,7 +91,7 @@ def sandbox_name(role_name: str, project_name: str, task: Task) -> str:
     return name
 
 
-def sandbox_definition(
+def _sandbox_definition(
     *,
     sandbox_name: str,
     workspace_dir: Path,
@@ -70,8 +123,8 @@ def sandbox_definition(
     )
 
 
-def create(session_dir: Path, definition: SandboxDefinition) -> None:
-    """Create the session directory with its sandbox definition and empty workspace.
+def _create(session_dir: Path, definition: SandboxDefinition) -> None:
+    """Create the session directory with its empty workspace, then the sandbox definition.
 
     Refuses if the directory already exists, so an existing sandbox's
     definition is never rewritten.
@@ -84,7 +137,7 @@ def create(session_dir: Path, definition: SandboxDefinition) -> None:
     definition.write(session_dir)
 
 
-def require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task: Task, repo_url: str) -> None:
+def _require_same_sandbox(definition: SandboxDefinition, *, role_name: str, task: Task, repo_url: str) -> None:
     """Raise unless the existing sandbox is for this role, task and repository.
 
     Sandbox names are slugs, so different launches can share one: role dev on

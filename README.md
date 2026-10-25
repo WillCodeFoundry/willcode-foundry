@@ -163,7 +163,7 @@ src/foundry/
 ├── git_clone.py        # GitClone: a shallow clone of a project's repository, through git: check out, write, commit, push
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml
-├── session.py          # sandbox naming, the definition's variables, creating a session
+├── session.py          # open_or_create: names the sandbox, creates its session once, refuses a collision
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
