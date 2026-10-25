@@ -1,9 +1,9 @@
 import copy
+import dataclasses
 from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from foundry import repo_policy
 from foundry.errors import FoundryError
@@ -11,6 +11,8 @@ from foundry.github import GitHub, GitHubError
 
 REPO_ROOT = Path(__file__).parents[1]
 POLICY = repo_policy.load(REPO_ROOT / "config" / "repo-policy")
+
+URL = "git@github.com:o/r.git"
 
 RULESET: dict[str, Any] = {
     "name": "agent-branches",
@@ -60,14 +62,39 @@ class FakeGitHub:
 _: type[GitHub] = FakeGitHub  # FakeGitHub implements the protocol
 
 
-def conforms(actual: object, expected: object) -> bool:
-    return (
-        repo_policy.compare("x", actual=repo_policy.common_fields(actual=actual, expected=expected), expected=expected)
-        is None
-    )
+# A policy that is the real one but for its rulesets: just RULESET.
+WITH_RULESET = dataclasses.replace(POLICY, rulesets=[RULESET])
+
+# What this repository's own files make of the policy's files: a project that conforms.
+CONFORMING_FILES = {
+    path: (REPO_ROOT / path).read_text() for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH)
+}
 
 
-# --- restriction and comparison -------------------------------------------------
+def conforming_to(policy: repo_policy.RepoPolicy = POLICY, repo_slug: str = "o/r") -> FakeGitHub:
+    """A repository with exactly what the policy asks for: this repository's files, and the policy's rulesets."""
+    fake = FakeGitHub()
+    fake.files[repo_slug] = dict(CONFORMING_FILES)
+    for ruleset in policy.rulesets:
+        fake.create_ruleset(repo_slug, ruleset)
+    return fake
+
+
+def deviations(fake: FakeGitHub, policy: repo_policy.RepoPolicy = POLICY) -> list[repo_policy.Deviation]:
+    """What check_project finds in the repository at URL; it must be checkable."""
+    result = repo_policy.check_project(fake, URL, policy)
+    assert result.error is None and result.changes == []
+    return result.deviations
+
+
+def with_ruleset(actual: dict[str, Any]) -> FakeGitHub:
+    """A repository conforming to WITH_RULESET, but holding ``actual`` as GitHub returns it for agent-branches."""
+    fake = conforming_to(WITH_RULESET)
+    fake.stored_rulesets["o/r"]["agent-branches"] = {"id": 1, **actual}
+    return fake
+
+
+# --- how a ruleset compares ----------------------------------------------------------
 
 
 def test_fields_github_adds_are_ignored() -> None:
@@ -81,14 +108,16 @@ def test_fields_github_adds_are_ignored() -> None:
             {"type": "pull_request", "parameters": {"required_approving_review_count": 1, "allowed_merge_methods": []}},
         ],
     }
-    assert conforms(actual, RULESET)
+
+    assert deviations(with_ruleset(actual), WITH_RULESET) == []
 
 
 def test_extra_list_items_are_deviations() -> None:
     extra_actor = {**RULESET, "bypass_actors": [*RULESET["bypass_actors"], {"actor_type": "Team", "actor_id": 9}]}
     extra_rule = {**RULESET, "rules": [*RULESET["rules"], {"type": "creation"}]}
-    assert not conforms(extra_actor, RULESET)
-    assert not conforms(extra_rule, RULESET)
+
+    for actual in (extra_actor, extra_rule):
+        assert [d.subject for d in deviations(with_ruleset(actual), WITH_RULESET)] == ["ruleset agent-branches"]
 
 
 def test_key_order_and_list_order_do_not_matter() -> None:
@@ -98,114 +127,140 @@ def test_key_order_and_list_order_do_not_matter() -> None:
         "bypass_actors": RULESET["bypass_actors"],
         "name": "agent-branches",
     }
-    assert conforms(reordered, RULESET)
+
+    assert deviations(with_ruleset(reordered), WITH_RULESET) == []
 
 
 def test_a_deviation_reads_as_a_diff_from_actual_to_the_repo_policy() -> None:
-    actual = {**RULESET, "rules": [{"type": "deletion"}]}
-    deviation = repo_policy.compare(
-        "ruleset agent-branches", actual=repo_policy.common_fields(actual=actual, expected=RULESET), expected=RULESET
-    )
-    assert deviation is not None and deviation.subject == "ruleset agent-branches"
+    (deviation,) = deviations(with_ruleset({**RULESET, "rules": [{"type": "deletion"}]}), WITH_RULESET)
+
+    assert deviation.subject == "ruleset agent-branches"
     assert deviation.diff.startswith("--- ruleset agent-branches (actual)\n+++ ruleset agent-branches (repo policy)\n")
     assert '+      "type": "pull_request"' in deviation.diff
 
 
 def test_a_missing_ruleset_diffs_as_entirely_missing() -> None:
-    deviation = repo_policy.compare("ruleset r", actual=None, expected=RULESET)
-    assert deviation is not None and deviation.diff.startswith("--- ruleset r (missing)\n")
+    fake = conforming_to(WITH_RULESET)
+    fake.stored_rulesets["o/r"] = {}
+
+    (deviation,) = deviations(fake, WITH_RULESET)
+
+    assert deviation.diff.startswith("--- ruleset agent-branches (missing)\n")
     assert all(line.startswith(("+", "@", "---")) for line in deviation.diff.splitlines())
 
 
+# --- how a project's files compare ------------------------------------------------
+
+
+def codeowners_deviations(text: str | None) -> list[str]:
+    """The subjects check_project reports for a conforming repository whose CODEOWNERS is ``text``, or absent."""
+    fake = conforming_to()
+    if text is None:
+        del fake.files["o/r"][repo_policy.CODEOWNERS_PATH]
+    else:
+        fake.files["o/r"][repo_policy.CODEOWNERS_PATH] = text
+    return [d.subject for d in deviations(fake)]
+
+
 def test_text_deviates_only_beyond_trailing_whitespace() -> None:
-    assert repo_policy.compare("CODEOWNERS", actual="* @will  \n\n\n", expected="* @will\n") is None
-    assert repo_policy.compare("CODEOWNERS", actual="* @will", expected="* @will\n") is None
-    assert repo_policy.compare("CODEOWNERS", actual="* @someone\n", expected="* @will\n") is not None
-    assert repo_policy.compare("CODEOWNERS", actual=None, expected="* @will\n") is not None
+    codeowners = POLICY.codeowners.rstrip("\n")
+
+    assert codeowners_deviations(f"{codeowners}  \n\n\n") == []
+    assert codeowners_deviations(codeowners) == []
+    assert codeowners_deviations("* @someone\n") == [repo_policy.CODEOWNERS_PATH]
+    assert codeowners_deviations(None) == [repo_policy.CODEOWNERS_PATH]
 
 
-# --- the ci-gate section of ci.yml ------------------------------------------------
-
-CI = yaml.safe_load("""\
-on:
-  pull_request:
-jobs:
-  lint: {}
-  test: {}
-  ci-gate:
-    if: always()
-    needs: [test, lint]
-""")
+CI_GATE_TEXT = (REPO_ROOT / "config" / "repo-policy" / "ci-gate.yml").read_text()
 
 
-def test_needs_naming_every_other_job_becomes_the_placeholder() -> None:
-    assert repo_policy.ci_gate_section(CI)["jobs"]["ci-gate"]["needs"] == repo_policy.ALL_OTHER_JOBS
+def project_ci(*, needs: str, on: str | None = None) -> str:
+    """A project's ci.yml as ci-gate.yml tells you to write one: jobs lint and test above ci-gate.
+
+    ``on`` replaces the on: block when given. The text keeps ci-gate.yml's bare `on:` key, which
+    YAML 1.1 reads as the boolean True.
+    """
+    assert CI_GATE_TEXT.count("jobs:\n") == 1 and CI_GATE_TEXT.count("needs: <all other jobs>") == 1
+    text = CI_GATE_TEXT.replace("jobs:\n", "jobs:\n  lint: {}\n  test: {}\n").replace(
+        "needs: <all other jobs>", f"needs: {needs}"
+    )
+    if on is not None:
+        start, end = text.index("on:\n"), text.index("\njobs:")
+        text = text[:start] + on + text[end:]
+    return text
 
 
-def test_needs_missing_a_job_is_left_as_it_is_so_the_diff_shows_it() -> None:
-    workflow = {**CI, "jobs": {**CI["jobs"], "ci-gate": {**CI["jobs"]["ci-gate"], "needs": ["test"]}}}
-    assert repo_policy.ci_gate_section(workflow)["jobs"]["ci-gate"]["needs"] == ["test"]
+def ci_deviations(ci_text: str | None) -> list[repo_policy.Deviation]:
+    """The deviations check_project reports for a conforming repository whose ci.yml is ``ci_text``, or absent."""
+    fake = conforming_to()
+    if ci_text is None:
+        del fake.files["o/r"][repo_policy.CI_WORKFLOW_PATH]
+    else:
+        fake.files["o/r"][repo_policy.CI_WORKFLOW_PATH] = ci_text
+    return deviations(fake)
 
 
-def test_a_bare_on_key_is_read_as_on() -> None:
-    assert True in CI  # what YAML 1.1 makes of `on:`
-    assert repo_policy.ci_gate_section(CI)["on"] == {"pull_request": None}
+def test_a_ci_gate_needing_every_other_job_conforms_whatever_the_jobs() -> None:
+    """Read with its bare on: key, whose on: block matches the policy's."""
+    assert ci_deviations(project_ci(needs="[test, lint]")) == []
+
+
+def test_a_ci_gate_needing_too_few_jobs_deviates_and_the_diff_shows_them() -> None:
+    (deviation,) = ci_deviations(project_ci(needs="[test]"))
+
+    assert deviation.subject == repo_policy.CI_WORKFLOW_PATH
+    assert any(line.startswith("-") and '"test"' in line for line in deviation.diff.splitlines())
+
+
+def test_a_different_on_block_deviates() -> None:
+    (deviation,) = ci_deviations(project_ci(needs="[test, lint]", on="on:\n  pull_request:\n"))
+
+    assert deviation.subject == repo_policy.CI_WORKFLOW_PATH
+    assert any(line.startswith("+") and '"workflow_dispatch"' in line for line in deviation.diff.splitlines())
 
 
 @pytest.mark.parametrize("ci_text", [None, "on: [pull_request\n", "- a list\n"])
 def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text: str | None) -> None:
-    fake = FakeGitHub()
-    if ci_text is not None:
-        fake.files["o/r"] = {repo_policy.CI_WORKFLOW_PATH: ci_text}
-    deviation = repo_policy.deviations(fake, "o/r", POLICY)[-1]
+    (deviation,) = ci_deviations(ci_text)
+
     assert deviation.subject == repo_policy.CI_WORKFLOW_PATH
     assert deviation.diff.startswith(f"--- {repo_policy.CI_WORKFLOW_PATH} (missing)")
 
 
-# --- apply_rulesets ------------------------------------------------------------------
+# --- check_project and fix_project ------------------------------------------------
 
 
 def policy_with_rulesets(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
     return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate={})
 
 
-def test_apply_rulesets_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:
-    fake = FakeGitHub()
+def test_fix_project_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:
+    policy = dataclasses.replace(
+        POLICY, rulesets=[{**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"}]
+    )
+    fake = conforming_to(dataclasses.replace(POLICY, rulesets=[]))
     fake.create_ruleset("o/r", {**RULESET, "name": "second", "rules": [{"type": "deletion"}]})
     fake.create_ruleset("o/r", {**RULESET, "name": "third"})
     second_id = fake.ruleset_id("o/r", "second")
-    policy = policy_with_rulesets(
-        {**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"}
-    )
 
-    changes = list(repo_policy.apply_rulesets(fake, "o/r", policy))
+    result = repo_policy.fix_project(fake, URL, policy)
 
-    assert changes == [
+    assert result.changes == [
         repo_policy.RulesetChange("first", repo_policy.RulesetAction.CREATED),
         repo_policy.RulesetChange("second", repo_policy.RulesetAction.UPDATED),
     ]
     assert fake.ruleset_id("o/r", "second") == second_id  # updated in place, not recreated
-    assert [d.subject for d in repo_policy.deviations(fake, "o/r", policy) if d.subject.startswith("ruleset")] == []
+    assert result.deviations == [] and result.conforms
 
 
-def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
-    fake = FakeGitHub()
-    fake.create_ruleset("o/r", RULESET)
+def test_fix_project_leaves_a_matching_ruleset_alone() -> None:
+    fake = conforming_to(WITH_RULESET)
     before = fake.rulesets("o/r")
 
-    assert list(repo_policy.apply_rulesets(fake, "o/r", policy_with_rulesets(RULESET))) == []
+    result = repo_policy.fix_project(fake, URL, WITH_RULESET)
+
+    assert result == repo_policy.ProjectCheck([], [])
     assert fake.rulesets("o/r") == before
-
-
-URL = "git@github.com:o/r.git"
-
-
-def conforming(fake: FakeGitHub, repo_slug: str = "o/r") -> None:
-    """Give the repository exactly what the policy asks for, as this repository has it."""
-    for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
-        fake.files.setdefault(repo_slug, {})[path] = (REPO_ROOT / path).read_text()
-    for ruleset in POLICY.rulesets:
-        fake.create_ruleset(repo_slug, ruleset)
 
 
 class FileReadFails(FakeGitHub):
@@ -216,10 +271,7 @@ class FileReadFails(FakeGitHub):
 
 
 def test_check_project_on_a_conforming_repository() -> None:
-    fake = FakeGitHub()
-    conforming(fake)
-
-    result = repo_policy.check_project(fake, URL, POLICY)
+    result = repo_policy.check_project(conforming_to(), URL, POLICY)
 
     assert result == repo_policy.ProjectCheck([], []) and result.conforms
 
@@ -257,8 +309,7 @@ def test_a_url_that_is_not_githubs_is_the_result_not_raised() -> None:
 
 
 def test_fix_project_creates_the_missing_rulesets_then_conforms() -> None:
-    fake = FakeGitHub()
-    conforming(fake)
+    fake = conforming_to()
     fake.stored_rulesets["o/r"] = {}  # every ruleset missing
 
     result = repo_policy.fix_project(fake, URL, POLICY)
@@ -319,10 +370,4 @@ def test_a_missing_codeowners_is_named(policy_dir: Path) -> None:
 
 def test_this_repository_conforms_to_its_own_repo_policy() -> None:
     """The foundry is one of its own projects: its CODEOWNERS and ci.yml keep the policy honest."""
-    fake = FakeGitHub()
-    for path in (repo_policy.CODEOWNERS_PATH, repo_policy.CI_WORKFLOW_PATH):
-        fake.files.setdefault("o/r", {})[path] = (REPO_ROOT / path).read_text()
-    for ruleset in POLICY.rulesets:
-        fake.create_ruleset("o/r", ruleset)
-
-    assert repo_policy.deviations(fake, "o/r", POLICY) == []
+    assert deviations(conforming_to()) == []
