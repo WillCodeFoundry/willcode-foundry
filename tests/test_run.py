@@ -27,7 +27,7 @@ def foundry_root(tmp_path: Path) -> Path:
 
 
 def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
-    request = prepare_launch(foundry_root, "tkt-store", "dev", Task("WCF-0042"))
+    request = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
     assert request.definition_dir == session_dir
@@ -38,15 +38,18 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 
 
 def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
-    first = prepare_launch(foundry_root, "tkt-store", "dev", Task("WCF-0042"))
-    assert prepare_launch(foundry_root, "tkt-store", "dev", Task("WCF-0042")) == first
+    first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    assert prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")) == first
 
 
 def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token = foundry_root / "secrets" / "github" / "dev.token"
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
-    assert prepare_launch(foundry_root, "tkt-store", "dev", Task("WCF-0042")).github_token_path == token
+    assert (
+        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")).github_token_path
+        == token
+    )
 
 
 @pytest.mark.parametrize(
@@ -55,4 +58,4 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 )
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
-        prepare_launch(foundry_root, project_name, role_name, Task("t1"))
+        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task("t1"))

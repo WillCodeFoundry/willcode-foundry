@@ -24,10 +24,12 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def main(args: argparse.Namespace) -> NoReturn:
     """Composition root: prepare the launch from this foundry, then hand over to the sandbox."""
     task = Task(args.task_id)
-    agent_sandbox.launch(prepare_launch(paths.find_foundry_root(), args.project_name, args.role_name, task))
+    agent_sandbox.launch(
+        prepare_launch(paths.find_foundry_root(), project_name=args.project_name, role_name=args.role_name, task=task)
+    )
 
 
-def prepare_launch(foundry_root: Path, project_name: str, role_name: str, task: Task) -> agent_sandbox.LaunchRequest:
+def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> agent_sandbox.LaunchRequest:
     """Everything up to the hand-over: the session, created the first time, and the request to launch it."""
     foundry_config = config.load(paths.config_path(foundry_root))
     project = foundry_config.project(project_name)

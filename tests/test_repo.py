@@ -29,7 +29,7 @@ def test_what_fix_changed_comes_before_the_result() -> None:
 
 
 def test_each_deviation_with_its_diff_indented() -> None:
-    deviation = Deviation(".github/CODEOWNERS", "--- a\n+++ b\n-* @someone\n+* @will\n")
+    deviation = Deviation(subject=".github/CODEOWNERS", diff="--- a\n+++ b\n-* @someone\n+* @will\n")
     assert report(STORE, ProjectCheck([], [deviation])) == [
         "store (o/store)",
         "  differs  .github/CODEOWNERS",
