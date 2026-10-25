@@ -11,8 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from foundry.task import NOTES_BRANCH
-from tests.agent_kit import AGENT_KIT_PATH, TASK
+from foundry.task import NOTES_BRANCH, Task
+
+AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
+TASK = Task("T1")
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -47,7 +49,7 @@ def session_init(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedP
 
 
 def test_a_task_without_its_branches_is_explained(kit_env, origin) -> None:
-    result = session_init(kit_env, origin)
+    result = session_init(kit_env(TASK), origin)
     assert result.returncode == 1
     assert f"task {TASK.id} has not been created" in result.stderr
     assert f"branch {TASK.branch}" in result.stderr and f"branch {NOTES_BRANCH}" in result.stderr
@@ -62,7 +64,7 @@ def test_a_task_without_its_task_md_is_explained(tmp_path, kit_env, origin) -> N
     git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
 
-    result = session_init(kit_env, origin)
+    result = session_init(kit_env(TASK), origin)
     assert result.returncode == 1
     assert f"{NOTES_BRANCH} has no {TASK.task_file}" in result.stderr
     assert not (tmp_path / "home" / ".claude").exists()  # stopped before writing instructions

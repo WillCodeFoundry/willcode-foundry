@@ -13,8 +13,9 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit import AGENT_KIT_PATH, TASK
 
+AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
+TASK = Task("T1")
 OTHER_TASK = Task("T2")
 
 
@@ -52,12 +53,13 @@ def repo(tmp_path, monkeypatch, kit_env):
     git(seed, "commit", "-qm", f"{TASK.id}: create task")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
 
-    code, notes = Path(kit_env["AGENT_PROJECT_DIR"]), Path(kit_env["AGENT_NOTES_DIR"])
+    env = kit_env(TASK)
+    code, notes = Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
     git(tmp_path, "clone", "-q", str(origin), str(code))
     git(code, "switch", "-q", TASK.branch)
     git(code, "worktree", "add", "-q", "--track", "-b", NOTES_BRANCH, str(notes), f"origin/{NOTES_BRANCH}")
     git(code, "config", "core.hooksPath", str(AGENT_KIT_PATH / "hooks"))
-    for key, value in kit_env.items():
+    for key, value in env.items():
         monkeypatch.setenv(key, value)
     return code, notes
 
