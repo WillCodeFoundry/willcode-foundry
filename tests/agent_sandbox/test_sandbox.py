@@ -161,11 +161,20 @@ SBX_LS_JSON = """{
 def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:
     host.responses = {SBX_LS: SBX_LS_JSON}
 
-    assert list_live_sandboxes(host, {}) == {"dev-p-running", "dev-p-starting"}
+    assert list_live_sandboxes(host) == {"dev-p-running", "dev-p-starting"}
 
 
 def test_a_failing_sbx_ls_is_reported(host) -> None:
     host.responses = {SBX_LS: 1}
 
     with pytest.raises(SandboxError, match="sbx ls failed"):
-        list_live_sandboxes(host, {})
+        list_live_sandboxes(host)
+
+
+def test_sbx_ls_runs_in_the_hosts_own_environment(host) -> None:
+    host.environ_value = {"PATH": "/bin", "SSH_AUTH_SOCK": "/personal.sock"}
+    host.responses = {SBX_LS: SBX_LS_JSON}
+
+    list_live_sandboxes(host)
+
+    assert host.calls == [(SBX_LS, {"PATH": "/bin", "SSH_AUTH_SOCK": "/personal.sock"})]

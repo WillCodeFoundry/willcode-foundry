@@ -1,7 +1,7 @@
 """The sandbox one launch prepares: the Sandbox port, and SbxCli, which drives it through sbx.
 
 Sandbox is what the launcher needs, named for what each step does; SbxCli is the only
-module that knows sbx's command lines. Tests use a FakeSandbox in tests/agent_sandbox.
+module that knows sbx's command lines.
 """
 
 import json
@@ -134,12 +134,12 @@ def _sbx_env(environ: Mapping[str, str], ssh_agent_socket_path: Path) -> dict[st
     return sbx_env
 
 
-def list_live_sandboxes(host: Host, env: Mapping[str, str]) -> set[str]:
+def list_live_sandboxes(host: Host) -> set[str]:
     """Names of the sandboxes ``sbx ls --json`` lists with any status but "stopped".
 
-    Not aimed at one sandbox, so ``env`` needn't carry a sandbox's socket.
+    Not aimed at one sandbox, so it runs in the host's own environment, with no sandbox's socket.
     """
-    result = host.run(("sbx", "ls", "--json"), env=env)
+    result = host.run(("sbx", "ls", "--json"), env=host.environ())
     if result.returncode != 0:
         raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")
     return {sandbox["name"] for sandbox in json.loads(result.stdout)["sandboxes"] if sandbox["status"] != "stopped"}

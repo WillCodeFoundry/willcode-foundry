@@ -48,7 +48,7 @@ def launch(request: LaunchRequest) -> NoReturn:
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, host.environ())):
+    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
         print(
             f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
         )
