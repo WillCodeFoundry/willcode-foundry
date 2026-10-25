@@ -17,8 +17,8 @@ class Project:
 class Role:
     """A role an agent can be given, as this foundry has it.
 
-    Listed in config/foundry.yaml; its SSH key and, if it should have gh, its GitHub
-    token, under secrets/.
+    Listed in config/foundry.yaml, with its folder in the agent kit (load refuses one
+    without); its SSH key and, if it should have gh, its GitHub token, under secrets/.
     """
 
     name: str
@@ -74,12 +74,25 @@ def parse(raw: object, *, foundry_root: Path, source: str = "config") -> Config:
     for role_name, value in (raw.get("roles") or {}).items():
         if value:
             raise FoundryError(f"{source}: roles.{role_name}: role options are not supported yet; use {{}}")
-        roles[role_name] = _role(foundry_root, role_name)
+        roles[role_name] = _role(foundry_root, role_name, source=source)
 
     return Config(foundry_name=foundry_name, projects=projects, roles=roles)
 
 
-def _role(foundry_root: Path, role_name: str) -> Role:
+# What a role's folder in the agent kit must hold. session-setup fails without the gitconfig, and
+# without ROLE.md the agent starts with no role at all: CLAUDE.md imports it, and a missing import
+# is skipped without a word. skills/ is optional: a role without it has none.
+_ROLE_FILES = ("ROLE.md", "gitconfig")
+
+
+def _role(foundry_root: Path, role_name: str, *, source: str) -> Role:
+    """The role, refused unless its folder in the agent kit holds what a sandbox needs from it."""
+    role_dir = paths.role_dir(foundry_root, role_name)
+    if not role_dir.is_dir():
+        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role_dir} doesn't exist")
+    missing = [name for name in _ROLE_FILES if not (role_dir / name).is_file()]
+    if missing:
+        raise FoundryError(f"{source}: role {role_name!r}: {role_dir} has no {' or '.join(missing)}")
     github_token_path = paths.github_token_path(foundry_root, role_name)
     return Role(
         name=role_name,
