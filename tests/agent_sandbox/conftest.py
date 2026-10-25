@@ -1,7 +1,4 @@
-"""agent_sandbox's fakes, handed to tests as fixtures, so no test imports from tests/.
-
-The foundry package's fakes are in tests/fakes.py.
-"""
+"""agent_sandbox's fakes, handed to tests as fixtures, so no test imports from tests/."""
 
 import subprocess
 from collections.abc import Mapping, Sequence
