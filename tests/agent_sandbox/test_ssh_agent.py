@@ -172,13 +172,13 @@ def test_reports_a_key_that_cannot_be_added(host, make_agent, tmp_path):
 def test_lists_key_fingerprints(host, make_agent):
     host.responses = {LIST: "256 SHA256:a key1 (ED25519)\n256 SHA256:b key2 (ED25519)\n"}
 
-    assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
+    assert make_agent().key_fingerprints() == {"SHA256:a", "SHA256:b"}
 
 
 def test_lists_no_fingerprints_for_an_empty_agent(host, make_agent):
     host.responses = {LIST: NO_KEYS}
 
-    assert make_agent().list_key_fingerprints() == set()
+    assert make_agent().key_fingerprints() == set()
 
 
 def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host, make_agent):
@@ -186,7 +186,7 @@ def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host,
     # code itself, not on stdout happening to be empty for NO_KEYS in other tests.
     host.responses = {LIST: (NO_KEYS, "256 SHA256:a key1 (ED25519)\n")}
 
-    assert make_agent().list_key_fingerprints() == set()
+    assert make_agent().key_fingerprints() == set()
 
 
 def test_each_sandbox_gets_an_ssh_agent_on_its_own_socket(host):
@@ -195,10 +195,10 @@ def test_each_sandbox_gets_an_ssh_agent_on_its_own_socket(host):
     assert registry.ssh_agent("myproj-qa").socket_path == SSH_AGENT_SOCKETS_DIR / "myproj-qa.sock"
 
 
-def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
+def test_key_fingerprints_ignore_blank_lines(host, make_agent):
     host.responses = {LIST: "256 SHA256:a key1 (ED25519)\n3072 SHA256:b key2 (RSA)\n"}
 
-    assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
+    assert make_agent().key_fingerprints() == {"SHA256:a", "SHA256:b"}
 
 
 # --- SshAgentRegistry.prune ---------------------------------------------------

@@ -1,10 +1,14 @@
+"""agent_sandbox's fakes, handed to tests as fixtures, so no test imports from tests/."""
+
 import subprocess
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import NoReturn
 
 import pytest
 
 from foundry.agent_sandbox.host import Host
+from foundry.agent_sandbox.sandbox import Sandbox
 
 Response = str | int | tuple[int, str]
 
@@ -24,6 +28,9 @@ class FakeHost:
     stdout) pair, or a list of those, used in turn. An unexpected command
     raises KeyError.
     """
+
+    ExecCalled = ExecCalled
+    """What exec raises, so a test can catch it as host.ExecCalled without importing it."""
 
     def __init__(self) -> None:
         self.responses: dict[tuple[str, ...], Response | list[Response]] = {}
@@ -68,8 +75,65 @@ class FakeHost:
         return [command for command, _ in self.calls]
 
 
+class Attached(Exception):
+    """Raised by FakeSandbox.attach instead of handing this process over."""
+
+
+class FakeSandbox:
+    """A sandbox in memory, as agent_sandbox.sandbox.Sandbox describes it.
+
+    A test sets up what the sandbox is like (whether it exists, what keys reach it, which commands
+    fail inside), then checks where it ended up.
+    """
+
+    def __init__(
+        self,
+        *,
+        exists: bool = False,
+        forwarded_key_fingerprints: set[str] | None = None,
+        exit_codes_by_command: Mapping[tuple[str, ...], int] | None = None,
+    ) -> None:
+        self.exists = exists
+        self.created = False
+        self.has_github_ssh_access = False
+        self.github_token_file: Path | None = None
+        self.commands_run: list[tuple[str, ...]] = []
+        self._forwarded_key_fingerprints = forwarded_key_fingerprints
+        self._exit_codes_by_command = dict(exit_codes_by_command or {})
+
+    def ensure_running(self) -> None:
+        self.created = not self.exists
+        self.exists = True
+
+    def give_github_ssh_access(self) -> None:
+        self.has_github_ssh_access = True
+
+    def set_github_token_file(self, github_token_path: Path | None) -> None:
+        self.github_token_file = github_token_path
+
+    def forwarded_key_fingerprints(self) -> set[str] | None:
+        return None if self._forwarded_key_fingerprints is None else set(self._forwarded_key_fingerprints)
+
+    def run(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        command = tuple(command)
+        self.commands_run.append(command)
+        return subprocess.CompletedProcess(command, self._exit_codes_by_command.get(command, 0), stdout="", stderr="")
+
+    def attach(self) -> NoReturn:
+        raise Attached()
+
+
+_: type[Sandbox] = FakeSandbox  # FakeSandbox implements the port
+
+
 @pytest.fixture
 def host() -> FakeHost:
     host = FakeHost()
     _: Host = host
     return host
+
+
+@pytest.fixture
+def make_sandbox() -> type[FakeSandbox]:
+    """FakeSandbox, to call with what the sandbox is like: make_sandbox(exists=True)."""
+    return FakeSandbox

@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -6,8 +7,7 @@ import yaml
 
 from foundry import repo_policy
 from foundry.errors import FoundryError
-from foundry.github import GitHubError
-from tests.fakes import FakeGitHub
+from foundry.github import GitHub, GitHubError
 
 REPO_ROOT = Path(__file__).parents[1]
 POLICY = repo_policy.load(REPO_ROOT / "config" / "repo-policy")
@@ -18,6 +18,46 @@ RULESET: dict[str, Any] = {
     "conditions": {"ref_name": {"include": ["refs/heads/task/**", "refs/heads/agent-notes"], "exclude": []}},
     "rules": [{"type": "deletion"}, {"type": "pull_request", "parameters": {"required_approving_review_count": 1}}],
 }
+
+
+class FakeGitHub:
+    """GitHub in memory, as foundry.github.GitHub describes it."""
+
+    def __init__(self) -> None:
+        self.stored_rulesets: dict[str, dict[str, dict[str, Any]]] = {}
+        """Rulesets by repo slug, then by name; each stored with the id GitHub would give it."""
+        self.files: dict[str, dict[str, str]] = {}
+        """File text by repo slug, then path on the default branch."""
+        self.unavailable: dict[str, str] = {}
+        """Repo slug -> the message GitHub refuses it with, e.g. for a plan without rulesets."""
+        self._next_id = 1
+
+    def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
+        if repo_slug in self.unavailable:
+            raise GitHubError(self.unavailable[repo_slug])
+        return copy.deepcopy(self.stored_rulesets.get(repo_slug, {}))
+
+    def file_text(self, *, repo_slug: str, file_path: str) -> str | None:
+        return self.files.get(repo_slug, {}).get(file_path)
+
+    def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None:
+        self.stored_rulesets.setdefault(repo_slug, {})[ruleset["name"]] = {
+            **copy.deepcopy(ruleset),
+            "id": self._next_id,
+        }
+        self._next_id += 1
+
+    def update_ruleset(self, repo_slug: str, ruleset_id: int, ruleset: dict[str, Any]) -> None:
+        repo = self.stored_rulesets[repo_slug]
+        (name,) = [name for name, stored in repo.items() if stored["id"] == ruleset_id]
+        del repo[name]
+        repo[ruleset["name"]] = {**copy.deepcopy(ruleset), "id": ruleset_id}
+
+    def ruleset_id(self, repo_slug: str, ruleset_name: str) -> int:
+        return int(self.stored_rulesets[repo_slug][ruleset_name]["id"])
+
+
+_: type[GitHub] = FakeGitHub  # FakeGitHub implements the protocol
 
 
 def conforms(actual: object, expected: object) -> bool:

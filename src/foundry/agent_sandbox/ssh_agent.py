@@ -166,7 +166,7 @@ class SshAgent:
             if result.returncode != 0:
                 raise SandboxError(f"ssh-add failed for {key_path}: {result.stderr.strip()}")
 
-    def list_key_fingerprints(self) -> set[str]:
+    def key_fingerprints(self) -> set[str]:
         """Fingerprints of the keys the agent holds; empty if none, or if it doesn't answer."""
         result = self._ssh_add("-l")
         if result.returncode != SshAddExitCode.HAS_KEYS:

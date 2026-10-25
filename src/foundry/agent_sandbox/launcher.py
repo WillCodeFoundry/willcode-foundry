@@ -16,7 +16,7 @@ from typing import NoReturn
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
+from foundry.agent_sandbox.sandbox import Sandbox, SbxCli, list_live_sandboxes
 from foundry.agent_sandbox.ssh_agent import SshAgent, SshAgentRegistry
 
 
@@ -33,78 +33,45 @@ class LaunchRequest:
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
 
 
-def require_dir(target_dir: Path, what: str) -> None:
-    if not target_dir.is_dir():
-        raise SandboxError(f"{what} {str(target_dir)!r} is not a directory")
+def launch(request: LaunchRequest) -> NoReturn:
+    """Prepare the sandbox and replace this process with the agent's session in it.
 
-
-def require_file(file_path: Path, what: str) -> None:
-    if not file_path.is_file():
-        raise SandboxError(f"{what} {str(file_path)!r} is not a file")
-
-
-def require_safe_paths(agent_kit_dir: Path, definition_dir: Path, private_paths: Sequence[Path]) -> None:
-    """Refuse layouts that would undo the sandbox's protections."""
-    if ":" in str(agent_kit_dir):
-        raise SandboxError(f"agent kit directory {str(agent_kit_dir)!r} contains ':'")
-    for private_path in private_paths:
-        if private_path.is_relative_to(agent_kit_dir):
-            raise SandboxError(f"{str(private_path)!r} is inside the agent kit, readable by the sandbox")
-    if definition_dir.is_relative_to(agent_kit_dir):
-        raise SandboxError(
-            f"sandbox definition {str(definition_dir)!r} is inside the agent kit; the sandbox could rewrite it"
+    Composition root. Raises SandboxError if anything before the hand-over fails.
+    """
+    definition = SandboxDefinition.read(request.definition_dir)
+    host = SystemHost()
+    ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
+    ssh_agent = ssh_agent_registry.ssh_agent(definition.name)
+    sandbox = SbxCli(
+        host,
+        sandbox_name=definition.name,
+        definition_dir=request.definition_dir,
+        ssh_agent_socket_path=ssh_agent.socket_path,
+    )
+    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
+        print(
+            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
         )
+    prepare(request, definition, ssh_agent, sandbox)
+    print(launch_summary(request, definition, ssh_agent.socket_path), file=sys.stderr)
+    sandbox.attach()
 
 
-def require_forwarded_keys(ssh_agent: SshAgent, sbx: Sbx) -> None:
-    """The sandbox must see exactly the keys we loaded, whatever sbx's settings claim."""
-    expected = ssh_agent.list_key_fingerprints()
-    if not expected:  # a sandbox with an empty agent would otherwise match
-        raise SandboxError(f"the ssh-agent at {ssh_agent.socket_path} holds no keys after loading them")
-    seen = sbx.agent_fingerprints()
-    if seen != expected:
-        found = "no ssh-agent" if seen is None else f"keys {sorted(seen)}"
-        raise SandboxError(
-            f"the sandbox sees {found}, expected {sorted(expected)}.\n"
-            "  check: sbx settings get ssh.agentForwardingEnabled  (must be true)\n"
-            "         sbx settings get ssh.agentSocketPath         (must be empty)\n"
-            "  then:  sbx daemon restart"
-        )
-
-
-def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sbx: Sbx) -> None:
+def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> None:
     """Everything up to, but not including, attaching the agent."""
-    require_dir(definition.agent_kit_dir, "agent kit")
-    require_dir(definition.workspace_dir, "workspace")
-    require_file(request.ssh_key_path, "ssh key")
-    private_paths = [request.ssh_key_path]
-    if request.github_token_path is not None:
-        require_file(request.github_token_path, "github token file")
-        private_paths.append(request.github_token_path)
-    require_safe_paths(definition.agent_kit_dir, request.definition_dir, private_paths)
-
+    _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
-
-    if not sbx.start_if_exists():
-        sbx.create()
-    sbx.ensure_github_ssh_allowed()
-    sbx.ensure_known_hosts()
-    # Clear first: a token from an earlier launch must not outlive its file.
-    sbx.clear_github_token()
-    if request.github_token_path is not None:
-        sbx.set_github_token_source(request.github_token_path)
-    require_forwarded_keys(ssh_agent, sbx)
-
+    sandbox.ensure_running()
+    sandbox.give_github_ssh_access()
+    sandbox.set_github_token_file(request.github_token_path)
+    _require_forwarded_keys(ssh_agent, sandbox)
     if request.init_command:
-        result = sbx.exec_in_sandbox(*request.init_command)
-        if result.returncode != 0:
-            raise SandboxError(
-                f"init failed ({' '.join(request.init_command)}):\n{result.stdout}{result.stderr}".rstrip()
-            )
+        _run_init(sandbox, request.init_command)
 
 
-def describe(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
+def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
+    """The lines launch prints before handing over: what the sandbox was given."""
     notes = (
         f"ssh-agent:  {ssh_agent_socket_path}",
         f"key:        {request.ssh_key_path}",
@@ -118,21 +85,45 @@ def describe(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_so
     return "\n".join(f"==> {note}" for note in notes)
 
 
-def launch(request: LaunchRequest) -> NoReturn:
-    """Prepare the sandbox and replace this process with ``sbx env run``.
-
-    Raises SandboxError if anything before the hand-over fails.
-    """
-    definition = SandboxDefinition.read(request.definition_dir)
-    host = SystemHost()
-    ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
-    ssh_agent = ssh_agent_registry.ssh_agent(definition.name)
-    process_env = Sbx.process_env(host.environ(), ssh_agent.socket_path)
-    sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, process_env)):
-        print(
-            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
+def _require_safe_layout(request: LaunchRequest, definition: SandboxDefinition) -> None:
+    """Refuse a missing file or directory, and layouts that would undo the sandbox's protections."""
+    for target_dir, what in ((definition.agent_kit_dir, "agent kit"), (definition.workspace_dir, "workspace")):
+        if not target_dir.is_dir():
+            raise SandboxError(f"{what} {str(target_dir)!r} is not a directory")
+    private_files = {"ssh key": request.ssh_key_path}
+    if request.github_token_path is not None:
+        private_files["github token file"] = request.github_token_path
+    for what, file_path in private_files.items():
+        if not file_path.is_file():
+            raise SandboxError(f"{what} {str(file_path)!r} is not a file")
+    if ":" in str(definition.agent_kit_dir):
+        raise SandboxError(f"agent kit directory {str(definition.agent_kit_dir)!r} contains ':'")
+    for private_path in private_files.values():
+        if private_path.is_relative_to(definition.agent_kit_dir):
+            raise SandboxError(f"{str(private_path)!r} is inside the agent kit, readable by the sandbox")
+    if request.definition_dir.is_relative_to(definition.agent_kit_dir):
+        raise SandboxError(
+            f"sandbox definition {str(request.definition_dir)!r} is inside the agent kit; the sandbox could rewrite it"
         )
-    prepare(request, definition, ssh_agent, sbx)
-    print(describe(request, definition, ssh_agent.socket_path), file=sys.stderr)
-    host.exec(sbx.attach_command(), process_env)
+
+
+def _require_forwarded_keys(ssh_agent: SshAgent, sandbox: Sandbox) -> None:
+    """The sandbox must see exactly the keys we loaded, whatever sbx's settings claim."""
+    expected = ssh_agent.key_fingerprints()
+    if not expected:  # a sandbox with an empty ssh-agent would otherwise match
+        raise SandboxError(f"the ssh-agent at {ssh_agent.socket_path} holds no keys after loading them")
+    seen = sandbox.forwarded_key_fingerprints()
+    if seen != expected:
+        found = "no ssh-agent" if seen is None else f"keys {sorted(seen)}"
+        raise SandboxError(
+            f"the sandbox sees {found}, expected {sorted(expected)}.\n"
+            "  check: sbx settings get ssh.agentForwardingEnabled  (must be true)\n"
+            "         sbx settings get ssh.agentSocketPath         (must be empty)\n"
+            "  then:  sbx daemon restart"
+        )
+
+
+def _run_init(sandbox: Sandbox, init_command: Sequence[str]) -> None:
+    result = sandbox.run(init_command)
+    if result.returncode != 0:
+        raise SandboxError(f"init failed ({' '.join(init_command)}):\n{result.stdout}{result.stderr}".rstrip())

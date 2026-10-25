@@ -101,7 +101,7 @@ The words used here, and in the code:
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.check_project` and `fix_project`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
+Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.check_project` and `fix_project`), which is what the tests call, with fakes for GitHub, the sandbox and the host's processes (`tests/fakes.py`, and fixtures in `tests/agent_sandbox/conftest.py`) and no patching.
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
@@ -173,13 +173,13 @@ src/foundry/
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
-    ├── launcher.py     # LaunchRequest and launch(): the sequence in steps 2–3 above
+    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port
     ├── pruning.py      # prune(): what stopped or removed sandboxes leave behind (their ssh-agents)
     ├── definition.py   # the sandbox definition: sbxenv.yaml, the only place that knows sbx's format
-    ├── sbx.py          # sbx env create/exec/run, policy, known hosts, secrets
+    ├── sandbox.py      # the Sandbox port, and SbxCli: it through sbx (env create/exec/run, policy, known hosts, secrets)
     ├── ssh_agent.py    # private agent, one key, fingerprint check; finding and killing foundry's agents
     ├── host.py         # the boundary to the host's processes: run, exec, environ, list and kill
-    └── github_keys.py  # GitHub's published host keys, pinned
+    └── github_host_keys.py  # GitHub's published host keys, pinned
 ```
 
 `agent_sandbox` is the code lifted from the standalone `agent-sandbox` repo, minus the parts the foundry now owns (git identity, `--clone`). It could be moved back out unchanged.

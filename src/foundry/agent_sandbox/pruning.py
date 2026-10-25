@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sbx import list_live_sandboxes
+from foundry.agent_sandbox.sandbox import list_live_sandboxes
 from foundry.agent_sandbox.ssh_agent import SshAgentRegistry
 
 
@@ -23,4 +23,4 @@ def prune() -> Pruned:
     """
     host = SystemHost()
     ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
-    return Pruned(ssh_agents=ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, host.environ())))
+    return Pruned(ssh_agents=ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)))
