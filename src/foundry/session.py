@@ -17,7 +17,7 @@ from foundry import paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
-from foundry.task import Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 # sbx accepts letters, digits, '.', '+', '-'. The name also names an
 # ssh-agent socket, whose path length is limited.
@@ -120,6 +120,13 @@ def _sandbox_definition(
             "AGENT_REPO_URL": repo_url,
             "AGENT_PROJECT_DIR": project_dir,
             "AGENT_NOTES_DIR": f"{project_dir}-notes",
+            # A task's names, so the kit and the agent's instructions spell none out.
+            # The notes paths are relative to a checkout's root, as git reports paths.
+            "AGENT_TASK_BRANCH": task.branch,
+            "AGENT_NOTES_BRANCH": NOTES_BRANCH,
+            "AGENT_NOTES_ROOT": NOTES_ROOT,
+            "AGENT_TASK_NOTES": task.notes_dir,
+            "AGENT_TASK_FILE": task.task_file,
         },
     )
 
