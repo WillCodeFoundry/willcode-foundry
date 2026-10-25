@@ -81,9 +81,9 @@ def test_a_missing_file_is_none_and_other_errors_still_raise() -> None:
         }
     )
 
-    assert GhCli(gh).file_text("o/r", "missing") is None
+    assert GhCli(gh).file_text(repo_slug="o/r", file_path="missing") is None
     with pytest.raises(GitHubError, match="Bad credentials") as error:
-        GhCli(gh).file_text("o/r", "CODEOWNERS")
+        GhCli(gh).file_text(repo_slug="o/r", file_path="CODEOWNERS")
     assert error.value.http_status == 401
 
 

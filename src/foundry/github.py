@@ -57,7 +57,7 @@ class GitHub(Protocol):
         """The repository's own rulesets in full, by name; inherited ones are left out."""
         ...
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+    def file_text(self, *, repo_slug: str, file_path: str) -> str | None:
         """A file's text on the default branch, or None if there is no such file."""
         ...
 
@@ -84,7 +84,7 @@ class GhCli:
             raise GitHubError(result.stderr.strip().removeprefix("gh: ") or f"gh api {endpoint} failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+    def file_text(self, *, repo_slug: str, file_path: str) -> str | None:
         try:
             content = self._api("GET", f"repos/{repo_slug}/contents/{file_path}")
         except GitHubError as error:

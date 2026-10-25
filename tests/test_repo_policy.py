@@ -21,7 +21,10 @@ RULESET: dict[str, Any] = {
 
 
 def conforms(actual: object, expected: object) -> bool:
-    return repo_policy.compare("x", repo_policy.restrict_to(expected, actual), expected) is None
+    return (
+        repo_policy.compare("x", actual=repo_policy.restrict_to(expected=expected, actual=actual), expected=expected)
+        is None
+    )
 
 
 # --- restriction and comparison -------------------------------------------------
@@ -60,23 +63,25 @@ def test_key_order_and_list_order_do_not_matter() -> None:
 
 def test_a_deviation_reads_as_a_diff_from_actual_to_the_repo_policy() -> None:
     actual = {**RULESET, "rules": [{"type": "deletion"}]}
-    deviation = repo_policy.compare("ruleset agent-branches", repo_policy.restrict_to(RULESET, actual), RULESET)
+    deviation = repo_policy.compare(
+        "ruleset agent-branches", actual=repo_policy.restrict_to(expected=RULESET, actual=actual), expected=RULESET
+    )
     assert deviation is not None and deviation.subject == "ruleset agent-branches"
     assert deviation.diff.startswith("--- ruleset agent-branches (actual)\n+++ ruleset agent-branches (repo policy)\n")
     assert '+      "type": "pull_request"' in deviation.diff
 
 
 def test_a_missing_ruleset_diffs_as_entirely_missing() -> None:
-    deviation = repo_policy.compare("ruleset r", None, RULESET)
+    deviation = repo_policy.compare("ruleset r", actual=None, expected=RULESET)
     assert deviation is not None and deviation.diff.startswith("--- ruleset r (missing)\n")
     assert all(line.startswith(("+", "@", "---")) for line in deviation.diff.splitlines())
 
 
 def test_text_deviates_only_beyond_trailing_whitespace() -> None:
-    assert repo_policy.compare("CODEOWNERS", "* @will  \n\n\n", "* @will\n") is None
-    assert repo_policy.compare("CODEOWNERS", "* @will", "* @will\n") is None
-    assert repo_policy.compare("CODEOWNERS", "* @someone\n", "* @will\n") is not None
-    assert repo_policy.compare("CODEOWNERS", None, "* @will\n") is not None
+    assert repo_policy.compare("CODEOWNERS", actual="* @will  \n\n\n", expected="* @will\n") is None
+    assert repo_policy.compare("CODEOWNERS", actual="* @will", expected="* @will\n") is None
+    assert repo_policy.compare("CODEOWNERS", actual="* @someone\n", expected="* @will\n") is not None
+    assert repo_policy.compare("CODEOWNERS", actual=None, expected="* @will\n") is not None
 
 
 # --- the ci-gate section of ci.yml ------------------------------------------------
@@ -164,7 +169,7 @@ def conforming(fake: FakeGitHub, repo_slug: str = "o/r") -> None:
 class FileReadFails(FakeGitHub):
     """GitHub that makes ruleset changes, then fails reading a file."""
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+    def file_text(self, *, repo_slug: str, file_path: str) -> str | None:
         raise GitHubError("Server Error (HTTP 502)")
 
 

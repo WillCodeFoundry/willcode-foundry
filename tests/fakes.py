@@ -23,7 +23,7 @@ class FakeGitHub:
             raise GitHubError(self.unavailable[repo_slug])
         return copy.deepcopy(self.stored_rulesets.get(repo_slug, {}))
 
-    def file_text(self, repo_slug: str, file_path: str) -> str | None:
+    def file_text(self, *, repo_slug: str, file_path: str) -> str | None:
         return self.files.get(repo_slug, {}).get(file_path)
 
     def create_ruleset(self, repo_slug: str, ruleset: dict[str, Any]) -> None:

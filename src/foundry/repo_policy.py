@@ -34,7 +34,7 @@ class RepoPolicy:
     ci_gate: dict[str, Any]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Deviation:
     """One way a repository differs from the repo policy, as a diff from it to the policy."""
 
@@ -82,9 +82,19 @@ def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Devia
     """How the repository differs from the policy; empty when it conforms."""
     actual_rulesets = github.rulesets(repo_slug)
     found = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
-    found.append(compare(CODEOWNERS_PATH, github.file_text(repo_slug, CODEOWNERS_PATH), policy.codeowners))
     found.append(
-        compare(CI_WORKFLOW_PATH, _project_ci_gate(github.file_text(repo_slug, CI_WORKFLOW_PATH)), policy.ci_gate)
+        compare(
+            CODEOWNERS_PATH,
+            actual=github.file_text(repo_slug=repo_slug, file_path=CODEOWNERS_PATH),
+            expected=policy.codeowners,
+        )
+    )
+    found.append(
+        compare(
+            CI_WORKFLOW_PATH,
+            actual=_project_ci_gate(github.file_text(repo_slug=repo_slug, file_path=CI_WORKFLOW_PATH)),
+            expected=policy.ci_gate,
+        )
     )
     return [deviation for deviation in found if deviation is not None]
 
@@ -146,7 +156,7 @@ def fix_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectChe
 
 
 def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:
-    return compare(f"ruleset {ruleset['name']}", restrict_to(ruleset, actual), ruleset)
+    return compare(f"ruleset {ruleset['name']}", actual=restrict_to(expected=ruleset, actual=actual), expected=ruleset)
 
 
 def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
@@ -158,16 +168,16 @@ def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
     return ci_gate_section(workflow) if isinstance(workflow, dict) else None
 
 
-def restrict_to(expected: Any, actual: Any) -> Any:
+def restrict_to(*, expected: Any, actual: Any) -> Any:
     """``actual`` with only the fields ``expected`` has, so fields GitHub adds don't count.
 
     A list's items are restricted to the fields the expected items have, so
     an extra item, such as another bypass actor, still shows.
     """
     if isinstance(expected, dict) and isinstance(actual, dict):
-        return {key: restrict_to(expected[key], actual[key]) for key in expected if key in actual}
+        return {key: restrict_to(expected=expected[key], actual=actual[key]) for key in expected if key in actual}
     if isinstance(expected, list) and isinstance(actual, list):
-        return [restrict_to(_expected_item(expected), item) for item in actual]
+        return [restrict_to(expected=_expected_item(expected), actual=item) for item in actual]
     return actual
 
 
@@ -199,7 +209,7 @@ def ci_gate_section(workflow: dict[Any, Any]) -> dict[str, Any]:
     return {"on": workflow.get("on", workflow.get(True)), "jobs": {CI_GATE_JOB: gate}}
 
 
-def compare(subject: str, actual: Any, expected: Any) -> Deviation | None:
+def compare(subject: str, *, actual: Any, expected: Any) -> Deviation | None:
     """The one place that decides whether something matches the policy, and how a deviation reads."""
     if isinstance(expected, str):
         actual_text, expected_text = _normalised(actual), _normalised(expected)
@@ -213,7 +223,7 @@ def compare(subject: str, actual: Any, expected: Any) -> Deviation | None:
             tofile=f"{subject} (repo policy)",
         )
     )
-    return Deviation(subject, diff) if diff else None
+    return Deviation(subject=subject, diff=diff) if diff else None
 
 
 def _normalised(text: str | None) -> str:
