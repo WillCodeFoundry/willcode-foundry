@@ -26,7 +26,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def create_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, task template and repository, in a scratch clone."""
     foundry_root = paths.find_foundry_root()
-    project = config.load(paths.config_path(foundry_root)).project(args.project_name)
+    project = config.load(foundry_root).project(args.project_name)
     new_task = task.Task(args.task_id)
     template = task.load_template(paths.task_template_dir(foundry_root))
     with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:

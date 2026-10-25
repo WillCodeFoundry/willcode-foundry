@@ -23,7 +23,9 @@ roles:
 def foundry_root(tmp_path: Path) -> Path:
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "foundry.yaml").write_text(CONFIG)
-    (tmp_path / "agent-kit").mkdir()
+    (tmp_path / "agent-kit" / "roles" / "dev").mkdir(parents=True)
+    for name in ("ROLE.md", "gitconfig"):
+        (tmp_path / "agent-kit" / "roles" / "dev" / name).write_text("")
     return tmp_path
 
 

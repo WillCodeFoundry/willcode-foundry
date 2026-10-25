@@ -12,7 +12,7 @@ $ uv run foundry prune                                     # kill the ssh-agents
 $ scripts/update-skills                                    # merge upstream's changes into the agent kit's copied skills
 ```
 
-`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
+`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`, and every role listed must have its folder in `agent-kit/roles/<role>/`, holding its `ROLE.md` and `gitconfig`: foundry refuses to run any command otherwise; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
 
 ## Layout
 
@@ -172,7 +172,7 @@ src/foundry/
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── git_clone.py        # GitClone: a shallow clone of a project's repository, through git: check out, write, commit, push
 ├── paths.py            # the only module that knows the instance layout; functions taking root
-├── config.py           # loads and validates config/foundry.yaml
+├── config.py           # loads and validates config/foundry.yaml; Role: a role's SSH key and optional token
 ├── session.py          # open_or_create: names the sandbox, creates its session once, refuses a collision; SessionVariables
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py

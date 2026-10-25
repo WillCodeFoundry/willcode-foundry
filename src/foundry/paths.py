@@ -31,6 +31,11 @@ def agent_kit_dir(foundry_root: Path) -> Path:
     return foundry_root / "agent-kit"
 
 
+def role_dir(foundry_root: Path, role_name: str) -> Path:
+    """A role's folder in the agent kit: its ROLE.md, gitconfig, memory and skills."""
+    return agent_kit_dir(foundry_root) / "roles" / role_name
+
+
 def ssh_key_path(foundry_root: Path, role_name: str) -> Path:
     return foundry_root / "secrets" / "ssh" / role_name
 
