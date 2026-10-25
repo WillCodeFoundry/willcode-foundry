@@ -59,19 +59,23 @@ class SshAgentRegistry:
         return self._sockets_dir / f"{sandbox_name}.sock"
 
     def _list_ssh_agents(self) -> dict[str, int]:
-        """The running agents for this user, as sandbox name -> pid, found by the command line
-        _start_command gives them."""
+        """This user's running ssh-agents, as sandbox name -> pid.
+
+        A process is one of them if its command line is exactly what _start_command gives for a
+        socket in the sockets directory. Split on whitespace, which is safe: the directory is fixed
+        and sandbox names are sbx-safe, so a socket path has no spaces.
+        """
         ssh_agent_pids = {}
         for pid, command in self._host.list_processes(self._uid):
-            if command.startswith("ssh-agent -a ") and command.endswith(" -s"):
-                socket = Path(command.removeprefix("ssh-agent -a ").removesuffix(" -s"))
-                if socket.parent == self._sockets_dir and socket.suffix == ".sock":
+            argv = tuple(command.split())
+            for socket in (Path(arg) for arg in argv):
+                if socket.parent == self._sockets_dir and socket.suffix == ".sock" and argv == _start_command(socket):
                     ssh_agent_pids[socket.stem] = pid
         return ssh_agent_pids
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
-    """How every agent is started; SshAgentRegistry._list_ssh_agents finds agents by this command line."""
+    """How every ssh-agent is started; SshAgentRegistry._list_ssh_agents recognises them by this command line."""
     return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
