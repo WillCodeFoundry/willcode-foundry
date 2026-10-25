@@ -298,14 +298,9 @@ def test_a_live_sandboxs_ssh_agent_is_kept_even_without_its_socket(host, tmp_pat
     assert host.killed == []
 
 
-def test_an_orphan_and_its_replacement_are_both_pruned_over_two_prunes(host, tmp_path):
-    registry = make_registry(host, tmp_path)
+def test_an_orphan_and_its_replacement_on_one_socket_are_both_pruned(host, tmp_path):
     host.processes = [ssh_agent_process(101, tmp_path, "dev-p-t1"), ssh_agent_process(102, tmp_path, "dev-p-t1")]
     socket_touched(tmp_path, "dev-p-t1", LONG_AGO)
 
-    assert registry.prune(live_sandboxes=set()) == ["dev-p-t1"]
-    (first,) = host.killed
-    host.processes = [process for process in host.processes if process[0] != first]
-
-    assert registry.prune(live_sandboxes=set()) == ["dev-p-t1"]
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-t1"]
     assert sorted(host.killed) == [101, 102]

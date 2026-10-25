@@ -16,6 +16,10 @@ SSH_AGENT_SOCKETS_DIR = Path("/tmp/sbx-agents")  # session paths are too long fo
 
 _RECENTLY_TOUCHED_SECONDS = 600  # covers a launch's sandbox creation and session-init
 
+# Stands in for the sandbox name when rendering the command template.
+# It can't occur in a path or a command line, so it can't collide with real text.
+_NAME_PLACEHOLDER = "\0"
+
 
 def parse_fingerprint(ssh_add_line: str) -> str:
     """The fingerprint from one ``ssh-add -l`` line: ``<bits> <fingerprint> <comment> (<type>)``."""
@@ -45,16 +49,16 @@ class SshAgentRegistry:
         An agent whose socket is gone is killed too: nothing can reach it, but it still holds a
         key. Returns the names of the sandboxes whose agents were killed, sorted.
         """
-        pruned = []
-        for sandbox_name, pid in sorted(self._list_ssh_agents().items()):
+        pruned = set()
+        for sandbox_name, pid in self._list_ssh_agents():
             if sandbox_name in live_sandboxes or self._recently_touched(sandbox_name):
                 continue
             try:
                 self._host.kill_process(pid)
             except ProcessLookupError:
                 continue  # it stopped meanwhile
-            pruned.append(sandbox_name)
-        return pruned
+            pruned.add(sandbox_name)
+        return sorted(pruned)
 
     def _socket_path(self, sandbox_name: str) -> Path:
         return self._sockets_dir / f"{sandbox_name}.sock"
@@ -66,22 +70,32 @@ class SshAgentRegistry:
         except FileNotFoundError:
             return False  # no socket: not a launch in progress, since ensure_running creates it first
 
-    def _list_ssh_agents(self) -> dict[str, int]:
-        """This user's running ssh-agents, as sandbox name -> pid, whether or not their sockets still exist.
+    def _list_ssh_agents(self) -> list[tuple[str, int]]:
+        """Return (sandbox name, pid) for every running ssh-agent this registry started.
 
-        A process is one of them if its command line is what _start_command gives for some sandbox's
-        socket in the sockets directory. Two can share a sandbox name only if one is an orphan whose
-        replacement started on the same socket; then one pid is kept here, and the next prune finds
-        the other.
+        An agent counts as ours if its command line is exactly what _start_command
+        produces for some sandbox's socket in the sockets directory. Its socket
+        file may or may not still exist.
         """
-        marker = "\0"  # stands in for the sandbox name; can't occur in a path or a command line
-        before, after = " ".join(_start_command(self._socket_path(marker))).split(marker)
-        started_by_registry = re.compile(re.escape(before) + r"([^/\s]+)" + re.escape(after))
-        return {
-            match[1]: pid
-            for pid, command in self._host.list_processes(self._uid)
-            if (match := started_by_registry.fullmatch(command))
-        }
+        pattern = self._ssh_agent_command_pattern()
+        ssh_agents = []
+        for pid, command in self._host.list_processes(self._uid):
+            match = pattern.fullmatch(command)
+            if match:
+                ssh_agents.append((match["sandbox"], pid))
+        return ssh_agents
+
+    def _ssh_agent_command_pattern(self) -> re.Pattern[str]:
+        """Regex matching the command line _start_command gives for any sandbox's
+        socket, with the sandbox name captured as the group "sandbox".
+
+        How it works: render the real command with a placeholder where the sandbox
+        name goes, split on the placeholder, escape the literal text on each side,
+        and put a capture group in the gap.
+        """
+        command = " ".join(_start_command(self._socket_path(_NAME_PLACEHOLDER)))
+        prefix, suffix = command.split(_NAME_PLACEHOLDER)  # name must appear exactly once
+        return re.compile(re.escape(prefix) + r"(?P<sandbox>[^/\s]+)" + re.escape(suffix))
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
