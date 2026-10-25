@@ -15,7 +15,7 @@ take it through review to a pull request.
   decisions as ADRs in `docs/adr/`. Nothing else goes in either.
 
 ## Review
-The reviewer writes its rounds in `$AGENT_NOTES_DIR/.agent/$AGENT_TASK/REVIEW.md`.
+The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`.
 
 - When the latest round says `Verdict: changes needed`: under each open
   finding, add "Fixed in `<commit>`." or "Disagree: <why>.", without editing

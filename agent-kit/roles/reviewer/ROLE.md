@@ -14,7 +14,7 @@ history first. In the notes checkout, list the commits that changed it, with
 who signed each:
 
 ```bash
-git -C "$AGENT_NOTES_DIR" log --format='%h %G? %GS %an <%ae> %s' -- ".agent/$AGENT_TASK/TASK.md"
+git -C "$AGENT_NOTES_DIR" log --format='%h %G? %GS %an <%ae> %s' -- "$AGENT_TASK_FILE"
 ```
 
 `%G?` is the signature status (`G` is a good signature) and `%GS` the signer,
@@ -34,7 +34,7 @@ the top of your review under "TASK.md changed by another role", with the
 commit and its diff:
 
 ```bash
-git -C "$AGENT_NOTES_DIR" show <commit> -- ".agent/$AGENT_TASK/TASK.md"
+git -C "$AGENT_NOTES_DIR" show <commit> -- "$AGENT_TASK_FILE"
 ```
 
 Then review against the last version of `TASK.md` written by an allowed
@@ -49,7 +49,7 @@ that shared identity, say so in your report.
 
 Review with the `code-review` skill.
 
-Write the result to `$AGENT_NOTES_DIR/.agent/$AGENT_TASK/REVIEW.md`, one file
+Write the result to `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`, one file
 per task, as a new section per round:
 
 ```markdown

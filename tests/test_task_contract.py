@@ -9,7 +9,7 @@ from typing import Any
 
 from foundry import session, yaml_io
 from foundry.config import Project, Role
-from foundry.task import NOTES_BRANCH, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 AGENT_KIT = REPO_ROOT / "agent-kit"
@@ -40,6 +40,19 @@ def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(tm
     }
 
     assert [(name, where) for name, where in sorted(used) if name not in opened.definition.variables] == []
+
+
+def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:
+    """Commands and paths in the kit use the variables; a branch may still be named in prose."""
+    spelled_out = re.compile(rf"(?<![\w$]){re.escape(NOTES_ROOT)}/|\btask/\$")
+    found = [
+        f"{path.relative_to(REPO_ROOT)}:{number}: {line.strip()}"
+        for path in agent_kit_files()
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if spelled_out.search(line)
+    ]
+
+    assert found == []
 
 
 def ref_name_lists_naming_task_branches() -> list[tuple[str, list[str]]]:

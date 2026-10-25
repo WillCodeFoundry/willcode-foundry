@@ -37,7 +37,7 @@ Before going further, confirm the fixed point resolves (`git rev-parse <fixed-po
 The spec is the task's `TASK.md`, in the version your `ROLE.md`'s check settled on: the last one written by an allowed commit. Read that version from the notes checkout:
 
 ```bash
-git -C "$AGENT_NOTES_DIR" show <commit>:.agent/$AGENT_TASK/TASK.md
+git -C "$AGENT_NOTES_DIR" show "<commit>:$AGENT_TASK_FILE"
 ```
 
 If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spec available".
