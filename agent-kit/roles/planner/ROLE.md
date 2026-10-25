@@ -19,7 +19,7 @@ Paths below are relative to this role's directory.
    than one session's work or touches more than one area of the code, propose
    a split and plan only the first part.
 4. Draft the task from its skeleton `TASK.md`. Put every unresolved point under
-   "Open questions" and ask them one at a time.
+   "Open questions" and ask them in rounds.
 5. Check the draft against `checklist.md`. Fix what fails.
 6. Present the draft in the session for approval. Once the human approves
    it, write it to `$AGENT_NOTES_DIR/.agent/$AGENT_TASK/TASK.md`, then commit
@@ -28,7 +28,9 @@ Paths below are relative to this role's directory.
    else there.
 
 ## Asking questions
-- One question at a time.
+- Ask in rounds, with the `grilling` skill: each round, every question you can
+  ask now, numbered, each with your recommended answer, rather than a single
+  question per turn.
 - Each question is answerable with yes, no, or a single fact.
 - Say why the answer changes the task.
 - Prefer offering a default ("I'd assume X unless you say otherwise") over an

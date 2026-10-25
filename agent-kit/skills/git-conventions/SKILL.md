@@ -88,30 +88,7 @@ scoped. If the PR has one commit, reuse its summary. Prefix the task id:
 
 ### Description
 
-```markdown
-## What
-One or two sentences: the change, from the reviewer's point of view.
-
-## Why
-The problem this solves and where it came from. Link the task.
-
-## How
-The approach, and any decision a reviewer might question: alternatives
-rejected, trade-offs accepted, anything non-obvious in the diff.
-
-## Testing
-How you verified it. Which tests were added, what you ran by hand, what you
-could not test and why.
-
-## Notes for the reviewer
-Where to start reading. Anything out of the ordinary: a file that looks
-changed but is only moved, a deliberate deviation from a project convention.
-```
-
-- Keep "What" short; it is what shows up in the merge commit and release notes.
-- "How" is where to put the reasoning from your commit bodies, consolidated.
-- Leave out a section if it would only say "n/a".
-- A PR is one task. If it does more, the task was two tasks.
+The body follows the `pr` skill.
 
 ### Checklist before opening
 
@@ -120,3 +97,4 @@ changed but is only moved, a deliberate deviation from a project convention.
 - [ ] Diff against `main` contains only what the task needs
 - [ ] Description states how it was tested
 - [ ] Every acceptance criterion in `TASK.md` is addressed or explicitly deferred
+- [ ] `REVIEW.md`'s latest round says `Verdict: approved`

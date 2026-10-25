@@ -90,6 +90,21 @@ mkdir -p "$HOME/.claude"
     import_path "$task_md_path"
 } > "$HOME/.claude/CLAUDE.md"
 
+# The role's skills: roles/<role>/skills/ holds a link to each skill, and is
+# linked as ~/.claude/skills, where Claude Code loads them. Remade at every
+# launch, so a role's changed skills take effect; a role without the folder
+# has none.
+skills_link="$HOME/.claude/skills"
+if [[ -e "$skills_link" && ! -L "$skills_link" ]]; then
+    echo "session-init: $skills_link is a folder, not the link to the role's skills; remove it, then run again." >&2
+    exit 1
+fi
+if [[ -d "$role_path/skills" ]]; then
+    ln -sfn "$role_path/skills" "$skills_link"
+else
+    rm -f "$skills_link"
+fi
+
 echo "session-init: checkouts ready"
 git -C "$AGENT_PROJECT_DIR" status -sb | head -1
 git -C "$AGENT_NOTES_DIR"   status -sb | head -1
