@@ -54,7 +54,7 @@ class SessionVariables:
         """The notes checkout, inside the sandbox."""
         return f"{self.project_dir}-notes"
 
-    def as_env(self) -> dict[str, str]:
+    def to_env(self) -> dict[str, str]:
         """The variables, by name, as the sandbox definition carries them."""
         return {
             "AGENT_ROLE": self.role_name,
@@ -74,7 +74,7 @@ class SessionVariables:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> "SessionVariables":
-        """Read the variables back. ``from_env(v.as_env()) == v``.
+        """Read the variables back. ``from_env(v.to_env()) == v``.
 
         Raises FoundryError naming every variable that is missing, or that holds another value than
         this foundry would set for the same role, task and paths: a sandbox created before a name
@@ -91,7 +91,7 @@ class SessionVariables:
             project_dir=env["AGENT_PROJECT_DIR"],
         )
         differing = [
-            f"{name}={env[name]!r}, now {value!r}" for name, value in variables.as_env().items() if env[name] != value
+            f"{name}={env[name]!r}, now {value!r}" for name, value in variables.to_env().items() if env[name] != value
         ]
         if differing:
             raise FoundryError(f"other values: {'; '.join(differing)}")
@@ -103,9 +103,9 @@ class SessionVariables:
 
     @classmethod
     def _names(cls) -> list[str]:
-        """Every variable's name, taken from as_env, so the full list is spelled out once."""
+        """Every variable's name, taken from to_env, so the full list is spelled out once."""
         placeholder = cls(role_name="", task=Task("t"), repo_url="", agent_kit_dir=Path(), project_dir="")
-        return list(placeholder.as_env())
+        return list(placeholder.to_env())
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -155,7 +155,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
                 name=sandbox_name,
                 workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
                 agent_kit_dir=wanted.agent_kit_dir,
-                variables=wanted.as_env(),
+                variables=wanted.to_env(),
             ),
         )
     definition = SandboxDefinition.read(session_dir)

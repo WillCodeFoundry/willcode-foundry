@@ -65,5 +65,5 @@ Never edit earlier rounds. In each round, in this order:
    …), so the dev can answer each by its id.
 4. A last line: `Verdict: changes needed` or `Verdict: approved`.
 
-Commit and push it on `agent-notes`, as `AGENTS.md`'s "Notes checkout" rules
+Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.

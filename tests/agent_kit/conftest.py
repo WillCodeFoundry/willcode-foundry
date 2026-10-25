@@ -23,6 +23,6 @@ def kit_env(tmp_path: Path, session_variables: Callable[[Task], SessionVariables
         variables = dataclasses.replace(
             session_variables(task), agent_kit_dir=AGENT_KIT_PATH, project_dir=str(tmp_path / "work" / "p")
         )
-        return variables.as_env()
+        return variables.to_env()
 
     return env

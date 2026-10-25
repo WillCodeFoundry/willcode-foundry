@@ -44,4 +44,4 @@ When the shape of that interface is itself in question (how deep the module is, 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
 - **Refactoring is not part of the loop.** The reviewer role reviews the change, with the `code-review` skill, and its findings come back to you through `REVIEW.md`. Don't widen the task to tidy up what you pass: note it under "Next" in `PROGRESS.md` instead.
-- **Each green slice is a commit.** Once a slice's test and the project's checks pass, commit it on the task branch with a message that says why, then update `PROGRESS.md` and commit it on `agent-notes`, as "Work in small steps" in `AGENTS.md` says.
+- **Each green slice is a commit.** Once a slice's test and the project's checks pass, commit it on the task branch with a message that says why, then update `PROGRESS.md` and commit it on `$AGENT_NOTES_BRANCH`, as "Work in small steps" in `AGENTS.md` says.

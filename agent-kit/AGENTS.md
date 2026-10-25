@@ -188,7 +188,7 @@ git push -u origin "$AGENT_TASK_BRANCH"
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
   has moved and conflicts, note it in Blockers and ask.
 
-### Notes checkout (`agent-notes`)
+### Notes checkout (`$AGENT_NOTES_BRANCH`)
 
 ```bash
 cd "$AGENT_NOTES_DIR"
@@ -257,5 +257,5 @@ Asking early is always better than guessing.
 - [ ] `PROGRESS.md` reflects exactly where things stand, including next steps
 - [ ] New learnings appended to `LEARNINGS.md`
 - [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
-- [ ] Notes committed and pushed on `agent-notes`
+- [ ] Notes committed and pushed on `$AGENT_NOTES_BRANCH`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation
