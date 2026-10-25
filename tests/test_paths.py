@@ -21,6 +21,7 @@ def test_find_foundry_root_fails_outside_an_instance(tmp_path: Path) -> None:
 
 def test_paths_are_built_without_touching_the_filesystem(tmp_path: Path) -> None:
     assert paths.agent_kit_dir(tmp_path) == tmp_path / "agent-kit"
+    assert paths.role_dir(tmp_path, "dev") == tmp_path / "agent-kit" / "roles" / "dev"
     assert paths.ssh_key_path(tmp_path, "dev") == tmp_path / "secrets" / "ssh" / "dev"
     assert paths.github_token_path(tmp_path, "dev") == tmp_path / "secrets" / "github" / "dev.token"
     assert paths.session_dir(tmp_path, "s") == tmp_path / "sessions" / "s"

@@ -31,17 +31,16 @@ def main(args: argparse.Namespace) -> NoReturn:
 
 def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> agent_sandbox.LaunchRequest:
     """Everything up to the hand-over: the session, created the first time, and the request to launch it."""
-    foundry_config = config.load(paths.config_path(foundry_root))
+    foundry_config = config.load(foundry_root)
     project = foundry_config.project(project_name)
     role = foundry_config.role(role_name)
     opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
     if opened.created:
         print(f"==> session:   {opened.dir} (new)", file=sys.stderr)
 
-    github_token_path = paths.github_token_path(foundry_root, role.name)
     return agent_sandbox.LaunchRequest(
         definition_dir=opened.dir,
-        ssh_key_path=paths.ssh_key_path(foundry_root, role.name),
+        ssh_key_path=role.ssh_key_path,
         init_command=opened.init_command,
-        github_token_path=github_token_path if github_token_path.is_file() else None,
+        github_token_path=role.github_token_path,
     )

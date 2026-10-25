@@ -20,7 +20,7 @@ def session_variables(tmp_path: Path) -> Callable[[Task], SessionVariables]:
         opened = session.open_or_create(
             tmp_path / "foundry",
             project=Project(name="p", url="git@github.com:o/p.git"),
-            role=Role(name="dev"),
+            role=Role(name="dev", ssh_key_path=tmp_path / "secrets" / "ssh" / "dev", github_token_path=None),
             task=task,
         )
         return opened.variables
