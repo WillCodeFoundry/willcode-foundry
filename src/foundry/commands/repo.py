@@ -1,7 +1,7 @@
 """foundry repo check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
 
 import argparse
-from collections.abc import Callable
+from typing import NamedTuple
 
 from foundry import config, paths, repo_policy
 from foundry.config import Config
@@ -35,50 +35,46 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def check_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, policy and GitHub; exit 0 only if every project conforms."""
     foundry_root = paths.find_foundry_root()
-    return check_projects(
-        config.load(paths.config_path(foundry_root)),
-        repo_policy.load(paths.repo_policy_dir(foundry_root)),
-        GhCli(),
-        args.project_names,
-        fix=args.fix,
-    )
+    foundry_config = config.load(paths.config_path(foundry_root))
+    policy = repo_policy.load(paths.repo_policy_dir(foundry_root))
+    github = GhCli()
 
-
-def check_projects(
-    foundry_config: Config,
-    policy: RepoPolicy,
-    github: GitHub,
-    project_names: list[str],
-    *,
-    fix: bool,
-    emit: Callable[[str], None] = print,
-) -> int:
-    """Check each project, named or all in name order, emitting its report as it goes; 0 only if all conform.
-
-    A project's header is emitted before GitHub is asked about it, so a slow one shows which it is.
-    A project that can't be checked is reported, and the rest are still checked.
-    """
     all_conform = True
-    for project_name in project_names or sorted(foundry_config.projects):
-        project = foundry_config.project(project_name)
-        try:
-            repo_slug = repo_slug_from_url(project.url)
-        except FoundryError as error:
-            emit(project_name)
-            emit(f"  error    {error}")
-            all_conform = False
-            continue
-        emit(f"{project_name} ({repo_slug})")
-        result = repo_policy.check_project(github, repo_slug, policy, fix=fix)
-        for line in report(result):
-            emit(line)
-        all_conform = all_conform and result.conforms
+    for project_name in args.project_names or sorted(foundry_config.projects):
+        project = check_one_project(foundry_config, policy, github, project_name, fix=args.fix)
+        print("\n".join(report(project)))
+        all_conform = all_conform and project.result.conforms
     return 0 if all_conform else 1
 
 
-def report(result: ProjectCheck) -> list[str]:
-    """The lines under a project's header: what --fix changed, then its error, 'conforms', or each deviation's diff."""
-    lines = [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
+class CheckedProject(NamedTuple):
+    name: str
+    repo_slug: str | None
+    """None when the project's URL isn't a GitHub repository's; the result says why."""
+    result: ProjectCheck
+
+
+def check_one_project(
+    foundry_config: Config, policy: RepoPolicy, github: GitHub, project_name: str, *, fix: bool
+) -> CheckedProject:
+    """Check one project's repository; a URL that isn't GitHub's is part of the result, like a GitHub error.
+
+    Raises FoundryError for a project config/foundry.yaml doesn't list.
+    """
+    project = foundry_config.project(project_name)
+    try:
+        repo_slug = repo_slug_from_url(project.url)
+    except FoundryError as error:
+        return CheckedProject(project_name, None, ProjectCheck([], [], error=str(error)))
+    return CheckedProject(project_name, repo_slug, repo_policy.check_project(github, repo_slug, policy, fix=fix))
+
+
+def report(project: CheckedProject) -> list[str]:
+    """The lines check prints for one project: its header, what --fix changed, then its error, 'conforms', or
+    each deviation's diff."""
+    result = project.result
+    lines = [project.name if project.repo_slug is None else f"{project.name} ({project.repo_slug})"]
+    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
     if result.error is not None:
         return [*lines, f"  error    {result.error}"]
     if not result.deviations:
