@@ -9,7 +9,7 @@ $ uv sync
 $ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
 $ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
-$ uv run foundry skills update                             # reinstall the agent kit's copied skills from skills.lock
+$ scripts/update-skills                                    # merge upstream's changes into the agent kit's copied skills
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
@@ -20,6 +20,7 @@ $ uv run foundry skills update                             # reinstall the agent
 .
 ├── pyproject.toml                # the `foundry` package and command
 ├── src/foundry/                  # launcher code (see below)
+├── scripts/update-skills         # merges upstream's changes into the kit's copied skills; run on your machine
 ├── tests/
 ├── config/
 │   ├── foundry.yaml              # instance name, projects (clone URLs), roles
@@ -56,11 +57,10 @@ $ uv run foundry skills update                             # reinstall the agent
 │   │   ├── memory/               # curated knowledge, one file per topic
 │   │   └── skills                # the role's skill names, one per line; '#' starts a comment
 │   └── skills/
-│       ├── skills.lock           # the source repository, commit, and each skill's path
+│       ├── skills.lock           # where the copied skills come from: upstream, its commit, each skill's folder
 │       ├── LICENSE-mattpocock    # copied from the source repository at that commit
-│       ├── patches/<skill>.patch # the foundry's changes to each copied skill
 │       ├── git-conventions/      # the foundry's own skill: commit messages and pull request titles
-│       └── tdd/, codebase-design/, …  # written by foundry skills update; never edited by hand
+│       └── tdd/, codebase-design/, …  # copied from upstream, edited in place for the foundry
 ├── secrets/                      # untracked except .gitkeep
 │   ├── ssh/<role>, <role>.pub
 │   └── github/<role>.token       # optional
@@ -95,7 +95,7 @@ The words used here, and in the code:
 | **deviation** | One way a repository differs from the repo policy, with its diff |
 | **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
-| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), or checks out a commit, writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
+| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
 
 1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`.
 2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`; one a launch prepared in the last 10 minutes is spared. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
@@ -165,8 +165,6 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
-├── commands/skills.py  # foundry skills update
-├── skills.py           # skills.lock, and installing the agent kit's copied skills from the source at its commit
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
@@ -195,7 +193,7 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh scripts/update-skills
 ```
 
 These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the kit's `source` directives are relative to it.
@@ -204,12 +202,13 @@ These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.py
 
 ## Skills
 
-Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each is attributed in its `SKILL.md`'s frontmatter (`metadata.source`), in `agent-kit/skills/LICENSE-mattpocock`, the licence copied from the source, and in `agent-kit/skills/skills.lock`, which pins the commit they were copied from. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
+Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each is attributed in its `SKILL.md`'s frontmatter (`metadata.source`), in `agent-kit/skills/LICENSE-mattpocock`, upstream's licence, and in `agent-kit/skills/skills.lock`, which records the upstream commit they're up to date with. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
 
-Each role's skills are listed in `agent-kit/roles/<role>/skills`; `session-init` links them into the agent's `~/.claude/skills/` at every launch, so Claude Code loads them as skills. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are `agent-kit/skills/patches/<skill>.patch`, applied by `foundry skills update`, so an update keeps them.
+Each role's skills are listed in `agent-kit/roles/<role>/skills`; `session-init` links them into the agent's `~/.claude/skills/` at every launch, so Claude Code loads them as skills. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are edits to the copies themselves, so change a skill as you would any file in the kit.
 
-- **To update:** change `commit` in `skills.lock`, run `uv run foundry skills update`, review the diff and commit. A patch that no longer applies fails the update, naming the skill, and nothing is installed.
-- **To change an adaptation:** never edit an installed skill's folder. Copy the skill's folder as the source has it (without `agents/`) aside, twice; edit one copy; from `agent-kit/skills/` run `git diff --no-index <pristine> <edited>`, rewrite its paths to be relative to the skill's folder (`a/SKILL.md`, `b/SKILL.md`), save it as `patches/<skill>.patch`, then run the command.
+- **To update:** run `scripts/update-skills` (or `scripts/update-skills COMMIT` for a given upstream commit). It fetches the recorded commit and the new one, applies upstream's changes between them to each copy with git's three-way merge, leaving out `agents/` (Codex-only metadata), and records the new commit in `skills.lock` and each skill's `metadata.source`. Review with `git diff --cached` and commit. Where upstream changed a line the foundry also changed, the file is left unmerged with conflict markers, as in any merge: resolve it, `git add` it, then commit. A test fails while any markers remain.
+- **To see everything the foundry changed in a skill:** after an update has fetched upstream's commit, `git diff <commit>:skills/engineering/tdd HEAD:agent-kit/skills/tdd`.
+- **To copy another skill:** copy its folder from upstream at the recorded commit, without `agents/`, add a `metadata.source` block like the others', add a `skill` line to `skills.lock`, then edit it.
 
 ## sbx requirements
 

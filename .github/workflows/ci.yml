@@ -37,7 +37,7 @@ jobs:
       # guard-bash is Python without a .py extension, so it is named explicitly.
       - run: uv run ruff format --check . agent-kit/claude/hooks/guard-bash
       - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
-      # The kit's shell scripts; session-harden and most of session-init have no
+      # The kit's shell scripts, and scripts/update-skills; session-harden and most of session-init have no
       # tests (they need root inside a sandbox), so this is their main check.
       # Run from the repository root: the kit's source directives are relative to it.
       - run: >-
@@ -45,6 +45,7 @@ jobs:
           agent-kit/bin/session-init agent-kit/bin/session-harden agent-kit/bin/link-skills
           agent-kit/hooks/pre-commit agent-kit/hooks/prepare-commit-msg agent-kit/hooks/pre-push
           agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh
+          scripts/update-skills
 
   mypy:
     runs-on: ubuntu-latest

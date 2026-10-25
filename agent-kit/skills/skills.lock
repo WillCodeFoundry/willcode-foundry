@@ -1,16 +1,15 @@
-# The skills foundry skills update copies into this folder: from which repository, at which commit, and
-# each one's folder there. Each skill's adaptation is patches/<skill>.patch. To update: change the commit,
-# run `uv run foundry skills update`, review the diff, commit.
-source:
-  repo: https://github.com/mattpocock/skills.git
-  commit: 5beb35b040e3de97e54fa9e386d7e42d15c295c2
-  license: LICENSE
-  author: Matt Pocock
-  license_name: MIT
-skills:
-  tdd: {path: skills/engineering/tdd}
-  codebase-design: {path: skills/engineering/codebase-design}
-  domain-modeling: {path: skills/engineering/domain-modeling}
-  code-review: {path: skills/engineering/code-review}
-  pr: {path: skills/engineering/pr}
-  grilling: {path: skills/productivity/grilling}
+# Where the kit's copied skills come from. They are edited in place for the
+# foundry; scripts/update-skills merges upstream's changes since `commit` into
+# them, then records the new commit here and in each skill's metadata.source.
+repo https://github.com/mattpocock/skills.git
+commit 5beb35b040e3de97e54fa9e386d7e42d15c295c2
+# license <upstream's licence file> <its copy in agent-kit/skills/>
+license LICENSE LICENSE-mattpocock
+
+# skill <folder in agent-kit/skills/> <folder in upstream>
+skill tdd skills/engineering/tdd
+skill codebase-design skills/engineering/codebase-design
+skill domain-modeling skills/engineering/domain-modeling
+skill code-review skills/engineering/code-review
+skill pr skills/engineering/pr
+skill grilling skills/productivity/grilling

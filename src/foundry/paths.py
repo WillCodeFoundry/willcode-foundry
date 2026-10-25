@@ -29,11 +29,6 @@ def agent_kit_dir(foundry_root: Path) -> Path:
     return foundry_root / "agent-kit"
 
 
-def skills_dir(foundry_root: Path) -> Path:
-    """The agent kit's skills: the foundry's own, and those `foundry skills update` copies (see skills.lock there)."""
-    return agent_kit_dir(foundry_root) / "skills"
-
-
 def ssh_key_path(foundry_root: Path, role_name: str) -> Path:
     return foundry_root / "secrets" / "ssh" / role_name
 

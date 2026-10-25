@@ -13,7 +13,7 @@ metadata:
     commit: 5beb35b040e3de97e54fa9e386d7e42d15c295c2
     author: Matt Pocock
     license: MIT (see ../LICENSE-mattpocock)
-  adapted: for willcode-foundry; changes in ../patches/pr.patch
+  adapted: for willcode-foundry, edited in place; see Skills in its README
 ---
 
 The title is as the `git-conventions` skill says (`$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`): `[<task id>] type(scope): summary`.

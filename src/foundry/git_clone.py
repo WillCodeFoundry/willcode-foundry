@@ -1,5 +1,5 @@
 """GitClone: a shallow clone of a project's repository, in a folder you give it, made and pushed with git and
-your own access. It speaks in branches, commits and files; the git details (fetching one commit deep, the remote's
+your own access. It speaks in branches and files; the git details (fetching one commit deep, the remote's
 name, refspecs) stay inside it."""
 
 import subprocess
@@ -14,10 +14,9 @@ _REMOTE_NAME = "origin"
 class GitClone:
     """A clone of the repository at a URL, in a folder you give it, holding nothing until a branch is checked out.
 
-    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it) or checks out
-    a commit, checks and writes files in it, commits them, and pushes branches together. Only the branches and
-    commits needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key in your
-    git config.
+    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
+    writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
+    commit deep. Every commit is signed with SSH, using the signing key in your git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
     """
@@ -60,11 +59,6 @@ class GitClone:
             self._git("switch", "--quiet", branch)
         else:
             self._git("switch", "--quiet", "--orphan", branch)
-
-    def check_out_commit(self, commit: str) -> None:
-        """Check out ``commit``, a full commit id, fetched one commit deep and on no branch: files as they were."""
-        self._git("fetch", "--quiet", "--depth=1", _REMOTE_NAME, commit)
-        self._git("switch", "--quiet", "--detach", commit)
 
     def exists(self, path: str) -> bool:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
