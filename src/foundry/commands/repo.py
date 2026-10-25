@@ -3,8 +3,10 @@
 import argparse
 
 from foundry import config, paths, repo_policy
-from foundry.github import GhCli, GitHubError, repo_slug_from_url
-from foundry.repo_policy import Deviation, RulesetChange
+from foundry.config import Project
+from foundry.errors import FoundryError
+from foundry.github import GhCli, repo_slug_from_url
+from foundry.repo_policy import ProjectCheck
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -38,26 +40,29 @@ def check_main(args: argparse.Namespace) -> int:
 
     all_conform = True
     for project_name in args.project_names or sorted(foundry_config.projects):
-        repo_slug = repo_slug_from_url(foundry_config.project(project_name).url)
-        try:
-            changes = repo_policy.apply_rulesets(github, repo_slug, policy) if args.fix else []
-            deviations = repo_policy.deviations(github, repo_slug, policy)
-        except GitHubError as error:
-            print(f"{project_name} ({repo_slug})\n  error    {error}")
-            all_conform = False
-            continue
-        print("\n".join(report(project_name, repo_slug, changes, deviations)))
-        all_conform = all_conform and not deviations
+        project = foundry_config.project(project_name)
+        if args.fix:
+            result = repo_policy.fix_project(github, project.url, policy)
+        else:
+            result = repo_policy.check_project(github, project.url, policy)
+        print("\n".join(report(project, result)))
+        all_conform = all_conform and result.conforms
     return 0 if all_conform else 1
 
 
-def report(project_name: str, repo_slug: str, changes: list[RulesetChange], deviations: list[Deviation]) -> list[str]:
-    """The lines check prints for one project: what --fix changed, then 'conforms' or each deviation's diff."""
-    lines = [f"{project_name} ({repo_slug})"]
-    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in changes]
-    if not deviations:
+def report(project: Project, result: ProjectCheck) -> list[str]:
+    """The lines check prints for one project: its header, what --fix changed, then its error, 'conforms', or
+    each deviation's diff."""
+    try:
+        lines = [f"{project.name} ({repo_slug_from_url(project.url)})"]
+    except FoundryError:
+        lines = [project.name]  # the result's error says why
+    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
+    if result.error is not None:
+        return [*lines, f"  error    {result.error}"]
+    if not result.deviations:
         lines.append("  conforms")
-    for deviation in deviations:
+    for deviation in result.deviations:
         lines.append(f"  differs  {deviation.subject}")
         lines += [f"           {line}" for line in deviation.diff.splitlines()]
     return lines
