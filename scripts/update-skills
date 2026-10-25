@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Merge upstream's changes into the agent kit's copied skills. Run by hand.
+#
+#   scripts/update-skills            # to upstream's latest commit
+#   scripts/update-skills COMMIT     # to that commit
+#
+# A copied skill is a folder in agent-kit/skills/ whose SKILL.md has a
+# metadata.source: the upstream repo, the skill's path there, and the commit
+# it's up to date with. For each, this applies upstream's changes since that
+# commit, without agents/, with git's three-way merge, and records the new
+# commit. A line both sides changed is left as a merge conflict. Then review
+# (git diff HEAD), resolve, and commit.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# The value of `key:` in a SKILL.md's metadata.source block.
+source_field() {
+    awk -v key="$1:" '/^  source:/ { inside = 1; next }
+        inside && !/^    / { exit }
+        inside && $1 == key { print $2; exit }' "$2"
+}
+
+failed=''
+for skill_md in agent-kit/skills/*/SKILL.md; do
+    repo=$(source_field repo "$skill_md")
+    [[ -n "$repo" ]] || continue  # one of the foundry's own skills
+    skill_dir=${skill_md%/SKILL.md} path=$(source_field path "$skill_md") old=$(source_field commit "$skill_md")
+    url="https://github.com/$repo.git"
+
+    git fetch --quiet --no-tags "$url" "${1:-HEAD}"
+    new=$(git rev-parse FETCH_HEAD)
+    if [[ "$new" == "$old" ]]; then
+        echo "${skill_dir##*/}: already at ${old:0:12}"
+        continue
+    fi
+    git fetch --quiet --no-tags "$url" "$old"
+    git diff --binary "$old" "$new" --relative="$path" -- "$path" ":(exclude)$path/agents" \
+        | git apply --3way --allow-empty --directory="$skill_dir" || failed+=" ${skill_dir##*/}"
+    sed "s/^\\(    commit: \\)$old\$/\\1$new/" "$skill_md" > "$skill_md.tmp" && mv "$skill_md.tmp" "$skill_md"
+    git show "$new:LICENSE" > "agent-kit/skills/LICENSE-${repo%%/*}"
+    echo "${skill_dir##*/}: updated to ${new:0:12}"
+done
+
+if [[ -n "$failed" ]]; then
+    echo "update-skills: not merged cleanly:$failed; resolve what git reported above, then commit" >&2
+    exit 1
+fi
