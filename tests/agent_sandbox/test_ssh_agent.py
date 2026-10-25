@@ -275,14 +275,37 @@ def test_a_recently_launched_ssh_agent_is_spared(host, tmp_path):
 
 
 def test_an_ssh_agent_that_stopped_meanwhile_is_skipped(host, tmp_path):
-    host.processes = [
-        ssh_agent_process(101, tmp_path, "dev-p-no-socket"),
-        ssh_agent_process(102, tmp_path, "dev-p-gone"),
-        ssh_agent_process(103, tmp_path, "dev-p-old"),
-    ]
+    host.processes = [ssh_agent_process(102, tmp_path, "dev-p-gone"), ssh_agent_process(103, tmp_path, "dev-p-old")]
     socket_touched(tmp_path, "dev-p-gone", LONG_AGO)
     socket_touched(tmp_path, "dev-p-old", LONG_AGO)
     host.gone = {102}
 
     assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-old"]
     assert host.killed == [103]
+
+
+def test_an_ssh_agent_whose_socket_is_gone_is_pruned(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-no-socket")]
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-no-socket"]
+    assert host.killed == [101]
+
+
+def test_a_live_sandboxs_ssh_agent_is_kept_even_without_its_socket(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-live")]
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes={"dev-p-live"}) == []
+    assert host.killed == []
+
+
+def test_an_orphan_and_its_replacement_are_both_pruned_over_two_prunes(host, tmp_path):
+    registry = make_registry(host, tmp_path)
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-t1"), ssh_agent_process(102, tmp_path, "dev-p-t1")]
+    socket_touched(tmp_path, "dev-p-t1", LONG_AGO)
+
+    assert registry.prune(live_sandboxes=set()) == ["dev-p-t1"]
+    (first,) = host.killed
+    host.processes = [process for process in host.processes if process[0] != first]
+
+    assert registry.prune(live_sandboxes=set()) == ["dev-p-t1"]
+    assert sorted(host.killed) == [101, 102]

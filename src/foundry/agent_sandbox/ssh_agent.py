@@ -1,6 +1,7 @@
 """A dedicated ssh-agent per sandbox, reachable at a fixed socket path."""
 
 import os
+import re
 import stat
 import subprocess
 import time
@@ -39,39 +40,48 @@ class SshAgentRegistry:
         return SshAgent(self._host, self._socket_path(sandbox_name), self._uid)
 
     def prune(self, *, live_sandboxes: Collection[str]) -> list[str]:
-        """Kill the agents of sandboxes not in ``live_sandboxes``, except recently touched ones.
+        """Kill the ssh-agents of sandboxes not in ``live_sandboxes``, except recently touched ones.
 
-        Returns the names of the sandboxes whose agents were killed, sorted.
+        An agent whose socket is gone is killed too: nothing can reach it, but it still holds a
+        key. Returns the names of the sandboxes whose agents were killed, sorted.
         """
-        ssh_agent_pids = self._list_ssh_agents()
-        killed = []
-        for name in sorted(ssh_agent_pids.keys() - set(live_sandboxes)):
+        pruned = []
+        for sandbox_name, pid in sorted(self._list_ssh_agents().items()):
+            if sandbox_name in live_sandboxes or self._recently_touched(sandbox_name):
+                continue
             try:
-                if time.time() - self._socket_path(name).stat().st_mtime < _RECENTLY_TOUCHED_SECONDS:
-                    continue  # launched recently: its sandbox may not be live yet
-                self._host.kill_process(ssh_agent_pids[name])
-            except (FileNotFoundError, ProcessLookupError):
-                continue  # the agent stopped meanwhile, removing its socket
-            killed.append(name)
-        return killed
+                self._host.kill_process(pid)
+            except ProcessLookupError:
+                continue  # it stopped meanwhile
+            pruned.append(sandbox_name)
+        return pruned
 
     def _socket_path(self, sandbox_name: str) -> Path:
         return self._sockets_dir / f"{sandbox_name}.sock"
 
-    def _list_ssh_agents(self) -> dict[str, int]:
-        """This user's running ssh-agents, as sandbox name -> pid.
+    def _recently_touched(self, sandbox_name: str) -> bool:
+        """Whether the sandbox's socket was touched in the last 10 minutes, as a launch in progress's is."""
+        try:
+            return time.time() - self._socket_path(sandbox_name).stat().st_mtime < _RECENTLY_TOUCHED_SECONDS
+        except FileNotFoundError:
+            return False  # no socket: not a launch in progress, since ensure_running creates it first
 
-        A process is one of them if its command line is exactly what _start_command gives for a
-        socket in the sockets directory. Split on whitespace, which is safe: the directory is fixed
-        and sandbox names are sbx-safe, so a socket path has no spaces.
+    def _list_ssh_agents(self) -> dict[str, int]:
+        """This user's running ssh-agents, as sandbox name -> pid, whether or not their sockets still exist.
+
+        A process is one of them if its command line is what _start_command gives for some sandbox's
+        socket in the sockets directory. Two can share a sandbox name only if one is an orphan whose
+        replacement started on the same socket; then one pid is kept here, and the next prune finds
+        the other.
         """
-        ssh_agent_pids = {}
-        for pid, command in self._host.list_processes(self._uid):
-            argv = tuple(command.split())
-            for socket in (Path(arg) for arg in argv):
-                if socket.parent == self._sockets_dir and socket.suffix == ".sock" and argv == _start_command(socket):
-                    ssh_agent_pids[socket.stem] = pid
-        return ssh_agent_pids
+        marker = "\0"  # stands in for the sandbox name; can't occur in a path or a command line
+        before, after = " ".join(_start_command(self._socket_path(marker))).split(marker)
+        started_by_registry = re.compile(re.escape(before) + r"([^/\s]+)" + re.escape(after))
+        return {
+            match[1]: pid
+            for pid, command in self._host.list_processes(self._uid)
+            if (match := started_by_registry.fullmatch(command))
+        }
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
