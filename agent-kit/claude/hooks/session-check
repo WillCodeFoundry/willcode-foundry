@@ -4,10 +4,7 @@
 #
 #   RULE  A session cannot end with uncommitted or unpushed changes.
 set -euo pipefail
-: "${AGENT_TASK:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}"
-# For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/task.sh
-source "$(dirname "$0")/../../lib/task.sh"
+: "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
 
 # Already looping on this hook: let the stop through rather than spin. Input
 # that isn't the JSON Claude Code sends is not a reason to let it through.
@@ -26,8 +23,8 @@ report_unsaved_work() {  # report_unsaved_work <dir> <branch> <label>
         problems+=("$label has commits not pushed to origin/$branch")
     fi
 }
-report_unsaved_work "$AGENT_PROJECT_DIR" "$TASK_BRANCH"  "code checkout"
-report_unsaved_work "$AGENT_NOTES_DIR"   "$NOTES_BRANCH" "notes checkout"
+report_unsaved_work "$AGENT_PROJECT_DIR" "$AGENT_TASK_BRANCH"  "code checkout"
+report_unsaved_work "$AGENT_NOTES_DIR"   "$AGENT_NOTES_BRANCH" "notes checkout"
 
 if ((${#problems[@]} == 0)); then
     exit 0

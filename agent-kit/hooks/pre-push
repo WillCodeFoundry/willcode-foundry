@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Pushes only to this task's branch and agent-notes. The project's GitHub
+# Pushes only to this task's branch and the notes branch. The project's GitHub
 # rulesets allow any task/**, since GitHub can't tell one task from another;
 # this keeps a role to its own. git passes one line per ref on stdin:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -euo pipefail
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
 # For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/task.sh
-source "$(dirname "$0")/../lib/task.sh"
 # shellcheck source=agent-kit/lib/hooks.sh
 source "$(dirname "$0")/../lib/hooks.sh"
 
 while read -r _local_ref _local_sha remote_ref _remote_sha; do
     case "$remote_ref" in
-        "refs/heads/$TASK_BRANCH"|"refs/heads/$NOTES_BRANCH") ;;
-        *) refuse pre-push "You may only push $TASK_BRANCH and $NOTES_BRANCH, not ${remote_ref#refs/heads/}." \
-               "Code goes on $TASK_BRANCH; notes go on $NOTES_BRANCH." ;;
+        "refs/heads/$AGENT_TASK_BRANCH"|"refs/heads/$AGENT_NOTES_BRANCH") ;;
+        *) refuse pre-push "You may only push $AGENT_TASK_BRANCH and $AGENT_NOTES_BRANCH, not ${remote_ref#refs/heads/}." \
+               "Code goes on $AGENT_TASK_BRANCH; notes go on $AGENT_NOTES_BRANCH." ;;
     esac
 done

@@ -5,13 +5,11 @@
 # The sandbox has no host checkout: the project is cloned here from
 # $AGENT_REPO_URL into $AGENT_PROJECT_DIR. Assumes `foundry task create` has
 # already created the task: its branch, and its notes folder, holding its
-# TASK.md, on `agent-notes` (names from lib/task.sh). Anything missing is
-# an error, not something to create here.
+# TASK.md, on the notes branch (names from the AGENT_* variables). Anything
+# missing is an error, not something to create here.
 set -euo pipefail
 : "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_REPO_URL:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
-# For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/task.sh
-source "$(dirname "$0")/../lib/task.sh"
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_TASK_FILE:?}"
 
 role_path="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
 [[ -f "$role_path/gitconfig" ]] || { echo "session-init: $role_path/gitconfig is missing" >&2; exit 1; }
@@ -47,32 +45,32 @@ git fetch origin
 # The task must already exist on origin: created with its branch and a TASK.md
 # on `agent-notes` before any agent runs. Say so plainly rather than let git fail.
 missing=()
-git show-ref -q --verify "refs/remotes/origin/$TASK_BRANCH" || missing+=("branch $TASK_BRANCH")
-git show-ref -q --verify "refs/remotes/origin/$NOTES_BRANCH" || missing+=("branch $NOTES_BRANCH")
+git show-ref -q --verify "refs/remotes/origin/$AGENT_TASK_BRANCH" || missing+=("branch $AGENT_TASK_BRANCH")
+git show-ref -q --verify "refs/remotes/origin/$AGENT_NOTES_BRANCH" || missing+=("branch $AGENT_NOTES_BRANCH")
 if ((${#missing[@]})); then
     echo "session-init: task $AGENT_TASK has not been created on $AGENT_REPO_URL: missing ${missing[*]}." >&2
     echo "  Create it with: foundry task create <project> $AGENT_TASK, write its TASK.md, then run again." >&2
     exit 1
 fi
 
-if git show-ref -q --verify "refs/heads/$TASK_BRANCH"; then
-    git switch "$TASK_BRANCH"
+if git show-ref -q --verify "refs/heads/$AGENT_TASK_BRANCH"; then
+    git switch "$AGENT_TASK_BRANCH"
 else
-    git switch -c "$TASK_BRANCH" --track "origin/$TASK_BRANCH"
+    git switch -c "$AGENT_TASK_BRANCH" --track "origin/$AGENT_TASK_BRANCH"
 fi
 
 if [[ ! -d "$AGENT_NOTES_DIR" ]]; then
-    if git show-ref -q --verify "refs/heads/$NOTES_BRANCH"; then
-        git worktree add "$AGENT_NOTES_DIR" "$NOTES_BRANCH"
+    if git show-ref -q --verify "refs/heads/$AGENT_NOTES_BRANCH"; then
+        git worktree add "$AGENT_NOTES_DIR" "$AGENT_NOTES_BRANCH"
     else
-        git worktree add --track -b "$NOTES_BRANCH" "$AGENT_NOTES_DIR" "origin/$NOTES_BRANCH"
+        git worktree add --track -b "$AGENT_NOTES_BRANCH" "$AGENT_NOTES_DIR" "origin/$AGENT_NOTES_BRANCH"
     fi
 fi
 
 # Every task has a TASK.md: foundry task create refuses a template without one.
-task_md_path="$AGENT_NOTES_DIR/$TASK_FILE_RELATIVE_PATH"
+task_md_path="$AGENT_NOTES_DIR/$AGENT_TASK_FILE"
 [[ -f "$task_md_path" ]] || {
-    echo "session-init: $NOTES_BRANCH has no $TASK_FILE_RELATIVE_PATH; push the task's TASK.md there, then run again." >&2
+    echo "session-init: $AGENT_NOTES_BRANCH has no $AGENT_TASK_FILE; push the task's TASK.md there, then run again." >&2
     exit 1
 }
 

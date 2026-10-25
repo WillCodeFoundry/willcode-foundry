@@ -235,3 +235,29 @@ def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: 
     code, _ = repo
     (code / "wip.txt").write_text("x\n")
     assert json.loads(stop(raw_input=raw_input).stdout)["decision"] == "block"
+
+
+# --- every script -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "hooks/pre-commit",
+        "hooks/pre-push",
+        "hooks/prepare-commit-msg",
+        "claude/hooks/session-check",
+        "bin/session-init",
+    ],
+)
+def test_a_script_run_outside_a_sandbox_names_the_variable_it_lacks(script: str) -> None:
+    result = subprocess.run(
+        [str(AGENT_KIT_PATH / script)],
+        env={"PATH": os.environ["PATH"]},
+        input="",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "AGENT_" in result.stderr and "parameter null or not set" in result.stderr

@@ -48,7 +48,6 @@ $ scripts/update-skills                                    # merge upstream's ch
 │   │   ├── prepare-commit-msg    # adds the Task: trailer on the task branch
 │   │   └── pre-push              # only this task's branch and agent-notes
 │   ├── lib/
-│   │   ├── task.sh               # a task's branch and notes names, from AGENT_TASK; agrees with task.py's Task (a test checks)
 │   │   └── hooks.sh              # helpers the git hooks share: refusals, the current branch
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
@@ -191,12 +190,12 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/task.sh agent-kit/lib/hooks.sh scripts/update-skills
+$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh scripts/update-skills
 ```
 
 These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the kit's `source` directives are relative to it.
 
-`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that `task.py`, `agent-kit/lib/task.sh` and `config/repo-policy/rulesets.yaml` name a task's branches and notes alike.
+`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that every `AGENT_*` variable the agent kit uses is one the sandbox definition sets, and that `config/repo-policy/rulesets.yaml` names a task's branches as `task.py` does. The kit's tests take their variables from a real sandbox definition (`tests/agent_kit/kit_env.py`).
 
 ## Skills
 
