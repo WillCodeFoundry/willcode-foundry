@@ -1,36 +1,17 @@
 #!/usr/bin/env bash
 # Prepare a sandbox for an agent session: what the launcher runs inside the
-# sandbox, as the agent user, before the agent starts. session-setup does the
-# agent user's part; then the sandbox is hardened, and the Docker socket is
-# checked on every launch. Idempotent: safe to run again on a re-attached
-# sandbox.
+# sandbox, as the agent user, before the agent starts. Idempotent: safe to run
+# again on a re-attached sandbox.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
 
+# The agent user's part: git identity, checkouts, the agent's instructions.
 "$AGENT_KIT_DIR/bin/session-setup"
 
-# --- Harden, last -------------------------------------------------------------
-# Installs Claude's managed settings and removes sudo, su and Docker. Nothing
-# after this may need root. On a re-attached sandbox sudo is already gone and
-# this is skipped.
-
+# Harden on the first launch, while sudo still exists; nothing after this may
+# need root. Then verify on every launch, as the agent itself, with the groups
+# sbx gives it: the launch stops unless the agent can't become root.
 if sudo -n true 2>/dev/null; then
     sudo --preserve-env=AGENT_KIT_DIR "$AGENT_KIT_DIR/bin/session-harden"
-elif [[ -f /etc/claude-code/managed-settings.json ]]; then
-    echo "session-init: already hardened"
-else
-    echo "session-init: no sudo and no managed settings installed; cannot harden this sandbox" >&2
-    exit 1
 fi
-
-# Checked here, on every launch, because this process has the groups sbx
-# gives the agent (session-harden's su-based checks don't): a Docker socket
-# the agent can reach is root over this sandbox.
-for socket in /var/run/docker.sock /var/run/docker/containerd/containerd.sock; do
-    if [[ -S "$socket" && -w "$socket" ]]; then
-        echo "session-init: the agent can use $socket, which is root over this sandbox; not starting the agent." >&2
-        echo "  A sandbox hardened before Docker's socket was made root-only needs recreating:" >&2
-        echo "  sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again." >&2
-        exit 1
-    fi
-done
+"$AGENT_KIT_DIR/bin/session-harden" --verify

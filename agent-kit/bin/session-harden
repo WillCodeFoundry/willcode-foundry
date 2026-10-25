@@ -1,13 +1,61 @@
 #!/usr/bin/env bash
-# Root part of session setup. Installs Claude's managed settings, then takes
-# away the agent user's ways to become root: sudo, su, and Docker, whose
-# daemon mounts this sandbox's own filesystem for anyone who can reach its
-# socket. Run once, last, via sudo from session-init; the final check fails
-# the launch if sudo or su is left, and session-init checks Docker as the
-# agent on every launch.
+# Hardens a sandbox, and checks that it is hardened: the agent can't become
+# root, and can't change Claude's managed settings. Two modes, both run by
+# session-init:
+#
+#   session-harden            as root, via sudo, on the first launch, while
+#                             sudo still exists: installs the managed settings
+#                             and takes away sudo, su and Docker.
+#   session-harden --verify   as the agent, on every launch, before the agent
+#                             starts: checks all of it, with lib/hardening.sh.
+#
+# The checks run as the agent itself because sbx gives agent processes the
+# docker group by number, whatever /etc/group says: root, or a login through
+# su, would see different permissions than the agent has.
 set -euo pipefail
 : "${AGENT_KIT_DIR:?}"
 
+DOCKER_SOCKETS=(/var/run/docker.sock /var/run/docker/containerd/containerd.sock)
+MANAGED_SETTINGS=/etc/claude-code/managed-settings.json
+
+verify() {
+    if [[ $EUID -eq 0 ]]; then
+        echo "session-harden: refusing: --verify runs as the agent, so it sees what the agent can do; root can do anything" >&2
+        exit 1
+    fi
+    # shellcheck source=agent-kit/lib/hardening.sh
+    source "$AGENT_KIT_DIR/lib/hardening.sh"
+    local found=()
+    # check <command...>: run one check, keeping each line it prints if it fails.
+    check() {
+        local out line
+        if ! out="$("$@")"; then
+            while IFS= read -r line; do found+=("$line"); done <<<"$out"
+        fi
+    }
+    check hardening_check_sudo
+    check hardening_check_su
+    check hardening_check_docker_sockets "${DOCKER_SOCKETS[@]}"
+    check hardening_check_managed_settings "$MANAGED_SETTINGS" "$AGENT_KIT_DIR/claude/managed-settings.json"
+    if ((${#found[@]})); then
+        {
+            echo "session-harden --verify: not starting the agent; it can still:"
+            printf '  %s\n' "${found[@]}"
+            echo "A sandbox hardened by an older agent kit needs recreating:"
+            echo "  sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again."
+        } >&2
+        exit 1
+    fi
+    echo "session-harden --verify: hardened"
+}
+
+case "${1:-}" in
+    --verify) verify; exit 0 ;;
+    "") ;;
+    *) echo "usage: session-harden [--verify]" >&2; exit 2 ;;
+esac
+
+# --- Root mode ------------------------------------------------------------------
 # Removing sudo would lock a real machine's owner out; only run in a sandbox,
 # via sudo from its agent user.
 agent_user="${SUDO_USER:-}"
@@ -19,7 +67,7 @@ fi
 # Root-owned, so the agent can read the settings but not change or replace
 # them. The directory is set too, in case it already existed.
 install -d -m 0755 -o root -g root /etc/claude-code
-install    -m 0644 -o root -g root "$AGENT_KIT_DIR/claude/managed-settings.json" /etc/claude-code/managed-settings.json
+install    -m 0644 -o root -g root "$AGENT_KIT_DIR/claude/managed-settings.json" "$MANAGED_SETTINGS"
 
 chmod 0000 "$(readlink -f "$(command -v sudo)")"   # sudo can't run, whatever its rules say
 passwd -l root >/dev/null                           # su needs root's password; there is none
@@ -47,14 +95,6 @@ printf '%s\n' "$docker_config" > /etc/docker/daemon.json
 chmod 0644 /etc/docker/daemon.json
 if [[ -S /var/run/docker.sock ]]; then chgrp root /var/run/docker.sock; fi
 
-# Verify sudo and su as the agent user. Docker can't be checked from here: a
-# login through su gets /etc/group's groups, not the ones sbx gives the agent.
-as_agent() { su -s /bin/sh "$agent_user" -c "$1" </dev/null >/dev/null 2>&1; }
-failed=()
-as_agent 'sudo -n true' && failed+=("sudo")
-as_agent 'su root -c true' && failed+=("su to root")
-if ((${#failed[@]})); then
-    echo "session-harden: FAILED, $agent_user can still use: $(IFS=,; echo "${failed[*]}")" >&2
-    exit 1
-fi
+# Checked by `session-harden --verify`, which session-init runs next, as the
+# agent itself.
 echo "session-harden: managed settings installed; sudo and su removed for $agent_user; Docker socket made root-only"

@@ -1,8 +1,8 @@
-"""agent-kit/bin/session-harden's refusal to run outside a sandbox, and the hardening checks in
-agent-kit/lib/hardening.sh.
+"""agent-kit/bin/session-harden: its refusal to run outside a sandbox, its verify mode's refusal to run
+as root, and the checks in agent-kit/lib/hardening.sh that `session-harden --verify` runs.
 
-session-harden removes sudo from the machine it runs on, so it is only run as far as its refusal.
-The checks are run against sockets, files and stand-in commands of each test's own.
+Root mode removes sudo from the machine it runs on, so it is only run as far as its refusal. The
+checks are run against sockets, files and stand-in commands of each test's own.
 """
 
 import os
@@ -34,6 +34,31 @@ def test_session_harden_refuses_outside_a_sandbox_before_changing_anything(sudo_
     result = subprocess.run([str(SESSION_HARDEN)], env=env, capture_output=True, text=True, check=False)
     assert result.returncode == 1
     assert "only runs inside a foundry sandbox" in result.stderr
+
+
+def test_session_harden_refuses_an_unknown_mode() -> None:
+    env = {"PATH": os.environ["PATH"], "AGENT_KIT_DIR": str(AGENT_KIT_PATH)}
+    result = subprocess.run([str(SESSION_HARDEN), "--fix"], env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 2
+    assert "usage: session-harden [--verify]" in result.stderr
+
+
+@pytest.mark.skipif(os.geteuid() != 0, reason="checks the refusal to verify as root")
+def test_verify_refuses_to_run_as_root() -> None:
+    env = {"PATH": os.environ["PATH"], "AGENT_KIT_DIR": str(AGENT_KIT_PATH)}
+    result = subprocess.run([str(SESSION_HARDEN), "--verify"], env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    assert "runs as the agent" in result.stderr
+
+
+@needs_non_root
+def test_verify_on_a_machine_that_isnt_a_hardened_sandbox_refuses_to_start_the_agent() -> None:
+    """This machine has no managed settings installed, whatever else it allows."""
+    env = {"PATH": os.environ["PATH"], "AGENT_KIT_DIR": str(AGENT_KIT_PATH)}
+    result = subprocess.run([str(SESSION_HARDEN), "--verify"], env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    assert "not starting the agent" in result.stderr
+    assert "managed settings" in result.stderr
 
 
 # --- the checks ---------------------------------------------------------------------
