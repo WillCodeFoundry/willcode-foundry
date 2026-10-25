@@ -9,7 +9,6 @@ import pytest
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_host_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.sandbox import SbxCli, list_live_sandboxes
-from tests.agent_sandbox.fakes import ExecCalled, FakeHost
 
 SOCKET = Path("/tmp/sbx-agents/n.sock")
 ENV = {"PATH": "/bin", "SSH_AUTH_SOCK": str(SOCKET)}
@@ -141,7 +140,7 @@ def test_commands_run_inside_with_the_definitions_variables(host, sbx_cli: SbxCl
 
 
 def test_attaching_hands_over_to_sbx_env_run_with_the_sandboxs_socket(host, sbx_cli: SbxCli, definition_dir: Path):
-    with pytest.raises(ExecCalled) as handed_over:
+    with pytest.raises(host.ExecCalled) as handed_over:
         sbx_cli.attach()
     assert handed_over.value.command == ("sbx", "env", "run", "--auto-approve", str(definition_dir))
     assert handed_over.value.env == ENV
@@ -159,13 +158,13 @@ SBX_LS_JSON = """{
 }"""
 
 
-def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host: FakeHost) -> None:
+def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:
     host.responses = {SBX_LS: SBX_LS_JSON}
 
     assert list_live_sandboxes(host, {}) == {"dev-p-running", "dev-p-starting"}
 
 
-def test_a_failing_sbx_ls_is_reported(host: FakeHost) -> None:
+def test_a_failing_sbx_ls_is_reported(host) -> None:
     host.responses = {SBX_LS: 1}
 
     with pytest.raises(SandboxError, match="sbx ls failed"):
