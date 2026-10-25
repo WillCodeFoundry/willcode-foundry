@@ -11,10 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit.kit_env import AGENT_KIT_PATH, kit_env
-
-TASK = Task("T1")
+from foundry.task import NOTES_BRANCH
+from tests.agent_kit import AGENT_KIT_PATH, TASK
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -41,21 +39,21 @@ def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return bare
 
 
-def session_init(tmp_path: Path, origin: Path) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, **kit_env(tmp_path, TASK, AGENT_REPO_URL=f"file://{origin}")}
+def session_init(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedProcess[str]:
+    env = {**os.environ, **kit_env, "AGENT_REPO_URL": f"file://{origin}"}
     return subprocess.run(
         [str(AGENT_KIT_PATH / "bin" / "session-init")], env=env, capture_output=True, text=True, check=False
     )
 
 
-def test_a_task_without_its_branches_is_explained(tmp_path, origin) -> None:
-    result = session_init(tmp_path, origin)
+def test_a_task_without_its_branches_is_explained(kit_env, origin) -> None:
+    result = session_init(kit_env, origin)
     assert result.returncode == 1
     assert f"task {TASK.id} has not been created" in result.stderr
     assert f"branch {TASK.branch}" in result.stderr and f"branch {NOTES_BRANCH}" in result.stderr
 
 
-def test_a_task_without_its_task_md_is_explained(tmp_path, origin) -> None:
+def test_a_task_without_its_task_md_is_explained(tmp_path, kit_env, origin) -> None:
     seed = tmp_path / "seed"
     git(seed, "push", "-q", "origin", f"HEAD:refs/heads/{TASK.branch}")
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
@@ -64,7 +62,7 @@ def test_a_task_without_its_task_md_is_explained(tmp_path, origin) -> None:
     git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
 
-    result = session_init(tmp_path, origin)
+    result = session_init(kit_env, origin)
     assert result.returncode == 1
     assert f"{NOTES_BRANCH} has no {TASK.task_file}" in result.stderr
     assert not (tmp_path / "home" / ".claude").exists()  # stopped before writing instructions

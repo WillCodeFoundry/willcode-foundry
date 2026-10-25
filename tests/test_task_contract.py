@@ -3,12 +3,12 @@ sandbox as the AGENT_* variables the session sets, which the agent kit reads, an
 rulesets in config/repo-policy/rulesets.yaml, which must spell them out for GitHub."""
 
 import re
+from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from foundry import session, yaml_io
-from foundry.config import Project, Role
+from foundry import yaml_io
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -29,17 +29,17 @@ def agent_kit_files() -> list[Path]:
     return files
 
 
-def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(tmp_path: Path) -> None:
-    opened = session.open_or_create(
-        tmp_path, project=Project(name="p", url="git@github.com:o/p.git"), role=Role(name="dev"), task=Task("t1")
-    )
+def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
+    sandbox_variables: Callable[[Task], dict[str, str]],
+) -> None:
+    variables = sandbox_variables(Task("t1"))
     used = {
         (name, str(path.relative_to(REPO_ROOT)))
         for path in agent_kit_files()
         for name in re.findall(r"\bAGENT_[A-Z_]+\b", path.read_text())
     }
 
-    assert [(name, where) for name, where in sorted(used) if name not in opened.definition.variables] == []
+    assert [(name, where) for name, where in sorted(used) if name not in variables] == []
 
 
 def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:
