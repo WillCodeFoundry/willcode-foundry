@@ -34,8 +34,8 @@ class SshAgentRegistry:
         self._uid = uid
         self._sockets_dir = sockets_dir
 
-    def agent_for(self, sandbox_name: str) -> "SshAgent":
-        """The agent for this sandbox; its ensure_running starts it, or reuses the one already there."""
+    def ssh_agent(self, sandbox_name: str) -> "SshAgent":
+        """This sandbox's ssh-agent; its ensure_running starts it, or reuses the one already there."""
         return SshAgent(self._host, self._socket_path(sandbox_name), self._uid)
 
     def prune(self, *, live_sandboxes: Collection[str]) -> list[str]:
@@ -43,13 +43,13 @@ class SshAgentRegistry:
 
         Returns the names of the sandboxes whose agents were killed, sorted.
         """
-        agents = self._list_agents()
+        ssh_agent_pids = self._list_ssh_agents()
         killed = []
-        for name in sorted(agents.keys() - set(live_sandboxes)):
+        for name in sorted(ssh_agent_pids.keys() - set(live_sandboxes)):
             try:
                 if time.time() - self._socket_path(name).stat().st_mtime < _RECENTLY_TOUCHED_SECONDS:
                     continue  # launched recently: its sandbox may not be live yet
-                self._host.kill_process(agents[name])
+                self._host.kill_process(ssh_agent_pids[name])
             except (FileNotFoundError, ProcessLookupError):
                 continue  # the agent stopped meanwhile, removing its socket
             killed.append(name)
@@ -58,20 +58,20 @@ class SshAgentRegistry:
     def _socket_path(self, sandbox_name: str) -> Path:
         return self._sockets_dir / f"{sandbox_name}.sock"
 
-    def _list_agents(self) -> dict[str, int]:
+    def _list_ssh_agents(self) -> dict[str, int]:
         """The running agents for this user, as sandbox name -> pid, found by the command line
         _start_command gives them."""
-        agents = {}
+        ssh_agent_pids = {}
         for pid, command in self._host.list_processes(self._uid):
             if command.startswith("ssh-agent -a ") and command.endswith(" -s"):
                 socket = Path(command.removeprefix("ssh-agent -a ").removesuffix(" -s"))
                 if socket.parent == self._sockets_dir and socket.suffix == ".sock":
-                    agents[socket.stem] = pid
-        return agents
+                    ssh_agent_pids[socket.stem] = pid
+        return ssh_agent_pids
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:
-    """How every agent is started; SshAgentRegistry._list_agents finds agents by this command line."""
+    """How every agent is started; SshAgentRegistry._list_ssh_agents finds agents by this command line."""
     return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
@@ -105,7 +105,7 @@ class SshAddExitCode(IntEnum):
 class SshAgent:
     """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox.
 
-    Made by SshAgentRegistry.agent_for, which knows where each sandbox's socket is.
+    Made by SshAgentRegistry.ssh_agent, which knows where each sandbox's socket is.
     """
 
     def __init__(self, host: Host, socket_path: Path, uid: int) -> None:
@@ -118,7 +118,7 @@ class SshAgent:
         _ensure_private_dir(self.socket_path.parent, self._uid)
         if not self._is_running():
             self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
-            # Its env script is ignored, so this process never uses the sandbox's agent.
+            # Its env script is ignored, so this process never uses the sandbox's ssh-agent.
             result = self._host.run(_start_command(self.socket_path))
             if result.returncode != 0 or not self._is_running():
                 raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")

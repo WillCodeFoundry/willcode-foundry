@@ -126,11 +126,13 @@ def launch(request: LaunchRequest) -> NoReturn:
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
     ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
-    ssh_agent = ssh_agent_registry.agent_for(definition.name)
+    ssh_agent = ssh_agent_registry.ssh_agent(definition.name)
     process_env = Sbx.process_env(host.environ(), ssh_agent.socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    if killed := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, process_env)):
-        print(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(killed)}", file=sys.stderr)
+    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, process_env)):
+        print(
+            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
+        )
     prepare(request, definition, ssh_agent, sbx)
     print(describe(request, definition, ssh_agent.socket_path), file=sys.stderr)
     host.exec(sbx.attach_command(), process_env)
