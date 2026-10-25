@@ -248,6 +248,7 @@ def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: 
         "hooks/prepare-commit-msg",
         "claude/hooks/session-check",
         "bin/session-init",
+        "bin/session-setup",
     ],
 )
 def test_a_script_run_outside_a_sandbox_names_the_variable_it_lacks(script: str) -> None:
