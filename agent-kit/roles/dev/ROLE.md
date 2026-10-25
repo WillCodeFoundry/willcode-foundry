@@ -19,7 +19,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`
 
 - When the latest round says `Verdict: changes needed`: under each open
   finding, add "Fixed in `<commit>`." or "Disagree: <why>.", without editing
-  the reviewer's text. Commit and push it on `agent-notes`, with the fixes on
+  the reviewer's text. Commit and push it on `$AGENT_NOTES_BRANCH`, with the fixes on
   the task branch.
 - When it says `Verdict: approved`: open the pull request into the default
   branch with `gh pr create`, the title as the `git-conventions` skill says

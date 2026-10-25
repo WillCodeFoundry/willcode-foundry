@@ -65,8 +65,10 @@ def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
 
 
 def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:
-    """Commands and paths in the kit use the variables; a branch may still be named in prose."""
-    spelled_out = re.compile(rf"(?<![\w$]){re.escape(NOTES_ROOT)}/|\btask/\$")
+    """Commands, paths and prose in the kit use the variables, so renaming one in Task leaves nothing stale."""
+    spelled_out = re.compile(
+        rf"(?<![\w$]){re.escape(NOTES_ROOT)}/|\btask/\$|(?<![\w-]){re.escape(NOTES_BRANCH)}(?![\w-])"
+    )
     found = [
         f"{path.relative_to(REPO_ROOT)}:{number}: {line.strip()}"
         for path in agent_kit_files()

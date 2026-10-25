@@ -45,7 +45,7 @@ git config core.hooksPath "$AGENT_KIT_DIR/hooks"   # read-only mount: agents can
 git fetch origin
 
 # The task must already exist on origin: created with its branch and a TASK.md
-# on `agent-notes` before any agent runs. Say so plainly rather than let git fail.
+# on $AGENT_NOTES_BRANCH before any agent runs. Say so plainly rather than let git fail.
 missing=()
 git show-ref -q --verify "refs/remotes/origin/$AGENT_TASK_BRANCH" || missing+=("branch $AGENT_TASK_BRANCH")
 git show-ref -q --verify "refs/remotes/origin/$AGENT_NOTES_BRANCH" || missing+=("branch $AGENT_NOTES_BRANCH")

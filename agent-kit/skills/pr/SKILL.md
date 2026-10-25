@@ -54,7 +54,7 @@ Skip all preambles and keep prose brief. Use the project's domain language from 
 
 ### Task
 
-Where the task and its review live, so whoever merges can read them: the paths to `TASK.md` and `REVIEW.md` in the task notes on `agent-notes`, with each variable in the template written out as its value. Then every acceptance criterion in `TASK.md`, in its words, each with how it's met: the test, the file or the commit that shows it. A criterion not met is listed unticked, with why.
+Where the task and its review live, so whoever merges can read them: the paths to `TASK.md` and `REVIEW.md` in the task notes on `$AGENT_NOTES_BRANCH`, with each variable in the template written out as its value. Then every acceptance criterion in `TASK.md`, in its words, each with how it's met: the test, the file or the commit that shows it. A criterion not met is listed unticked, with why.
 
 ### Summary
 
