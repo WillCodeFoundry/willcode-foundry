@@ -5,14 +5,8 @@ import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import (
-    LaunchRequest,
-    prepare,
-    require_dir,
-    require_file,
-    require_safe_paths,
-)
-from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
+from foundry.agent_sandbox.launcher import LaunchRequest, prepare
+from foundry.agent_sandbox.sandbox import SbxCli
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
 FP = "256 SHA256:abc comment (ED25519)"
@@ -48,8 +42,9 @@ def layout(tmp_path):
 def run_prepare(layout, host, **request) -> LaunchRequest:
     """prepare() for a launch request pointing at the layout's definition."""
     _, key, sdir, sock = layout
-    launch_request = LaunchRequest(definition_dir=sdir, ssh_key_path=key, **request)
-    prepare(launch_request, SandboxDefinition.read(sdir), SshAgent(host, sock, os.getuid()), Sbx(host, {}, "n", sdir))
+    launch_request = LaunchRequest(**{"definition_dir": sdir, "ssh_key_path": key, **request})
+    sandbox = SbxCli(host, sandbox_name="n", definition_dir=sdir, ssh_agent_socket_path=sock)
+    prepare(launch_request, SandboxDefinition.read(sdir), SshAgent(host, sock, os.getuid()), sandbox)
     return launch_request
 
 
@@ -71,17 +66,41 @@ def responses(key: Path, sdir: Path) -> Responses:
     return Responses(sdir, base)
 
 
-def test_safe_paths_reject_secrets_or_the_definition_inside_agent_kit(tmp_path: Path) -> None:
-    kit = tmp_path / "kit"
-    with pytest.raises(SandboxError, match="inside the agent kit"):
-        require_safe_paths(kit, tmp_path / "s", [kit / "key"])
-    with pytest.raises(SandboxError, match="inside the agent kit"):
-        require_safe_paths(kit, tmp_path / "s", [tmp_path / "key", kit / "token"])
-    with pytest.raises(SandboxError, match="inside the agent kit"):
-        require_safe_paths(kit, kit / "s", [tmp_path / "key"])
+def test_a_secret_inside_the_agent_kit_is_refused(layout, host) -> None:
+    kit, _key, _sdir, _sock = layout
+    (kit / "key").write_text("k")
+    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
+        run_prepare(layout, host, ssh_key_path=kit / "key")
+
+
+def test_a_token_file_inside_the_agent_kit_is_refused(layout, host) -> None:
+    kit, _key, _sdir, _sock = layout
+    (kit / "token").write_text("t")
+    with pytest.raises(SandboxError, match="inside the agent kit, readable by the sandbox"):
+        run_prepare(layout, host, github_token_path=kit / "token")
+
+
+def test_a_definition_inside_the_agent_kit_is_refused(layout, host, tmp_path) -> None:
+    kit, key, _sdir, sock = layout
+    inside = kit / "s"
+    inside.mkdir()
+    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=kit, variables={}).write(inside)
+    with pytest.raises(SandboxError, match="the sandbox could rewrite it"):
+        run_prepare((kit, key, inside, sock), host)
+
+
+def test_an_agent_kit_path_with_a_colon_is_refused(layout, host, tmp_path) -> None:
+    _kit, _key, sdir, _sock = layout
+    colon_kit = tmp_path / "a:b"
+    colon_kit.mkdir()
+    SandboxDefinition(name="n", workspace_dir=tmp_path / "ws", agent_kit_dir=colon_kit, variables={}).write(sdir)
     with pytest.raises(SandboxError, match="contains ':'"):
-        require_safe_paths(tmp_path / "a:b", tmp_path / "s", [])
-    require_safe_paths(kit, tmp_path / "s", [tmp_path / "key"])
+        run_prepare(layout, host)
+
+
+def test_a_missing_ssh_key_is_refused(layout, host, tmp_path) -> None:
+    with pytest.raises(SandboxError, match=r"ssh key '.*' is not a file"):
+        run_prepare(layout, host, ssh_key_path=tmp_path / "missing")
 
 
 def test_prepare_creates_then_runs_init_after_the_key_check(layout, host) -> None:
@@ -116,18 +135,6 @@ def test_prepare_gives_sbx_the_token_file_never_the_token(layout, host, tmp_path
     assert not any(TOKEN in " ".join(command) for command in cmds)
 
 
-def test_a_failing_token_source_never_reports_the_token(layout, host, tmp_path) -> None:
-    _kit, key, sdir, _sock = layout
-    token_file = tmp_path / "dev.token"
-    token_file.write_text(TOKEN)
-    host.responses = responses(key, sdir)
-    host.responses[("sbx", "secret", "set", "github", "--sandbox", "n", "--command", f"cat {token_file}")] = 1
-    with pytest.raises(SandboxError, match="sbx secret set failed") as error:
-        run_prepare(layout, host, github_token_path=token_file)
-    assert TOKEN not in str(error.value)
-    assert TOKEN not in repr(LaunchRequest(definition_dir=sdir, ssh_key_path=key, github_token_path=token_file))
-
-
 def test_prepare_aborts_when_init_fails(layout, host) -> None:
     _kit, key, sdir, _sock = layout
     host.responses = responses(key, sdir)
@@ -135,10 +142,6 @@ def test_prepare_aborts_when_init_fails(layout, host) -> None:
 
     with pytest.raises(SandboxError, match="init failed"):
         run_prepare(layout, host, init_command=("init",))
-
-
-def test_attach_command_auto_approves(tmp_path: Path, host) -> None:
-    assert Sbx(host, {}, "n", tmp_path).attach_command() == ("sbx", "env", "run", "--auto-approve", str(tmp_path))
 
 
 def test_prepare_never_removes_a_sandbox(layout, host) -> None:
@@ -162,46 +165,8 @@ def test_an_empty_agent_never_counts_as_the_expected_keys(layout, host) -> None:
         run_prepare(layout, host)
 
 
-def test_require_dir_accepts_a_directory_and_refuses_anything_else(tmp_path: Path) -> None:
-    require_dir(tmp_path, "workspace")
-    with pytest.raises(SandboxError, match="is not a directory"):
-        require_dir(tmp_path / "missing", "workspace")
-
-
-def test_require_file_accepts_a_file_and_refuses_a_directory(tmp_path: Path) -> None:
-    (tmp_path / "key").touch()
-    require_file(tmp_path / "key", "ssh key")
-    with pytest.raises(SandboxError, match="is not a file"):
-        require_file(tmp_path, "ssh key")
-
-
 def test_a_session_whose_workspace_is_gone_is_refused(layout, host, tmp_path) -> None:
     # A session from before the workspace moved into it, its /tmp workspace since cleared.
     (tmp_path / "ws").rmdir()
     with pytest.raises(SandboxError, match=r"workspace '.*ws' is not a directory"):
         run_prepare(layout, host)
-
-
-# --- list_live_sandboxes ------------------------------------------------------
-
-SBX_LS = ("sbx", "ls", "--json")
-SBX_LS_JSON = """{
-  "sandboxes": [
-    {"name": "dev-p-running", "id": "1", "agent": "claude", "status": "running", "workspaces": []},
-    {"name": "dev-p-stopped", "id": "2", "agent": "claude", "status": "stopped", "workspaces": []},
-    {"name": "dev-p-starting", "id": "3", "agent": "claude", "status": "starting", "workspaces": []}
-  ]
-}"""
-
-
-def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:
-    host.responses = {SBX_LS: SBX_LS_JSON}
-
-    assert list_live_sandboxes(host, {}) == {"dev-p-running", "dev-p-starting"}
-
-
-def test_a_failing_sbx_ls_is_reported(host) -> None:
-    host.responses = {SBX_LS: 1}
-
-    with pytest.raises(SandboxError, match="sbx ls failed"):
-        list_live_sandboxes(host, {})

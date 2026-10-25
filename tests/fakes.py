@@ -1,4 +1,4 @@
-"""Fakes for the foundry package's interfaces. agent_sandbox's are in tests/agent_sandbox/conftest.py."""
+"""Fakes for the foundry package's interfaces. agent_sandbox's are in tests/agent_sandbox/fakes.py."""
 
 import copy
 from typing import Any

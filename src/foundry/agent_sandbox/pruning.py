@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sbx import list_live_sandboxes
+from foundry.agent_sandbox.sandbox import list_live_sandboxes
 from foundry.agent_sandbox.ssh_agent import SshAgentRegistry
 
 

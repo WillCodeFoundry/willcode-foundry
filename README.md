@@ -173,13 +173,13 @@ src/foundry/
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
-    ├── launcher.py     # LaunchRequest and launch(): the sequence in steps 2–3 above
+    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port
     ├── pruning.py      # prune(): what stopped or removed sandboxes leave behind (their ssh-agents)
     ├── definition.py   # the sandbox definition: sbxenv.yaml, the only place that knows sbx's format
-    ├── sbx.py          # sbx env create/exec/run, policy, known hosts, secrets
+    ├── sandbox.py      # the Sandbox port, and SbxCli: it through sbx (env create/exec/run, policy, known hosts, secrets)
     ├── ssh_agent.py    # private agent, one key, fingerprint check; finding and killing foundry's agents
     ├── host.py         # the boundary to the host's processes: run, exec, environ, list and kill
-    └── github_keys.py  # GitHub's published host keys, pinned
+    └── github_host_keys.py  # GitHub's published host keys, pinned
 ```
 
 `agent_sandbox` is the code lifted from the standalone `agent-sandbox` repo, minus the parts the foundry now owns (git identity, `--clone`). It could be moved back out unchanged.
