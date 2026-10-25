@@ -44,7 +44,8 @@ or `CONTRIBUTING.md` wins where it says otherwise.
 
 ### Footer
 
-- `Task: <task-id>`, always.
+- `Task: <task-id>`, on every commit on a task branch. The foundry's
+  `prepare-commit-msg` hook adds it, so don't write it yourself.
 - `BREAKING CHANGE: <what breaks and how to migrate>` when it does.
 - No `Co-authored-by` or other attribution lines.
 
@@ -59,13 +60,13 @@ warning, since a brief window without limiting is cheaper than an outage.
 
 Rejected failing closed (503): it turns every cache blip into downtime.
 
-Task: WCF-0042
+Task: wcf-0042
 ```
 
 ```
 test(api): cover Retry-After header on 429 responses
 
-Task: WCF-0042
+Task: wcf-0042
 ```
 
 ### Avoid
@@ -82,35 +83,12 @@ Same rules as a commit summary: imperative, under 72 characters, typed and
 scoped. If the PR has one commit, reuse its summary. Prefix the task id:
 
 ```
-[WCF-0042] feat(api): rate-limit unauthenticated requests
+[wcf-0042] feat(api): rate-limit unauthenticated requests
 ```
 
 ### Description
 
-```markdown
-## What
-One or two sentences: the change, from the reviewer's point of view.
-
-## Why
-The problem this solves and where it came from. Link the task.
-
-## How
-The approach, and any decision a reviewer might question: alternatives
-rejected, trade-offs accepted, anything non-obvious in the diff.
-
-## Testing
-How you verified it. Which tests were added, what you ran by hand, what you
-could not test and why.
-
-## Notes for the reviewer
-Where to start reading. Anything out of the ordinary: a file that looks
-changed but is only moved, a deliberate deviation from a project convention.
-```
-
-- Keep "What" short; it is what shows up in the merge commit and release notes.
-- "How" is where to put the reasoning from your commit bodies, consolidated.
-- Leave out a section if it would only say "n/a".
-- A PR is one task. If it does more, the task was two tasks.
+The body follows the `pr` skill.
 
 ### Checklist before opening
 
@@ -119,3 +97,4 @@ changed but is only moved, a deliberate deviation from a project convention.
 - [ ] Diff against `main` contains only what the task needs
 - [ ] Description states how it was tested
 - [ ] Every acceptance criterion in `TASK.md` is addressed or explicitly deferred
+- [ ] `REVIEW.md`'s latest round says `Verdict: approved`

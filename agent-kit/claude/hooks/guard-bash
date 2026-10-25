@@ -1,45 +1,51 @@
 #!/usr/bin/env python3
-"""PreToolUse guard for Bash commands.
+"""PreToolUse guard for Bash commands: don't skip or reconfigure the git hooks.
 
-Denies commands that would disable or bypass the foundry's guardrails.
-Reads the tool call as JSON on stdin; exit 2 with a reason on stderr denies.
+Refuses a command with a word that is --no-verify, or that mentions
+core.hooksPath. Reads the tool call as JSON on stdin; exits 2 with a reason
+on stderr to refuse. A quoted word stays one word, so a commit message that
+mentions --no-verify passes.
 
-  RULE  Git hooks are never bypassed or reconfigured.
-  RULE  Pushed history is never rewritten and remote branches never deleted.
-  RULE  Privilege escalation and changes to Claude's settings are not allowed.
+A guardrail against the common slip of reaching for --no-verify when a hook
+refuses, not a security boundary: the project's GitHub rulesets refuse what
+matters once pushed. Accepted misses, on purpose, to keep this simple:
+`git commit -n`, abbreviations such as --no-ver, --no-verify inside
+`sh -c "..."`, and `git config --get core.hooksPath` being refused although
+it only reads.
 """
+
 import json
-import re
+import shlex
 import sys
 
-RULES = [
-    # pattern, reason
-    (r"--no-verify|\bcommit\s+(-\S*n|\S*\s-n\b)", "git hooks must not be bypassed (--no-verify / -n)"),
-    (r"\bcore\.hooks[Pp]ath\b|\bhooks\.", "git hook configuration must not be changed"),
-    (r"\.git/hooks\b|/hooks/(pre-commit|pre-push)\b", "git hook files must not be touched"),
-    (r"\bpush\b.*(--force|--force-with-lease|-f\b|\+refs/)", "force-push is not allowed"),
-    (r"\bpush\b.*(--delete|-d\b|:refs/heads/|\s:\S+)", "deleting remote branches is not allowed"),
-    (r"\bgit\s+(rebase|reset\s+--hard|filter-branch|filter-repo)\b", "rewriting history is not allowed; use git pull --rebase only"),
-    (r"\bsudo\b|\bsu\b\s|\bdoas\b|\bpkexec\b", "privilege escalation is not allowed"),
-    (r"(>|>>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bsed\s+-i|\bchmod\b|\bchown\b|\bln\b).*(/etc/claude-code|managed-settings)", "Claude settings must not be changed"),
-    (r"\bchmod\b.*\bhooks\b|\bchattr\b", "hook permissions must not be changed"),
-]
 
-
-def main():
+def refusal_reason(command: str) -> str | None:
     try:
-        call = json.load(sys.stdin)
-        command = call.get("tool_input", {}).get("command", "")
-    except (json.JSONDecodeError, AttributeError):
-        return 0  # not a shape we understand; don't block
+        words = shlex.split(command)
+    except ValueError:  # unbalanced quotes: refuse rather than guess what runs
+        return "the command could not be parsed; quote it so each argument is clear"
+    if "--no-verify" in words:
+        return "git hooks must not be bypassed (--no-verify)"
+    if any("core.hookspath" in word.lower() for word in words):
+        return "git hook configuration must not be changed"
+    return None
 
-    for pattern, reason in RULES:
-        if re.search(pattern, command):
-            print(f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
-                  "  Fix the cause instead. If you believe this is wrong, record it under\n"
-                  "  Blockers in PROGRESS.md and ask.", file=sys.stderr)
-            return 2
-    return 0
+
+def main() -> int:
+    try:
+        command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+    except (json.JSONDecodeError, AttributeError):
+        return 0  # not a tool call we understand; don't block
+    reason = refusal_reason(command) if isinstance(command, str) else None
+    if reason is None:
+        return 0
+    print(
+        f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
+        "  Fix the cause instead. If you believe this is wrong, record it under\n"
+        "  Blockers in PROGRESS.md and ask.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":

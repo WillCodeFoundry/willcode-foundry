@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
-# Dispatch to the rules for whichever checkout the commit is being made in.
+# What each checkout may commit, so tasks don't step on each other:
+#   task branch: no task notes: nothing under the notes root, at any depth,
+#                so notes written from a subfolder are caught too;
+#   notes branch: only this task's notes folder.
+# Commits on any other branch are left alone: they can't be pushed.
 set -euo pipefail
-lib="$(dirname "$0")/lib"
-source "$lib/common.sh"
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_NOTES_ROOT:?}" "${AGENT_TASK_NOTES:?}"
+# For ShellCheck, relative to the repository root, where CI runs it:
+# shellcheck source=agent-kit/lib/hooks.sh
+source "$(dirname "$0")/../lib/hooks.sh"
 
+# Paths staged for the commit being made.
+staged_files() { git diff --cached --name-only --diff-filter=ACMRD; }
+
+refused=()
 case "$(current_branch)" in
-    "$NOTES_BRANCH") exec "$lib/check-notes-commit.sh" ;;
-    "$TASK_BRANCH")  exec "$lib/check-code-commit.sh" ;;
-    *)
-        refuse pre-commit \
-            "Commits are only allowed on $TASK_BRANCH or $NOTES_BRANCH," \
-            "not on $(current_branch)." \
-            "Switch to the right checkout and try again."
-        ;;
+    "$AGENT_TASK_BRANCH")
+        while IFS= read -r f; do
+            if [[ "$f" == "$AGENT_NOTES_ROOT"/* || "$f" == */"$AGENT_NOTES_ROOT"/* ]]; then
+                refused+=("$f")
+            fi
+        done < <(staged_files)
+        rule="Task notes belong on $AGENT_NOTES_BRANCH, in \$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/, not on $AGENT_TASK_BRANCH:" ;;
+    "$AGENT_NOTES_BRANCH")
+        while IFS= read -r f; do
+            [[ "$f" == "$AGENT_TASK_NOTES"/* ]] || refused+=("$f")
+        done < <(staged_files)
+        rule="On $AGENT_NOTES_BRANCH you may only change files in $AGENT_TASK_NOTES/:" ;;
+    *) exit 0 ;;
 esac
+
+if ((${#refused[@]})); then
+    refuse pre-commit "$rule" "${refused[@]/#/    }" "" "Unstage with: git restore --staged <file>"
+fi

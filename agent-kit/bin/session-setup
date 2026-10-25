@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# The agent user's part of preparing a sandbox, run by session-init before it
+# hardens: the git identity, the checkouts, and the agent's instructions.
+# Idempotent: safe to run again on a re-attached sandbox. Never needs root,
+# so the tests run it outside a sandbox.
+#
+# The sandbox has no host checkout: the project is cloned here from
+# $AGENT_REPO_URL into $AGENT_PROJECT_DIR. Assumes `foundry task create` has
+# already created the task: its branch, and its notes folder, holding its
+# TASK.md, on the notes branch (names from the AGENT_* variables). Anything
+# missing is an error, not something to create here.
+set -euo pipefail
+: "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_REPO_URL:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_TASK_FILE:?}"
+
+role_path="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
+[[ -f "$role_path/gitconfig" ]] || { echo "session-setup: $role_path/gitconfig is missing" >&2; exit 1; }
+
+# --- Git identity -------------------------------------------------------------
+# Global, so both checkouts share it. Name, email, signing key and shared
+# behaviour all come from the role's gitconfig and what it includes.
+
+git config --global include.path "$role_path/gitconfig"
+# Lets agents verify commits signed by any role, or by you.
+git config --global gpg.ssh.allowedSignersFile "$AGENT_KIT_DIR/git/allowed_signers"
+
+if [[ "$(git config --get commit.gpgsign || true)" == true ]] \
+   && [[ -z "$(git config --get user.signingkey || true)" ]]; then
+    echo "session-setup: $AGENT_ROLE signs commits but $role_path/gitconfig sets no user.signingkey" >&2
+    exit 1
+fi
+
+# --- Checkouts ----------------------------------------------------------------
+
+if [[ ! -d "$AGENT_PROJECT_DIR/.git" ]]; then
+    mkdir -p "$(dirname "$AGENT_PROJECT_DIR")"
+    # Blobless partial clone: full history of commits, file contents fetched on
+    # demand. Keeps large repositories fast without the limits of --depth.
+    git clone --filter=blob:none "$AGENT_REPO_URL" "$AGENT_PROJECT_DIR"
+fi
+cd "$AGENT_PROJECT_DIR"
+
+git config core.hooksPath "$AGENT_KIT_DIR/hooks"   # read-only mount: agents cannot alter hooks
+
+git fetch origin
+
+# The task must already exist on origin: created with its branch and a TASK.md
+# on $AGENT_NOTES_BRANCH before any agent runs. Say so plainly rather than let git fail.
+missing=()
+git show-ref -q --verify "refs/remotes/origin/$AGENT_TASK_BRANCH" || missing+=("branch $AGENT_TASK_BRANCH")
+git show-ref -q --verify "refs/remotes/origin/$AGENT_NOTES_BRANCH" || missing+=("branch $AGENT_NOTES_BRANCH")
+if ((${#missing[@]})); then
+    echo "session-setup: task $AGENT_TASK has not been created on $AGENT_REPO_URL: missing ${missing[*]}." >&2
+    echo "  Create it with: foundry task create <project> $AGENT_TASK, write its TASK.md, then run again." >&2
+    exit 1
+fi
+
+if git show-ref -q --verify "refs/heads/$AGENT_TASK_BRANCH"; then
+    git switch "$AGENT_TASK_BRANCH"
+else
+    git switch -c "$AGENT_TASK_BRANCH" --track "origin/$AGENT_TASK_BRANCH"
+fi
+
+if [[ ! -d "$AGENT_NOTES_DIR" ]]; then
+    if git show-ref -q --verify "refs/heads/$AGENT_NOTES_BRANCH"; then
+        git worktree add "$AGENT_NOTES_DIR" "$AGENT_NOTES_BRANCH"
+    else
+        git worktree add --track -b "$AGENT_NOTES_BRANCH" "$AGENT_NOTES_DIR" "origin/$AGENT_NOTES_BRANCH"
+    fi
+fi
+
+# Every task has a TASK.md: foundry task create refuses a template without one.
+task_md_path="$AGENT_NOTES_DIR/$AGENT_TASK_FILE"
+[[ -f "$task_md_path" ]] || {
+    echo "session-setup: $AGENT_NOTES_BRANCH has no $AGENT_TASK_FILE; push the task's TASK.md there, then run again." >&2
+    exit 1
+}
+
+# --- Agent instructions -------------------------------------------------------
+# Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @
+# imports without the approval dialog it shows for imports in a project file.
+# Rewritten at every launch, so edits made inside the sandbox don't persist.
+
+import_path() { printf '@%s\n' "${1// /\\ }"; }   # an @ import needs spaces escaped
+mkdir -p "$HOME/.claude"
+{
+    echo "<!-- Written by session-init at every launch; edits here are discarded. -->"
+    import_path "$AGENT_KIT_DIR/AGENTS.md"
+    import_path "$role_path/ROLE.md"
+    import_path "$task_md_path"
+} > "$HOME/.claude/CLAUDE.md"
+
+# The role's skills: roles/<role>/skills/ holds a link to each skill, and is
+# linked as ~/.claude/skills, where Claude Code loads them. Remade at every
+# launch, so a role's changed skills take effect; a role without the folder
+# has none.
+skills_link="$HOME/.claude/skills"
+if [[ -e "$skills_link" && ! -L "$skills_link" ]]; then
+    echo "session-setup: $skills_link is a folder, not the link to the role's skills; remove it, then run again." >&2
+    exit 1
+fi
+if [[ -d "$role_path/skills" ]]; then
+    ln -sfn "$role_path/skills" "$skills_link"
+else
+    rm -f "$skills_link"
+fi
+
+echo "session-setup: checkouts ready"
+git -C "$AGENT_PROJECT_DIR" status -sb | head -1
+git -C "$AGENT_NOTES_DIR"   status -sb | head -1

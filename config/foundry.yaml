@@ -1,0 +1,19 @@
+# Instance registry. The launcher refuses projects and roles not listed here.
+name: willcode-foundry
+
+projects:
+  # <name>: { url: <ssh clone url> }   -- used as `foundry run <name> <role> [task]`
+  tkt-store:
+    url: git@github.com:WillCodeFoundry/tkt-store.git
+  willcode-foundry:
+    url: git@github.com:WillCodeFoundry/willcode-foundry.git
+  foundry-test:
+    url: git@github.com:WillCodeFoundry/foundry-test.git
+roles:
+  # An empty mapping means "exists, defaults". Per-role sandbox options
+  # (template, memory, cpus, kits) can be added here as needed.
+  planner: {}
+  dev: {}
+  qa: {}
+  reviewer: {}
+  architect: {}

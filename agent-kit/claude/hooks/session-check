@@ -4,16 +4,16 @@
 #
 #   RULE  A session cannot end with uncommitted or unpushed changes.
 set -euo pipefail
-: "${AGENT_TASK:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}"
+: "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
 
-input=$(cat)
-# Already looping on this hook: let the stop through rather than spin.
-if [[ "$input" == *'"stop_hook_active": true'* || "$input" == *'"stop_hook_active":true'* ]]; then
+# Already looping on this hook: let the stop through rather than spin. Input
+# that isn't the JSON Claude Code sends is not a reason to let it through.
+if python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("stop_hook_active") is True else 1)' 2>/dev/null; then
     exit 0
 fi
 
 problems=()
-check() {  # check <dir> <branch> <label>
+report_unsaved_work() {  # report_unsaved_work <dir> <branch> <label>
     local dir="$1" branch="$2" label="$3"
     if [[ -n "$(git -C "$dir" status --porcelain)" ]]; then
         problems+=("$label has uncommitted changes")
@@ -23,12 +23,13 @@ check() {  # check <dir> <branch> <label>
         problems+=("$label has commits not pushed to origin/$branch")
     fi
 }
-check "$AGENT_PROJECT_DIR" "task/$AGENT_TASK" "code checkout"
-check "$AGENT_NOTES_DIR"   "agent-notes"       "notes checkout"
+report_unsaved_work "$AGENT_PROJECT_DIR" "$AGENT_TASK_BRANCH"  "code checkout"
+report_unsaved_work "$AGENT_NOTES_DIR"   "$AGENT_NOTES_BRANCH" "notes checkout"
 
 if ((${#problems[@]} == 0)); then
     exit 0
 fi
 
-reason="Cannot end the session yet: $(IFS=';'; echo "${problems[*]}"). Commit and push both checkouts (see AGENTS.md section 4), update PROGRESS.md, then finish."
+problem_summary="$(printf '%s; ' "${problems[@]}")"
+reason="Cannot end the session yet: ${problem_summary%; }. Commit and push that work (see \"Git rules\" in AGENTS.md), then finish."
 python3 -c 'import json,sys; print(json.dumps({"decision":"block","reason":sys.argv[1]}))' "$reason"

@@ -1,33 +1,180 @@
 #!/usr/bin/env bash
-# Root part of session setup. Installs Claude's managed settings, then
-# removes the agent user's ability to become root again. Run once, last,
-# via sudo from session-init. After it returns, nothing inside the sandbox
-# can undo what it did.
+# Hardens a sandbox, and checks that it is hardened: the agent can't become
+# root, and can't change Claude's managed settings. Two modes, both run by
+# session-init:
+#
+#   session-harden            as root, via sudo, on the first launch, while
+#                             sudo still exists: installs the managed settings
+#                             and takes away sudo, su and Docker.
+#   session-harden --verify   as the agent, on every launch, before the agent
+#                             starts: checks all of it.
+#
+# Each step below sits beside the check that proves it. The checks run as the
+# agent itself because sbx gives agent processes the docker group by number,
+# whatever /etc/group says: root, or a login through su, would see different
+# permissions than the agent has.
+#
+# Sourcing this file only defines its functions, so the tests can run each
+# check against sockets, files and commands of their own. A check takes what it
+# inspects as arguments; on failure it prints what the agent can still do, one
+# line each, and returns 1.
 set -euo pipefail
-: "${AGENT_KIT_DIR:?}"
-[[ $EUID -eq 0 ]] || { echo "lockdown: must run as root" >&2; exit 1; }
 
-agent_user="${SUDO_USER:-agent}"
+DOCKER_SOCKETS=(/var/run/docker.sock /var/run/docker/containerd/containerd.sock)
+MANAGED_SETTINGS=/etc/claude-code/managed-settings.json
 
-# 1. Managed settings: root-owned, world-readable, agent cannot write.
-install -d -m 0755 -o root -g root /etc/claude-code
-install    -m 0644 -o root -g root \
-    "$AGENT_KIT_DIR/claude/managed-settings.json" \
-    /etc/claude-code/managed-settings.json
+# --- Claude's managed settings ---------------------------------------------------
 
-# 2. Remove passwordless sudo for the agent user, every way it can be granted.
-rm -f /etc/sudoers.d/*
-sed -i -E '/NOPASSWD/d' /etc/sudoers 2>/dev/null || true
-for g in sudo wheel admin; do
-    getent group "$g" >/dev/null && gpasswd -d "$agent_user" "$g" >/dev/null 2>&1 || true
-done
-# Belt and braces: no setuid sudo at all.
-chmod 0000 /usr/bin/sudo 2>/dev/null || true
-command -v doas >/dev/null && chmod 0000 "$(command -v doas)" || true
+# Root-owned, so the agent can read the settings but not change or replace
+# them. The directory is set too, in case it already existed.
+harden_managed_settings() {
+    install -d -m 0755 -o root -g root /etc/claude-code
+    install    -m 0644 -o root -g root "$AGENT_KIT_DIR/claude/managed-settings.json" "$MANAGED_SETTINGS"
+}
 
-# 3. Verify as the agent user.
-if su -s /bin/sh "$agent_user" -c 'sudo -n true' 2>/dev/null; then
-    echo "lockdown: FAILED, $agent_user can still sudo" >&2
-    exit 1
+# hardening_check_managed_settings <installed> <kit copy> [owner uid]: the
+# installed settings exist, belong to the owner (root unless given), can't be
+# written by the agent, and are the kit's. Settings from an older kit mean older
+# permissions and hooks, so they count as not hardened.
+hardening_check_managed_settings() {
+    local installed="$1" kit_copy="$2" owner="${3:-0}"
+    if [[ ! -f "$installed" ]]; then
+        echo "run without Claude's managed settings: $installed is missing"
+        return 1
+    fi
+    if [[ "$(stat -c %u "$installed")" != "$owner" ]]; then
+        echo "replace Claude's managed settings: $installed isn't owned by uid $owner"
+        return 1
+    fi
+    if [[ -w "$installed" ]]; then
+        echo "change Claude's managed settings: $installed is writable"
+        return 1
+    fi
+    if ! cmp -s "$installed" "$kit_copy"; then
+        echo "run with older managed settings: $installed differs from $kit_copy"
+        return 1
+    fi
+}
+
+# --- sudo and su -------------------------------------------------------------------
+
+harden_sudo_and_su() {
+    chmod 0000 "$(readlink -f "$(command -v sudo)")"   # sudo can't run, whatever its rules say
+    passwd -l root >/dev/null                           # su needs root's password; there is none
+}
+
+# hardening_check_sudo: the agent can't run sudo.
+hardening_check_sudo() {
+    if sudo -n true >/dev/null 2>&1; then
+        echo "run sudo"
+        return 1
+    fi
+}
+
+# hardening_check_su: the agent can't su to root. Root's password is locked, so
+# su fails even without a terminal, and succeeds without one if root has none.
+hardening_check_su() {
+    if su root -c true </dev/null >/dev/null 2>&1; then
+        echo "su to root"
+        return 1
+    fi
+}
+
+# --- Docker ----------------------------------------------------------------------
+
+# `docker run -v /:/host` is root over this sandbox. sbx gives every process it
+# starts the docker group by number, whatever /etc/group says, so leaving the
+# group changes nothing: the socket has to leave the group instead. dockerd
+# reads daemon.json each time it starts and recreates its socket owned by that
+# group; the socket that exists now changes too.
+#
+# Assumption: the sandbox template doesn't configure dockerd itself. If it ever
+# does, stop with a clear message rather than merge into its settings.
+harden_docker() {
+    local docker_config='{"group": "root"}'
+    if [[ -e /etc/docker/daemon.json && "$(cat /etc/docker/daemon.json)" != "$docker_config" ]]; then
+        {
+            echo "session-harden: refusing: this sandbox's template already has /etc/docker/daemon.json."
+            echo "  foundry assumes the template leaves dockerd unconfigured, so that it can write"
+            echo "  $docker_config there and keep the agent off the Docker socket. Merging into a"
+            echo "  template's own Docker settings isn't supported; change session-harden or the template."
+        } >&2
+        exit 1
+    fi
+    install -d -m 0755 -o root -g root /etc/docker
+    printf '%s\n' "$docker_config" > /etc/docker/daemon.json
+    chmod 0644 /etc/docker/daemon.json
+    if [[ -S /var/run/docker.sock ]]; then chgrp root /var/run/docker.sock; fi
+}
+
+# hardening_check_docker_sockets <socket>...: the agent can't write to any of
+# these sockets.
+hardening_check_docker_sockets() {
+    local socket failed=1
+    for socket in "$@"; do
+        if [[ -S "$socket" && -w "$socket" ]]; then
+            echo "use $socket, which is root over this sandbox"
+            failed=0
+        fi
+    done
+    ((failed))
+}
+
+# --- The two modes -----------------------------------------------------------------
+
+harden() {
+    # Removing sudo would lock a real machine's owner out; only run in a
+    # sandbox, via sudo from its agent user.
+    local agent_user="${SUDO_USER:-}"
+    if [[ $EUID -ne 0 || "$agent_user" != agent ]]; then
+        echo "session-harden: refusing: only runs inside a foundry sandbox, via sudo from its 'agent' user (SUDO_USER is '${agent_user:-unset}')" >&2
+        exit 1
+    fi
+    harden_managed_settings
+    harden_sudo_and_su
+    harden_docker
+    # Checked by `session-harden --verify`, which session-init runs next, as the agent.
+    echo "session-harden: managed settings installed; sudo and su removed for $agent_user; Docker socket made root-only"
+}
+
+verify() {
+    if [[ $EUID -eq 0 ]]; then
+        echo "session-harden: refusing: --verify runs as the agent, so it sees what the agent can do; root can do anything" >&2
+        exit 1
+    fi
+    local found=()
+    # check <command...>: run one check, keeping each line it prints if it fails.
+    check() {
+        local out line
+        if ! out="$("$@")"; then
+            while IFS= read -r line; do found+=("$line"); done <<<"$out"
+        fi
+    }
+    check hardening_check_managed_settings "$MANAGED_SETTINGS" "$AGENT_KIT_DIR/claude/managed-settings.json"
+    check hardening_check_sudo
+    check hardening_check_su
+    check hardening_check_docker_sockets "${DOCKER_SOCKETS[@]}"
+    if ((${#found[@]})); then
+        {
+            echo "session-harden --verify: not starting the agent; it can still:"
+            printf '  %s\n' "${found[@]}"
+            echo "A sandbox hardened by an older agent kit needs recreating:"
+            echo "  sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/ and launch again."
+        } >&2
+        exit 1
+    fi
+    echo "session-harden --verify: hardened"
+}
+
+main() {
+    : "${AGENT_KIT_DIR:?}"
+    case "${1:-}" in
+        --verify) verify ;;
+        "") harden ;;
+        *) echo "usage: session-harden [--verify]" >&2; exit 2 ;;
+    esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
 fi
-echo "lockdown: managed settings installed, sudo removed for $agent_user"

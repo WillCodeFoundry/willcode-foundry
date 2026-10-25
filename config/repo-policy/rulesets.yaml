@@ -1,0 +1,107 @@
+# The rulesets every project's GitHub repository must have, whatever runs
+# inside a sandbox: part of the repo policy, with CODEOWNERS and ci-gate.yml
+# beside it. Checked by `foundry repo check`, and applied by its --fix.
+#
+# Each ruleset is in the shape of GitHub's REST API ("Create a repository
+# ruleset"), sent as-is by `check --fix` and matched to GitHub's by name. `check`
+# compares only the fields written here; ones GitHub adds are ignored. If
+# GitHub fills in a default field and check keeps showing it, add it here.
+#
+# Repository admins (you) bypass every rule; agents' users have write access
+# only, so the rules hold for them. RepositoryRole 5 is GitHub's admin role.
+# Needs a plan with rulesets on private repositories (GitHub Pro or Team).
+
+admin_bypass: &admin_bypass
+  - {actor_type: RepositoryRole, actor_id: 5, bypass_mode: always}
+
+rulesets:
+  # Main changes only through a reviewed pull request whose CI passed. Roles
+  # are separate GitHub users, so you can approve an agent's pull request;
+  # your own you can merge, or push directly, through the admin bypass.
+  #
+  # CI: each project's workflow ends in a job named ci-gate that needs all its
+  # other jobs (ci-gate.yml), so projects keep their own jobs and this file
+  # stays the same.
+  # integration_id 15368 is GitHub Actions: a status posted by anyone else
+  # under that name doesn't count.
+  #
+  # Code owner review: agents' users, the reviewer role's included, have
+  # write access, so one approval alone could come from an agent. Each
+  # project's CODEOWNERS is the repo policy's, which names you for every file,
+  # so every pull request needs your approval, including one that changes
+  # the workflows ci-gate runs.
+  - name: foundry-default-branch
+    target: branch
+    enforcement: active
+    bypass_actors: *admin_bypass
+    conditions:
+      ref_name:
+        include: ["~DEFAULT_BRANCH"]
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 1
+          dismiss_stale_reviews_on_push: true
+          require_code_owner_review: true
+          require_last_push_approval: true
+          required_review_thread_resolution: false
+      - type: required_status_checks
+        parameters:
+          strict_required_status_checks_policy: true
+          required_status_checks:
+            - {context: ci-gate, integration_id: 15368}
+
+  # The branches agents push: signed commits, never rewritten or deleted.
+  - name: foundry-agent-branches
+    target: branch
+    enforcement: active
+    bypass_actors: *admin_bypass
+    conditions:
+      ref_name:
+        include: ["refs/heads/task/**", "refs/heads/agent-notes"]
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: required_signatures
+
+  # Every other branch is closed to agents; admins create and push them freely.
+  #
+  # Except dependabot/**: rulesets bind GitHub Apps too, and Dependabot
+  # creates, force-pushes and deletes its own branches there. Agents could
+  # push there as well, but a pull request from it still needs your review,
+  # code owner approval and ci-gate, like any other. (Dependabot can be a
+  # bypass actor instead, but the REST API docs don't give its actor id.)
+  - name: foundry-other-branches
+    target: branch
+    enforcement: active
+    bypass_actors: *admin_bypass
+    conditions:
+      ref_name:
+        include: ["~ALL"]
+        exclude:
+          - "~DEFAULT_BRANCH"
+          - "refs/heads/task/**"
+          - "refs/heads/agent-notes"
+          - "refs/heads/dependabot/**"
+    rules:
+      - type: creation
+      - type: update
+      - type: deletion
+
+  # Tags mark releases: only admins create, move or delete them.
+  - name: foundry-tags
+    target: tag
+    enforcement: active
+    bypass_actors: *admin_bypass
+    conditions:
+      ref_name:
+        include: ["~ALL"]
+        exclude: []
+    rules:
+      - type: creation
+      - type: update
+      - type: deletion
