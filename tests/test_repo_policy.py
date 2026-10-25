@@ -22,7 +22,7 @@ RULESET: dict[str, Any] = {
 
 def conforms(actual: object, expected: object) -> bool:
     return (
-        repo_policy.compare("x", actual=repo_policy.restrict_to(expected=expected, actual=actual), expected=expected)
+        repo_policy.compare("x", actual=repo_policy.common_fields(actual=actual, expected=expected), expected=expected)
         is None
     )
 
@@ -64,7 +64,7 @@ def test_key_order_and_list_order_do_not_matter() -> None:
 def test_a_deviation_reads_as_a_diff_from_actual_to_the_repo_policy() -> None:
     actual = {**RULESET, "rules": [{"type": "deletion"}]}
     deviation = repo_policy.compare(
-        "ruleset agent-branches", actual=repo_policy.restrict_to(expected=RULESET, actual=actual), expected=RULESET
+        "ruleset agent-branches", actual=repo_policy.common_fields(actual=actual, expected=RULESET), expected=RULESET
     )
     assert deviation is not None and deviation.subject == "ruleset agent-branches"
     assert deviation.diff.startswith("--- ruleset agent-branches (actual)\n+++ ruleset agent-branches (repo policy)\n")
@@ -125,7 +125,7 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
 # --- apply_rulesets ------------------------------------------------------------------
 
 
-def policy_of(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
+def policy_with_rulesets(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
     return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate={})
 
 
@@ -134,7 +134,9 @@ def test_apply_rulesets_creates_the_missing_and_updates_the_deviating_in_policy_
     fake.create_ruleset("o/r", {**RULESET, "name": "second", "rules": [{"type": "deletion"}]})
     fake.create_ruleset("o/r", {**RULESET, "name": "third"})
     second_id = fake.ruleset_id("o/r", "second")
-    policy = policy_of({**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"})
+    policy = policy_with_rulesets(
+        {**RULESET, "name": "first"}, {**RULESET, "name": "second"}, {**RULESET, "name": "third"}
+    )
 
     changes = list(repo_policy.apply_rulesets(fake, "o/r", policy))
 
@@ -151,7 +153,7 @@ def test_apply_rulesets_leaves_a_matching_ruleset_alone() -> None:
     fake.create_ruleset("o/r", RULESET)
     before = fake.rulesets("o/r")
 
-    assert list(repo_policy.apply_rulesets(fake, "o/r", policy_of(RULESET))) == []
+    assert list(repo_policy.apply_rulesets(fake, "o/r", policy_with_rulesets(RULESET))) == []
     assert fake.rulesets("o/r") == before
 
 
@@ -185,7 +187,7 @@ def test_check_project_on_a_conforming_repository() -> None:
 def test_check_project_lists_deviations_and_changes_nothing() -> None:
     fake = FakeGitHub()
 
-    result = repo_policy.check_project(fake, URL, policy_of(RULESET))
+    result = repo_policy.check_project(fake, URL, policy_with_rulesets(RULESET))
 
     assert result.changes == [] and result.error is None and not result.conforms
     assert [d.subject for d in result.deviations] == [
@@ -230,7 +232,7 @@ def test_fix_project_creates_the_missing_rulesets_then_conforms() -> None:
 def test_fix_project_keeps_the_changes_made_before_github_failed() -> None:
     fake = FileReadFails()
 
-    result = repo_policy.fix_project(fake, URL, policy_of(RULESET))
+    result = repo_policy.fix_project(fake, URL, policy_with_rulesets(RULESET))
 
     assert result == repo_policy.ProjectCheck(
         [repo_policy.RulesetChange("agent-branches", repo_policy.RulesetAction.CREATED)],
