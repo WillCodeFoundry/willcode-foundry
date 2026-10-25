@@ -37,7 +37,7 @@ def agent_kit_files() -> list[Path]:
 def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    variables = session_variables(Task("t1")).as_env()
+    variables = session_variables(Task("t1")).to_env()
     used = {
         (name, str(path.relative_to(REPO_ROOT)))
         for path in agent_kit_files()
@@ -53,7 +53,7 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     """Outside AGENTS.md, which documents them all: a variable only it names is read by nothing."""
     kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path != AGENTS_MD)
 
-    assert [name for name in session_variables(Task("t1")).as_env() if not re.search(rf"\b{name}\b", kit_text)] == []
+    assert [name for name in session_variables(Task("t1")).to_env() if not re.search(rf"\b{name}\b", kit_text)] == []
 
 
 def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
@@ -61,7 +61,7 @@ def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
 ) -> None:
     listed = re.findall(r"^\| `(AGENT_[A-Z_]+)` \|", AGENTS_MD.read_text(), flags=re.MULTILINE)
 
-    assert sorted(listed) == sorted(session_variables(Task("t1")).as_env())
+    assert sorted(listed) == sorted(session_variables(Task("t1")).to_env())
 
 
 def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:

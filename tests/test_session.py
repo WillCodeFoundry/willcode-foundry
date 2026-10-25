@@ -135,13 +135,13 @@ def test_the_session_carries_its_variables(tmp_path: Path) -> None:
         agent_kit_dir=tmp_path / "agent-kit",
         project_dir="/home/agent/work/tkt-store",
     )
-    assert opened.variables.as_env() == opened.definition.variables
+    assert opened.variables.to_env() == opened.definition.variables
 
 
 def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
     variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1")).variables
 
-    assert SessionVariables.from_env(variables.as_env()) == variables
+    assert SessionVariables.from_env(variables.to_env()) == variables
 
 
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
