@@ -1,6 +1,7 @@
 """A dedicated ssh-agent per sandbox, reachable at a fixed socket path."""
 
 import os
+import re
 import stat
 import subprocess
 import time
@@ -11,19 +12,13 @@ from pathlib import Path
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import Host
 
-AGENT_SOCKETS_DIR = Path("/tmp/sbx-agents")  # session paths are too long for a socket; one user per machine
+SSH_AGENT_SOCKETS_DIR = Path("/tmp/sbx-agents")  # session paths are too long for a socket; one user per machine
 
+_RECENTLY_TOUCHED_SECONDS = 600  # covers a launch's sandbox creation and session-init
 
-def agent_socket_path(sockets_dir: Path, sandbox_name: str) -> Path:
-    return sockets_dir / f"{sandbox_name}.sock"
-
-
-def _start_command(socket_path: Path) -> tuple[str, ...]:
-    """How every agent is started; list_ssh_agents relies on this command line."""
-    return ("ssh-agent", "-a", str(socket_path), "-s")
-
-
-RECENTLY_TOUCHED_SECONDS = 600  # covers a launch's sandbox creation and session-init
+# Stands in for the sandbox name when rendering the command template.
+# It can't occur in a path or a command line, so it can't collide with real text.
+_NAME_PLACEHOLDER = "\0"
 
 
 def parse_fingerprint(ssh_add_line: str) -> str:
@@ -31,30 +26,81 @@ def parse_fingerprint(ssh_add_line: str) -> str:
     return ssh_add_line.split()[1]
 
 
-def list_ssh_agents(host: Host, uid: int, sockets_dir: Path) -> dict[str, int]:
-    """This launcher's running ssh-agents for ``uid``, as sandbox name -> pid, found by their command line."""
-    agents = {}
-    for pid, command in host.list_processes(uid):
-        if command.startswith("ssh-agent -a ") and command.endswith(" -s"):
-            socket = Path(command.removeprefix("ssh-agent -a ").removesuffix(" -s"))
-            if socket.parent == sockets_dir and socket.suffix == ".sock":
-                agents[socket.stem] = pid
-    return agents
+class SshAgentRegistry:
+    """This user's ssh-agents, one per sandbox, each on a socket in one private directory.
 
+    An agent is started with a fixed command line, so a later launch or prune can find it in the
+    process list; one whose socket was touched in the last 10 minutes is never pruned, since its
+    sandbox may not be live yet.
+    """
 
-def kill_ssh_agents(host: Host, uid: int, sockets_dir: Path, *, keep: Collection[str]) -> list[str]:
-    """Kill this launcher's ssh-agents for ``uid``, except the kept sandboxes' and recently launched ones."""
-    agents = list_ssh_agents(host, uid, sockets_dir)
-    killed = []
-    for name in sorted(agents.keys() - set(keep)):
+    def __init__(self, host: Host, *, uid: int, sockets_dir: Path = SSH_AGENT_SOCKETS_DIR) -> None:
+        self._host = host
+        self._uid = uid
+        self._sockets_dir = sockets_dir
+
+    def ssh_agent(self, sandbox_name: str) -> "SshAgent":
+        """This sandbox's ssh-agent; its ensure_running starts it, or reuses the one already there."""
+        return SshAgent(self._host, self._socket_path(sandbox_name), self._uid)
+
+    def prune(self, *, live_sandboxes: Collection[str]) -> list[str]:
+        """Kill the ssh-agents of sandboxes not in ``live_sandboxes``, except recently touched ones.
+
+        An agent whose socket is gone is killed too: nothing can reach it, but it still holds a
+        key. Returns the names of the sandboxes whose agents were killed, sorted.
+        """
+        pruned = set()
+        for sandbox_name, pid in self._list_ssh_agents():
+            if sandbox_name in live_sandboxes or self._recently_touched(sandbox_name):
+                continue
+            try:
+                self._host.kill_process(pid)
+            except ProcessLookupError:
+                continue  # it stopped meanwhile
+            pruned.add(sandbox_name)
+        return sorted(pruned)
+
+    def _socket_path(self, sandbox_name: str) -> Path:
+        return self._sockets_dir / f"{sandbox_name}.sock"
+
+    def _recently_touched(self, sandbox_name: str) -> bool:
+        """Whether the sandbox's socket was touched in the last 10 minutes, as a launch in progress's is."""
         try:
-            if time.time() - agent_socket_path(sockets_dir, name).stat().st_mtime < RECENTLY_TOUCHED_SECONDS:
-                continue  # launched recently: its sandbox may not be live yet
-            host.kill_process(agents[name])
-        except (FileNotFoundError, ProcessLookupError):
-            continue  # the agent stopped meanwhile, removing its socket
-        killed.append(name)
-    return killed
+            return time.time() - self._socket_path(sandbox_name).stat().st_mtime < _RECENTLY_TOUCHED_SECONDS
+        except FileNotFoundError:
+            return False  # no socket: not a launch in progress, since ensure_running creates it first
+
+    def _list_ssh_agents(self) -> list[tuple[str, int]]:
+        """Return (sandbox name, pid) for every running ssh-agent this registry started.
+
+        An agent counts as ours if its command line is exactly what _start_command
+        produces for some sandbox's socket in the sockets directory. Its socket
+        file may or may not still exist.
+        """
+        pattern = self._ssh_agent_command_pattern()
+        ssh_agents = []
+        for pid, command in self._host.list_processes(self._uid):
+            match = pattern.fullmatch(command)
+            if match:
+                ssh_agents.append((match["sandbox"], pid))
+        return ssh_agents
+
+    def _ssh_agent_command_pattern(self) -> re.Pattern[str]:
+        """Regex matching the command line _start_command gives for any sandbox's
+        socket, with the sandbox name captured as the group "sandbox".
+
+        How it works: render the real command with a placeholder where the sandbox
+        name goes, split on the placeholder, escape the literal text on each side,
+        and put a capture group in the gap.
+        """
+        command = " ".join(_start_command(self._socket_path(_NAME_PLACEHOLDER)))
+        prefix, suffix = command.split(_NAME_PLACEHOLDER)  # name must appear exactly once
+        return re.compile(re.escape(prefix) + r"(?P<sandbox>[^/\s]+)" + re.escape(suffix))
+
+
+def _start_command(socket_path: Path) -> tuple[str, ...]:
+    """How every ssh-agent is started; SshAgentRegistry._list_ssh_agents recognises them by this command line."""
+    return ("ssh-agent", "-a", str(socket_path), "-s")
 
 
 def _ensure_private_dir(private_dir: Path, uid: int) -> None:
@@ -85,7 +131,10 @@ class SshAddExitCode(IntEnum):
 
 
 class SshAgent:
-    """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox."""
+    """An ssh-agent bound to ``socket_path``, reused across launches of one sandbox.
+
+    Made by SshAgentRegistry.ssh_agent, which knows where each sandbox's socket is.
+    """
 
     def __init__(self, host: Host, socket_path: Path, uid: int) -> None:
         self._host = host
@@ -97,11 +146,11 @@ class SshAgent:
         _ensure_private_dir(self.socket_path.parent, self._uid)
         if not self._is_running():
             self.socket_path.unlink(missing_ok=True)  # stale socket from a dead agent
-            # Its env script is ignored, so this process never uses the sandbox's agent.
+            # Its env script is ignored, so this process never uses the sandbox's ssh-agent.
             result = self._host.run(_start_command(self.socket_path))
             if result.returncode != 0 or not self._is_running():
                 raise SandboxError(f"ssh-agent failed to start on {self.socket_path}")
-        self.socket_path.touch()  # kill_ssh_agents spares it until the sandbox is live
+        self.socket_path.touch()  # SshAgentRegistry.prune spares it until the sandbox is live
 
     def replace_keys(self, key_paths: Sequence[Path]) -> None:
         """Make the keys at ``key_paths`` the only keys the agent holds.

@@ -16,9 +16,8 @@ from typing import NoReturn
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.pruning import kill_unused_ssh_agents
-from foundry.agent_sandbox.sbx import Sbx
-from foundry.agent_sandbox.ssh_agent import AGENT_SOCKETS_DIR, SshAgent, agent_socket_path
+from foundry.agent_sandbox.sbx import Sbx, list_live_sandboxes
+from foundry.agent_sandbox.ssh_agent import SshAgent, SshAgentRegistry
 
 
 @dataclass(frozen=True)
@@ -125,14 +124,15 @@ def launch(request: LaunchRequest) -> NoReturn:
     Raises SandboxError if anything before the hand-over fails.
     """
     definition = SandboxDefinition.read(request.definition_dir)
-    uid = os.getuid()
     host = SystemHost()
-    ssh_agent_socket_path = agent_socket_path(AGENT_SOCKETS_DIR, definition.name)
-    ssh_agent = SshAgent(host, ssh_agent_socket_path, uid)
-    process_env = Sbx.process_env(host.environ(), ssh_agent_socket_path)
+    ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
+    ssh_agent = ssh_agent_registry.ssh_agent(definition.name)
+    process_env = Sbx.process_env(host.environ(), ssh_agent.socket_path)
     sbx = Sbx(host, process_env, definition.name, request.definition_dir)
-    if killed := kill_unused_ssh_agents(host, uid, AGENT_SOCKETS_DIR, process_env):
-        print(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(killed)}", file=sys.stderr)
+    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host, process_env)):
+        print(
+            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
+        )
     prepare(request, definition, ssh_agent, sbx)
-    print(describe(request, definition, ssh_agent_socket_path), file=sys.stderr)
+    print(describe(request, definition, ssh_agent.socket_path), file=sys.stderr)
     host.exec(sbx.attach_command(), process_env)

@@ -74,7 +74,7 @@ def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> No
     task.create(clone, Task(task_id), TEMPLATE)
 
 
-def files_on(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
+def branch_files(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
     paths = git(git_env, f"--git-dir={origin_dir}", "ls-tree", "-r", "--name-only", branch).splitlines()
     return {path: git(git_env, f"--git-dir={origin_dir}", "show", f"{branch}:{path}") + "\n" for path in paths}
 
@@ -119,7 +119,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_no
     create(origin_dir, git_env)
 
     assert head(origin_dir, git_env, "task/t1") == head(origin_dir, git_env, "main")
-    assert files_on(origin_dir, git_env, task.NOTES_BRANCH) == {
+    assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         ".agent/t0/TASK.md": "an earlier task\n",
         ".agent/t1/PROGRESS.md": "# Progress\n",
         ".agent/t1/TASK.md": "# Task <id>: <title>\n",
@@ -133,7 +133,7 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
 
     create(origin_dir, git_env)
 
-    assert files_on(origin_dir, git_env, task.NOTES_BRANCH) == {
+    assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         ".agent/t1/PROGRESS.md": "# Progress\n",
         ".agent/t1/TASK.md": "# Task <id>: <title>\n",
     }

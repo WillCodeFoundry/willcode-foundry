@@ -5,14 +5,7 @@ from pathlib import Path
 import pytest
 
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.ssh_agent import (
-    AGENT_SOCKETS_DIR,
-    RECENTLY_TOUCHED_SECONDS,
-    SshAgent,
-    agent_socket_path,
-    kill_ssh_agents,
-    list_ssh_agents,
-)
+from foundry.agent_sandbox.ssh_agent import SSH_AGENT_SOCKETS_DIR, SshAgent, SshAgentRegistry
 
 LIST = ("ssh-add", "-l")
 DELETE_ALL = ("ssh-add", "-D")
@@ -196,8 +189,10 @@ def test_lists_no_fingerprints_when_the_exit_code_says_so_even_with_stdout(host,
     assert make_agent().list_key_fingerprints() == set()
 
 
-def test_agent_sockets_are_named_for_the_sandbox():
-    assert agent_socket_path(AGENT_SOCKETS_DIR, "myproj-dev") == Path("/tmp/sbx-agents/myproj-dev.sock")
+def test_each_sandbox_gets_an_ssh_agent_on_its_own_socket(host):
+    registry = SshAgentRegistry(host, uid=OWN_UID)
+    assert registry.ssh_agent("myproj-dev").socket_path == SSH_AGENT_SOCKETS_DIR / "myproj-dev.sock"
+    assert registry.ssh_agent("myproj-qa").socket_path == SSH_AGENT_SOCKETS_DIR / "myproj-qa.sock"
 
 
 def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
@@ -206,66 +201,106 @@ def test_list_key_fingerprints_ignores_blank_lines(host, make_agent):
     assert make_agent().list_key_fingerprints() == {"SHA256:a", "SHA256:b"}
 
 
-# --- list_ssh_agents / kill_ssh_agents --------------------------------------
+# --- SshAgentRegistry.prune ---------------------------------------------------
+
+LONG_AGO = 24 * 60 * 60  # older than any recency rule
 
 
-def agent_process(pid, sockets_dir, sandbox_name):
-    return (pid, " ".join(start(agent_socket_path(sockets_dir, sandbox_name))))
+def make_registry(host, sockets_dir):
+    return SshAgentRegistry(host, uid=OWN_UID, sockets_dir=sockets_dir)
+
+
+def socket_path(sockets_dir, sandbox_name):
+    """Where the registry puts a sandbox's socket (test_each_sandbox_gets_an_ssh_agent_on_its_own_socket)."""
+    return sockets_dir / f"{sandbox_name}.sock"
+
+
+def ssh_agent_process(pid, sockets_dir, sandbox_name):
+    """How a running agent appears in the process list: the command line it was started with."""
+    return (pid, " ".join(start(socket_path(sockets_dir, sandbox_name))))
 
 
 def socket_touched(sockets_dir, sandbox_name, seconds_ago):
-    socket = agent_socket_path(sockets_dir, sandbox_name)
+    socket = socket_path(sockets_dir, sandbox_name)
     socket.touch()
     os.utime(socket, (time.time() - seconds_ago,) * 2)
 
 
-OLD = RECENTLY_TOUCHED_SECONDS + 60
+def test_an_ssh_agent_the_registry_started_is_one_it_later_prunes(host, tmp_path):
+    sockets_dir = tmp_path / "sockets"
+    registry = make_registry(host, sockets_dir)
+    ssh_agent = registry.ssh_agent("dev-p-t1")
+    host.responses = {LIST: [NOT_RUNNING, NO_KEYS], start(ssh_agent.socket_path): 0}
+    ssh_agent.ensure_running()
+    started = next(command for command in host.commands if command[0] == "ssh-agent")
+    host.processes = [(101, " ".join(started))]
+    os.utime(ssh_agent.socket_path, (time.time() - LONG_AGO,) * 2)
+
+    assert registry.prune(live_sandboxes=set()) == ["dev-p-t1"]
+    assert host.killed == [101]
 
 
-def test_ssh_agents_are_found_by_the_command_line_they_are_started_with(host, tmp_path):
-    host.processes = [agent_process(101, tmp_path, "dev-p-t1")]
+def test_ssh_agents_of_sandboxes_not_live_are_pruned(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-live"), ssh_agent_process(102, tmp_path, "dev-p-old")]
+    for name in ("dev-p-live", "dev-p-old"):
+        socket_touched(tmp_path, name, LONG_AGO)
 
-    assert list_ssh_agents(host, OWN_UID, tmp_path) == {"dev-p-t1": 101}
-
-
-def test_listing_ignores_every_other_process(host, tmp_path):
-    host.processes = [
-        agent_process(101, tmp_path, "dev-p-t1"),
-        agent_process(102, tmp_path / "elsewhere", "qa-p-t1"),
-        (103, "ssh-agent -s"),  # the user's own agent
-        (104, "vim notes.md"),
-        agent_process(105, tmp_path, "qa-p-t2"),
-    ]
-
-    assert list_ssh_agents(host, OWN_UID, tmp_path) == {"dev-p-t1": 101, "qa-p-t2": 105}
-
-
-def test_agents_with_old_sockets_are_killed_except_those_kept(host, tmp_path):
-    host.processes = [agent_process(101, tmp_path, "dev-p-kept"), agent_process(102, tmp_path, "dev-p-old")]
-    for name in ("dev-p-kept", "dev-p-old"):
-        socket_touched(tmp_path, name, OLD)
-
-    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep={"dev-p-kept"}) == ["dev-p-old"]
+    assert make_registry(host, tmp_path).prune(live_sandboxes={"dev-p-live"}) == ["dev-p-old"]
     assert host.killed == [102]
 
 
-def test_a_recently_launched_agent_is_spared(host, tmp_path):
-    host.processes = [agent_process(101, tmp_path, "dev-p-new")]
+def test_pruning_ignores_every_process_that_is_not_one_of_its_ssh_agents(host, tmp_path):
+    host.processes = [
+        ssh_agent_process(101, tmp_path, "dev-p-t1"),
+        ssh_agent_process(102, tmp_path / "elsewhere", "qa-p-t1"),  # another sockets directory
+        (103, "ssh-agent -s"),  # the user's own agent
+        (104, "vim notes.md"),
+        ssh_agent_process(105, tmp_path, "qa-p-t2"),
+    ]
+    for name in ("dev-p-t1", "qa-p-t2"):
+        socket_touched(tmp_path, name, LONG_AGO)
+    (tmp_path / "elsewhere").mkdir()
+    socket_touched(tmp_path / "elsewhere", "qa-p-t1", LONG_AGO)
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-t1", "qa-p-t2"]
+    assert sorted(host.killed) == [101, 105]
+
+
+def test_a_recently_launched_ssh_agent_is_spared(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-new")]
     socket_touched(tmp_path, "dev-p-new", 5)
 
-    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep=set()) == []
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == []
     assert host.killed == []
 
 
-def test_an_agent_that_stopped_meanwhile_is_skipped(host, tmp_path):
-    host.processes = [
-        agent_process(101, tmp_path, "dev-p-no-socket"),
-        agent_process(102, tmp_path, "dev-p-gone"),
-        agent_process(103, tmp_path, "dev-p-old"),
-    ]
-    socket_touched(tmp_path, "dev-p-gone", OLD)
-    socket_touched(tmp_path, "dev-p-old", OLD)
+def test_an_ssh_agent_that_stopped_meanwhile_is_skipped(host, tmp_path):
+    host.processes = [ssh_agent_process(102, tmp_path, "dev-p-gone"), ssh_agent_process(103, tmp_path, "dev-p-old")]
+    socket_touched(tmp_path, "dev-p-gone", LONG_AGO)
+    socket_touched(tmp_path, "dev-p-old", LONG_AGO)
     host.gone = {102}
 
-    assert kill_ssh_agents(host, OWN_UID, tmp_path, keep=set()) == ["dev-p-old"]
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-old"]
     assert host.killed == [103]
+
+
+def test_an_ssh_agent_whose_socket_is_gone_is_pruned(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-no-socket")]
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-no-socket"]
+    assert host.killed == [101]
+
+
+def test_a_live_sandboxs_ssh_agent_is_kept_even_without_its_socket(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-live")]
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes={"dev-p-live"}) == []
+    assert host.killed == []
+
+
+def test_an_orphan_and_its_replacement_on_one_socket_are_both_pruned(host, tmp_path):
+    host.processes = [ssh_agent_process(101, tmp_path, "dev-p-t1"), ssh_agent_process(102, tmp_path, "dev-p-t1")]
+    socket_touched(tmp_path, "dev-p-t1", LONG_AGO)
+
+    assert make_registry(host, tmp_path).prune(live_sandboxes=set()) == ["dev-p-t1"]
+    assert sorted(host.killed) == [101, 102]

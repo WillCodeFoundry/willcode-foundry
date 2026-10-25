@@ -156,7 +156,9 @@ def fix_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectChe
 
 
 def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:
-    return compare(f"ruleset {ruleset['name']}", actual=restrict_to(expected=ruleset, actual=actual), expected=ruleset)
+    return compare(
+        f"ruleset {ruleset['name']}", actual=common_fields(actual=actual, expected=ruleset), expected=ruleset
+    )
 
 
 def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
@@ -168,16 +170,16 @@ def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
     return ci_gate_section(workflow) if isinstance(workflow, dict) else None
 
 
-def restrict_to(*, expected: Any, actual: Any) -> Any:
-    """``actual`` with only the fields ``expected`` has, so fields GitHub adds don't count.
+def common_fields(*, actual: Any, expected: Any) -> Any:
+    """``actual``, keeping only the fields it has in common with ``expected``, so fields GitHub adds don't count.
 
-    A list's items are restricted to the fields the expected items have, so
+    Each of a list's items keeps only the fields the expected items have, so
     an extra item, such as another bypass actor, still shows.
     """
     if isinstance(expected, dict) and isinstance(actual, dict):
-        return {key: restrict_to(expected=expected[key], actual=actual[key]) for key in expected if key in actual}
+        return {key: common_fields(actual=actual[key], expected=expected[key]) for key in expected if key in actual}
     if isinstance(expected, list) and isinstance(actual, list):
-        return [restrict_to(expected=_expected_item(expected), actual=item) for item in actual]
+        return [common_fields(actual=item, expected=_expected_item(expected)) for item in actual]
     return actual
 
 
