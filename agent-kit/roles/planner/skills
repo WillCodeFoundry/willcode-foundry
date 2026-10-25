@@ -1,4 +1,0 @@
-# The planner role's skills, linked into ~/.claude/skills/ at every launch (bin/link-skills).
-grilling
-domain-modeling
-codebase-design

@@ -40,7 +40,7 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/AGENTS.md` | this file |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/ROLE.md` | your role's identity, method, definition of done and boundaries |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
-| `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills`) are loaded as Claude Code skills; `git-conventions` is read by its path |
+| `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills/`) are loaded as Claude Code skills; `git-conventions` is read by its path |
 
 You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
 not available to you. If the task needs them, record it under "Blockers" and
