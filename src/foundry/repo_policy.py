@@ -23,8 +23,8 @@ from foundry.github import GitHub, repo_slug_from_url
 
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
-CI_GATE_JOB = "ci-gate"
-ALL_OTHER_JOBS = "<all other jobs>"
+_CI_GATE_JOB = "ci-gate"
+_ALL_OTHER_JOBS = "<all other jobs>"
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class RulesetAction(StrEnum):
 
 @dataclass(frozen=True)
 class RulesetChange:
-    """One ruleset apply_rulesets created or updated."""
+    """One ruleset fix_project created or updated."""
 
     ruleset_name: str
     action: RulesetAction
@@ -64,7 +64,7 @@ def load(policy_dir: Path) -> RepoPolicy:
 
     ci_gate_path = policy_dir / "ci-gate.yml"
     try:
-        ci_gate = ci_gate_section(yaml_io.load(ci_gate_path))
+        ci_gate = _ci_gate_section(yaml_io.load(ci_gate_path))
     except (KeyError, TypeError, AttributeError) as error:
         raise FoundryError(f"{ci_gate_path}: not a workflow fragment foundry can read ({error!r})") from None
 
@@ -78,19 +78,19 @@ def _read_text(file_path: Path) -> str:
         raise FoundryError(f"{file_path} is missing") from None
 
 
-def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
+def _deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
     """How the repository differs from the policy; empty when it conforms."""
     actual_rulesets = github.rulesets(repo_slug)
     found = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
     found.append(
-        compare(
+        _compare(
             CODEOWNERS_PATH,
             actual=github.file_text(repo_slug=repo_slug, file_path=CODEOWNERS_PATH),
             expected=policy.codeowners,
         )
     )
     found.append(
-        compare(
+        _compare(
             CI_WORKFLOW_PATH,
             actual=_project_ci_gate(github.file_text(repo_slug=repo_slug, file_path=CI_WORKFLOW_PATH)),
             expected=policy.ci_gate,
@@ -99,7 +99,7 @@ def deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Devia
     return [deviation for deviation in found if deviation is not None]
 
 
-def apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[RulesetChange]:
+def _apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[RulesetChange]:
     """Create the policy's rulesets the repository lacks and update those that deviate, in policy order.
 
     Yields each change once GitHub has made it, so a caller keeps the changes made before a
@@ -136,7 +136,7 @@ def check_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectC
     A URL that isn't a GitHub repository's, or a GitHub error, is part of the result, not raised.
     """
     try:
-        return ProjectCheck([], deviations(github, repo_slug_from_url(repo_url), policy))
+        return ProjectCheck([], _deviations(github, repo_slug_from_url(repo_url), policy))
     except FoundryError as error:
         return ProjectCheck([], [], error=str(error))
 
@@ -149,15 +149,15 @@ def fix_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectChe
     changes: list[RulesetChange] = []
     try:
         repo_slug = repo_slug_from_url(repo_url)
-        changes.extend(apply_rulesets(github, repo_slug, policy))  # takes each change as it's made
-        return ProjectCheck(changes, deviations(github, repo_slug, policy))
+        changes.extend(_apply_rulesets(github, repo_slug, policy))  # takes each change as it's made
+        return ProjectCheck(changes, _deviations(github, repo_slug, policy))
     except FoundryError as error:
         return ProjectCheck(changes, [], error=str(error))
 
 
 def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:
-    return compare(
-        f"ruleset {ruleset['name']}", actual=common_fields(actual=actual, expected=ruleset), expected=ruleset
+    return _compare(
+        f"ruleset {ruleset['name']}", actual=_common_fields(actual=actual, expected=ruleset), expected=ruleset
     )
 
 
@@ -167,19 +167,19 @@ def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
         workflow = yaml.safe_load(workflow_text) if workflow_text is not None else None
     except yaml.YAMLError:
         return None
-    return ci_gate_section(workflow) if isinstance(workflow, dict) else None
+    return _ci_gate_section(workflow) if isinstance(workflow, dict) else None
 
 
-def common_fields(*, actual: Any, expected: Any) -> Any:
+def _common_fields(*, actual: Any, expected: Any) -> Any:
     """``actual``, keeping only the fields it has in common with ``expected``, so fields GitHub adds don't count.
 
     Each of a list's items keeps only the fields the expected items have, so
     an extra item, such as another bypass actor, still shows.
     """
     if isinstance(expected, dict) and isinstance(actual, dict):
-        return {key: common_fields(actual=actual[key], expected=expected[key]) for key in expected if key in actual}
+        return {key: _common_fields(actual=actual[key], expected=expected[key]) for key in expected if key in actual}
     if isinstance(expected, list) and isinstance(actual, list):
-        return [common_fields(actual=item, expected=_expected_item(expected)) for item in actual]
+        return [_common_fields(actual=item, expected=_expected_item(expected)) for item in actual]
     return actual
 
 
@@ -191,7 +191,7 @@ def _expected_item(items: list[Any]) -> Any:
     return {key: _expected_item([item[key] for item in items if key in item]) for key in keys}
 
 
-def ci_gate_section(workflow: dict[Any, Any]) -> dict[str, Any]:
+def _ci_gate_section(workflow: dict[Any, Any]) -> dict[str, Any]:
     """The part of a parsed ci.yml the policy covers: its on: value and its ci-gate job.
 
     A ci-gate that needs every other job gets the placeholder in place of the
@@ -200,18 +200,18 @@ def ci_gate_section(workflow: dict[Any, Any]) -> dict[str, Any]:
     jobs = workflow.get("jobs")
     if not isinstance(jobs, dict):
         jobs = {}
-    gate = jobs.get(CI_GATE_JOB)
+    gate = jobs.get(_CI_GATE_JOB)
     if (
         isinstance(gate, dict)
         and isinstance(gate.get("needs"), list)
-        and set(gate["needs"]) == set(jobs) - {CI_GATE_JOB}
+        and set(gate["needs"]) == set(jobs) - {_CI_GATE_JOB}
     ):
-        gate = {**gate, "needs": ALL_OTHER_JOBS}
+        gate = {**gate, "needs": _ALL_OTHER_JOBS}
     # YAML 1.1 reads a bare `on:` key as the boolean True.
-    return {"on": workflow.get("on", workflow.get(True)), "jobs": {CI_GATE_JOB: gate}}
+    return {"on": workflow.get("on", workflow.get(True)), "jobs": {_CI_GATE_JOB: gate}}
 
 
-def compare(subject: str, *, actual: Any, expected: Any) -> Deviation | None:
+def _compare(subject: str, *, actual: Any, expected: Any) -> Deviation | None:
     """The one place that decides whether something matches the policy, and how a deviation reads."""
     if isinstance(expected, str):
         actual_text, expected_text = _normalised(actual), _normalised(expected)
