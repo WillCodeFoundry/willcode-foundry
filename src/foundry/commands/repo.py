@@ -34,7 +34,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def check_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, policy and GitHub; exit 0 only if every project conforms."""
     foundry_root = paths.find_foundry_root()
-    foundry_config = config.load(paths.config_path(foundry_root))
+    foundry_config = config.load(foundry_root)
     policy = repo_policy.load(paths.repo_policy_dir(foundry_root))
     github = GhCli()
 

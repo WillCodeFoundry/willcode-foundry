@@ -13,7 +13,7 @@ from foundry.session import SessionVariables
 from foundry.task import Task
 
 TKT_STORE = Project(name="tkt-store", url="git@github.com:o/tkt-store.git")
-DEV = Role(name="dev")
+DEV = Role(name="dev", ssh_key_path=Path("/foundry/secrets/ssh/dev"), github_token_path=None)
 
 
 def test_the_first_open_creates_the_session_with_its_workspace_inside(tmp_path: Path) -> None:
