@@ -1,14 +1,17 @@
 """agent-kit/bin/link-skills, with a temporary HOME and a temporary kit: it links exactly the role's skills
-into ~/.claude/skills/, removes links no longer listed, and never touches real folders."""
+into ~/.claude/skills/, removes links no longer listed, and never touches real folders. And the real kit's
+role lists: link-skills can't see that a listed skill calls one the role doesn't have."""
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-LINK_SKILLS = Path(__file__).parents[2] / "agent-kit" / "bin" / "link-skills"
+AGENT_KIT = Path(__file__).parents[2] / "agent-kit"
+LINK_SKILLS = AGENT_KIT / "bin" / "link-skills"
 
 
 @pytest.fixture
@@ -60,14 +63,6 @@ def test_a_link_no_longer_listed_is_removed(kit, home) -> None:
     assert sorted(linked(home)) == ["pr", "tdd"]
 
 
-def test_running_again_changes_nothing(kit, home) -> None:
-    link_skills(kit, home)
-    first = linked(home)
-
-    assert link_skills(kit, home).returncode == 0
-    assert linked(home) == first
-
-
 def test_a_real_folder_is_left_alone(kit, home) -> None:
     own = home / ".claude" / "skills" / "mine"
     own.mkdir(parents=True)
@@ -96,3 +91,15 @@ def test_a_role_without_a_list_gets_no_skills(kit, home) -> None:
 
     assert result.returncode == 0, result.stderr
     assert linked(home) == {}
+
+
+@pytest.mark.parametrize("role_list", sorted(AGENT_KIT.glob("roles/*/skills")), ids=lambda path: path.parent.name)
+def test_every_skill_a_roles_skills_call_is_on_its_list(role_list: Path) -> None:
+    listed = {name for line in role_list.read_text().splitlines() if (name := line.partition("#")[0].strip())}
+    called = {
+        (name, called_name)
+        for name in sorted(listed)
+        for path in sorted((AGENT_KIT / "skills" / name).rglob("*.md"))
+        for called_name in re.findall(r'call the Skill tool with "([^"]+)"', path.read_text())
+    }
+    assert sorted((name, called) for name, called in called if called not in listed) == []

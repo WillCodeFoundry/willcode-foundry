@@ -1,86 +1,47 @@
 #!/usr/bin/env bash
-# Merge upstream's changes into the agent kit's copies of its skills.
+# Merge upstream's changes into the agent kit's copied skills. Run by hand.
 #
 #   scripts/update-skills            # to upstream's latest commit
 #   scripts/update-skills COMMIT     # to that commit
 #
-# The copies in agent-kit/skills/ are edited in place for the foundry.
-# agent-kit/skills/skills.lock says where they came from and at which
-# commit. For each skill there, this fetches that commit and the new one
-# from upstream, and applies upstream's changes between them to the copy
-# with git's three-way merge (git apply --3way), leaving out agents/
-# (Codex-only metadata). Where upstream changed a line the foundry also
-# changed, the file is left with conflict markers and unmerged, as in any
-# merge. The new commit is then recorded in skills.lock and in each
-# skill's metadata.source, and upstream's licence copied again.
-#
-# Runs on your machine, with git and your own access to upstream; never
-# in a sandbox. Review the result (git diff --cached), resolve any
-# conflicts, then commit.
+# A copied skill is a folder in agent-kit/skills/ whose SKILL.md has a
+# metadata.source: the upstream repo, the skill's path there, and the commit
+# it's up to date with. For each, this applies upstream's changes since that
+# commit, without agents/, with git's three-way merge, and records the new
+# commit. A line both sides changed is left as a merge conflict. Then review
+# (git diff HEAD), resolve, and commit.
 set -euo pipefail
-
 cd "$(git rev-parse --show-toplevel)"
-skills_dir=agent-kit/skills
-lock=$skills_dir/skills.lock
 
-refuse() { echo "update-skills: $*" >&2; exit 1; }
-
-repo='' old='' license_source='' license_copy=''
-names=() paths=()
-while read -r kind first second rest || [[ -n "$kind" ]]; do
-    case "$kind" in
-        '' | '#'*) ;;
-        repo) repo=$first ;;
-        commit) old=$first ;;
-        license) license_source=$first license_copy=$second ;;
-        skill) names+=("$first") paths+=("$second") ;;
-        *) refuse "$lock: don't know '$kind${first:+ $first}${second:+ $second}${rest:+ $rest}'" ;;
-    esac
-done < "$lock"
-[[ -n "$repo" && -n "$old" && -n "$license_copy" && ${#names[@]} -gt 0 ]] \
-    || refuse "$lock needs repo, commit, license and at least one skill line"
-
-[[ -z "$(git status --porcelain -- "$skills_dir")" ]] \
-    || refuse "uncommitted changes in $skills_dir; commit or stash them first"
-
-# Fetch the target first, so FETCH_HEAD names it. The objects are kept only
-# until git's next garbage collection: nothing points at them.
-git fetch --quiet --no-tags "$repo" "${1:-HEAD}"
-new=$(git rev-parse FETCH_HEAD)
-if [[ "$new" == "$old" ]]; then
-    echo "update-skills: already at ${old:0:12}"
-    exit 0
-fi
-git fetch --quiet --no-tags "$repo" "$old"
-
-# Replaces the line "<prefix><old commit>" with "<prefix><new commit>"; portable, unlike sed -i.
-record() {
-    local file=$1 prefix=$2 updated
-    updated=$(sed "s/^\\($prefix\\)$old\$/\\1$new/" "$file")
-    printf '%s\n' "$updated" > "$file"
+# The value of `key:` in a SKILL.md's metadata.source block.
+source_field() {
+    awk -v key="$1:" '/^  source:/ { inside = 1; next }
+        inside && !/^    / { exit }
+        inside && $1 == key { print $2; exit }' "$2"
 }
 
-conflicted=()
-for i in "${!names[@]}"; do
-    name=${names[i]} path=${paths[i]}
-    if ! git diff --binary "$old" "$new" --relative="$path" -- "$path" ":(exclude)$path/agents" \
-        | git apply --3way --allow-empty --directory="$skills_dir/$name"; then
-        conflicted+=("$name")
+failed=''
+for skill_md in agent-kit/skills/*/SKILL.md; do
+    repo=$(source_field repo "$skill_md")
+    [[ -n "$repo" ]] || continue  # one of the foundry's own skills
+    skill_dir=${skill_md%/SKILL.md} path=$(source_field path "$skill_md") old=$(source_field commit "$skill_md")
+    url="https://github.com/$repo.git"
+
+    git fetch --quiet --no-tags "$url" "${1:-HEAD}"
+    new=$(git rev-parse FETCH_HEAD)
+    if [[ "$new" == "$old" ]]; then
+        echo "${skill_dir##*/}: already at ${old:0:12}"
+        continue
     fi
-    if [[ -f "$skills_dir/$name/SKILL.md" ]]; then
-        record "$skills_dir/$name/SKILL.md" ' *commit: '
-    fi
+    git fetch --quiet --no-tags "$url" "$old"
+    git diff --binary "$old" "$new" --relative="$path" -- "$path" ":(exclude)$path/agents" \
+        | git apply --3way --allow-empty --directory="$skill_dir" || failed+=" ${skill_dir##*/}"
+    sed "s/^\\(    commit: \\)$old\$/\\1$new/" "$skill_md" > "$skill_md.tmp" && mv "$skill_md.tmp" "$skill_md"
+    git show "$new:LICENSE" > "agent-kit/skills/LICENSE-${repo%%/*}"
+    echo "${skill_dir##*/}: updated to ${new:0:12}"
 done
 
-record "$lock" 'commit '
-git show "$new:$license_source" > "$skills_dir/$license_copy"
-# Stage everything but the conflicted files, which git add would mark resolved.
-for name in "${names[@]}"; do
-    [[ " ${conflicted[*]-} " == *" $name "* ]] || git add -- "$skills_dir/$name"
-done
-git add -- "$lock" "$skills_dir/$license_copy"
-
-echo "update-skills: updated ${names[*]} to ${new:0:12}; review with: git diff --cached"
-if ((${#conflicted[@]})); then
-    refuse "conflicts in ${conflicted[*]}: resolve them (git status lists the files), git add them, then commit"
+if [[ -n "$failed" ]]; then
+    echo "update-skills: not merged cleanly:$failed; resolve what git reported above, then commit" >&2
+    exit 1
 fi
