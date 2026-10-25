@@ -101,7 +101,7 @@ The words used here, and in the code:
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.apply_rulesets` and `deviations`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
+Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo.check_projects`), which is what the tests call, with fakes for GitHub and the host's processes and no patching.
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
@@ -138,7 +138,7 @@ $ uv run foundry repo check tkt-store             # one project
 $ uv run foundry repo check --fix                 # first create or update the rulesets to match, then check
 ```
 
-Every project's repository must match the repo policy in `config/repo-policy/`: its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` section of its `.github/workflows/ci.yml`, which the rulesets depend on. `check` compares rather than analyses: anything different is a deviation, shown as a diff from the repository to the policy, even when it's harmless. A repository with none prints `conforms`. When a project really needs to differ, change the policy.
+Every project's repository must match the repo policy in `config/repo-policy/`: its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` section of its `.github/workflows/ci.yml`, which the rulesets depend on. `check` compares rather than analyses: anything different is a deviation, shown as a diff from the repository to the policy, even when it's harmless. A repository with none prints `conforms`. A project GitHub refuses, or whose URL isn't GitHub's, prints its error, and the rest are still checked; with `--fix`, rulesets changed before the error are listed above it. When a project really needs to differ, change the policy.
 
 `rulesets.yaml` lists the rulesets, in the shape of GitHub's REST API; edit it, then run `check --fix`. Repository admins (you) bypass them; agents' users, with write access only, can't:
 
