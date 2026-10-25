@@ -1,8 +1,8 @@
 """agent-kit/hooks and the Stop hook, against a real repository with a local origin.
 
-Mirrors what session-init sets up in a sandbox: a code checkout on the task's
-branch, a notes worktree on agent-notes, and core.hooksPath pointing at the kit,
-with the variables a sandbox for the task gets.
+The checkouts are made by session-setup, as in a sandbox: a code checkout on the
+task's branch, a notes worktree on agent-notes, and core.hooksPath pointing at the
+kit, with the variables a sandbox for the task gets.
 """
 
 import json
@@ -25,18 +25,18 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch, kit_env):
-    """(code checkout, notes checkout), both clean and pushed."""
+    """(code checkout, notes checkout), made by session-setup, both clean and pushed."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))  # keep the developer's global git config out
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for key, value in {
-        "user.name": "t",
-        "user.email": "t@t",
-        "commit.gpgsign": "false",
-        "init.defaultBranch": "main",
-    }.items():
+    for key, value in {"user.name": "t", "user.email": "t@t", "init.defaultBranch": "main"}.items():
         git(tmp_path, "config", "--global", key, value)
+    # session-setup includes the role's gitconfig, which signs with the role's key; there is no
+    # private key here, so signing is turned off by git's environment override, which beats any file.
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
 
     origin = tmp_path / "origin.git"
     git(tmp_path, "init", "--bare", "-q", str(origin))
@@ -53,15 +53,14 @@ def repo(tmp_path, monkeypatch, kit_env):
     git(seed, "commit", "-qm", f"{TASK.id}: create task")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
 
-    env = kit_env(TASK)
-    code, notes = Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
-    git(tmp_path, "clone", "-q", str(origin), str(code))
-    git(code, "switch", "-q", TASK.branch)
-    git(code, "worktree", "add", "-q", "--track", "-b", NOTES_BRANCH, str(notes), f"origin/{NOTES_BRANCH}")
-    git(code, "config", "core.hooksPath", str(AGENT_KIT_PATH / "hooks"))
+    env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{origin}"}
     for key, value in env.items():
         monkeypatch.setenv(key, value)
-    return code, notes
+    setup = subprocess.run(
+        [str(AGENT_KIT_PATH / "bin" / "session-setup")], env=os.environ, capture_output=True, text=True, check=False
+    )
+    assert setup.returncode == 0, setup.stderr
+    return Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
 
 
 def commit(cwd: Path, *message: str) -> subprocess.CompletedProcess[str]:
