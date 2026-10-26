@@ -284,3 +284,13 @@ def test_an_interpreter_owned_and_read_only_passes(tmp_path: Path) -> None:
 def test_a_missing_interpreter_fails(tmp_path: Path) -> None:
     (found,) = harden.check_python(str(tmp_path / "python3"))
     assert "is missing" in found
+
+
+def test_a_sudo_hardening_left_unexecutable_is_no_sudo_and_no_crash(tmp_path: Path) -> None:
+    """Every launch after the first finds the sudo the first one left mode 0: session-init must go on to
+    verify. Mode 0 keeps out even root, so this runs as any user."""
+    sudo = Path(stand_in(tmp_path, "sudo", 0))
+    sudo.chmod(0)
+
+    assert harden.can_sudo(str(sudo)) is False
+    assert harden.check_sudo(str(sudo)) == []

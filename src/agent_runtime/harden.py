@@ -80,15 +80,21 @@ def harden_sudo_and_su() -> None:
     subprocess.run(["passwd", "-l", "root"], stdout=subprocess.DEVNULL, check=True)
 
 
+def can_sudo(sudo: str = "sudo") -> bool:
+    """Whether sudo runs without a password. False, not an error, when it is missing or can't execute: on
+    every launch after the first, hardening has left it mode 0."""
+    return succeeds([sudo, "-n", "true"])
+
+
 def check_sudo(sudo: str = "sudo") -> list[str]:
     """The agent can't run sudo."""
-    return ["run sudo"] if _succeeds([sudo, "-n", "true"]) else []
+    return ["run sudo"] if can_sudo(sudo) else []
 
 
 def check_su(su: str = "su") -> list[str]:
     """The agent can't su to root. Root's password is locked, so su fails even without a terminal, and
     succeeds without one if root has none."""
-    return ["su to root"] if _succeeds([su, "root", "-c", "true"]) else []
+    return ["su to root"] if succeeds([su, "root", "-c", "true"]) else []
 
 
 # --- Docker --------------------------------------------------------------------------
@@ -243,11 +249,13 @@ def _is_socket(path: Path) -> bool:
         return False
 
 
-def _succeeds(command: list[str]) -> bool:
+def succeeds(command: list[str]) -> bool:
+    """Whether ``command`` runs and exits 0, its output discarded. A command that is missing, or that can't
+    execute, didn't succeed."""
     try:
         result = subprocess.run(
             command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
         )
-    except OSError:  # missing, or not executable: as good as failing
+    except OSError:  # FileNotFoundError, PermissionError, ...: as good as failing
         return False
     return result.returncode == 0

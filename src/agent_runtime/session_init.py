@@ -15,17 +15,10 @@ def session_init(env: contract.Environ | None = None) -> int:
     environ = env or contract.read_environ()
     if (returncode := session_setup.session_setup(environ)) != 0:
         return returncode
-    if _can_sudo():
+    if harden.can_sudo():
         # Root is given AGENT_KIT_DIR alone, and runs the runtime from the read-only kit, isolated.
         root_command = ["sudo", f"--preserve-env={contract.KIT_DIR}", *contract.command(environ.kit_dir, "harden")]
         hardened = subprocess.run(root_command, check=False)
         if hardened.returncode != 0:
             return hardened.returncode
     return harden.verify({contract.KIT_DIR: str(environ.kit_dir)})
-
-
-def _can_sudo() -> bool:
-    try:
-        return subprocess.run(["sudo", "-n", "true"], capture_output=True, check=False).returncode == 0
-    except FileNotFoundError:
-        return False
