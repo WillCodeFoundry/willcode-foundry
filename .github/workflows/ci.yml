@@ -36,12 +36,7 @@ jobs:
       - run: uv sync --locked --group dev
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      # The kit's shell scripts, and scripts/update-skills. session-harden's root mode has no tests (it
-      # changes the machine it runs on), so this is its main check; its --verify checks are tested.
-      - run: >-
-          shellcheck --severity=warning
-          agent-kit/bin/session-harden
-          scripts/update-skills
+      - run: shellcheck --severity=warning scripts/update-skills
 
   mypy:
     runs-on: ubuntu-latest

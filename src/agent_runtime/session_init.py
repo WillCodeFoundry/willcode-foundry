@@ -3,7 +3,7 @@ before the agent starts. Idempotent: safe to run again on a re-attached sandbox.
 
 import subprocess
 
-from agent_runtime import contract, session_setup
+from agent_runtime import contract, harden, session_setup
 
 
 def session_init(env: contract.Environ | None = None) -> int:
@@ -15,12 +15,13 @@ def session_init(env: contract.Environ | None = None) -> int:
     environ = env or contract.read_environ()
     if (returncode := session_setup.session_setup(environ)) != 0:
         return returncode
-    harden = str(environ.kit_dir / "bin" / "session-harden")
     if _can_sudo():
-        hardened = subprocess.run(["sudo", f"--preserve-env={contract.KIT_DIR}", harden], check=False)
+        # Root is given AGENT_KIT_DIR alone, and runs the runtime from the read-only kit, isolated.
+        root_command = ["sudo", f"--preserve-env={contract.KIT_DIR}", *contract.command(environ.kit_dir, "harden")]
+        hardened = subprocess.run(root_command, check=False)
         if hardened.returncode != 0:
             return hardened.returncode
-    return subprocess.run([harden, "--verify"], check=False).returncode
+    return harden.verify({contract.KIT_DIR: str(environ.kit_dir)})
 
 
 def _can_sudo() -> bool:

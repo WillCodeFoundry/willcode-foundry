@@ -18,7 +18,7 @@ if sys.version_info < MINIMUM_PYTHON:
 import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 
-from agent_runtime import claude_hooks, contract, git_hooks, session_init, session_setup  # noqa: E402
+from agent_runtime import claude_hooks, contract, git_hooks, harden, session_init, session_setup  # noqa: E402
 
 CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "guard-bash": claude_hooks.guard_bash,
@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.set_defaults(func=lambda args: session_init.session_init())
     setup = subparsers.add_parser("session-setup", help="the agent user's part of session-init")
     setup.set_defaults(func=lambda args: session_setup.session_setup())
+    hardening = subparsers.add_parser(
+        "harden", help="as root: harden the sandbox; with --verify, as the agent: check it is hardened"
+    )
+    hardening.add_argument("--verify", action="store_true")
+    hardening.set_defaults(func=lambda args: harden.verify() if args.verify else harden.harden())
 
     hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
     hook.add_argument("name", choices=CLAUDE_HOOKS)
