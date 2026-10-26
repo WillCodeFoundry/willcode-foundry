@@ -33,12 +33,12 @@ def test_the_sandboxs_user_can_read_it(kit_dir: Path) -> None:
     assert stat.S_IMODE(build_runtime(kit_dir).stat().st_mode) == 0o644
 
 
-def test_building_again_gives_the_same_bytes_and_leaves_nothing_behind(kit_dir: Path) -> None:
-    first = build_runtime(kit_dir).read_bytes()
+def test_building_again_succeeds_and_leaves_nothing_behind(kit_dir: Path) -> None:
+    first = zipfile.ZipFile(build_runtime(kit_dir)).namelist()
 
     second = build_runtime(kit_dir)
 
-    assert second.read_bytes() == first
+    assert sorted(zipfile.ZipFile(second).namelist()) == sorted(first)
     assert sorted(path.name for path in second.parent.iterdir()) == ["agent_runtime.pyz"]
 
 

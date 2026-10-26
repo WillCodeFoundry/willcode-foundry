@@ -211,7 +211,6 @@ src/agent_runtime/        # runs inside a sandbox; the standard library only, ne
 | `session-setup` | `session-init`; never needs root |
 | `harden`, `harden --verify` | `session-init`: as root through sudo on the first launch; as the agent on every launch |
 | `hook guard-bash`, `hook session-check` | Claude Code, from managed settings |
-| `git-hook pre-commit`, `prepare-commit-msg`, `pre-push` | by hand; git runs the same functions through `agent-kit/hooks/` |
 
 It targets the repository's Python floor, 3.11, like `foundry`, and the sandbox template ships a newer one, so the tests on CI's Python versions cover it. `__main__` still checks the version before importing anything else, so a template that someday ships an older `python3` fails at `session-init` with what it needs.
 
