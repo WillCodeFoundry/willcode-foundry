@@ -118,7 +118,7 @@ def check_managed_settings(
     hardened."""
     if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner, can_write):
         return found
-    if installed.read_bytes() != kit_copy.read_bytes():
+    if installed.read_bytes() != _read_or_none(kit_copy):  # a kit copy that can't be read is no match
         return [f"run with older managed settings: {installed} differs from {kit_copy}"]
     return []
 
@@ -315,6 +315,13 @@ def _install_file(target: Path, content: bytes, owner: Owner) -> None:
         os.replace(partial, target)
     finally:
         partial.unlink(missing_ok=True)
+
+
+def _read_or_none(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None
 
 
 def _is_socket(path: Path) -> bool:

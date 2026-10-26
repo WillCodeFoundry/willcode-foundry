@@ -29,59 +29,7 @@ needs_non_root = pytest.mark.skipif(
 )
 
 
-# --- the two modes' refusals ---------------------------------------------------------
-
-
-@pytest.mark.parametrize("sudo_user", ["", "root", "will"])
-def test_harden_refuses_outside_a_sandbox_before_changing_anything(
-    capsys: pytest.CaptureFixture[str], sudo_user: str
-) -> None:
-    # Never with SUDO_USER=agent: as root, that would harden this machine.
-    assert harden.harden(AGENT_KIT_PATH, sudo_user) == 1
-    assert "only runs inside a foundry sandbox" in capsys.readouterr().err
-
-
-@pytest.mark.skipif(os.geteuid() != 0, reason="checks the refusal to verify as root")
-def test_verify_refuses_to_run_as_root(capsys: pytest.CaptureFixture[str]) -> None:
-    assert harden.verify(AGENT_KIT_PATH) == 1
-    assert "runs as the agent" in capsys.readouterr().err
-
-
-@needs_non_root
-def test_verify_on_a_machine_that_isnt_a_hardened_sandbox_refuses_to_start_the_agent(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """This machine has no managed settings installed, whatever else it allows."""
-    assert harden.verify(AGENT_KIT_PATH) == 1
-    err = capsys.readouterr().err
-    assert "not starting the agent" in err
-    assert "managed settings" in err
-
-
-# --- root mode's file steps ----------------------------------------------------------
-
-
-def test_the_kits_settings_are_installed_read_only_for_others(tmp_path: Path) -> None:
-    installed = tmp_path / "etc" / "claude-code" / "managed-settings.json"
-
-    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
-
-    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
-    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
-    assert stat.S_IMODE(installed.parent.stat().st_mode) == 0o755
-    assert (installed.stat().st_uid, installed.stat().st_gid) == ME
-    assert [path.name for path in installed.parent.iterdir()] == [installed.name]  # no partial file left
-
-
-def test_installing_replaces_settings_from_an_older_kit(tmp_path: Path) -> None:
-    installed = tmp_path / "managed-settings.json"
-    installed.write_text('{"permissions": {}}\n')
-    installed.chmod(0o600)
-
-    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
-
-    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
-    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
+# --- helpers -------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -98,207 +46,13 @@ def make_socket(socket_path: Path, mode: int) -> Path:
     return socket_path
 
 
-def test_docker_is_configured_to_give_its_socket_to_root(tmp_path: Path, socket_dir: Path) -> None:
-    daemon_config = tmp_path / "etc" / "docker" / "daemon.json"
-    docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
-
-    harden.harden_docker(daemon_config, [docker_socket, socket_dir / "absent.sock"], owner=ME)
-
-    assert daemon_config.read_text() == '{"group": "root"}\n'
-    assert stat.S_IMODE(daemon_config.stat().st_mode) == 0o644
-    assert docker_socket.stat().st_gid == ME.gid
-
-
-def test_dockers_configuration_from_an_earlier_launch_is_kept(tmp_path: Path) -> None:
-    daemon_config = tmp_path / "daemon.json"
-    daemon_config.write_text('{"group": "root"}\n')
-
-    harden.harden_docker(daemon_config, [], owner=ME)
-
-    assert daemon_config.read_text() == '{"group": "root"}\n'
-
-
-def test_a_templates_own_docker_configuration_is_refused_untouched(tmp_path: Path) -> None:
-    daemon_config = tmp_path / "daemon.json"
-    daemon_config.write_text('{"debug": true}\n')
-
-    with pytest.raises(harden.HardenError, match="already has"):
-        harden.harden_docker(daemon_config, [], owner=ME)
-
-    assert daemon_config.read_text() == '{"debug": true}\n'
-
-
-# --- the checks ----------------------------------------------------------------------
-
-
 def stand_in(tmp_path: Path, name: str, exit_code: int) -> str:
-    """A command that only exits with the code given."""
+    """A command that only exits with the code given, replacing any file of that name, as a new one."""
     command = tmp_path / name
+    command.unlink(missing_ok=True)  # it may be the stand-in root mode left mode 0
     command.write_text(f"#!/bin/sh\nexit {exit_code}\n")
     command.chmod(0o755)
     return str(command)
-
-
-@pytest.mark.parametrize(("check", "found"), [(harden.check_sudo, "run sudo"), (harden.check_su, "su to root")])
-def test_a_command_that_still_reaches_root_fails_its_check(tmp_path: Path, check, found: str) -> None:
-    assert check(stand_in(tmp_path, "command", 0)) == [found]
-
-
-@pytest.mark.parametrize("check", [harden.check_sudo, harden.check_su])
-def test_a_command_that_fails_or_is_missing_passes_its_check(tmp_path: Path, check) -> None:
-    assert check(stand_in(tmp_path, "command", 1)) == []
-    assert check(str(tmp_path / "absent")) == []
-
-
-@needs_non_root
-def test_a_socket_the_agent_can_write_fails_naming_it(socket_dir: Path) -> None:
-    open_socket = make_socket(socket_dir / "open.sock", 0o666)
-    closed_socket = make_socket(socket_dir / "closed.sock", 0o600)
-    closed_socket.chmod(0o000)  # owned by the test's user, so only no permissions at all keeps it out
-
-    assert harden.check_docker_sockets([closed_socket, open_socket]) == [
-        f"use {open_socket}, which is root over this sandbox"
-    ]
-
-
-@needs_non_root
-def test_sockets_the_agent_cant_write_or_that_are_absent_pass(socket_dir: Path) -> None:
-    closed_socket = make_socket(socket_dir / "closed.sock", 0o000)
-
-    assert harden.check_docker_sockets([closed_socket, socket_dir / "absent.sock"]) == []
-
-
-def test_every_writable_socket_is_named_in_one_run(socket_dir: Path) -> None:
-    mode = 0o666 if os.geteuid() != 0 else 0o600  # root can write to both, whatever their mode
-    sockets = [make_socket(socket_dir / f"{name}.sock", mode) for name in ("a", "b")]
-
-    assert harden.check_docker_sockets(sockets) == [f"use {path}, which is root over this sandbox" for path in sockets]
-
-
-@pytest.fixture
-def installed_settings(tmp_path: Path) -> Path:
-    """The kit's managed settings, installed read-only, owned by the test's user."""
-    installed = tmp_path / "managed-settings.json"
-    installed.write_bytes(KIT_SETTINGS.read_bytes())
-    installed.chmod(0o444)
-    return installed
-
-
-@needs_non_root
-def test_the_kits_settings_owned_and_read_only_pass(installed_settings: Path) -> None:
-    assert harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME) == []
-
-
-def test_missing_settings_fail(tmp_path: Path) -> None:
-    (found,) = harden.check_managed_settings(tmp_path / "managed-settings.json", KIT_SETTINGS, ME)
-    assert "is missing" in found
-
-
-def test_settings_owned_by_someone_else_fail(installed_settings: Path) -> None:
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, SOMEONE_ELSE)
-    assert f"isn't owned by uid {os.geteuid() + 1}" in found
-
-
-def test_settings_the_agent_can_write_fail(installed_settings: Path) -> None:
-    installed_settings.chmod(installed_settings.stat().st_mode | stat.S_IWUSR)
-
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME)
-    assert "is writable" in found
-
-
-@needs_non_root
-def test_settings_from_an_older_kit_fail(installed_settings: Path) -> None:
-    installed_settings.chmod(0o644)
-    installed_settings.write_text('{"permissions": {}}\n')
-    installed_settings.chmod(0o444)
-
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME)
-    assert f"differs from {KIT_SETTINGS}" in found
-
-
-def test_the_root_owner_is_the_default(installed_settings: Path) -> None:
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS)
-
-    if os.geteuid() == 0:  # owned by root, but root can write it
-        assert "is writable" in found
-    else:
-        assert "isn't owned by uid 0" in found
-
-
-@pytest.fixture
-def kit(tmp_path: Path) -> Path:
-    kit = tmp_path / "agent-kit"
-    (kit / "hooks").mkdir(parents=True)
-    (kit / "hooks" / "pre-commit").write_text("#!/usr/bin/python3 -I\n")
-    return kit
-
-
-def test_a_kit_the_agent_can_write_fails(kit: Path) -> None:
-    (found,) = harden.check_kit_read_only(kit)
-    assert found == f"change the agent kit: {kit} is writable"
-
-
-@needs_non_root
-def test_one_writable_file_in_the_kit_fails_naming_it(kit: Path) -> None:
-    for directory in (kit, kit / "hooks"):
-        directory.chmod(0o555)
-    try:
-        assert harden.check_kit_read_only(kit) == [f"change the agent kit: {kit / 'hooks' / 'pre-commit'} is writable"]
-        (kit / "hooks" / "pre-commit").chmod(0o444)
-        assert harden.check_kit_read_only(kit) == []
-    finally:
-        for directory in (kit, kit / "hooks"):
-            directory.chmod(0o755)
-
-
-def test_an_interpreter_the_agent_owns_fails(tmp_path: Path) -> None:
-    python = tmp_path / "python3"
-    python.write_text("")
-    link = tmp_path / "python"
-    link.symlink_to(python)
-
-    (found,) = harden.check_python(str(link), owner=SOMEONE_ELSE)
-    assert found == (
-        f"replace the hooks' interpreter: {link} (resolving to {python}) isn't owned by uid {SOMEONE_ELSE.uid}"
-    )
-
-
-def test_an_interpreter_the_agent_can_write_fails(tmp_path: Path) -> None:
-    python = tmp_path / "python3"
-    python.write_text("")
-    python.chmod(0o755 if os.geteuid() != 0 else 0o555)  # root can write it either way
-
-    (found,) = harden.check_python(str(python), owner=ME)
-    assert found == f"change the hooks' interpreter: {python} (resolving to {python}) is writable"
-
-
-@needs_non_root
-def test_an_interpreter_owned_and_read_only_passes(tmp_path: Path) -> None:
-    python = tmp_path / "python3"
-    python.write_text("")
-    python.chmod(0o555)
-
-    assert harden.check_python(str(python), owner=ME) == []
-
-
-def test_a_missing_interpreter_fails(tmp_path: Path) -> None:
-    (found,) = harden.check_python(str(tmp_path / "python3"))
-    assert "is missing" in found
-
-
-def test_a_sudo_hardening_left_unexecutable_is_no_sudo_and_no_crash(tmp_path: Path) -> None:
-    """Every launch after the first finds the sudo the first one left mode 0: session-init must go on to
-    verify. Mode 0 keeps out even root, so this runs as any user."""
-    sudo = Path(stand_in(tmp_path, "sudo", 0))
-    sudo.chmod(0)
-
-    assert harden.can_sudo(str(sudo)) is False
-    assert harden.check_sudo(str(sudo)) == []
-
-
-def test_a_sudo_that_cant_be_found_is_refused_before_changing_anything(tmp_path: Path) -> None:
-    with pytest.raises(harden.HardenError, match="can't find"):
-        harden.harden_sudo_and_su(str(tmp_path / "absent"))
 
 
 @contextlib.contextmanager
@@ -316,50 +70,7 @@ def read_only(kit: Path) -> Iterator[None]:
                 path.chmod(0o755)
 
 
-@needs_non_root
-def test_a_link_to_a_writable_target_outside_the_kit_fails(kit: Path, tmp_path: Path) -> None:
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (kit / "hooks" / "link").symlink_to(outside)
-
-    with read_only(kit):
-        found = harden.check_kit_read_only(kit)
-
-    assert found == [f"change the agent kit: {kit / 'hooks' / 'link'} is writable"]
-
-
-@needs_non_root
-def test_a_link_to_nothing_fails(kit: Path, tmp_path: Path) -> None:
-    (kit / "hooks" / "link").symlink_to(tmp_path / "nothing")
-
-    with read_only(kit):
-        found = harden.check_kit_read_only(kit)
-
-    assert found == [
-        f"change the agent kit: {kit / 'hooks' / 'link'} links to {tmp_path / 'nothing'}, which doesn't exist"
-    ]
-
-
-@needs_non_root
-def test_a_read_only_kit_with_links_inside_it_passes(kit: Path) -> None:
-    (kit / "hooks" / "link").symlink_to("pre-commit")
-
-    with read_only(kit):
-        assert harden.check_kit_read_only(kit) == []
-
-
-@needs_non_root
-def test_a_folder_that_cant_be_listed_fails(kit: Path) -> None:
-    with read_only(kit):
-        (kit / "hooks").chmod(0o000)
-        (found,) = harden.check_kit_read_only(kit)
-
-    assert found.startswith(f"change the agent kit unchecked: {kit / 'hooks'} can't be listed")
-
-
-def test_a_missing_kit_fails(tmp_path: Path) -> None:
-    (found,) = harden.check_kit_read_only(tmp_path / "absent")
-    assert "can't be listed" in found
+# --- the real machine ----------------------------------------------------------------
 
 
 def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
@@ -488,3 +199,284 @@ def test_root_mode_then_agent_mode_on_one_machine(
     assert root_mode.regrouped_socket.stat().st_gid == root_mode.root.gid
     assert stat.S_IMODE(Path(root_mode.sudo).stat().st_mode) == 0
     assert machine.passwd_log.read_text() == "-l root\n"
+
+
+# --- agent mode: each way the agent could still reach root makes verify refuse --------------
+#
+# Each case starts from a machine root mode has just hardened, breaks one thing, and checks verify refuses,
+# naming it in today's words.
+
+
+@pytest.fixture
+def hardened(machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]) -> TemporaryMachine:
+    """The machine after root mode's first launch, its output discarded."""
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 0
+    capsys.readouterr()
+    return machine
+
+
+def assert_refused(
+    capsys: pytest.CaptureFixture[str], kit: Path, machine: harden.Machine, *lines: str, startswith: str = ""
+) -> None:
+    """verify refuses to start the agent, and says each of ``lines``, one line each."""
+    assert harden.verify(kit, machine) == 1
+    err = capsys.readouterr().err
+    assert "not starting the agent" in err
+    found = [line.removeprefix("  ") for line in err.splitlines()]
+    for line in lines:
+        assert line in found, err
+    if startswith:
+        assert any(line.startswith(startswith) for line in found), err
+
+
+@contextlib.contextmanager
+def writable(directory: Path) -> Iterator[None]:
+    """Let the test, as the kit's owner, add something to a read-only folder of it."""
+    directory.chmod(0o755)
+    try:
+        yield
+    finally:
+        directory.chmod(0o555)
+
+
+def test_missing_settings_are_refused(hardened, read_only_kit, capsys) -> None:
+    installed = hardened.root_mode.managed_settings
+    installed.unlink()
+
+    assert_refused(
+        capsys, read_only_kit, hardened.agent_mode, f"run without Claude's managed settings: {installed} is missing"
+    )
+
+
+def test_settings_and_interpreter_root_doesnt_own_are_refused(hardened, read_only_kit, capsys) -> None:
+    """A non-root test can't give a file away, so the machine's root becomes someone else instead."""
+    agent_mode = dataclasses.replace(hardened.agent_mode, root=SOMEONE_ELSE)
+    installed = agent_mode.managed_settings
+    python = Path(agent_mode.python)
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        agent_mode,
+        f"replace Claude's managed settings: {installed} isn't owned by uid {SOMEONE_ELSE.uid}",
+        f"replace the hooks' interpreter: {python} (resolving to {python.resolve()})"
+        f" isn't owned by uid {SOMEONE_ELSE.uid}",
+    )
+
+
+def test_settings_the_agent_can_write_are_refused(hardened, read_only_kit, capsys) -> None:
+    installed = hardened.root_mode.managed_settings
+    installed.chmod(0o646)
+
+    assert_refused(
+        capsys, read_only_kit, hardened.agent_mode, f"change Claude's managed settings: {installed} is writable"
+    )
+
+
+def test_settings_other_than_the_kits_are_refused(hardened, read_only_kit, capsys) -> None:
+    installed = hardened.root_mode.managed_settings
+    installed.write_text('{"permissions": {}}\n')
+    kit_copy = read_only_kit / "claude" / "managed-settings.json"
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"run with older managed settings: {installed} differs from {kit_copy}",
+    )
+
+
+@pytest.mark.parametrize(("command", "line"), [("sudo", "run sudo"), ("su", "su to root")])
+def test_a_command_that_still_reaches_root_is_refused(hardened, read_only_kit, capsys, command: str, line: str) -> None:
+    stand_in_path = Path(getattr(hardened.agent_mode, command))
+    stand_in(stand_in_path.parent, stand_in_path.name, 0)
+
+    assert_refused(capsys, read_only_kit, hardened.agent_mode, line)
+
+
+def test_every_docker_socket_the_agent_can_write_is_named_in_one_run(hardened, read_only_kit, capsys) -> None:
+    docker_socket, containerd_socket = hardened.agent_mode.checked_sockets
+    docker_socket.chmod(0o666)
+    make_socket(containerd_socket, 0o666)
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"use {docker_socket}, which is root over this sandbox",
+        f"use {containerd_socket}, which is root over this sandbox",
+    )
+
+
+def test_a_writable_file_in_the_kit_is_refused(hardened, read_only_kit, capsys) -> None:
+    agents_md = read_only_kit / "AGENTS.md"
+    agents_md.chmod(0o446)
+
+    assert_refused(capsys, read_only_kit, hardened.agent_mode, f"change the agent kit: {agents_md} is writable")
+
+
+def test_a_link_to_a_writable_folder_outside_the_kit_is_refused(hardened, read_only_kit, tmp_path, capsys) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside.chmod(0o777)
+    link = read_only_kit / "hooks" / "outside"
+    with writable(link.parent):
+        link.symlink_to(outside)
+
+    assert_refused(capsys, read_only_kit, hardened.agent_mode, f"change the agent kit: {link} is writable")
+
+
+def test_a_link_to_nothing_in_the_kit_is_refused(hardened, read_only_kit, tmp_path, capsys) -> None:
+    link = read_only_kit / "hooks" / "nowhere"
+    with writable(link.parent):
+        link.symlink_to(tmp_path / "nothing")
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"change the agent kit: {link} links to {tmp_path / 'nothing'}, which doesn't exist",
+    )
+
+
+@needs_non_root
+def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, read_only_kit, capsys) -> None:
+    """Listing is real: root can list anything, so this runs as another user only."""
+    hooks = read_only_kit / "hooks"
+    hooks.chmod(0o000)
+    try:
+        assert_refused(
+            capsys,
+            read_only_kit,
+            hardened.agent_mode,
+            startswith=f"change the agent kit unchecked: {hooks} can't be listed",
+        )
+    finally:
+        hooks.chmod(0o555)
+
+
+def test_a_missing_kit_is_refused(hardened, tmp_path, capsys) -> None:
+    assert harden.verify(tmp_path / "absent", hardened.agent_mode) == 1
+    err = capsys.readouterr().err
+    assert "not starting the agent" in err and "can't be listed" in err
+
+
+def test_a_missing_interpreter_is_refused(hardened, read_only_kit, capsys) -> None:
+    python = Path(hardened.agent_mode.python)
+    python.resolve().unlink()
+
+    assert harden.verify(read_only_kit, hardened.agent_mode) == 1
+    err = capsys.readouterr().err
+    assert "not starting the agent" in err
+    assert any(
+        line.startswith("  run without the hooks' interpreter:") and "is missing" in line for line in err.splitlines()
+    )
+
+
+def test_an_interpreter_the_agent_can_write_is_refused(hardened, read_only_kit, capsys) -> None:
+    python = Path(hardened.agent_mode.python)
+    python.resolve().chmod(0o757)
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"change the hooks' interpreter: {python} (resolving to {python.resolve()}) is writable",
+    )
+
+
+@pytest.mark.parametrize("sudo", ["missing", "failing", "unexecutable"])
+def test_a_sudo_that_cant_reach_root_passes(hardened, read_only_kit, tmp_path, capsys, sudo: str) -> None:
+    """Unexecutable is what root mode leaves, and what every later launch finds (review finding R12)."""
+    agent_mode = hardened.agent_mode
+    if sudo == "missing":
+        agent_mode = dataclasses.replace(agent_mode, sudo=str(tmp_path / "absent"))
+    elif sudo == "failing":
+        stand_in(Path(agent_mode.sudo).parent, "sudo", 1)
+
+    assert harden.verify(read_only_kit, agent_mode) == 0, capsys.readouterr().err
+
+
+def test_a_missing_su_passes(hardened, read_only_kit, tmp_path, capsys) -> None:
+    agent_mode = dataclasses.replace(hardened.agent_mode, su=str(tmp_path / "absent"))
+
+    assert harden.verify(read_only_kit, agent_mode) == 0, capsys.readouterr().err
+
+
+def test_verify_refuses_to_run_as_root(hardened, read_only_kit, capsys) -> None:
+    """It checks what the agent can do; root can do anything."""
+    assert harden.verify(read_only_kit, hardened.root_mode) == 1
+    assert "runs as the agent" in capsys.readouterr().err
+
+
+# --- root mode (still one step at a time; replaced next) ------------------------------
+
+
+@pytest.mark.parametrize("sudo_user", ["", "root", "will"])
+def test_harden_refuses_outside_a_sandbox_before_changing_anything(
+    capsys: pytest.CaptureFixture[str], sudo_user: str
+) -> None:
+    # Never with SUDO_USER=agent: as root, that would harden this machine.
+    assert harden.harden(AGENT_KIT_PATH, sudo_user) == 1
+    assert "only runs inside a foundry sandbox" in capsys.readouterr().err
+
+
+# --- root mode's file steps ----------------------------------------------------------
+
+
+def test_the_kits_settings_are_installed_read_only_for_others(tmp_path: Path) -> None:
+    installed = tmp_path / "etc" / "claude-code" / "managed-settings.json"
+
+    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
+
+    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
+    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
+    assert stat.S_IMODE(installed.parent.stat().st_mode) == 0o755
+    assert (installed.stat().st_uid, installed.stat().st_gid) == ME
+    assert [path.name for path in installed.parent.iterdir()] == [installed.name]  # no partial file left
+
+
+def test_installing_replaces_settings_from_an_older_kit(tmp_path: Path) -> None:
+    installed = tmp_path / "managed-settings.json"
+    installed.write_text('{"permissions": {}}\n')
+    installed.chmod(0o600)
+
+    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
+
+    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
+    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
+
+
+def test_docker_is_configured_to_give_its_socket_to_root(tmp_path: Path, socket_dir: Path) -> None:
+    daemon_config = tmp_path / "etc" / "docker" / "daemon.json"
+    docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
+
+    harden.harden_docker(daemon_config, [docker_socket, socket_dir / "absent.sock"], owner=ME)
+
+    assert daemon_config.read_text() == '{"group": "root"}\n'
+    assert stat.S_IMODE(daemon_config.stat().st_mode) == 0o644
+    assert docker_socket.stat().st_gid == ME.gid
+
+
+def test_dockers_configuration_from_an_earlier_launch_is_kept(tmp_path: Path) -> None:
+    daemon_config = tmp_path / "daemon.json"
+    daemon_config.write_text('{"group": "root"}\n')
+
+    harden.harden_docker(daemon_config, [], owner=ME)
+
+    assert daemon_config.read_text() == '{"group": "root"}\n'
+
+
+def test_a_templates_own_docker_configuration_is_refused_untouched(tmp_path: Path) -> None:
+    daemon_config = tmp_path / "daemon.json"
+    daemon_config.write_text('{"debug": true}\n')
+
+    with pytest.raises(harden.HardenError, match="already has"):
+        harden.harden_docker(daemon_config, [], owner=ME)
+
+    assert daemon_config.read_text() == '{"debug": true}\n'
+
+
+def test_a_sudo_that_cant_be_found_is_refused_before_changing_anything(tmp_path: Path) -> None:
+    with pytest.raises(harden.HardenError, match="can't find"):
+        harden.harden_sudo_and_su(str(tmp_path / "absent"))
