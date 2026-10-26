@@ -7,6 +7,7 @@ kit, with the variables a sandbox for the task gets.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -166,6 +167,32 @@ def test_push_of_the_task_branch_is_accepted_but_other_refs_are_refused(repo) ->
         assert result.returncode != 0 and "only push" in result.stderr, target
 
 
+def test_a_kit_without_its_runtime_refuses_the_commit(repo, built_kit, tmp_path) -> None:
+    """The hooks find the runtime beside them; missing, they fail and git stops, rather than run no rules."""
+    code, _ = repo
+    kit = tmp_path / "kit-without-runtime"
+    shutil.copytree(built_kit, kit, symlinks=True, ignore=shutil.ignore_patterns(".build"))
+    git(code, "config", "core.hooksPath", str(kit / "hooks"))
+    change(code, "hello.sh")
+
+    result = commit(code, "feat: hello")
+
+    assert result.returncode != 0
+    assert f"pre-commit: refusing: {kit / '.build' / 'agent_runtime.pyz'} is missing" in result.stderr
+    assert git(code, "rev-list", "--count", "HEAD").stdout.strip() == "1"  # only the seed commit
+
+
+def test_the_hooks_ignore_a_runtime_named_by_the_environment(repo, tmp_path, monkeypatch) -> None:
+    """The agent sets its git commands' environment; AGENT_KIT_DIR pointing elsewhere changes nothing."""
+    code, _ = repo
+    monkeypatch.setenv("AGENT_KIT_DIR", str(tmp_path / "elsewhere"))
+    change(code, f"{TASK.notes_dir}/PROGRESS.md")
+
+    result = commit(code, "notes")
+
+    assert result.returncode != 0 and f"Task notes belong on {NOTES_BRANCH}" in result.stderr
+
+
 # --- notes checkout ----------------------------------------------------------
 
 
@@ -254,7 +281,7 @@ RUNTIME = ("<python>", "-I", "<kit>/.build/agent_runtime.pyz")
     [
         ("<kit>/hooks/pre-commit",),
         ("<kit>/hooks/pre-push",),
-        ("<kit>/hooks/prepare-commit-msg",),
+        ("<kit>/hooks/prepare-commit-msg", "<kit>/message"),
         (*RUNTIME, "hook", "session-check"),
         ("<kit>/bin/session-init",),
         ("<kit>/bin/session-setup",),

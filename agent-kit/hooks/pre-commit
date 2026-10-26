@@ -1,35 +1,18 @@
-#!/usr/bin/env bash
-# What each checkout may commit, so tasks don't step on each other:
-#   task branch: no task notes: nothing under the notes root, at any depth,
-#                so notes written from a subfolder are caught too;
-#   notes branch: only this task's notes folder.
-# Commits on any other branch are left alone: they can't be pushed.
-set -euo pipefail
-: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_NOTES_ROOT:?}" "${AGENT_TASK_NOTES:?}"
-# For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/hooks.sh
-source "$(dirname "$0")/../lib/hooks.sh"
+#!/usr/bin/python3 -I
+"""git's pre-commit hook: runs agent_runtime.git_hooks.pre_commit from the runtime built into this kit.
 
-# Paths staged for the commit being made.
-staged_files() { git diff --cached --name-only --diff-filter=ACMRD; }
+The runtime is found from this file, never from $AGENT_KIT_DIR, which the agent sets for its own git
+commands. Without it, this hook fails and git stops rather than run without the rule.
+"""
 
-refused=()
-case "$(current_branch)" in
-    "$AGENT_TASK_BRANCH")
-        while IFS= read -r f; do
-            if [[ "$f" == "$AGENT_NOTES_ROOT"/* || "$f" == */"$AGENT_NOTES_ROOT"/* ]]; then
-                refused+=("$f")
-            fi
-        done < <(staged_files)
-        rule="Task notes belong on $AGENT_NOTES_BRANCH, in \$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/, not on $AGENT_TASK_BRANCH:" ;;
-    "$AGENT_NOTES_BRANCH")
-        while IFS= read -r f; do
-            [[ "$f" == "$AGENT_TASK_NOTES"/* ]] || refused+=("$f")
-        done < <(staged_files)
-        rule="On $AGENT_NOTES_BRANCH you may only change files in $AGENT_TASK_NOTES/:" ;;
-    *) exit 0 ;;
-esac
+import sys
+from pathlib import Path
 
-if ((${#refused[@]})); then
-    refuse pre-commit "$rule" "${refused[@]/#/    }" "" "Unstage with: git restore --staged <file>"
-fi
+RUNTIME = Path(__file__).resolve().parent.parent / ".build" / "agent_runtime.pyz"
+if not RUNTIME.is_file():
+    sys.exit(f"pre-commit: refusing: {RUNTIME} is missing; the sandbox's launch builds it, so launch again")
+sys.path.insert(0, str(RUNTIME))
+
+from agent_runtime import git_hooks  # noqa: E402
+
+git_hooks.pre_commit()

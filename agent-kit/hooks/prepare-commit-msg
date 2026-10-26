@@ -1,16 +1,18 @@
-#!/usr/bin/env bash
-# Adds a "Task: <task>" trailer to every commit on the task branch, so each
-# code commit traces back to its task without the agent having to remember.
-# This runs even with --no-verify. git passes the message file as $1.
-set -euo pipefail
-: "${AGENT_TASK:?}" "${AGENT_TASK_BRANCH:?}"
-# For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/hooks.sh
-source "$(dirname "$0")/../lib/hooks.sh"
+#!/usr/bin/python3 -I
+"""git's prepare-commit-msg hook: runs agent_runtime.git_hooks.prepare_commit_msg from the runtime built into this kit.
 
-[[ "$(current_branch)" == "$AGENT_TASK_BRANCH" ]] || exit 0
-message_file="${1:?prepare-commit-msg needs the message file}"
+The runtime is found from this file, never from $AGENT_KIT_DIR, which the agent sets for its own git
+commands. Without it, this hook fails and git stops rather than run without the rule.
+"""
 
-# An empty message aborts the commit; a trailer would make it go through.
-[[ -n "$(git stripspace --strip-comments < "$message_file")" ]] || exit 0
-git interpret-trailers --in-place --if-exists doNothing --trailer "Task: $AGENT_TASK" "$message_file"
+import sys
+from pathlib import Path
+
+RUNTIME = Path(__file__).resolve().parent.parent / ".build" / "agent_runtime.pyz"
+if not RUNTIME.is_file():
+    sys.exit(f"prepare-commit-msg: refusing: {RUNTIME} is missing; the sandbox's launch builds it, so launch again")
+sys.path.insert(0, str(RUNTIME))
+
+from agent_runtime import git_hooks  # noqa: E402
+
+git_hooks.prepare_commit_msg()

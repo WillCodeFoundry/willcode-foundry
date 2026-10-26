@@ -1,18 +1,18 @@
-#!/usr/bin/env bash
-# Pushes only to this task's branch and the notes branch. The project's GitHub
-# rulesets allow any task/**, since GitHub can't tell one task from another;
-# this keeps a role to its own. git passes one line per ref on stdin:
-#   <local ref> <local sha> <remote ref> <remote sha>
-set -euo pipefail
-: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
-# For ShellCheck, relative to the repository root, where CI runs it:
-# shellcheck source=agent-kit/lib/hooks.sh
-source "$(dirname "$0")/../lib/hooks.sh"
+#!/usr/bin/python3 -I
+"""git's pre-push hook: runs agent_runtime.git_hooks.pre_push from the runtime built into this kit.
 
-while read -r _local_ref _local_sha remote_ref _remote_sha; do
-    case "$remote_ref" in
-        "refs/heads/$AGENT_TASK_BRANCH"|"refs/heads/$AGENT_NOTES_BRANCH") ;;
-        *) refuse pre-push "You may only push $AGENT_TASK_BRANCH and $AGENT_NOTES_BRANCH, not ${remote_ref#refs/heads/}." \
-               "Code goes on $AGENT_TASK_BRANCH; notes go on $AGENT_NOTES_BRANCH." ;;
-    esac
-done
+The runtime is found from this file, never from $AGENT_KIT_DIR, which the agent sets for its own git
+commands. Without it, this hook fails and git stops rather than run without the rule.
+"""
+
+import sys
+from pathlib import Path
+
+RUNTIME = Path(__file__).resolve().parent.parent / ".build" / "agent_runtime.pyz"
+if not RUNTIME.is_file():
+    sys.exit(f"pre-push: refusing: {RUNTIME} is missing; the sandbox's launch builds it, so launch again")
+sys.path.insert(0, str(RUNTIME))
+
+from agent_runtime import git_hooks  # noqa: E402
+
+git_hooks.pre_push()

@@ -18,12 +18,19 @@ if sys.version_info < MINIMUM_PYTHON:
 import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 
-from agent_runtime import claude_hooks, contract  # noqa: E402
+from agent_runtime import claude_hooks, contract, git_hooks  # noqa: E402
 
 CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "guard-bash": claude_hooks.guard_bash,
     "session-check": claude_hooks.session_check,
 }
+
+GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
+    "pre-commit": lambda args: git_hooks.pre_commit(),
+    "prepare-commit-msg": git_hooks.prepare_commit_msg,
+    "pre-push": lambda args: git_hooks.pre_push(),
+}
+"""The kit's hooks/ stubs call git_hooks directly; these are the same hooks, for running by hand."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,7 +40,17 @@ def build_parser() -> argparse.ArgumentParser:
     hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
     hook.add_argument("name", choices=CLAUDE_HOOKS)
     hook.set_defaults(func=lambda args: CLAUDE_HOOKS[args.name]())
+
+    git_hook = subparsers.add_parser("git-hook", help="a git hook, with the arguments git passes it")
+    git_hook.add_argument("name", choices=GIT_HOOKS)
+    git_hook.add_argument("args", nargs="*")
+    git_hook.set_defaults(func=_run_git_hook)
     return parser
+
+
+def _run_git_hook(args: argparse.Namespace) -> int:
+    GIT_HOOKS[args.name](args.args)
+    return 0
 
 
 def run(argv: Sequence[str] | None = None) -> int:
