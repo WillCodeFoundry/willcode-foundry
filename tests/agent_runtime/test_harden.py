@@ -207,6 +207,30 @@ def test_root_mode_then_agent_mode_on_one_machine(
     assert machine.passwd_log.read_text() == "-l root\n"
 
 
+def _two_groups() -> tuple[int, int] | None:
+    """Two groups this user may give a file to: any two as root, two of its own otherwise; None if it has one."""
+    if os.geteuid() == 0:
+        return (os.getgid() + 1, os.getgid())
+    groups = sorted(set(os.getgroups()) | {os.getgid()})
+    return (groups[0], groups[1]) if len(groups) > 1 else None
+
+
+@pytest.mark.skipif(_two_groups() is None, reason="needs a user in two groups, to start the socket in the other")
+def test_root_mode_gives_the_docker_socket_to_root(machine: TemporaryMachine, read_only_kit: Path) -> None:
+    """The socket starts in the agent's group, as sbx's docker group, and ends in root's: the round trip can't
+    show it, since there the two are the same."""
+    groups = _two_groups()
+    assert groups is not None
+    agents_group, roots_group = groups
+    socket_path = machine.root_mode.regrouped_socket
+    os.chown(socket_path, -1, agents_group)
+    root_mode = dataclasses.replace(machine.root_mode, root=harden.Owner(ME.uid, roots_group))
+
+    assert harden.harden(read_only_kit, "agent", root_mode) == 0
+
+    assert socket_path.stat().st_gid == roots_group
+
+
 # --- agent mode: each way the agent could still reach root makes verify refuse --------------
 #
 # Each case starts from a machine root mode has just hardened, breaks one thing, and checks verify refuses,
