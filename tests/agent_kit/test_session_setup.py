@@ -8,36 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-
-from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit.conftest import runtime_command
-
-TASK = Task("T1")
-
-
-def git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
-
-
-@pytest.fixture
-def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A repository with only main: no task branch, no agent-notes."""
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
-        git(tmp_path, "config", "--global", key, value)
-    bare = tmp_path / "origin.git"
-    git(tmp_path, "init", "--bare", "-q", "-b", "main", str(bare))
-    seed = tmp_path / "seed"
-    git(tmp_path, "clone", "-q", str(bare), str(seed))
-    (seed / "README.md").write_text("hi\n")
-    git(seed, "add", ".")
-    git(seed, "commit", "-qm", "init")
-    git(seed, "push", "-q", "origin", "HEAD:main")
-    return bare
+from foundry.task import NOTES_BRANCH
+from tests.agent_kit.conftest import TASK, git, runtime_command
 
 
 def session_setup(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedProcess[str]:
@@ -71,20 +43,6 @@ def test_a_task_without_its_task_md_is_explained(tmp_path, kit_env, origin) -> N
     assert result.returncode == 1
     assert f"{NOTES_BRANCH} has no {TASK.task_file}" in result.stderr
     assert not (tmp_path / "home" / ".claude").exists()  # stopped before writing instructions
-
-
-@pytest.fixture
-def created_task(tmp_path: Path, origin: Path) -> Path:
-    """The origin once `foundry task create` has run: the task's branch, and its TASK.md on the notes branch."""
-    seed = tmp_path / "seed"
-    git(seed, "push", "-q", "origin", f"HEAD:refs/heads/{TASK.branch}")
-    git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    (seed / TASK.notes_dir).mkdir(parents=True)
-    (seed / TASK.task_file).write_text("# Task\n")
-    git(seed, "add", TASK.notes_dir)
-    git(seed, "commit", "-qm", f"Add task {TASK.id}")
-    git(seed, "push", "-q", "origin", NOTES_BRANCH)
-    return origin
 
 
 def git_out(cwd: Path, *args: str) -> str:
