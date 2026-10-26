@@ -4,7 +4,8 @@
 # ci-gate must match config/repo-policy/ci-gate.yml.
 #
 # Python comes from .python-version (the requires-python floor); the test job
-# also runs the newest Python. Actions are pinned to commit SHAs and kept
+# also runs the newest Python. Together they cover the sandbox template's
+# python3, which runs agent_runtime and is never older than the floor. Actions are pinned to commit SHAs and kept
 # current by Dependabot (.github/dependabot.yml).
 name: ci
 
