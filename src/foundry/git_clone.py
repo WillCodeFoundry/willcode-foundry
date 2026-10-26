@@ -14,8 +14,8 @@ _REMOTE_NAME = "origin"
 class GitClone:
     """A clone of the repository at a URL, in a folder you give it, holding nothing until a branch is checked out.
 
-    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
-    writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
+    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks, reads
+    and writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
     commit deep. Every commit is signed with SSH, using the signing key in your git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
@@ -63,6 +63,15 @@ class GitClone:
     def exists(self, path: str) -> bool:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
         return (self._work_dir / path).exists()
+
+    def read(self, path: str) -> str | None:
+        """The text of ``path``, relative to the repository root, in the checked-out files; None if it isn't there."""
+        file_path = self._work_dir / path
+        return file_path.read_text() if file_path.is_file() else None
+
+    def folders(self, pattern: str) -> list[str]:
+        """The checked-out folders matching ``pattern`` (pathlib's glob), relative to the repository root, sorted."""
+        return sorted(str(path.relative_to(self._work_dir)) for path in self._work_dir.glob(pattern) if path.is_dir())
 
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating folders and replacing files as needed.

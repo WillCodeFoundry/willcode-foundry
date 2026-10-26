@@ -1,25 +1,28 @@
 """foundry task: everything done to one task, each subcommand taking PROJECT TASK first.
 
-create makes the task; run launches a role on it.
+create makes the task; run launches a role on it; list shows where every task stands.
 """
 
 import argparse
 import os
 import sys
 import tempfile
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NoReturn
 
-from foundry import agent_sandbox, config, paths, session, task
+from foundry import agent_sandbox, config, paths, session, task, task_state
+from foundry.errors import FoundryError
 from foundry.git_clone import GitClone
 from foundry.task import Task
+from foundry.task_state import HUMAN, Lifecycle, TaskState
 
 _PROJECT_HELP = "project name, as listed in config/foundry.yaml"
 _TASK_HELP = "task id, e.g. wcf-0042"
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    parser = subparsers.add_parser("task", help="create and run tasks")
+    parser = subparsers.add_parser("task", help="create, run and list tasks")
     actions = parser.add_subparsers(dest="action", required=True)
 
     create = actions.add_parser(
@@ -40,6 +43,14 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     _add_project_and_task(run)
     run.add_argument("role_name", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
     run.set_defaults(func=run_main)
+
+    list_ = actions.add_parser(
+        "list",
+        help="every task's lifecycle, state, whose turn it is and hand-off note",
+        description="Reads the notes branch of every project, or of PROJECT, with git and your own access.",
+    )
+    list_.add_argument("project_name", metavar="PROJECT", nargs="?", default=None, help=_PROJECT_HELP)
+    list_.set_defaults(func=list_main)
 
 
 def _add_project_and_task(parser: argparse.ArgumentParser) -> None:
@@ -96,3 +107,61 @@ def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, tas
         init_command=opened.init_command,
         github_token_path=role.github_token_path,
     )
+
+
+# --- list --------------------------------------------------------------------------
+
+
+def list_main(args: argparse.Namespace) -> int:
+    """Composition root: each project's notes branch in a scratch clone, and this foundry's lifecycles."""
+    foundry_root = paths.find_foundry_root()
+    foundry_config = config.load(foundry_root)
+    projects = (
+        [foundry_config.project(args.project_name)] if args.project_name else list(foundry_config.projects.values())
+    )
+    lifecycles: dict[str, Lifecycle] = {}
+
+    def lifecycle(name: str) -> Lifecycle:
+        if name not in lifecycles:
+            lifecycles[name] = task_state.load_lifecycle(foundry_root, name)
+        return lifecycles[name]
+
+    for project in projects:
+        with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
+            states = task_state.read_all(_notes_clone(project.url, Path(scratch_dir)))
+        print("\n".join(list_lines(project.name, states, lifecycle)))
+    return 0
+
+
+def list_lines(
+    project_name: str,
+    states: Mapping[str, TaskState | FoundryError | None],
+    lifecycle: Callable[[str], Lifecycle],
+) -> list[str]:
+    """The project, then a line per task: its lifecycle, state, whose turn, counts, and the note's first line."""
+    lines = [project_name]
+    for task_id, state in states.items():
+        if state is None:
+            lines.append(f"  {task_id}  no state")
+            continue
+        if isinstance(state, FoundryError):
+            lines.append(f"  {task_id}  can't be read: {state}")
+            continue
+        try:
+            assignee = lifecycle(state.lifecycle).assignee(state.state)
+        except FoundryError as error:
+            lines.append(f"  {task_id}  can't be read: {error}")
+            continue
+        turn = "done" if assignee is None else "your turn" if assignee == HUMAN else f"{assignee}'s turn"
+        counts = [f"{key} {count}" for key, count in state.counts.items()]
+        note = state.note.splitlines()[0] if state.note else ""
+        lines.append(
+            "  " + "  ".join(part for part in (task_id, state.lifecycle, state.state, turn, *counts, note) if part)
+        )
+    return lines if states else [project_name, "  no tasks"]
+
+
+def _notes_clone(url: str, work_dir: Path) -> GitClone:
+    clone = GitClone.init(url, work_dir, os.environ)
+    clone.check_out(task.NOTES_BRANCH)
+    return clone
