@@ -40,7 +40,7 @@ jobs:
       # changes the machine it runs on), so this is its main check; its --verify checks are tested.
       - run: >-
           shellcheck --severity=warning
-          agent-kit/bin/session-init agent-kit/bin/session-setup agent-kit/bin/session-harden
+          agent-kit/bin/session-harden
           scripts/update-skills
 
   mypy:

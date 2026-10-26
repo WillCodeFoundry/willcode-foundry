@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from agent_runtime import contract
 from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
@@ -98,7 +99,7 @@ def test_the_init_command_runs_the_agent_kit_the_sandbox_was_created_with(tmp_pa
 
     opened = session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task("t1"))
 
-    assert opened.init_command == (str(tmp_path / "before" / "agent-kit" / "bin" / "session-init"),)
+    assert opened.init_command == contract.command(tmp_path / "before" / "agent-kit", "session-init")
     assert opened.variables.agent_kit_dir == tmp_path / "before" / "agent-kit"  # what the sandbox was told
 
 

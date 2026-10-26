@@ -12,8 +12,6 @@ from agent_runtime import contract
 from foundry.errors import FoundryError
 
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
-SESSION_INIT_RELATIVE_PATH = Path("bin") / "session-init"
-"""Inside an agent kit: what a sandbox runs before its agent starts."""
 
 
 def find_foundry_root(start_dir: Path | None = None) -> Path:

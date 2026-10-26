@@ -119,13 +119,13 @@ class Session:
 
     @property
     def init_command(self) -> tuple[str, ...]:
-        """session-init, from the agent kit this sandbox was created with.
+        """The runtime's session-init, from the agent kit this sandbox was created with.
 
         sbx fixes mounts when it creates a sandbox, so this is the kit recorded
         in the definition, not the foundry's current one: a moved foundry still
         finds the kit its existing sandboxes mount.
         """
-        return (str(self.definition.agent_kit_dir / paths.SESSION_INIT_RELATIVE_PATH),)
+        return contract.command(self.definition.agent_kit_dir, "session-init")
 
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:

@@ -1,4 +1,4 @@
-"""agent-kit/bin/session-setup, the agent user's part of session-init, against a local origin.
+"""The runtime's session-setup, the agent user's part of session-init, run from the built kit against a local origin.
 
 It never needs root, so it runs here as in a sandbox, with a sandbox's variables and a throwaway HOME.
 """
@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
+from tests.agent_kit.conftest import runtime_command
 
 TASK = Task("T1")
 
@@ -42,7 +43,7 @@ def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def session_setup(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, **kit_env, "AGENT_REPO_URL": f"file://{origin}"}
     return subprocess.run(
-        [str(Path(env["AGENT_KIT_DIR"]) / "bin" / "session-setup")],
+        runtime_command(Path(env["AGENT_KIT_DIR"]), "session-setup"),
         env=env,
         capture_output=True,
         text=True,

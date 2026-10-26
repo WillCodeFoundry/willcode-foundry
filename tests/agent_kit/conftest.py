@@ -1,9 +1,11 @@
 import dataclasses
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+from foundry import paths
 from foundry.session import SessionVariables
 from foundry.task import Task
 
@@ -26,3 +28,12 @@ def kit_env(
         return variables.to_env()
 
     return env
+
+
+def runtime_command(kit_dir: Path, *args: str) -> list[str]:
+    """A call into the runtime built into ``kit_dir``, as contract.command makes it, but on this interpreter.
+
+    The tests that run a command exactly as written (managed settings, the git hooks' stubs) use the
+    template's interpreter, /usr/bin/python3, as the sandbox does.
+    """
+    return [sys.executable, "-I", str(paths.runtime_pyz(kit_dir)), *args]

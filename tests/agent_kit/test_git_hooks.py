@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
+from tests.agent_kit.conftest import runtime_command
 
 SETTINGS = json.loads((Path(__file__).parents[2] / "agent-kit" / "claude" / "managed-settings.json").read_text())
 (STOP_COMMAND,) = (hook["command"] for entry in SETTINGS["hooks"]["Stop"] for hook in entry["hooks"])
@@ -60,7 +61,7 @@ def repo(tmp_path, monkeypatch, kit_env):
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     setup = subprocess.run(
-        [str(Path(env["AGENT_KIT_DIR"]) / "bin" / "session-setup")],
+        runtime_command(Path(env["AGENT_KIT_DIR"]), "session-setup"),
         env=os.environ,
         capture_output=True,
         text=True,
@@ -283,8 +284,8 @@ RUNTIME = ("<python>", "-I", "<kit>/.build/agent_runtime.pyz")
         ("<kit>/hooks/pre-push",),
         ("<kit>/hooks/prepare-commit-msg", "<kit>/message"),
         (*RUNTIME, "hook", "session-check"),
-        ("<kit>/bin/session-init",),
-        ("<kit>/bin/session-setup",),
+        (*RUNTIME, "session-init"),
+        (*RUNTIME, "session-setup"),
     ],
 )
 def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, command: tuple[str, ...]) -> None:
