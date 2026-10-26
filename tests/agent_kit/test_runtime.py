@@ -1,11 +1,14 @@
 """The built agent runtime, run as the kit's hooks and the launcher run it: ``python -I <pyz> ...``."""
 
 import ast
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+from agent_runtime import contract
 from foundry import paths
+from tests.agent_kit.conftest import runtime_command
 
 RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
 
@@ -52,3 +55,20 @@ def test_no_command_prints_the_usage(built_kit: Path) -> None:
 
     assert result.returncode == 2
     assert "usage: agent_runtime" in result.stderr
+
+
+def test_root_mode_is_given_the_kit_alone(built_kit: Path) -> None:
+    """As session-init runs it through sudo: AGENT_KIT_DIR preserved, the other session variables gone.
+
+    Run only as far as its refusal: SUDO_USER is never the sandbox's agent here.
+    """
+    result = subprocess.run(
+        runtime_command(built_kit, "harden"),
+        env={"PATH": os.environ["PATH"], contract.KIT_DIR: str(built_kit), "SUDO_USER": "will"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "only runs inside a foundry sandbox" in result.stderr

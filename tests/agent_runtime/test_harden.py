@@ -9,15 +9,13 @@ import contextlib
 import os
 import socket
 import stat
-import subprocess
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract, harden
-from tests.agent_kit.conftest import runtime_command
+from agent_runtime import harden
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 KIT_SETTINGS = harden.kit_settings(AGENT_KIT_PATH)
@@ -39,20 +37,6 @@ def test_harden_refuses_outside_a_sandbox_before_changing_anything(
     # Never with SUDO_USER=agent: as root, that would harden this machine.
     assert harden.harden(AGENT_KIT_PATH, sudo_user) == 1
     assert "only runs inside a foundry sandbox" in capsys.readouterr().err
-
-
-def test_root_mode_is_given_the_kit_alone(built_kit: Path) -> None:
-    """As session-init runs it through sudo: AGENT_KIT_DIR preserved, the rest of the variables gone."""
-    result = subprocess.run(
-        [*runtime_command(built_kit, "harden")],
-        env={"PATH": os.environ["PATH"], contract.KIT_DIR: str(built_kit), "SUDO_USER": "will"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 1
-    assert "only runs inside a foundry sandbox" in result.stderr
 
 
 @pytest.mark.skipif(os.geteuid() != 0, reason="checks the refusal to verify as root")
