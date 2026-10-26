@@ -28,10 +28,7 @@ from typing import NamedTuple
 
 from agent_runtime import contract
 
-DOCKER_SOCKETS = (Path("/var/run/docker.sock"), Path("/var/run/docker/containerd/containerd.sock"))
-MANAGED_SETTINGS = Path("/etc/claude-code/managed-settings.json")
-DOCKER_DAEMON_CONFIG = Path("/etc/docker/daemon.json")
-DOCKER_CONFIG = '{"group": "root"}'
+_DOCKER_CONFIG = '{"group": "root"}'
 SANDBOX_USER = "agent"
 
 
@@ -42,7 +39,7 @@ class Owner(NamedTuple):
     gid: int
 
 
-ROOT = Owner(0, 0)
+_ROOT = Owner(0, 0)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -84,17 +81,17 @@ SANDBOX = Machine(
     sudo="sudo",
     su="su",
     passwd="passwd",
-    root=ROOT,
+    root=_ROOT,
     euid=os.geteuid,
     can_write=_agent_can_write,
 )
 
 
-class HardenError(Exception):
+class _HardenError(Exception):
     """A step can't go ahead; the message says why and what to change."""
 
 
-def kit_settings(kit_dir: Path) -> Path:
+def _kit_settings(kit_dir: Path) -> Path:
     """The managed settings the kit holds, which the installed ones must be."""
     return kit_dir / "claude" / "managed-settings.json"
 
@@ -102,7 +99,7 @@ def kit_settings(kit_dir: Path) -> Path:
 # --- Claude's managed settings -------------------------------------------------------
 
 
-def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, owner: Owner = ROOT) -> None:
+def _harden_managed_settings(kit_copy: Path, installed: Path, owner: Owner) -> None:
     """Install the kit's settings, owned by ``owner`` (root), so the agent can read them but not change or
     replace them. The directory is set too, in case it already existed. Written beside its final name and
     renamed over it, as install(1) does."""
@@ -110,8 +107,8 @@ def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, 
     _install_file(installed, kit_copy.read_bytes(), owner)
 
 
-def check_managed_settings(
-    installed: Path, kit_copy: Path, owner: Owner = ROOT, can_write: Callable[[Path], bool] = _agent_can_write
+def _check_managed_settings(
+    installed: Path, kit_copy: Path, owner: Owner, can_write: Callable[[Path], bool]
 ) -> list[str]:
     """The installed settings exist, belong to the owner (root unless given), can't be written by the agent,
     and are the kit's. Settings from an older kit mean older permissions and hooks, so they count as not
@@ -126,7 +123,7 @@ def check_managed_settings(
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def harden_sudo_and_su(sudo: str = "sudo", passwd: str = "passwd") -> None:
+def _harden_sudo_and_su(sudo: str, passwd: str) -> None:
     """sudo can't run, whatever its rules say; su needs root's password, and there is none.
 
     Refuses, changing nothing, if ``sudo`` can't be found: hardening runs through sudo, so it is there to
@@ -134,7 +131,7 @@ def harden_sudo_and_su(sudo: str = "sudo", passwd: str = "passwd") -> None:
     """
     found = shutil.which(sudo)
     if found is None:
-        raise HardenError(f"can't find {sudo} to remove it; check the sandbox template's PATH and sudo")
+        raise _HardenError(f"can't find {sudo} to remove it; check the sandbox template's PATH and sudo")
     Path(found).resolve().chmod(0)
     subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=True)
 
@@ -145,12 +142,12 @@ def can_sudo(sudo: str = "sudo") -> bool:
     return _succeeds([sudo, "-n", "true"])
 
 
-def check_sudo(sudo: str = "sudo") -> list[str]:
+def _check_sudo(sudo: str) -> list[str]:
     """The agent can't run sudo."""
     return ["run sudo"] if can_sudo(sudo) else []
 
 
-def check_su(su: str = "su") -> list[str]:
+def _check_su(su: str) -> list[str]:
     """The agent can't su to root. Root's password is locked, so su fails even without a terminal, and
     succeeds without one if root has none."""
     return ["su to root"] if _succeeds([su, "root", "-c", "true"]) else []
@@ -159,11 +156,7 @@ def check_su(su: str = "su") -> list[str]:
 # --- Docker --------------------------------------------------------------------------
 
 
-def harden_docker(
-    daemon_config: Path = DOCKER_DAEMON_CONFIG,
-    sockets: Iterable[Path] = DOCKER_SOCKETS[:1],
-    owner: Owner = ROOT,
-) -> None:
+def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None:
     """Keep the agent off the Docker socket.
 
     ``docker run -v /:/host`` is root over this sandbox. sbx gives every process it starts the docker group
@@ -174,21 +167,20 @@ def harden_docker(
     Assumption: the sandbox template doesn't configure dockerd itself. If it ever does, stop with a clear
     message rather than merge into its settings.
     """
-    if daemon_config.exists() and daemon_config.read_text().rstrip("\n") != DOCKER_CONFIG:
-        raise HardenError(
+    if daemon_config.exists() and daemon_config.read_text().rstrip("\n") != _DOCKER_CONFIG:
+        raise _HardenError(
             f"this sandbox's template already has {daemon_config}.\n"
             "  foundry assumes the template leaves dockerd unconfigured, so that it can write\n"
-            f"  {DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
+            f"  {_DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
             "  template's own Docker settings isn't supported; change agent_runtime.harden or the template."
         )
     _install_dir(daemon_config.parent, owner)
-    _install_file(daemon_config, f"{DOCKER_CONFIG}\n".encode(), owner)
-    for socket_path in sockets:
-        if _is_socket(socket_path):
-            os.chown(socket_path, -1, owner.gid)
+    _install_file(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner)
+    if _is_socket(socket_path):
+        os.chown(socket_path, -1, owner.gid)
 
 
-def check_docker_sockets(sockets: Iterable[Path], can_write: Callable[[Path], bool] = _agent_can_write) -> list[str]:
+def _check_docker_sockets(sockets: Iterable[Path], can_write: Callable[[Path], bool]) -> list[str]:
     """The agent can't write to any of these sockets."""
     return [
         f"use {socket_path}, which is root over this sandbox"
@@ -200,7 +192,7 @@ def check_docker_sockets(sockets: Iterable[Path], can_write: Callable[[Path], bo
 # --- what the hooks and the launch run -----------------------------------------------
 
 
-def check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool] = _agent_can_write) -> list[str]:
+def _check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool]) -> list[str]:
     """The agent can't write anywhere in the agent kit, which holds the runtime every hook runs and the
     settings above are compared with. Proves the mount is read-only rather than assuming it.
 
@@ -219,9 +211,7 @@ def check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool] = _agen
     return []
 
 
-def check_python(
-    python: str = contract.PYTHON, owner: Owner = ROOT, can_write: Callable[[Path], bool] = _agent_can_write
-) -> list[str]:
+def _check_python(python: str, owner: Owner, can_write: Callable[[Path], bool]) -> list[str]:
     """The interpreter every hook and the launch run resolves to a file root owns and the agent can't write."""
     resolved = Path(python).resolve()
     shown = f"{python} (resolving to {resolved})"
@@ -242,10 +232,10 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         )
         return 1
     try:
-        harden_managed_settings(kit_settings(kit_dir), machine.managed_settings, machine.root)
-        harden_sudo_and_su(machine.sudo, machine.passwd)
-        harden_docker(machine.docker_daemon_config, [machine.regrouped_socket], machine.root)
-    except HardenError as error:
+        _harden_managed_settings(_kit_settings(kit_dir), machine.managed_settings, machine.root)
+        _harden_sudo_and_su(machine.sudo, machine.passwd)
+        _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
+    except _HardenError as error:
         print(f"harden: refusing: {error}", file=sys.stderr)
         return 1
     # Checked by `harden --verify`, which session-init runs next, as the agent.
@@ -262,12 +252,12 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
         )
         return 1
     found = [
-        *check_managed_settings(machine.managed_settings, kit_settings(kit_dir), machine.root, machine.can_write),
-        *check_sudo(machine.sudo),
-        *check_su(machine.su),
-        *check_docker_sockets(machine.checked_sockets, machine.can_write),
-        *check_kit_read_only(kit_dir, machine.can_write),
-        *check_python(machine.python, machine.root, machine.can_write),
+        *_check_managed_settings(machine.managed_settings, _kit_settings(kit_dir), machine.root, machine.can_write),
+        *_check_sudo(machine.sudo),
+        *_check_su(machine.su),
+        *_check_docker_sockets(machine.checked_sockets, machine.can_write),
+        *_check_kit_read_only(kit_dir, machine.can_write),
+        *_check_python(machine.python, machine.root, machine.can_write),
     ]
     if found:
         lines = "".join(f"  {line}\n" for line in found)

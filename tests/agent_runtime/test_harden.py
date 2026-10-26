@@ -20,7 +20,6 @@ import pytest
 from agent_runtime import contract, harden
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
-KIT_SETTINGS = harden.kit_settings(AGENT_KIT_PATH)
 ME = harden.Owner(os.getuid(), os.getgid())
 SOMEONE_ELSE = harden.Owner(os.getuid() + 1, os.getgid())
 
