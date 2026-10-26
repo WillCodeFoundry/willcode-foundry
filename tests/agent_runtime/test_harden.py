@@ -409,74 +409,98 @@ def test_verify_refuses_to_run_as_root(hardened, read_only_kit, capsys) -> None:
     assert "runs as the agent" in capsys.readouterr().err
 
 
-# --- root mode (still one step at a time; replaced next) ------------------------------
+# --- root mode: what it changes, in what order, and what it refuses -----------------------
+
+
+def snapshot(machine: TemporaryMachine) -> dict[str, tuple[object, ...]]:
+    """Everything on the machine: each path's mode, owner and contents, or link target, and its sockets'."""
+    root_mode = machine.root_mode
+    paths = [*sorted(machine.dir.rglob("*")), *root_mode.checked_sockets]
+    state: dict[str, tuple[object, ...]] = {}
+    for path in paths:
+        if path.is_symlink():
+            state[str(path)] = ("link", os.readlink(path))
+        elif path.exists():
+            status = path.lstat()
+            content = path.read_bytes() if path.is_file() and status.st_mode & stat.S_IRUSR else None
+            state[str(path)] = (status.st_mode, status.st_uid, status.st_gid, content)
+    return state
 
 
 @pytest.mark.parametrize("sudo_user", ["", "root", "will"])
-def test_harden_refuses_outside_a_sandbox_before_changing_anything(
-    capsys: pytest.CaptureFixture[str], sudo_user: str
+def test_root_mode_refuses_outside_a_sandbox_changing_nothing(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str], sudo_user: str
 ) -> None:
-    # Never with SUDO_USER=agent: as root, that would harden this machine.
-    assert harden.harden(AGENT_KIT_PATH, sudo_user) == 1
-    assert "only runs inside a foundry sandbox" in capsys.readouterr().err
+    """Removing sudo would lock a real machine's owner out: only sudo from the sandbox's agent may run it."""
+    before = snapshot(machine)
+
+    assert harden.harden(read_only_kit, sudo_user, machine.root_mode) == 1
+
+    err = capsys.readouterr().err
+    assert "only runs inside a foundry sandbox" in err and f"(SUDO_USER is '{sudo_user or 'unset'}')" in err
+    assert snapshot(machine) == before
 
 
-# --- root mode's file steps ----------------------------------------------------------
+def test_root_mode_refuses_without_root_changing_nothing(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = snapshot(machine)
+
+    assert harden.harden(read_only_kit, "agent", machine.agent_mode) == 1
+
+    err = capsys.readouterr().err
+    assert "only runs inside a foundry sandbox" in err and "(SUDO_USER is 'agent')" in err
+    assert snapshot(machine) == before
 
 
-def test_the_kits_settings_are_installed_read_only_for_others(tmp_path: Path) -> None:
-    installed = tmp_path / "etc" / "claude-code" / "managed-settings.json"
-
-    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
-
-    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
-    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
-    assert stat.S_IMODE(installed.parent.stat().st_mode) == 0o755
-    assert (installed.stat().st_uid, installed.stat().st_gid) == ME
-    assert [path.name for path in installed.parent.iterdir()] == [installed.name]  # no partial file left
-
-
-def test_installing_replaces_settings_from_an_older_kit(tmp_path: Path) -> None:
-    installed = tmp_path / "managed-settings.json"
+def test_settings_from_an_older_kit_are_replaced(machine: TemporaryMachine, read_only_kit: Path) -> None:
+    installed = machine.root_mode.managed_settings
+    installed.parent.mkdir(parents=True)
     installed.write_text('{"permissions": {}}\n')
     installed.chmod(0o600)
 
-    harden.harden_managed_settings(KIT_SETTINGS, installed, owner=ME)
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 0
 
-    assert installed.read_bytes() == KIT_SETTINGS.read_bytes()
+    assert installed.read_bytes() == (read_only_kit / "claude" / "managed-settings.json").read_bytes()
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
 
 
-def test_docker_is_configured_to_give_its_socket_to_root(tmp_path: Path, socket_dir: Path) -> None:
-    daemon_config = tmp_path / "etc" / "docker" / "daemon.json"
-    docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
-
-    harden.harden_docker(daemon_config, [docker_socket, socket_dir / "absent.sock"], owner=ME)
-
-    assert daemon_config.read_text() == '{"group": "root"}\n'
-    assert stat.S_IMODE(daemon_config.stat().st_mode) == 0o644
-    assert docker_socket.stat().st_gid == ME.gid
-
-
-def test_dockers_configuration_from_an_earlier_launch_is_kept(tmp_path: Path) -> None:
-    daemon_config = tmp_path / "daemon.json"
+def test_dockers_configuration_from_an_earlier_launch_is_kept(machine: TemporaryMachine, read_only_kit: Path) -> None:
+    daemon_config = machine.root_mode.docker_daemon_config
+    daemon_config.parent.mkdir(parents=True)
     daemon_config.write_text('{"group": "root"}\n')
 
-    harden.harden_docker(daemon_config, [], owner=ME)
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 0
 
     assert daemon_config.read_text() == '{"group": "root"}\n'
 
 
-def test_a_templates_own_docker_configuration_is_refused_untouched(tmp_path: Path) -> None:
-    daemon_config = tmp_path / "daemon.json"
+def test_a_templates_own_docker_configuration_is_refused_after_the_other_steps(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docker comes last: the settings and sudo steps have run when it refuses, and its own file is untouched."""
+    daemon_config = machine.root_mode.docker_daemon_config
+    daemon_config.parent.mkdir(parents=True)
     daemon_config.write_text('{"debug": true}\n')
 
-    with pytest.raises(harden.HardenError, match="already has"):
-        harden.harden_docker(daemon_config, [], owner=ME)
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 1
 
+    err = capsys.readouterr().err
+    assert "harden: refusing:" in err and "already has" in err
     assert daemon_config.read_text() == '{"debug": true}\n'
+    assert machine.root_mode.managed_settings.is_file()  # step 1 ran
+    assert machine.passwd_log.read_text() == "-l root\n"  # step 2 ran
 
 
-def test_a_sudo_that_cant_be_found_is_refused_before_changing_anything(tmp_path: Path) -> None:
-    with pytest.raises(harden.HardenError, match="can't find"):
-        harden.harden_sudo_and_su(str(tmp_path / "absent"))
+def test_a_sudo_that_cant_be_found_is_refused_after_the_settings_and_before_docker(
+    machine: TemporaryMachine, read_only_kit: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """sudo and su come second: the settings are installed when it refuses; passwd and Docker are left alone."""
+    root_mode = dataclasses.replace(machine.root_mode, sudo=str(tmp_path / "absent"))
+
+    assert harden.harden(read_only_kit, "agent", root_mode) == 1
+
+    assert "harden: refusing: can't find" in capsys.readouterr().err
+    assert root_mode.managed_settings.is_file()  # step 1 ran
+    assert not machine.passwd_log.exists()
+    assert not root_mode.docker_daemon_config.exists()  # step 3 didn't
