@@ -110,11 +110,13 @@ def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, 
     _install_file(installed, kit_copy.read_bytes(), owner)
 
 
-def check_managed_settings(installed: Path, kit_copy: Path, owner: Owner = ROOT) -> list[str]:
+def check_managed_settings(
+    installed: Path, kit_copy: Path, owner: Owner = ROOT, can_write: Callable[[Path], bool] = _agent_can_write
+) -> list[str]:
     """The installed settings exist, belong to the owner (root unless given), can't be written by the agent,
     and are the kit's. Settings from an older kit mean older permissions and hooks, so they count as not
     hardened."""
-    if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner):
+    if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner, can_write):
         return found
     if installed.read_bytes() != kit_copy.read_bytes():
         return [f"run with older managed settings: {installed} differs from {kit_copy}"]
@@ -124,7 +126,7 @@ def check_managed_settings(installed: Path, kit_copy: Path, owner: Owner = ROOT)
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def harden_sudo_and_su(sudo: str = "sudo") -> None:
+def harden_sudo_and_su(sudo: str = "sudo", passwd: str = "passwd") -> None:
     """sudo can't run, whatever its rules say; su needs root's password, and there is none.
 
     Refuses, changing nothing, if ``sudo`` can't be found: hardening runs through sudo, so it is there to
@@ -134,7 +136,7 @@ def harden_sudo_and_su(sudo: str = "sudo") -> None:
     if found is None:
         raise HardenError(f"can't find {sudo} to remove it; check the sandbox template's PATH and sudo")
     Path(found).resolve().chmod(0)
-    subprocess.run(["passwd", "-l", "root"], stdout=subprocess.DEVNULL, check=True)
+    subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=True)
 
 
 def can_sudo(sudo: str = "sudo") -> bool:
@@ -186,19 +188,19 @@ def harden_docker(
             os.chown(socket_path, -1, owner.gid)
 
 
-def check_docker_sockets(sockets: Iterable[Path]) -> list[str]:
+def check_docker_sockets(sockets: Iterable[Path], can_write: Callable[[Path], bool] = _agent_can_write) -> list[str]:
     """The agent can't write to any of these sockets."""
     return [
         f"use {socket_path}, which is root over this sandbox"
         for socket_path in sockets
-        if _is_socket(socket_path) and os.access(socket_path, os.W_OK)
+        if _is_socket(socket_path) and can_write(socket_path)
     ]
 
 
 # --- what the hooks and the launch run -----------------------------------------------
 
 
-def check_kit_read_only(kit_dir: Path) -> list[str]:
+def check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool] = _agent_can_write) -> list[str]:
     """The agent can't write anywhere in the agent kit, which holds the runtime every hook runs and the
     settings above are compared with. Proves the mount is read-only rather than assuming it.
 
@@ -210,26 +212,29 @@ def check_kit_read_only(kit_dir: Path) -> list[str]:
         for path in (Path(directory), *(Path(directory) / name for name in (*subdirectories, *files))):
             if path.is_symlink() and not path.exists():
                 return [f"change the agent kit: {path} links to {os.readlink(path)}, which doesn't exist"]
-            if os.access(path, os.W_OK):
+            if can_write(path):
                 return [f"change the agent kit: {path} is writable"]
     if unreadable:
         return [f"change the agent kit unchecked: {unreadable[0].filename} can't be listed ({unreadable[0].strerror})"]
     return []
 
 
-def check_python(python: str = contract.PYTHON, owner: Owner = ROOT) -> list[str]:
+def check_python(
+    python: str = contract.PYTHON, owner: Owner = ROOT, can_write: Callable[[Path], bool] = _agent_can_write
+) -> list[str]:
     """The interpreter every hook and the launch run resolves to a file root owns and the agent can't write."""
     resolved = Path(python).resolve()
-    return _check_owned_read_only(resolved, "the hooks' interpreter", f"{python} (resolving to {resolved})", owner)
+    shown = f"{python} (resolving to {resolved})"
+    return _check_owned_read_only(resolved, "the hooks' interpreter", shown, owner, can_write)
 
 
 # --- the two modes -------------------------------------------------------------------
 
 
-def harden(kit_dir: Path, sudo_user: str) -> int:
+def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
     """Root mode, given the kit to install settings from and the user sudo ran it for. Removing sudo would
     lock a real machine's owner out: only runs in a sandbox, via sudo from its agent user."""
-    if os.geteuid() != 0 or sudo_user != SANDBOX_USER:
+    if machine.euid() != 0 or sudo_user != SANDBOX_USER:
         print(
             f"harden: refusing: only runs inside a foundry sandbox, via sudo from its '{SANDBOX_USER}' user "
             f"(SUDO_USER is '{sudo_user or 'unset'}')",
@@ -237,9 +242,9 @@ def harden(kit_dir: Path, sudo_user: str) -> int:
         )
         return 1
     try:
-        harden_managed_settings(kit_settings(kit_dir))
-        harden_sudo_and_su()
-        harden_docker()
+        harden_managed_settings(kit_settings(kit_dir), machine.managed_settings, machine.root)
+        harden_sudo_and_su(machine.sudo, machine.passwd)
+        harden_docker(machine.docker_daemon_config, [machine.regrouped_socket], machine.root)
     except HardenError as error:
         print(f"harden: refusing: {error}", file=sys.stderr)
         return 1
@@ -248,21 +253,21 @@ def harden(kit_dir: Path, sudo_user: str) -> int:
     return 0
 
 
-def verify(kit_dir: Path) -> int:
+def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
     """Agent mode: run every check against the kit, as the agent, and refuse to start the agent if any fails."""
-    if os.geteuid() == 0:
+    if machine.euid() == 0:
         print(
             "harden --verify: refusing: it runs as the agent, so it sees what the agent can do; root can do anything",
             file=sys.stderr,
         )
         return 1
     found = [
-        *check_managed_settings(MANAGED_SETTINGS, kit_settings(kit_dir)),
-        *check_sudo(),
-        *check_su(),
-        *check_docker_sockets(DOCKER_SOCKETS),
-        *check_kit_read_only(kit_dir),
-        *check_python(),
+        *check_managed_settings(machine.managed_settings, kit_settings(kit_dir), machine.root, machine.can_write),
+        *check_sudo(machine.sudo),
+        *check_su(machine.su),
+        *check_docker_sockets(machine.checked_sockets, machine.can_write),
+        *check_kit_read_only(kit_dir, machine.can_write),
+        *check_python(machine.python, machine.root, machine.can_write),
     ]
     if found:
         lines = "".join(f"  {line}\n" for line in found)
@@ -279,14 +284,16 @@ def verify(kit_dir: Path) -> int:
 # --- helpers -------------------------------------------------------------------------
 
 
-def _check_owned_read_only(path: Path, what: str, shown: str, owner: Owner) -> list[str]:
+def _check_owned_read_only(
+    path: Path, what: str, shown: str, owner: Owner, can_write: Callable[[Path], bool]
+) -> list[str]:
     """``path`` exists, belongs to ``owner`` and can't be written by the agent; ``shown`` names it in the
     failure, ``what`` says what it is."""
     if not path.is_file():
         return [f"run without {what}: {shown} is missing"]
     if path.stat().st_uid != owner.uid:
         return [f"replace {what}: {shown} isn't owned by uid {owner.uid}"]
-    if os.access(path, os.W_OK):
+    if can_write(path):
         return [f"change {what}: {shown} is writable"]
     return []
 

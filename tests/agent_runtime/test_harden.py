@@ -6,7 +6,9 @@ The checks are run against sockets, files and stand-in commands of each test's o
 """
 
 import contextlib
+import dataclasses
 import os
+import shutil
 import socket
 import stat
 import tempfile
@@ -382,3 +384,107 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
     read_only.chmod(0o444)
     for path in (writable, read_only, tmp_path / "absent"):
         assert sandbox.can_write(path) == os.access(path, os.W_OK), path
+
+
+# --- a temporary machine: the second adapter behind harden.Machine ------------------------
+#
+# The agent is modelled as a user who is neither the owner nor in the group of what it touches: it can write
+# a path when the path's "other" bits say so (for a link, its target's). In a test the root owner and the agent
+# are the same user, so os.access would report every file root mode installs as writable.
+
+AGENT_UID = 4242
+"""The agent's uid in agent mode; root mode runs as 0. Only what harden reads through the machine sees them."""
+
+
+def other_can_write(path: Path) -> bool:
+    try:
+        return bool(path.stat().st_mode & stat.S_IWOTH)
+    except OSError:
+        return False
+
+
+def recording_stand_in(directory: Path, name: str) -> tuple[str, Path]:
+    """A command that records the arguments of each run, one line each, and exits 0."""
+    log = directory / f"{name}.log"
+    command = directory / name
+    command.write_text(f'#!/bin/sh\nprintf \'%s\\n\' "$*" >> "{log}"\n')
+    command.chmod(0o755)
+    return str(command), log
+
+
+@dataclasses.dataclass(frozen=True)
+class TemporaryMachine:
+    """What a test needs to hand harden a machine, and to look at it afterwards."""
+
+    root_mode: harden.Machine
+    """The machine as root mode sees it: effective uid 0."""
+    dir: Path
+    """Every file the machine holds, except its sockets."""
+    passwd_log: Path
+
+    @property
+    def agent_mode(self) -> harden.Machine:
+        """The same machine as the agent sees it."""
+        return dataclasses.replace(self.root_mode, euid=lambda: AGENT_UID)
+
+
+@pytest.fixture
+def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
+    """A sandbox before its first launch: sudo works, su doesn't, Docker's socket is the agent's group's."""
+    machine_dir = tmp_path / "machine"
+    bin_dir = machine_dir / "usr" / "bin"
+    bin_dir.mkdir(parents=True)
+    python = bin_dir / "python3.14"
+    python.write_text("")
+    python.chmod(0o755)
+    (bin_dir / "python3").symlink_to("python3.14")
+    passwd, passwd_log = recording_stand_in(machine_dir, "passwd")
+    docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
+    return TemporaryMachine(
+        root_mode=harden.Machine(
+            managed_settings=machine_dir / "etc" / "claude-code" / "managed-settings.json",
+            docker_daemon_config=machine_dir / "etc" / "docker" / "daemon.json",
+            regrouped_socket=docker_socket,
+            checked_sockets=(docker_socket, socket_dir / "containerd.sock"),
+            python=str(bin_dir / "python3"),
+            sudo=stand_in(bin_dir, "sudo", 0),
+            su=stand_in(bin_dir, "su", 1),
+            passwd=passwd,
+            root=ME,
+            euid=lambda: 0,
+            can_write=other_can_write,
+        ),
+        dir=machine_dir,
+        passwd_log=passwd_log,
+    )
+
+
+@pytest.fixture
+def read_only_kit(tmp_path: Path) -> Iterator[Path]:
+    """A copy of the real agent kit, its role skills' links included, with nothing in it writable."""
+    kit = tmp_path / "agent-kit"
+    shutil.copytree(AGENT_KIT_PATH, kit, symlinks=True, ignore=shutil.ignore_patterns(".build"))
+    with read_only(kit):
+        yield kit
+
+
+def test_root_mode_then_agent_mode_on_one_machine(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What the first launch does: harden as root, then verify as the agent, on the same files."""
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 0
+    assert harden.verify(read_only_kit, machine.agent_mode) == 0
+    assert capsys.readouterr().out.endswith("harden --verify: hardened\n")
+
+    root_mode = machine.root_mode
+    installed = root_mode.managed_settings
+    assert installed.read_bytes() == (read_only_kit / "claude" / "managed-settings.json").read_bytes()
+    assert stat.S_IMODE(installed.stat().st_mode) == 0o644
+    assert (installed.stat().st_uid, installed.stat().st_gid) == root_mode.root
+    assert stat.S_IMODE(installed.parent.stat().st_mode) == 0o755
+    assert [path.name for path in installed.parent.iterdir()] == [installed.name]  # no partial file left
+    assert root_mode.docker_daemon_config.read_text() == '{"group": "root"}\n'
+    assert stat.S_IMODE(root_mode.docker_daemon_config.stat().st_mode) == 0o644
+    assert root_mode.regrouped_socket.stat().st_gid == root_mode.root.gid
+    assert stat.S_IMODE(Path(root_mode.sudo).stat().st_mode) == 0
+    assert machine.passwd_log.read_text() == "-l root\n"
