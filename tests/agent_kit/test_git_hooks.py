@@ -8,13 +8,15 @@ kit, with the variables a sandbox for the task gets.
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
 
-AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
+SETTINGS = json.loads((Path(__file__).parents[2] / "agent-kit" / "claude" / "managed-settings.json").read_text())
+(STOP_COMMAND,) = (hook["command"] for entry in SETTINGS["hooks"]["Stop"] for hook in entry["hooks"])
 TASK = Task("T1")
 OTHER_TASK = Task("T2")
 
@@ -57,7 +59,11 @@ def repo(tmp_path, monkeypatch, kit_env):
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     setup = subprocess.run(
-        [str(AGENT_KIT_PATH / "bin" / "session-setup")], env=os.environ, capture_output=True, text=True, check=False
+        [str(Path(env["AGENT_KIT_DIR"]) / "bin" / "session-setup")],
+        env=os.environ,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert setup.returncode == 0, setup.stderr
     return Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
@@ -189,8 +195,10 @@ def test_another_tasks_folder_is_refused(repo) -> None:
 
 
 def stop(active: bool = False, *, raw_input: str | None = None) -> subprocess.CompletedProcess[str]:
+    """The Stop hook, run as Claude Code runs it: its command from managed settings, through a shell."""
     return subprocess.run(
-        [str(AGENT_KIT_PATH / "claude" / "hooks" / "session-check")],
+        STOP_COMMAND,
+        shell=True,
         input=json.dumps({"stop_hook_active": active}) if raw_input is None else raw_input,
         capture_output=True,
         text=True,
@@ -238,26 +246,24 @@ def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: 
 
 # --- every script -------------------------------------------------------------
 
+RUNTIME = ("<python>", "-I", "<kit>/.build/agent_runtime.pyz")
+
 
 @pytest.mark.parametrize(
-    "script",
+    "command",
     [
-        "hooks/pre-commit",
-        "hooks/pre-push",
-        "hooks/prepare-commit-msg",
-        "claude/hooks/session-check",
-        "bin/session-init",
-        "bin/session-setup",
+        ("<kit>/hooks/pre-commit",),
+        ("<kit>/hooks/pre-push",),
+        ("<kit>/hooks/prepare-commit-msg",),
+        (*RUNTIME, "hook", "session-check"),
+        ("<kit>/bin/session-init",),
+        ("<kit>/bin/session-setup",),
     ],
 )
-def test_a_script_run_outside_a_sandbox_names_the_variable_it_lacks(script: str) -> None:
+def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, command: tuple[str, ...]) -> None:
+    argv = [arg.replace("<kit>", str(built_kit)).replace("<python>", sys.executable) for arg in command]
     result = subprocess.run(
-        [str(AGENT_KIT_PATH / script)],
-        env={"PATH": os.environ["PATH"]},
-        input="",
-        capture_output=True,
-        text=True,
-        check=False,
+        argv, env={"PATH": os.environ["PATH"]}, input="", capture_output=True, text=True, check=False
     )
     assert result.returncode != 0
-    assert "AGENT_" in result.stderr and "parameter null or not set" in result.stderr
+    assert "AGENT_" in result.stderr and "not set" in result.stderr

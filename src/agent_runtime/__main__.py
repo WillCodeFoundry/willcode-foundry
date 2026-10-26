@@ -18,13 +18,21 @@ if sys.version_info < MINIMUM_PYTHON:
 import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 
-from agent_runtime import contract  # noqa: E402
+from agent_runtime import claude_hooks, contract  # noqa: E402
+
+CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
+    "guard-bash": claude_hooks.guard_bash,
+    "session-check": claude_hooks.session_check,
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent_runtime", description="Runs inside a foundry sandbox.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    del subparsers  # commands are added stage by stage
+
+    hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
+    hook.add_argument("name", choices=CLAUDE_HOOKS)
+    hook.set_defaults(func=lambda args: CLAUDE_HOOKS[args.name]())
     return parser
 
 

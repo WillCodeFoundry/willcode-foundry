@@ -12,7 +12,6 @@ import pytest
 
 from foundry.task import NOTES_BRANCH, Task
 
-AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 TASK = Task("T1")
 
 
@@ -43,7 +42,11 @@ def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def session_setup(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, **kit_env, "AGENT_REPO_URL": f"file://{origin}"}
     return subprocess.run(
-        [str(AGENT_KIT_PATH / "bin" / "session-setup")], env=env, capture_output=True, text=True, check=False
+        [str(Path(env["AGENT_KIT_DIR"]) / "bin" / "session-setup")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 
@@ -87,7 +90,7 @@ def git_out(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(kit_env, created_task) -> None:
+def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(built_kit, kit_env, created_task) -> None:
     env = kit_env(TASK)
 
     result = session_setup(env, created_task)
@@ -97,22 +100,20 @@ def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(kit_env, created
     assert git_out(code, "branch", "--show-current") == TASK.branch
     assert git_out(notes, "branch", "--show-current") == NOTES_BRANCH
     assert (notes / TASK.task_file).read_text() == "# Task\n"
-    assert git_out(code, "config", "core.hooksPath") == str(AGENT_KIT_PATH / "hooks")
+    assert git_out(code, "config", "core.hooksPath") == str(built_kit / "hooks")
 
 
-def test_the_git_identity_is_the_roles(tmp_path, kit_env, created_task) -> None:
+def test_the_git_identity_is_the_roles(tmp_path, built_kit, kit_env, created_task) -> None:
     assert session_setup(kit_env(TASK), created_task).returncode == 0
 
-    assert git_out(tmp_path, "config", "--global", "include.path") == str(
-        AGENT_KIT_PATH / "roles" / "dev" / "gitconfig"
-    )
+    assert git_out(tmp_path, "config", "--global", "include.path") == str(built_kit / "roles" / "dev" / "gitconfig")
     assert git_out(tmp_path, "config", "--global", "gpg.ssh.allowedSignersFile") == str(
-        AGENT_KIT_PATH / "git" / "allowed_signers"
+        built_kit / "git" / "allowed_signers"
     )
     assert git_out(tmp_path, "config", "user.name") == "wc-foundry-dev"
 
 
-def test_the_agent_starts_briefed_with_its_roles_skills(tmp_path, kit_env, created_task) -> None:
+def test_the_agent_starts_briefed_with_its_roles_skills(tmp_path, built_kit, kit_env, created_task) -> None:
     env = kit_env(TASK)
 
     assert session_setup(env, created_task).returncode == 0
@@ -120,11 +121,11 @@ def test_the_agent_starts_briefed_with_its_roles_skills(tmp_path, kit_env, creat
     claude_dir = tmp_path / "home" / ".claude"
     imports = [line for line in (claude_dir / "CLAUDE.md").read_text().splitlines() if line.startswith("@")]
     assert imports == [
-        f"@{AGENT_KIT_PATH / 'AGENTS.md'}",
-        f"@{AGENT_KIT_PATH / 'roles' / 'dev' / 'ROLE.md'}",
+        f"@{built_kit / 'AGENTS.md'}",
+        f"@{built_kit / 'roles' / 'dev' / 'ROLE.md'}",
         f"@{Path(env['AGENT_NOTES_DIR']) / TASK.task_file}",
     ]
-    assert (claude_dir / "skills").readlink() == AGENT_KIT_PATH / "roles" / "dev" / "skills"
+    assert (claude_dir / "skills").readlink() == built_kit / "roles" / "dev" / "skills"
 
 
 def test_a_second_run_succeeds_and_changes_nothing(tmp_path, kit_env, created_task) -> None:
@@ -140,9 +141,9 @@ def test_a_second_run_succeeds_and_changes_nothing(tmp_path, kit_env, created_ta
     assert git_out(code, "branch", "--show-current") == TASK.branch
 
 
-def test_a_role_that_signs_without_a_key_is_refused(tmp_path, kit_env, created_task) -> None:
+def test_a_role_that_signs_without_a_key_is_refused(tmp_path, built_kit, kit_env, created_task) -> None:
     kit = tmp_path / "agent-kit"
-    shutil.copytree(AGENT_KIT_PATH, kit, symlinks=True)
+    shutil.copytree(built_kit, kit, symlinks=True)
     gitconfig = kit / "roles" / "dev" / "gitconfig"
     gitconfig.write_text("".join(line for line in gitconfig.read_text().splitlines(True) if "signingkey" not in line))
 

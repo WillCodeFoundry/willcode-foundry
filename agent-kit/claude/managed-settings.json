@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$AGENT_KIT_DIR/claude/hooks/guard-bash\"",
+            "command": "/usr/bin/python3 -I \"$AGENT_KIT_DIR/.build/agent_runtime.pyz\" hook guard-bash",
             "timeout": 10
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$AGENT_KIT_DIR/claude/hooks/session-check\"",
+            "command": "/usr/bin/python3 -I \"$AGENT_KIT_DIR/.build/agent_runtime.pyz\" hook session-check",
             "timeout": 30
           }
         ]

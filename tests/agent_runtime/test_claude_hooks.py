@@ -1,20 +1,21 @@
-"""agent-kit/claude/hooks/guard-bash, run as Claude Code runs it: JSON on stdin."""
+"""agent_runtime.claude_hooks: guard-bash against the commands it must allow and refuse, called directly.
 
+session-check needs real checkouts, so it is tested end to end, in tests/agent_kit/test_git_hooks.py.
+"""
+
+import io
 import json
-import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 
-GUARD_BASH_PATH = Path(__file__).parents[2] / "agent-kit" / "claude" / "hooks" / "guard-bash"
+from agent_runtime import claude_hooks
 
 
-def guard(command: str) -> subprocess.CompletedProcess[str]:
+def guard(command: str) -> tuple[int, str]:
+    stderr = io.StringIO()
     call = {"tool_name": "Bash", "tool_input": {"command": command}}
-    return subprocess.run(
-        [sys.executable, str(GUARD_BASH_PATH)], input=json.dumps(call), capture_output=True, text=True, check=False
-    )
+    returncode = claude_hooks.guard_bash(io.StringIO(json.dumps(call)), stderr)
+    return returncode, stderr.getvalue()
 
 
 ALLOWED = [
@@ -47,7 +48,7 @@ REFUSED = [
     ("echo 'unbalanced", "could not be parsed"),
 ]
 
-# Accepted misses, listed in guard-bash's docstring: simple beats complete for a guardrail.
+# Accepted misses, listed in refusal_reason's docstring: simple beats complete for a guardrail.
 MISSED_ON_PURPOSE = [
     ("git commit -n -m x", 0),
     ("git commit --no-ver -m x", 0),
@@ -58,25 +59,24 @@ MISSED_ON_PURPOSE = [
 
 @pytest.mark.parametrize(("command", "returncode"), MISSED_ON_PURPOSE)
 def test_accepted_misses(command: str, returncode: int) -> None:
-    assert guard(command).returncode == returncode
+    assert guard(command)[0] == returncode
 
 
 @pytest.mark.parametrize("command", ALLOWED)
 def test_allowed(command: str) -> None:
-    result = guard(command)
-    assert result.returncode == 0, result.stderr
+    returncode, stderr = guard(command)
+    assert returncode == 0, stderr
 
 
 @pytest.mark.parametrize(("command", "reason"), REFUSED)
 def test_refused_with_a_reason(command: str, reason: str) -> None:
-    result = guard(command)
-    assert result.returncode == 2
-    assert reason in result.stderr
-    assert "Blockers" in result.stderr  # says what to do instead
+    returncode, stderr = guard(command)
+    assert returncode == 2
+    assert reason in stderr
+    assert f"Command: {command}" in stderr
+    assert "Blockers" in stderr  # says what to do instead
 
 
-def test_input_it_does_not_understand_is_let_through() -> None:
-    result = subprocess.run(
-        [sys.executable, str(GUARD_BASH_PATH)], input="not json", capture_output=True, text=True, check=False
-    )
-    assert result.returncode == 0
+@pytest.mark.parametrize("raw_input", ["not json", "[]", '{"tool_input": "x"}', '{"tool_input": {"command": 3}}'])
+def test_input_it_does_not_understand_is_let_through(raw_input: str) -> None:
+    assert claude_hooks.guard_bash(io.StringIO(raw_input), io.StringIO()) == 0

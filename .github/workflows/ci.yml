@@ -34,9 +34,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --group dev
-      # guard-bash is Python without a .py extension, so it is named explicitly.
-      - run: uv run ruff format --check . agent-kit/claude/hooks/guard-bash
-      - run: uv run ruff check . agent-kit/claude/hooks/guard-bash
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
       # The kit's shell scripts, and scripts/update-skills. session-harden's root mode has no tests (it
       # changes the machine it runs on), so this is its main check; its --verify checks are tested.
       # Run from the repository root: the kit's source directives are relative to it.
@@ -44,7 +43,7 @@ jobs:
           shellcheck --severity=warning --external-sources
           agent-kit/bin/session-init agent-kit/bin/session-setup agent-kit/bin/session-harden
           agent-kit/hooks/pre-commit agent-kit/hooks/prepare-commit-msg agent-kit/hooks/pre-push
-          agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh
+          agent-kit/lib/hooks.sh
           scripts/update-skills
 
   mypy:
