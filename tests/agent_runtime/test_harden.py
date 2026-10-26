@@ -9,6 +9,7 @@ import contextlib
 import os
 import socket
 import stat
+import subprocess
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,10 +17,12 @@ from pathlib import Path
 import pytest
 
 from agent_runtime import contract, harden
+from tests.agent_kit.conftest import runtime_command
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 KIT_SETTINGS = harden.kit_settings(AGENT_KIT_PATH)
-ME = (os.getuid(), os.getgid())
+ME = harden.Owner(os.getuid(), os.getgid())
+SOMEONE_ELSE = harden.Owner(os.getuid() + 1, os.getgid())
 
 needs_non_root = pytest.mark.skipif(
     os.geteuid() == 0, reason="root can write to anything, so write permissions can't be checked as root"
@@ -29,22 +32,32 @@ needs_non_root = pytest.mark.skipif(
 # --- the two modes' refusals ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("sudo_user", [None, "root", "will"])
+@pytest.mark.parametrize("sudo_user", ["", "root", "will"])
 def test_harden_refuses_outside_a_sandbox_before_changing_anything(
-    capsys: pytest.CaptureFixture[str], sudo_user: str | None
+    capsys: pytest.CaptureFixture[str], sudo_user: str
 ) -> None:
     # Never with SUDO_USER=agent: as root, that would harden this machine.
-    environ = {contract.KIT_DIR: str(AGENT_KIT_PATH)}
-    if sudo_user is not None:
-        environ["SUDO_USER"] = sudo_user
-
-    assert harden.harden(environ) == 1
+    assert harden.harden(AGENT_KIT_PATH, sudo_user) == 1
     assert "only runs inside a foundry sandbox" in capsys.readouterr().err
+
+
+def test_root_mode_is_given_the_kit_alone(built_kit: Path) -> None:
+    """As session-init runs it through sudo: AGENT_KIT_DIR preserved, the rest of the variables gone."""
+    result = subprocess.run(
+        [*runtime_command(built_kit, "harden")],
+        env={"PATH": os.environ["PATH"], contract.KIT_DIR: str(built_kit), "SUDO_USER": "will"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "only runs inside a foundry sandbox" in result.stderr
 
 
 @pytest.mark.skipif(os.geteuid() != 0, reason="checks the refusal to verify as root")
 def test_verify_refuses_to_run_as_root(capsys: pytest.CaptureFixture[str]) -> None:
-    assert harden.verify({contract.KIT_DIR: str(AGENT_KIT_PATH)}) == 1
+    assert harden.verify(AGENT_KIT_PATH) == 1
     assert "runs as the agent" in capsys.readouterr().err
 
 
@@ -53,7 +66,7 @@ def test_verify_on_a_machine_that_isnt_a_hardened_sandbox_refuses_to_start_the_a
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """This machine has no managed settings installed, whatever else it allows."""
-    assert harden.verify({contract.KIT_DIR: str(AGENT_KIT_PATH)}) == 1
+    assert harden.verify(AGENT_KIT_PATH) == 1
     err = capsys.readouterr().err
     assert "not starting the agent" in err
     assert "managed settings" in err
@@ -107,7 +120,7 @@ def test_docker_is_configured_to_give_its_socket_to_root(tmp_path: Path, socket_
 
     assert daemon_config.read_text() == '{"group": "root"}\n'
     assert stat.S_IMODE(daemon_config.stat().st_mode) == 0o644
-    assert docker_socket.stat().st_gid == ME[1]
+    assert docker_socket.stat().st_gid == ME.gid
 
 
 def test_dockers_configuration_from_an_earlier_launch_is_kept(tmp_path: Path) -> None:
@@ -187,23 +200,23 @@ def installed_settings(tmp_path: Path) -> Path:
 
 @needs_non_root
 def test_the_kits_settings_owned_and_read_only_pass(installed_settings: Path) -> None:
-    assert harden.check_managed_settings(installed_settings, KIT_SETTINGS, os.geteuid()) == []
+    assert harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME) == []
 
 
 def test_missing_settings_fail(tmp_path: Path) -> None:
-    (found,) = harden.check_managed_settings(tmp_path / "managed-settings.json", KIT_SETTINGS, os.geteuid())
+    (found,) = harden.check_managed_settings(tmp_path / "managed-settings.json", KIT_SETTINGS, ME)
     assert "is missing" in found
 
 
 def test_settings_owned_by_someone_else_fail(installed_settings: Path) -> None:
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, os.geteuid() + 1)
+    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, SOMEONE_ELSE)
     assert f"isn't owned by uid {os.geteuid() + 1}" in found
 
 
 def test_settings_the_agent_can_write_fail(installed_settings: Path) -> None:
     installed_settings.chmod(installed_settings.stat().st_mode | stat.S_IWUSR)
 
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, os.geteuid())
+    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME)
     assert "is writable" in found
 
 
@@ -213,7 +226,7 @@ def test_settings_from_an_older_kit_fail(installed_settings: Path) -> None:
     installed_settings.write_text('{"permissions": {}}\n')
     installed_settings.chmod(0o444)
 
-    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, os.geteuid())
+    (found,) = harden.check_managed_settings(installed_settings, KIT_SETTINGS, ME)
     assert f"differs from {KIT_SETTINGS}" in found
 
 
@@ -258,9 +271,9 @@ def test_an_interpreter_the_agent_owns_fails(tmp_path: Path) -> None:
     link = tmp_path / "python"
     link.symlink_to(python)
 
-    (found,) = harden.check_python(str(link), owner=os.geteuid() + 1)
+    (found,) = harden.check_python(str(link), owner=SOMEONE_ELSE)
     assert found == (
-        f"replace the hooks' interpreter: {link} resolves to {python}, which isn't owned by uid {os.geteuid() + 1}"
+        f"replace the hooks' interpreter: {link} (resolving to {python}) isn't owned by uid {SOMEONE_ELSE.uid}"
     )
 
 
@@ -269,8 +282,8 @@ def test_an_interpreter_the_agent_can_write_fails(tmp_path: Path) -> None:
     python.write_text("")
     python.chmod(0o755 if os.geteuid() != 0 else 0o555)  # root can write it either way
 
-    (found,) = harden.check_python(str(python), owner=os.geteuid())
-    assert "which is writable" in found
+    (found,) = harden.check_python(str(python), owner=ME)
+    assert found == f"change the hooks' interpreter: {python} (resolving to {python}) is writable"
 
 
 @needs_non_root
@@ -279,7 +292,7 @@ def test_an_interpreter_owned_and_read_only_passes(tmp_path: Path) -> None:
     python.write_text("")
     python.chmod(0o555)
 
-    assert harden.check_python(str(python), owner=os.geteuid()) == []
+    assert harden.check_python(str(python), owner=ME) == []
 
 
 def test_a_missing_interpreter_fails(tmp_path: Path) -> None:

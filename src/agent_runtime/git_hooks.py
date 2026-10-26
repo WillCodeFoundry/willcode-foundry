@@ -7,12 +7,12 @@
 Each takes what git passes, and the session variables, defaulting to this process's.
 """
 
-import subprocess
 import sys
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 
-from agent_runtime import contract
-from agent_runtime.refusal import current_branch, refuse
+from agent_runtime import contract, git
+from agent_runtime.refusal import refuse
 
 
 def pre_commit(env: contract.Environ | None = None) -> None:
@@ -24,7 +24,7 @@ def pre_commit(env: contract.Environ | None = None) -> None:
     Commits on any other branch are left alone: they can't be pushed.
     """
     environ = env or _read_environ("pre-commit")
-    branch = current_branch()
+    branch = git.current_branch()
     if branch == environ.task_branch:
         root = environ.notes_root
         refused = [path for path in _staged_paths() if path.startswith(f"{root}/") or f"/{root}/" in path]
@@ -49,22 +49,17 @@ def prepare_commit_msg(args: Sequence[str] | None = None, env: contract.Environ 
     file first."""
     environ = env or _read_environ("prepare-commit-msg")
     arguments = sys.argv[1:] if args is None else args
-    if current_branch() != environ.task_branch:
+    if git.current_branch() != environ.task_branch:
         return
     if not arguments:
         sys.exit("prepare-commit-msg needs the message file")
     message_file = arguments[0]
     # An empty message aborts the commit; a trailer would make it go through.
-    with open(message_file) as message:
-        stripped = subprocess.run(
-            ["git", "stripspace", "--strip-comments"], stdin=message, capture_output=True, text=True, check=True
-        )
-    if not stripped.stdout:
+    if not git.run("stripspace", "--strip-comments", input=Path(message_file).read_text(), check=True).stdout:
         return
     trailer = f"Task: {environ.task}"
-    subprocess.run(
-        ["git", "interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file],
-        check=True,
+    git.run(
+        "interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file, check=True
     )
 
 
@@ -101,10 +96,5 @@ def _read_environ(hook: str) -> contract.Environ:
 
 def _staged_paths() -> list[str]:
     """Paths staged for the commit being made, as git spells them, whatever characters they hold."""
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMRD", "-z"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = git.run("diff", "--cached", "--name-only", "--diff-filter=ACMRD", "-z", check=True)
     return [path for path in result.stdout.split("\0") if path]

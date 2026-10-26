@@ -79,7 +79,7 @@ class SessionVariables:
         this foundry would set for the same role, task and paths: a sandbox created before a name
         changed keeps the old one, and its kit would use it.
         """
-        missing = [name for name in cls._names() if name not in env]
+        missing = [name for name in contract.NAMES if name not in env]
         if missing:
             raise FoundryError(f"missing {', '.join(missing)}")
         variables = cls(
@@ -99,11 +99,6 @@ class SessionVariables:
     def is_same_sandbox(self, other: "SessionVariables") -> bool:
         """Whether both are for the same role, task and repository; paths may differ, e.g. after the foundry moved."""
         return (self.role_name, self.task, self.repo_url) == (other.role_name, other.task, other.repo_url)
-
-    @classmethod
-    def _names(cls) -> list[str]:
-        """Every variable's name, from the contract the agent runtime reads them by."""
-        return list(contract.NAMES)
 
 
 @dataclass(frozen=True, kw_only=True)

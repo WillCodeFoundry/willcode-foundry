@@ -201,7 +201,8 @@ src/agent_runtime/        # runs inside a sandbox; the standard library only, ne
 ├── harden.py             # as root: installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; --verify, as the agent: checks it all
 ├── claude_hooks.py       # guard_bash (PreToolUse), session_check (Stop)
 ├── git_hooks.py          # pre_commit, prepare_commit_msg, pre_push, which agent-kit/hooks/ call
-└── refusal.py            # what the git hooks share: refusals, the current branch
+├── refusal.py            # the shape every git hook's refusal takes
+└── git.py                # git as the runtime reads a repository with: output captured; the current branch
 ```
 
 | Command (`/usr/bin/python3 -I agent_runtime.pyz …`) | Run by |

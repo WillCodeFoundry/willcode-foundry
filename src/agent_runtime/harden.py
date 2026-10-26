@@ -21,8 +21,9 @@ import stat
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 from agent_runtime import contract
 
@@ -31,7 +32,16 @@ MANAGED_SETTINGS = Path("/etc/claude-code/managed-settings.json")
 DOCKER_DAEMON_CONFIG = Path("/etc/docker/daemon.json")
 DOCKER_CONFIG = '{"group": "root"}'
 SANDBOX_USER = "agent"
-ROOT = (0, 0)
+
+
+class Owner(NamedTuple):
+    """Who a file belongs to. The steps set both; the checks compare the uid, what decides who can replace it."""
+
+    uid: int
+    gid: int
+
+
+ROOT = Owner(0, 0)
 
 
 class HardenError(Exception):
@@ -46,7 +56,7 @@ def kit_settings(kit_dir: Path) -> Path:
 # --- Claude's managed settings -------------------------------------------------------
 
 
-def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, owner: tuple[int, int] = ROOT) -> None:
+def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, owner: Owner = ROOT) -> None:
     """Install the kit's settings, owned by ``owner`` (root), so the agent can read them but not change or
     replace them. The directory is set too, in case it already existed. Written beside its final name and
     renamed over it, as install(1) does."""
@@ -54,16 +64,12 @@ def harden_managed_settings(kit_copy: Path, installed: Path = MANAGED_SETTINGS, 
     _install_file(installed, kit_copy.read_bytes(), owner)
 
 
-def check_managed_settings(installed: Path, kit_copy: Path, owner: int = 0) -> list[str]:
+def check_managed_settings(installed: Path, kit_copy: Path, owner: Owner = ROOT) -> list[str]:
     """The installed settings exist, belong to the owner (root unless given), can't be written by the agent,
     and are the kit's. Settings from an older kit mean older permissions and hooks, so they count as not
     hardened."""
-    if not installed.is_file():
-        return [f"run without Claude's managed settings: {installed} is missing"]
-    if installed.stat().st_uid != owner:
-        return [f"replace Claude's managed settings: {installed} isn't owned by uid {owner}"]
-    if os.access(installed, os.W_OK):
-        return [f"change Claude's managed settings: {installed} is writable"]
+    if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner):
+        return found
     if installed.read_bytes() != kit_copy.read_bytes():
         return [f"run with older managed settings: {installed} differs from {kit_copy}"]
     return []
@@ -108,7 +114,7 @@ def check_su(su: str = "su") -> list[str]:
 def harden_docker(
     daemon_config: Path = DOCKER_DAEMON_CONFIG,
     sockets: Iterable[Path] = DOCKER_SOCKETS[:1],
-    owner: tuple[int, int] = ROOT,
+    owner: Owner = ROOT,
 ) -> None:
     """Keep the agent off the Docker socket.
 
@@ -131,7 +137,7 @@ def harden_docker(
     _install_file(daemon_config, f"{DOCKER_CONFIG}\n".encode(), owner)
     for socket_path in sockets:
         if _is_socket(socket_path):
-            os.chown(socket_path, -1, owner[1])
+            os.chown(socket_path, -1, owner.gid)
 
 
 def check_docker_sockets(sockets: Iterable[Path]) -> list[str]:
@@ -165,26 +171,18 @@ def check_kit_read_only(kit_dir: Path) -> list[str]:
     return []
 
 
-def check_python(python: str = contract.PYTHON, owner: int = 0) -> list[str]:
+def check_python(python: str = contract.PYTHON, owner: Owner = ROOT) -> list[str]:
     """The interpreter every hook and the launch run resolves to a file root owns and the agent can't write."""
     resolved = Path(python).resolve()
-    if not resolved.is_file():
-        return [f"run hooks without their interpreter: {python} is missing"]
-    if resolved.stat().st_uid != owner:
-        return [f"replace the hooks' interpreter: {python} resolves to {resolved}, which isn't owned by uid {owner}"]
-    if os.access(resolved, os.W_OK):
-        return [f"change the hooks' interpreter: {python} resolves to {resolved}, which is writable"]
-    return []
+    return _check_owned_read_only(resolved, "the hooks' interpreter", f"{python} (resolving to {resolved})", owner)
 
 
 # --- the two modes -------------------------------------------------------------------
 
 
-def harden(environ: Mapping[str, str] | None = None) -> int:
-    """Root mode. Removing sudo would lock a real machine's owner out: only runs in a sandbox, via sudo from
-    its agent user."""
-    env = os.environ if environ is None else environ
-    sudo_user = env.get("SUDO_USER", "")
+def harden(kit_dir: Path, sudo_user: str) -> int:
+    """Root mode, given the kit to install settings from and the user sudo ran it for. Removing sudo would
+    lock a real machine's owner out: only runs in a sandbox, via sudo from its agent user."""
     if os.geteuid() != 0 or sudo_user != SANDBOX_USER:
         print(
             f"harden: refusing: only runs inside a foundry sandbox, via sudo from its '{SANDBOX_USER}' user "
@@ -192,7 +190,6 @@ def harden(environ: Mapping[str, str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    kit_dir = contract.read_kit_dir(env)
     try:
         harden_managed_settings(kit_settings(kit_dir))
         harden_sudo_and_su()
@@ -205,15 +202,14 @@ def harden(environ: Mapping[str, str] | None = None) -> int:
     return 0
 
 
-def verify(environ: Mapping[str, str] | None = None) -> int:
-    """Agent mode: run every check, as the agent, and refuse to start the agent if any fails."""
+def verify(kit_dir: Path) -> int:
+    """Agent mode: run every check against the kit, as the agent, and refuse to start the agent if any fails."""
     if os.geteuid() == 0:
         print(
             "harden --verify: refusing: it runs as the agent, so it sees what the agent can do; root can do anything",
             file=sys.stderr,
         )
         return 1
-    kit_dir = contract.read_kit_dir(environ)
     found = [
         *check_managed_settings(MANAGED_SETTINGS, kit_settings(kit_dir)),
         *check_sudo(),
@@ -237,13 +233,25 @@ def verify(environ: Mapping[str, str] | None = None) -> int:
 # --- helpers -------------------------------------------------------------------------
 
 
-def _install_dir(directory: Path, owner: tuple[int, int]) -> None:
+def _check_owned_read_only(path: Path, what: str, shown: str, owner: Owner) -> list[str]:
+    """``path`` exists, belongs to ``owner`` and can't be written by the agent; ``shown`` names it in the
+    failure, ``what`` says what it is."""
+    if not path.is_file():
+        return [f"run without {what}: {shown} is missing"]
+    if path.stat().st_uid != owner.uid:
+        return [f"replace {what}: {shown} isn't owned by uid {owner.uid}"]
+    if os.access(path, os.W_OK):
+        return [f"change {what}: {shown} is writable"]
+    return []
+
+
+def _install_dir(directory: Path, owner: Owner) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     os.chown(directory, *owner)
     directory.chmod(0o755)
 
 
-def _install_file(target: Path, content: bytes, owner: tuple[int, int]) -> None:
+def _install_file(target: Path, content: bytes, owner: Owner) -> None:
     descriptor, partial_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
     partial = Path(partial_name)
     try:

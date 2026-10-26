@@ -16,6 +16,7 @@ if sys.version_info < MINIMUM_PYTHON:
     sys.exit(1)
 
 import argparse  # noqa: E402
+import os  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 
 from agent_runtime import claude_hooks, contract, git_hooks, harden, session_init, session_setup  # noqa: E402
@@ -45,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         "harden", help="as root: harden the sandbox; with --verify, as the agent: check it is hardened"
     )
     hardening.add_argument("--verify", action="store_true")
-    hardening.set_defaults(func=lambda args: harden.verify() if args.verify else harden.harden())
+    hardening.set_defaults(func=_run_harden)
 
     hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
     hook.add_argument("name", choices=CLAUDE_HOOKS)
@@ -56,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
     git_hook.add_argument("args", nargs="*")
     git_hook.set_defaults(func=_run_git_hook)
     return parser
+
+
+def _run_harden(args: argparse.Namespace) -> int:
+    """Root is given AGENT_KIT_DIR alone (session-init preserves only it); sudo sets SUDO_USER."""
+    kit_dir = contract.read_kit_dir()
+    return harden.verify(kit_dir) if args.verify else harden.harden(kit_dir, os.environ.get("SUDO_USER", ""))
 
 
 def _run_git_hook(args: argparse.Namespace) -> int:

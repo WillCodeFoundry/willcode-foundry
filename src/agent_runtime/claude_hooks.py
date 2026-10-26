@@ -7,12 +7,11 @@ Both are guardrails against mistakes, not boundaries: see "What protects what" i
 
 import json
 import shlex
-import subprocess
 import sys
 from pathlib import Path
 from typing import TextIO
 
-from agent_runtime import contract
+from agent_runtime import contract, git
 
 
 def refusal_reason(command: str) -> str | None:
@@ -89,13 +88,9 @@ def _stop_hook_active(stdin: TextIO) -> bool:
 
 def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
     problems = []
-    if _git(checkout, "status", "--porcelain").stdout.strip():
+    if git.run("-C", str(checkout), "status", "--porcelain").stdout.strip():
         problems.append(f"{label} has uncommitted changes")
-    _git(checkout, "fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
-    if _git(checkout, "log", "--oneline", f"origin/{branch}..HEAD").stdout.strip():
+    git.run("-C", str(checkout), "fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
+    if git.run("-C", str(checkout), "log", "--oneline", f"origin/{branch}..HEAD").stdout.strip():
         problems.append(f"{label} has commits not pushed to origin/{branch}")
     return problems
-
-
-def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False)

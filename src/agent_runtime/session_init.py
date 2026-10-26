@@ -21,4 +21,4 @@ def session_init(env: contract.Environ | None = None) -> int:
         hardened = subprocess.run(root_command, check=False)
         if hardened.returncode != 0:
             return hardened.returncode
-    return harden.verify({contract.KIT_DIR: str(environ.kit_dir)})
+    return harden.verify(environ.kit_dir)

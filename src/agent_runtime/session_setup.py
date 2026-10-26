@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from agent_runtime import contract
+from agent_runtime import contract, git
 
 
 class SetupError(Exception):
@@ -45,7 +45,7 @@ def _set_up(environ: contract.Environ) -> None:
     _link_skills(role_path)
     print("session-setup: checkouts ready", flush=True)
     for checkout in (environ.project_dir, environ.notes_dir):
-        print(_git_output("-C", str(checkout), "status", "-sb").partition("\n")[0], flush=True)
+        print(git.run("-C", str(checkout), "status", "-sb").stdout.partition("\n")[0], flush=True)
 
 
 def _set_identity(environ: contract.Environ, role_path: Path) -> None:
@@ -134,20 +134,16 @@ def _link_skills(role_path: Path) -> None:
 
 
 def _git(*args: str, cwd: Path | None = None) -> None:
-    """Run git, its output going where this command's goes; a failure stops setup, as git reported it."""
+    """Run git, its output going where this command's goes, unlike git.run: what clone and switch print is
+    the setup's progress. A failure stops setup, as git reported it."""
     sys.stdout.flush()
     if subprocess.run(["git", *args], cwd=cwd, check=False).returncode != 0:
         raise SetupError(f"`git {' '.join(args)}` failed; see git's message above")
 
 
-def _git_output(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=False).stdout
-
-
 def _git_config(key: str) -> str:
-    return _git_output("config", "--get", key).strip()
+    return git.run("config", "--get", key).stdout.strip()
 
 
 def _has_ref(repository: Path, ref: str) -> bool:
-    result = subprocess.run(["git", "-C", str(repository), "show-ref", "-q", "--verify", ref], check=False)
-    return result.returncode == 0
+    return git.run("-C", str(repository), "show-ref", "-q", "--verify", ref).returncode == 0
