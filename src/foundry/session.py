@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from agent_runtime import contract
 from foundry import paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
@@ -36,9 +37,9 @@ SANDBOX_WORK_DIR: Final = "/home/agent/work"
 class SessionVariables:
     """What a session's sandbox is told: the AGENT_* variables, as one value.
 
-    The only place their names are spelled out. The agent kit's scripts and AGENTS.md read
-    them by name, and tests/test_task_contract.py holds both to this class. They are fixed
-    when the sandbox is created: sbx never rewrites its definition.
+    Their names come from agent_runtime.contract, which the runtime reads them back with;
+    AGENTS.md lists them, and tests/test_task_contract.py holds it and the kit to the contract.
+    They are fixed when the sandbox is created: sbx never rewrites its definition.
     """
 
     role_name: str
@@ -57,19 +58,17 @@ class SessionVariables:
     def to_env(self) -> dict[str, str]:
         """The variables, by name, as the sandbox definition carries them."""
         return {
-            "AGENT_ROLE": self.role_name,
-            "AGENT_TASK": self.task.id,
-            "AGENT_KIT_DIR": str(self.agent_kit_dir),
-            "AGENT_REPO_URL": self.repo_url,
-            "AGENT_PROJECT_DIR": self.project_dir,
-            "AGENT_NOTES_DIR": self.notes_dir,
-            # A task's names, so the kit and the agent's instructions spell none out.
-            # The notes paths are relative to a checkout's root, as git reports paths.
-            "AGENT_TASK_BRANCH": self.task.branch,
-            "AGENT_NOTES_BRANCH": NOTES_BRANCH,
-            "AGENT_NOTES_ROOT": NOTES_ROOT,
-            "AGENT_TASK_NOTES": self.task.notes_dir,
-            "AGENT_TASK_FILE": self.task.task_file,
+            contract.ROLE: self.role_name,
+            contract.TASK: self.task.id,
+            contract.KIT_DIR: str(self.agent_kit_dir),
+            contract.REPO_URL: self.repo_url,
+            contract.PROJECT_DIR: self.project_dir,
+            contract.NOTES_DIR: self.notes_dir,
+            contract.TASK_BRANCH: self.task.branch,
+            contract.NOTES_BRANCH: NOTES_BRANCH,
+            contract.NOTES_ROOT: NOTES_ROOT,
+            contract.TASK_NOTES: self.task.notes_dir,
+            contract.TASK_FILE: self.task.task_file,
         }
 
     @classmethod
@@ -84,11 +83,11 @@ class SessionVariables:
         if missing:
             raise FoundryError(f"missing {', '.join(missing)}")
         variables = cls(
-            role_name=env["AGENT_ROLE"],
-            task=Task(env["AGENT_TASK"]),
-            repo_url=env["AGENT_REPO_URL"],
-            agent_kit_dir=Path(env["AGENT_KIT_DIR"]),
-            project_dir=env["AGENT_PROJECT_DIR"],
+            role_name=env[contract.ROLE],
+            task=Task(env[contract.TASK]),
+            repo_url=env[contract.REPO_URL],
+            agent_kit_dir=Path(env[contract.KIT_DIR]),
+            project_dir=env[contract.PROJECT_DIR],
         )
         differing = [
             f"{name}={env[name]!r}, now {value!r}" for name, value in variables.to_env().items() if env[name] != value
@@ -103,9 +102,8 @@ class SessionVariables:
 
     @classmethod
     def _names(cls) -> list[str]:
-        """Every variable's name, taken from to_env, so the full list is spelled out once."""
-        placeholder = cls(role_name="", task=Task("t"), repo_url="", agent_kit_dir=Path(), project_dir="")
-        return list(placeholder.to_env())
+        """Every variable's name, from the contract the agent runtime reads them by."""
+        return list(contract.NAMES)
 
 
 @dataclass(frozen=True, kw_only=True)

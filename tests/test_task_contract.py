@@ -17,15 +17,20 @@ from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 AGENT_KIT = REPO_ROOT / "agent-kit"
+AGENT_RUNTIME = REPO_ROOT / "src" / "agent_runtime"
+CONTRACT = AGENT_RUNTIME / "contract.py"
 AGENTS_MD = AGENT_KIT / "AGENTS.md"
 RULESETS = REPO_ROOT / "config" / "repo-policy" / "rulesets.yaml"
 
 
 def agent_kit_files() -> list[Path]:
-    """Every text file in the agent kit: its scripts, and the instructions the agent reads."""
+    """Every text file in the agent kit and the runtime it runs: their code, and the instructions the agent reads.
+
+    Not the runtime built into the kit (.build/), which is the runtime's source again.
+    """
     files = []
-    for path in sorted(AGENT_KIT.rglob("*")):
-        if path.is_file():
+    for path in sorted([*AGENT_KIT.rglob("*"), *AGENT_RUNTIME.rglob("*.py")]):
+        if path.is_file() and ".build" not in path.relative_to(REPO_ROOT).parts:
             try:
                 path.read_text()
             except UnicodeDecodeError:
@@ -50,8 +55,9 @@ def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
 def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    """Outside AGENTS.md, which documents them all: a variable only it names is read by nothing."""
-    kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path != AGENTS_MD)
+    """Outside AGENTS.md, which documents them all, and the contract, which names them all: a variable only
+    they name is read by nothing."""
+    kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path not in (AGENTS_MD, CONTRACT))
 
     assert [name for name in session_variables(Task("t1")).to_env() if not re.search(rf"\b{name}\b", kit_text)] == []
 

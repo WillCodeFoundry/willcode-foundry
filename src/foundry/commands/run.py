@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths, session
+from foundry.runtime_build import build_runtime
 from foundry.task import Task
 
 
@@ -30,13 +31,19 @@ def main(args: argparse.Namespace) -> NoReturn:
 
 
 def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> agent_sandbox.LaunchRequest:
-    """Everything up to the hand-over: the session, created the first time, and the request to launch it."""
+    """Everything up to the hand-over: the session, created the first time, the agent runtime built into the
+    kit its sandbox mounts, and the request to launch it.
+
+    The kit is the one the sandbox definition records, not this foundry's: sbx fixes mounts when it creates a
+    sandbox, so a moved foundry still updates the kit its existing sandboxes see. A failed build aborts.
+    """
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(project_name)
     role = foundry_config.role(role_name)
     opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
     if opened.created:
         print(f"==> session:   {opened.dir} (new)", file=sys.stderr)
+    build_runtime(opened.definition.agent_kit_dir)
 
     return agent_sandbox.LaunchRequest(
         definition_dir=opened.dir,

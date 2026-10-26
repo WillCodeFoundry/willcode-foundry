@@ -25,3 +25,4 @@ def test_paths_are_built_without_touching_the_filesystem(tmp_path: Path) -> None
     assert paths.ssh_key_path(tmp_path, "dev") == tmp_path / "secrets" / "ssh" / "dev"
     assert paths.github_token_path(tmp_path, "dev") == tmp_path / "secrets" / "github" / "dev.token"
     assert paths.session_dir(tmp_path, "s") == tmp_path / "sessions" / "s"
+    assert paths.runtime_pyz(tmp_path / "kit") == tmp_path / "kit" / ".build" / "agent_runtime.pyz"

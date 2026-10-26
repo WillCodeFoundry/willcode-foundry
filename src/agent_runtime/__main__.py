@@ -1,0 +1,47 @@
+"""The runtime's command line: ``/usr/bin/python3 -I agent_runtime.pyz <command>``.
+
+The version is checked before anything else is imported, and this file uses only syntax that old
+interpreters parse, so a template that ships an older python3 prints what it needs instead of a
+SyntaxError from a module further in.
+"""
+
+import sys
+
+MINIMUM_PYTHON = (3, 11)
+
+if sys.version_info < MINIMUM_PYTHON:
+    needed = ".".join(map(str, MINIMUM_PYTHON))
+    found = ".".join(map(str, sys.version_info[:2]))
+    sys.stderr.write(f"agent_runtime: needs Python >= {needed}; {sys.executable} is {found}\n")
+    sys.exit(1)
+
+import argparse  # noqa: E402
+from collections.abc import Callable, Sequence  # noqa: E402
+
+from agent_runtime import contract  # noqa: E402
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="agent_runtime", description="Runs inside a foundry sandbox.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    del subparsers  # commands are added stage by stage
+    return parser
+
+
+def run(argv: Sequence[str] | None = None) -> int:
+    """Run one command; returns its exit code. A missing session variable is reported, not raised."""
+    args = build_parser().parse_args(argv)
+    handler: Callable[[argparse.Namespace], int] = args.func
+    try:
+        return handler(args)
+    except contract.MissingVariables as error:
+        print(f"agent_runtime {args.command}: {error}", file=sys.stderr)
+        return 1
+
+
+def main() -> None:
+    sys.exit(run())
+
+
+if __name__ == "__main__":
+    main()
