@@ -188,7 +188,10 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 
 
 def test_the_report_says_what_was_created_and_how_to_run_it() -> None:
-    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry task run store t1 ROLE"]
+    assert report("store", Task("T1")) == [
+        "created task t1 in store",
+        "once its TASK.md is written, or to have the planner write it: foundry task next store t1",
+    ]
 
 
 def test_create_takes_a_project_and_a_task() -> None:

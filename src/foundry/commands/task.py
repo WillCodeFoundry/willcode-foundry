@@ -1,6 +1,7 @@
 """foundry task: everything done to one task, each subcommand taking PROJECT TASK first.
 
-create makes the task; run launches a role on it; list shows where every task stands.
+create makes the task; run launches a role on it, and next the role whose turn it is; list shows
+where every task stands.
 """
 
 import argparse
@@ -38,11 +39,19 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "run",
         help="start or re-attach to the sandbox for ROLE on TASK",
         description="Start the sandbox for ROLE on TASK in PROJECT, or re-attach to it if it already exists. "
-        "A task with a task state starts only the role whose turn it is.",
+        "A task with a task state starts only the role whose turn it is; `foundry task next` picks it for you.",
     )
     _add_project_and_task(run)
     run.add_argument("role_name", metavar="ROLE", help="role name, as listed in config/foundry.yaml")
     run.set_defaults(func=run_main)
+
+    next_ = actions.add_parser(
+        "next",
+        help="run the role whose turn it is on TASK, or say what is waiting on you",
+        description="Reads the task state from the project's notes branch, with git and your own access.",
+    )
+    _add_project_and_task(next_)
+    next_.set_defaults(func=next_main)
 
     list_ = actions.add_parser(
         "list",
@@ -76,19 +85,35 @@ def create_main(args: argparse.Namespace) -> int:
 def report(project_name: str, new_task: task.Task) -> list[str]:
     return [
         f"created task {new_task.id} in {project_name}",
-        f"run it with: foundry task run {project_name} {new_task.id} ROLE",
+        f"once its TASK.md is written, or to have the planner write it: foundry task next {project_name} {new_task.id}",
     ]
 
 
-# --- run ---------------------------------------------------------------------------
+# --- run and next ------------------------------------------------------------------
 
 
 def run_main(args: argparse.Namespace) -> NoReturn:
     """Composition root: prepare the launch from this foundry, then hand over to the sandbox."""
+    _launch(paths.find_foundry_root(), project_name=args.project_name, role_name=args.role_name, task_id=args.task_id)
+
+
+def next_main(args: argparse.Namespace) -> NoReturn:
+    """Composition root: read the task state in a scratch clone, then launch its assignee as run does."""
+    foundry_root = paths.find_foundry_root()
+    project = config.load(foundry_root).project(args.project_name)
+    the_task = Task(args.task_id)
+    with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
+        clone = _notes_clone(project.url, Path(scratch_dir))
+        state = task_state.read(clone, the_task)
+    lifecycle = task_state.load_lifecycle(foundry_root, state.lifecycle) if state else None
+    role_name = task_state.next_role(state, lifecycle, the_task, project_name=project.name)
+    print(f"==> {the_task.id}: {role_name}'s turn", file=sys.stderr)
+    _launch(foundry_root, project_name=project.name, role_name=role_name, task_id=the_task.id)
+
+
+def _launch(foundry_root: Path, *, project_name: str, role_name: str, task_id: str) -> NoReturn:
     agent_sandbox.launch(
-        prepare_launch(
-            paths.find_foundry_root(), project_name=args.project_name, role_name=args.role_name, task=Task(args.task_id)
-        )
+        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task(task_id))
     )
 
 

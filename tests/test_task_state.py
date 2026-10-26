@@ -145,6 +145,36 @@ def test_a_missing_lifecycle_is_named(tmp_path: Path) -> None:
         task_state.load_lifecycle(tmp_path, "nope")
 
 
+# --- task next --------------------------------------------------------------------
+
+
+def test_next_is_the_states_assignee(notes_clone) -> None:
+    state = task_state.read(notes_clone, Task("t1"))
+    assert task_state.next_role(state, FEATURE, Task("t1"), project_name="store") == "reviewer"
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        (
+            "blocked",
+            r"^task t1 is waiting for you, in blocked \(from review\): R7\.\n.*foundry task move store t1 review",
+        ),
+        ("done", r"^task t1 is done; to reopen it: foundry task move store t1 STATE"),
+    ],
+)
+def test_next_says_what_waits_on_the_human(name: str, message: str) -> None:
+    state = TaskState.parse(state_json(name, previous="review", note="R7."), "x")
+
+    with pytest.raises(FoundryError, match=message):
+        task_state.next_role(state, FEATURE, Task("t1"), project_name="store")
+
+
+def test_next_on_a_task_without_a_state_says_to_name_the_role() -> None:
+    with pytest.raises(FoundryError, match=r"task t0 has no STATE\.json.*foundry task run store t0 ROLE"):
+        task_state.next_role(None, None, Task("t0"), project_name="store")
+
+
 # --- the commands -----------------------------------------------------------------
 
 
@@ -181,6 +211,7 @@ def test_list_of_a_project_without_tasks() -> None:
     ("argv", "expected"),
     [
         (["task", "run", "store", "T1", "dev"], {"project_name": "store", "task_id": "T1", "role_name": "dev"}),
+        (["task", "next", "store", "T1"], {"project_name": "store", "task_id": "T1"}),
         (["task", "list"], {"project_name": None}),
         (["task", "list", "store"], {"project_name": "store"}),
     ],

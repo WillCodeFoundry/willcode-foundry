@@ -14,7 +14,7 @@ from typing import Any, Final
 from foundry import paths
 from foundry.errors import FoundryError
 from foundry.git_clone import GitClone
-from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, STATE_FILE, Task
 
 HUMAN: Final = "human"
 
@@ -162,3 +162,32 @@ def read_all(clone: GitClone) -> dict[str, TaskState | FoundryError | None]:
         except FoundryError as error:
             states[task_id] = error
     return states
+
+
+# --- what's next -----------------------------------------------------------------------
+
+
+def next_role(state: TaskState | None, lifecycle: Lifecycle | None, task: Task, *, project_name: str) -> str:
+    """The role whose turn it is; FoundryError saying what to do when it is no role's.
+
+    ``lifecycle`` is the state's, and None only with no state.
+    """
+    if state is None or lifecycle is None:
+        raise FoundryError(
+            f"task {task.id} has no {STATE_FILE}: it was created before task states, so it has no turns; "
+            f"launch a role with: foundry task run {project_name} {task.id} ROLE"
+        )
+    assignee = lifecycle.assignee(state.state)
+    if assignee is None:
+        raise FoundryError(
+            f"task {task.id} is done; to reopen it: foundry task move {project_name} {task.id} STATE --note …"
+        )
+    if assignee == HUMAN:
+        came_from = f" (from {state.previous})" if state.previous else ""
+        back = state.previous or "STATE"
+        raise FoundryError(
+            f"task {task.id} is waiting for you, in {state.state}{came_from}: {state.note or '(no note)'}\n"
+            f"  once you've answered, hand it back: foundry task move {project_name} {task.id} {back} --note …\n"
+            "  or move it anywhere else in its lifecycle; the README's Task states section lists the usual moves"
+        )
+    return assignee
