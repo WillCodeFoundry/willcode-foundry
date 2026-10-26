@@ -91,8 +91,9 @@ def update(
         if not _apply_upstream_changes(foundry_root, source, new, skill_dir):
             conflicted.append(skill_dir.name)
         skill_md.write_text(_with_commit(skill_md.read_text(), source.commit, new))
-        license_text = _git(foundry_root, "show", f"{new}:LICENSE")
-        (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_text(license_text)
+        # Byte for byte: whatever line endings and encoding upstream's licence has.
+        license_bytes = _git_bytes(foundry_root, "show", f"{new}:LICENSE")
+        (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_bytes(license_bytes)
         report(f"{skill_dir.name}: updated to {new[:12]}")
     return conflicted
 
@@ -149,7 +150,12 @@ def _with_commit(skill_md_text: str, old: str, new: str) -> str:
 
 
 def _git(cwd: Path, *args: str) -> str:
-    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
+    return _git_bytes(cwd, *args).decode()
+
+
+def _git_bytes(cwd: Path, *args: str) -> bytes:
+    """git's output exactly as it wrote it; a failure is a FoundryError naming the command."""
+    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=False)
     if result.returncode != 0:
-        raise FoundryError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+        raise FoundryError(f"git {' '.join(args)} failed: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout

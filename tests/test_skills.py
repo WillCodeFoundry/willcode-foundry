@@ -81,7 +81,7 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     (upstream / "skills" / "engineering" / "tdd" / "agents" / "codex.yaml").write_text("x: 2\n")
     (upstream / "skills" / "engineering" / "tdd" / "NEW.md").write_text("New.\n")
-    (upstream / "LICENSE").write_text("MIT, second\n")
+    (upstream / "LICENSE").write_bytes("MIT, second, ©\r\n".encode())
     second = commit_all(upstream, "second")
 
     reported, conflicted = update(foundry_root, upstream)
@@ -93,7 +93,7 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
     )
     assert (skill_dir / "NEW.md").read_text() == "New.\n"
     assert not (skill_dir / "agents").exists()
-    assert (foundry_root / "agent-kit" / "skills" / "LICENSE-mattpocock").read_text() == "MIT, second\n"
+    assert (foundry_root / "agent-kit" / "skills" / "LICENSE-mattpocock").read_bytes() == "MIT, second, ©\r\n".encode()
 
 
 def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream) -> None:
