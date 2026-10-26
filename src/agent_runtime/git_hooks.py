@@ -4,15 +4,16 @@
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
 - ``pre_push``: pushes only to this task's branch and the notes branch.
 
-Each takes what git passes, and the session variables, defaulting to this process's.
+Each takes what git passes, and the session variables, defaulting to this process's. Every refusal has the
+same shape (``_refuse``): what was wrong, then what to do instead.
 """
 
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import NoReturn
 
 from agent_runtime import contract, git
-from agent_runtime.refusal import refuse
 
 
 def pre_commit(env: contract.Environ | None = None) -> None:
@@ -38,7 +39,7 @@ def pre_commit(env: contract.Environ | None = None) -> None:
     else:
         return
     if refused:
-        refuse(
+        _refuse(
             "pre-commit", rule, *(f"    {path}" for path in refused), "", "Unstage with: git restore --staged <file>"
         )
 
@@ -78,12 +79,19 @@ def pre_push(refs: Iterable[str] | None = None, env: contract.Environ | None = N
             continue
         remote_ref = fields[2] if len(fields) > 2 else ""
         if remote_ref not in allowed:
-            refuse(
+            _refuse(
                 "pre-push",
                 f"You may only push {environ.task_branch} and {environ.notes_branch}, "
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
                 f"Code goes on {environ.task_branch}; notes go on {environ.notes_branch}.",
             )
+
+
+def _refuse(hook: str, *lines: str) -> NoReturn:
+    """Print a refusal that says what was wrong and what to do instead, then exit non-zero."""
+    body = "".join(f"  {line}\n" for line in lines)
+    sys.stderr.write(f"{hook}: refusing\n\n{body}\n")
+    sys.exit(1)
 
 
 def _read_environ(hook: str) -> contract.Environ:
