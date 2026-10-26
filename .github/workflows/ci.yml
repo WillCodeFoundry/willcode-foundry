@@ -37,7 +37,6 @@ jobs:
       - run: uv sync --locked --group dev
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      - run: shellcheck --severity=warning scripts/update-skills
 
   mypy:
     runs-on: ubuntu-latest

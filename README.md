@@ -9,7 +9,7 @@ $ uv sync
 $ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
 $ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
-$ scripts/update-skills                                    # merge upstream's changes into the agent kit's copied skills
+$ uv run foundry skills update                            # merge upstream's changes into the agent kit's copied skills
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`, and every role listed must have its folder in `agent-kit/roles/<role>/`, holding its `ROLE.md` and `gitconfig`: foundry refuses to run any command otherwise; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
@@ -21,7 +21,6 @@ $ scripts/update-skills                                    # merge upstream's ch
 ├── pyproject.toml                # the `foundry` package and command
 ├── src/foundry/                  # launcher code (see below)
 ├── src/agent_runtime/            # the code that runs inside a sandbox, around the agent (see below)
-├── scripts/update-skills         # merges upstream's changes into the kit's copied skills; run on your machine
 ├── tests/
 ├── config/
 │   ├── foundry.yaml              # instance name, projects (clone URLs), roles
@@ -168,6 +167,7 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
+├── commands/skills.py  # foundry skills update: merges upstream's changes into the kit's copied skills
 ├── runtime_build.py    # builds src/agent_runtime/ into a kit's .build/agent_runtime.pyz, atomically
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
@@ -221,10 +221,9 @@ $ uv sync --group dev
 $ uv run pytest
 $ uv run ruff check . && uv run ruff format --check .
 $ uv run mypy
-$ shellcheck --severity=warning scripts/update-skills
 ```
 
-These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. The sandbox's code is `agent_runtime`, so ruff, mypy and pytest cover it; ShellCheck only checks `scripts/update-skills`.
+These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. The foundry has no shell scripts: the sandbox's code is `agent_runtime`, so ruff, mypy and pytest cover it too.
 
 `tests/agent_runtime/` calls the runtime's functions directly: `guard_bash` against commands it must allow and refuse, the hardening checks against files, sockets and commands of their own, and root mode's file steps against a temporary directory. `tests/agent_kit/` tests the kit as delivered, with the runtime built into a copy of it once per run (the `built_kit` fixture in `tests/conftest.py`, so no test writes into `agent-kit/.build/`): the hooks' commands from managed settings as written, the git hooks through real `git commit` and `git push` against a throwaway repository with a local origin, `session-setup` through the pyz, and that the pyz imports nothing outside the standard library. They need `git`, and `/usr/bin/python3`, which the stubs and managed settings name. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that every `AGENT_*` variable the agent kit and runtime use is one the sandbox definition sets and one of them reads, and that `config/repo-policy/rulesets.yaml` names a task's branches as `task.py` does. The kit's tests take their variables from a real sandbox definition, through the `kit_env` fixture in `tests/agent_kit/conftest.py`.
 
@@ -234,7 +233,7 @@ Six of the agent kit's skills come from [mattpocock/skills](https://github.com/m
 
 Each role's skills are links in `agent-kit/roles/<role>/skills/`, one per skill (`ls` it to see them); `session-setup` links that folder as the agent's `~/.claude/skills` at every launch, so Claude Code loads them as skills. To give a role a skill, `ln -s ../../../skills/<name> agent-kit/roles/<role>/skills/`; a test checks every link points at a skill, and that a role has every skill its skills call. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are edits to the copies themselves, so change a skill as you would any file in the kit.
 
-- **To update,** by hand: `scripts/update-skills`, or `scripts/update-skills COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit.
+- **To update,** by hand: `foundry skills update`, or `foundry skills update COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit.
 - **To see everything the foundry changed in a skill:** after an update has fetched upstream's commit, `git diff <commit>:skills/engineering/tdd HEAD:agent-kit/skills/tdd`.
 - **To copy another skill:** copy its folder from upstream without `agents/`, add a `metadata.source` block like the others', then edit it.
 
