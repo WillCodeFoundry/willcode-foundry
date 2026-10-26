@@ -1,16 +1,37 @@
 #!/usr/bin/env bash
-# Stop hook: refuse to end the session while either checkout has uncommitted
-# or unpushed work. The reason is fed back to the agent as its next instruction.
+# Stop hook: refuse to end the session while this sandbox has changed the task
+# state other than with bin/task, or while either checkout has uncommitted or
+# unpushed work; and refuse once when the task state can't be read.
+# The reason is fed back to the agent as its next instruction.
 #
+#   RULE  A session cannot end with a hand-edited task state.
+#   RULE  A session cannot end unremarked on a task state that can't be read.
 #   RULE  A session cannot end with uncommitted or unpushed changes.
 set -euo pipefail
-: "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
+: "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_KIT_DIR:?}"
 
 # Already looping on this hook: let the stop through rather than spin. Input
 # that isn't the JSON Claude Code sends is not a reason to let it through.
 if python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("stop_hook_active") is True else 1)' 2>/dev/null; then
     exit 0
 fi
+
+block() {  # block <reason>: refuse the stop, telling the agent why
+    python3 -c 'import json,sys; print(json.dumps({"decision":"block","reason":sys.argv[1]}))' "$1"
+    exit 0
+}
+
+# Against what bin/task begin recorded at launch; a task created before task states
+# has no record and nothing to check (exit 3). A task state that can't be read (exit 4)
+# is refused once: the agent may not be able to do anything about it (origin may be
+# unreachable), so its next stop is let through, as the check at the top does.
+state_status=0
+state_problem="$("$AGENT_KIT_DIR/bin/task" check-state 2>&1)" || state_status=$?
+case "$state_status" in
+    0 | 3) ;;
+    4) block "${state_problem#task: }. Only the human can fix this. If you can still push your notes, put it under Blockers in PROGRESS.md and push them; either way, stop: your next stop is let through." ;;
+    *) block "Cannot end the session yet: ${state_problem#task: }." ;;
+esac
 
 problems=()
 report_unsaved_work() {  # report_unsaved_work <dir> <branch> <label>
@@ -31,5 +52,4 @@ if ((${#problems[@]} == 0)); then
 fi
 
 problem_summary="$(printf '%s; ' "${problems[@]}")"
-reason="Cannot end the session yet: ${problem_summary%; }. Commit and push that work (see \"Git rules\" in AGENTS.md), then finish."
-python3 -c 'import json,sys; print(json.dumps({"decision":"block","reason":sys.argv[1]}))' "$reason"
+block "Cannot end the session yet: ${problem_summary%; }. Commit and push that work (see \"Git rules\" in AGENTS.md), then finish."

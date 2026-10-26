@@ -1,17 +1,32 @@
 #!/usr/bin/env bash
 # Pushes only to this task's branch and the notes branch. The project's GitHub
 # rulesets allow any task/**, since GitHub can't tell one task from another;
-# this keeps a role to its own. git passes one line per ref on stdin:
+# this keeps a role to its own. Code is pushed only on the role's turn, as
+# origin's task state says (bin/task check-turn), so a role that has handed the
+# task on writes no more of it. git passes one line per ref on stdin:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -euo pipefail
-: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}"
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_KIT_DIR:?}"
 # For ShellCheck, relative to the repository root, where CI runs it:
 # shellcheck source=agent-kit/lib/hooks.sh
 source "$(dirname "$0")/../lib/hooks.sh"
 
 while read -r _local_ref _local_sha remote_ref _remote_sha; do
     case "$remote_ref" in
-        "refs/heads/$AGENT_TASK_BRANCH"|"refs/heads/$AGENT_NOTES_BRANCH") ;;
+        "refs/heads/$AGENT_TASK_BRANCH")
+            # Whose turn it is, as origin has the task state; a task created before task states
+            # has none (exit 3), and no turns.
+            turn_status=0
+            turn="$("$AGENT_KIT_DIR/bin/task" check-turn 2>&1)" || turn_status=$?
+            case "$turn_status" in
+                0 | 3) ;;
+                1) refuse pre-push "${turn#task: }" \
+                       "It isn't your turn on this task: push no more code to $AGENT_TASK_BRANCH." \
+                       "If it still needs your change, say so in your notes; the human can move the task back to you." ;;
+                *) refuse pre-push "${turn#task: }" \
+                       "Whose turn it is can't be told, so no code is pushed: stop, and say so in your notes." ;;
+            esac ;;
+        "refs/heads/$AGENT_NOTES_BRANCH") ;;
         *) refuse pre-push "You may only push $AGENT_TASK_BRANCH and $AGENT_NOTES_BRANCH, not ${remote_ref#refs/heads/}." \
                "Code goes on $AGENT_TASK_BRANCH; notes go on $AGENT_NOTES_BRANCH." ;;
     esac

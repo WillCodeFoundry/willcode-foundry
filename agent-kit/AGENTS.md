@@ -31,6 +31,7 @@ paths.
 | `AGENT_NOTES_ROOT` | the folder on that branch where every task's notes sit; never on the task branch |
 | `AGENT_TASK_NOTES` | your task's notes folder, relative to the notes checkout |
 | `AGENT_TASK_FILE` | your task's `TASK.md`, relative to the notes checkout |
+| `AGENT_STATE_FILE` | your task's `STATE.json`, relative to the notes checkout: the task state, written only by `$AGENT_KIT_DIR/bin/task` |
 
 | What | Where | Branch |
 |---|---|---|

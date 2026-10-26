@@ -3,6 +3,7 @@
 It never needs root, so it runs here as in a sandbox, with a sandbox's variables and a throwaway HOME.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -159,3 +160,97 @@ def test_a_skills_folder_in_place_of_the_link_is_refused(tmp_path, kit_env, crea
 
     assert result.returncode == 1
     assert "is a folder, not the link to the role's skills" in result.stderr
+
+
+# --- the task state -------------------------------------------------------------
+
+
+def push_state(tmp_path: Path, name: str, *, note: str = "") -> str:
+    """Put the task in state ``name`` on origin's notes branch, as bin/task would; returns the file's text."""
+    seed = tmp_path / "seed"
+    text = json.dumps(
+        {"lifecycle": "feature", "state": name, "previous": None, "counts": {}, "handoff": {"commit": "", "note": note}}
+    )
+    (seed / TASK.state_file).write_text(text)
+    git(seed, "add", TASK.state_file)
+    # Signing off: an earlier session-setup made the role's gitconfig, which signs, global under this HOME.
+    git(seed, "-c", "commit.gpgsign=false", "commit", "-qm", f"{TASK.id}: {name}")
+    git(seed, "push", "-q", "origin", NOTES_BRANCH)
+    return text
+
+
+def launch_record(tmp_path: Path) -> Path:
+    return tmp_path / "home" / ".claude" / "launch.json"
+
+
+def test_a_role_whose_turn_it_isnt_is_not_started(tmp_path, kit_env, created_task) -> None:
+    push_state(tmp_path, "review", note="R1 fixed.")
+
+    result = session_setup(kit_env(TASK), created_task)
+
+    assert result.returncode == 1
+    assert "reviewer's turn" in result.stderr and "R1 fixed." in result.stderr
+    assert not (tmp_path / "home" / ".claude" / "CLAUDE.md").exists()
+
+
+def test_the_launch_is_recorded_as_origins_notes_commit(tmp_path, kit_env, created_task) -> None:
+    push_state(tmp_path, "ready")
+
+    result = session_setup(kit_env(TASK), created_task)
+
+    assert result.returncode == 0, result.stderr
+    notes_head = git_out(tmp_path / "seed", "rev-parse", "HEAD")
+    assert json.loads(launch_record(tmp_path).read_text()) == {"notes_base": notes_head}
+
+
+def test_a_relaunch_sees_the_latest_task_state(tmp_path, kit_env, created_task) -> None:
+    push_state(tmp_path, "ready")
+    assert session_setup(kit_env(TASK), created_task).returncode == 0
+    push_state(tmp_path, "review")  # handed on since: by this sandbox, or by another role's
+
+    result = session_setup(kit_env(TASK), created_task)
+
+    assert result.returncode == 1 and "reviewer's turn" in result.stderr
+
+
+def test_a_notes_checkout_behind_and_ahead_of_origin_only_warns(tmp_path, kit_env, created_task) -> None:
+    push_state(tmp_path, "ready")
+    env = kit_env(TASK)
+    assert session_setup(env, created_task).returncode == 0
+    notes = Path(env["AGENT_NOTES_DIR"])
+    (notes / TASK.notes_dir / "PROGRESS.md").write_text("local, unpushed\n")
+    git(notes, "add", TASK.notes_dir)
+    subprocess.run(  # with the sandbox's variables: the kit's git hooks read them
+        ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "local"],
+        cwd=notes,
+        env={**os.environ, **env},
+        check=True,
+        capture_output=True,
+    )
+    push_state(tmp_path, "ready", note="pushed meanwhile")
+
+    result = session_setup(env, created_task)
+
+    assert result.returncode == 0, result.stderr
+    assert "isn't up to date" in result.stderr and "git pull --rebase" in result.stderr
+
+
+def test_a_task_without_a_state_is_started_with_a_warning(tmp_path, kit_env, created_task) -> None:
+    launch_record(tmp_path).parent.mkdir(parents=True)
+    launch_record(tmp_path).write_text("left by an earlier launch\n")
+
+    result = session_setup(kit_env(TASK), created_task)
+
+    assert result.returncode == 0, result.stderr
+    assert f"has no {Path(TASK.state_file).name}" in result.stderr and "no turns" in result.stderr
+    assert not launch_record(tmp_path).exists()
+
+
+def test_a_task_state_that_cant_be_read_stops_the_launch(tmp_path, kit_env, created_task) -> None:
+    push_state(tmp_path, "nowhere")
+
+    result = session_setup(kit_env(TASK), created_task)
+
+    assert result.returncode == 1
+    assert "couldn't read the task state" in result.stderr and "not starting dev" in result.stderr
+    assert not launch_record(tmp_path).exists()

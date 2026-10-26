@@ -36,6 +36,15 @@ def role_dir(foundry_root: Path, role_name: str) -> Path:
     return agent_kit_dir(foundry_root) / "roles" / role_name
 
 
+def lifecycle_dir(foundry_root: Path) -> Path:
+    """The agent kit's lifecycles: one state machine per type of task, <name>.json."""
+    return agent_kit_dir(foundry_root) / "lifecycle"
+
+
+def lifecycle_path(foundry_root: Path, lifecycle_name: str) -> Path:
+    return lifecycle_dir(foundry_root) / f"{lifecycle_name}.json"
+
+
 def ssh_key_path(foundry_root: Path, role_name: str) -> Path:
     return foundry_root / "secrets" / "ssh" / role_name
 
