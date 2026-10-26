@@ -21,7 +21,8 @@ import stat
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -42,6 +43,51 @@ class Owner(NamedTuple):
 
 
 ROOT = Owner(0, 0)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Machine:
+    """Where hardening acts and what it checks: the sandbox's system files, sockets and the commands that reach
+    root, and what the agent can do to them. SANDBOX is the real one."""
+
+    managed_settings: Path
+    """Where Claude Code reads its managed settings."""
+    docker_daemon_config: Path
+    """dockerd's configuration, where root mode gives its socket to root."""
+    regrouped_socket: Path
+    """The Docker socket root mode gives to root now, rather than when dockerd next starts."""
+    checked_sockets: tuple[Path, ...]
+    """The sockets agent mode checks the agent can't write: any of them is root over the sandbox."""
+    python: str
+    """The interpreter every hook and the launch run."""
+    sudo: str
+    su: str
+    passwd: str
+    root: Owner
+    """Who the files root mode installs belong to."""
+    euid: Callable[[], int]
+    """The effective uid this process runs as: 0 in root mode, the agent's in agent mode."""
+    can_write: Callable[[Path], bool]
+    """Whether the agent can write ``path`` (for a link, its target)."""
+
+
+def _agent_can_write(path: Path) -> bool:
+    return os.access(path, os.W_OK)
+
+
+SANDBOX = Machine(
+    managed_settings=Path("/etc/claude-code/managed-settings.json"),
+    docker_daemon_config=Path("/etc/docker/daemon.json"),
+    regrouped_socket=Path("/var/run/docker.sock"),
+    checked_sockets=(Path("/var/run/docker.sock"), Path("/var/run/docker/containerd/containerd.sock")),
+    python=contract.PYTHON,
+    sudo="sudo",
+    su="su",
+    passwd="passwd",
+    root=ROOT,
+    euid=os.geteuid,
+    can_write=_agent_can_write,
+)
 
 
 class HardenError(Exception):

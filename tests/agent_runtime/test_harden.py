@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import harden
+from agent_runtime import contract, harden
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 KIT_SETTINGS = harden.kit_settings(AGENT_KIT_PATH)
@@ -358,3 +358,27 @@ def test_a_folder_that_cant_be_listed_fails(kit: Path) -> None:
 def test_a_missing_kit_fails(tmp_path: Path) -> None:
     (found,) = harden.check_kit_read_only(tmp_path / "absent")
     assert "can't be listed" in found
+
+
+def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
+    """The paths, commands and access hardening acts on in a real sandbox, spelled out once more here, so a
+    refactor can't change one silently."""
+    sandbox = harden.SANDBOX
+
+    assert sandbox.managed_settings == Path("/etc/claude-code/managed-settings.json")
+    assert sandbox.docker_daemon_config == Path("/etc/docker/daemon.json")
+    assert sandbox.regrouped_socket == Path("/var/run/docker.sock")
+    assert sandbox.checked_sockets == (
+        Path("/var/run/docker.sock"),
+        Path("/var/run/docker/containerd/containerd.sock"),
+    )
+    assert sandbox.python == "/usr/bin/python3" == contract.PYTHON
+    assert (sandbox.sudo, sandbox.su, sandbox.passwd) == ("sudo", "su", "passwd")
+    assert sandbox.root == harden.Owner(0, 0)
+    assert sandbox.euid is os.geteuid
+    writable, read_only = tmp_path / "writable", tmp_path / "read-only"
+    writable.write_text("")
+    read_only.write_text("")
+    read_only.chmod(0o444)
+    for path in (writable, read_only, tmp_path / "absent"):
+        assert sandbox.can_write(path) == os.access(path, os.W_OK), path
