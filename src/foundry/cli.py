@@ -5,10 +5,10 @@ import sys
 from collections.abc import Callable, Sequence
 
 from foundry.agent_sandbox import SandboxError
-from foundry.commands import prune, repo, run, task
+from foundry.commands import prune, repo, task
 from foundry.errors import FoundryError
 
-COMMANDS = (run, task, repo, prune)
+COMMANDS = (task, repo, prune)
 
 
 def build_parser() -> argparse.ArgumentParser:

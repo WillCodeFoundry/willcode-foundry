@@ -1,0 +1,34 @@
+{
+  "initial": "draft",
+  "on": {
+    "block": {"target": "blocked", "when": "you need the human to decide something: put the question in the note"}
+  },
+  "states": {
+    "draft": {
+      "assignee": "planner", "skill": "grilling",
+      "on": {"submit": {"target": "ready", "when": "the human approved the TASK.md draft, and it is written and pushed"}}
+    },
+    "ready": {
+      "assignee": "dev", "skill": "tdd",
+      "on": {"submit": {"target": "review", "when": "every acceptance criterion is met, and the code is pushed"}}
+    },
+    "review": {
+      "assignee": "reviewer", "skill": "code-review",
+      "on": {
+        "approve": {"target": "approved", "when": "nothing still open in REVIEW.md needs a change"},
+        "reject": {"target": "changes", "limit": 3, "fallback": "blocked",
+                   "when": "something still open in REVIEW.md needs a change"}
+      }
+    },
+    "changes": {
+      "assignee": "dev", "skill": "address-review",
+      "on": {"submit": {"target": "review", "when": "every open finding is answered, and the fixes are pushed"}}
+    },
+    "approved": {
+      "assignee": "dev", "skill": "pr",
+      "on": {"submit": {"target": "done", "when": "the pull request is open: put its URL in the note"}}
+    },
+    "blocked": {"assignee": "human"},
+    "done": {"final": true}
+  }
+}

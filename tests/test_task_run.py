@@ -1,11 +1,12 @@
-"""foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path."""
+"""foundry task run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path."""
 
 from pathlib import Path
 
 import pytest
 
+from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch
+from foundry.commands.task import prepare_launch
 from foundry.errors import FoundryError
 from foundry.session import SessionVariables
 from foundry.task import Task
@@ -62,3 +63,8 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task("t1"))
+
+
+def test_foundry_run_is_gone() -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["run", "store", "dev", "T1"])

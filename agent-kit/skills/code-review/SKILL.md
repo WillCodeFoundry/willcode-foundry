@@ -86,9 +86,20 @@ If the spec is missing, skip the Spec sub-agent and note this in the final repor
 
 ### 5. Aggregate
 
-Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "Reviewing" section describes, with the two reports under `### Standards` and `### Spec` headings in the round, verbatim or lightly cleaned, each finding with its id. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
+Write the result as a new round in the task's `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`, one file per task. Never edit earlier rounds. Each round is a section:
 
-End the reports with a one-line summary, before the round's verdict: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
+```markdown
+## Round <n> (reviewing <short sha>)
+```
+
+with, in this order:
+
+1. Any "TASK.md changed by another role" finding (your `ROLE.md`'s check).
+2. A verdict on every finding still open from earlier rounds: closed, still open, or accepted as is.
+3. The two reports, under `### Standards` and `### Spec` headings, verbatim or lightly cleaned, with ids continuing the sequence across rounds (`R1`, `R2`, …), so the dev can answer each by its id. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
+4. A one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
+
+Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules describe. Then end your turn with the event `"$AGENT_KIT_DIR/bin/task" show` lists for the round's outcome, and its summary as the hand-off note. If the loop of rounds is limited, the last one may hand the task to the human instead of the dev; don't pass work you'd otherwise send back just to avoid that.
 
 ## Why two axes
 

@@ -70,6 +70,7 @@ class SessionVariables:
             "AGENT_NOTES_ROOT": NOTES_ROOT,
             "AGENT_TASK_NOTES": self.task.notes_dir,
             "AGENT_TASK_FILE": self.task.task_file,
+            "AGENT_STATE_FILE": self.task.state_file,
         }
 
     @classmethod

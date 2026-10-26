@@ -47,23 +47,6 @@ that shared identity, say so in your report.
 
 ## Reviewing
 
-Review with the `code-review` skill.
-
-Write the result to `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`, one file
-per task, as a new section per round:
-
-```markdown
-## Round <n> (reviewing <short sha>)
-```
-
-Never edit earlier rounds. In each round, in this order:
-
-1. Any "TASK.md changed by another role" finding.
-2. A verdict on every finding still open from earlier rounds: closed, still
-   open, or accepted as is.
-3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
-   …), so the dev can answer each by its id.
-4. A last line: `Verdict: changes needed` or `Verdict: approved`.
-
-Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
-describe.
+Review the commit the task state names (`$AGENT_NOTES_DIR/$AGENT_STATE_FILE`'s
+`handoff.commit`), with the skill `"$AGENT_KIT_DIR/bin/task" show` names. Your
+rounds go in `REVIEW.md`, as that skill describes.

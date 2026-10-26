@@ -45,6 +45,7 @@ def test_the_definition_carries_the_variables_the_agent_kit_reads(tmp_path: Path
         "AGENT_NOTES_ROOT": ".agent",
         "AGENT_TASK_NOTES": ".agent/wcf-0042",
         "AGENT_TASK_FILE": ".agent/wcf-0042/TASK.md",
+        "AGENT_STATE_FILE": ".agent/wcf-0042/STATE.json",
     }
 
 

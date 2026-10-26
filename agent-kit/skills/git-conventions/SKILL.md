@@ -97,4 +97,3 @@ The body follows the `pr` skill.
 - [ ] Diff against `main` contains only what the task needs
 - [ ] Description states how it was tested
 - [ ] Every acceptance criterion in `TASK.md` is addressed or explicitly deferred
-- [ ] `REVIEW.md`'s latest round says `Verdict: approved`

@@ -20,6 +20,9 @@ NOTES_BRANCH: Final = "agent-notes"
 NOTES_ROOT: Final = ".agent"
 # The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
+# The notes file holding the task state: its lifecycle, the state it is in, and the hand-off note.
+# Written by the agent kit's bin/task and by `foundry task move`, never by hand.
+STATE_FILE: Final = "STATE.json"
 
 # A task id becomes the git branch task/<id>, so it must be a valid ref
 # component as well as readable: wcf-0042, fix-login.2. Matched after
@@ -61,6 +64,11 @@ class Task:
     def task_file(self) -> str:
         """The task's TASK_FILE on NOTES_BRANCH, relative to the repository root."""
         return f"{self.notes_dir}/{TASK_FILE}"
+
+    @property
+    def state_file(self) -> str:
+        """The task's STATE_FILE on NOTES_BRANCH, relative to the repository root."""
+        return f"{self.notes_dir}/{STATE_FILE}"
 
 
 def load_template(template_dir: Path) -> dict[str, str]:

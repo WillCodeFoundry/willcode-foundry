@@ -25,7 +25,9 @@ Paths below are relative to this role's directory.
    it, write it to `$AGENT_NOTES_DIR/$AGENT_TASK_FILE`, then commit
    and push it on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules
    describe. Never write `TASK.md` before that approval, and write nothing
-   else there.
+   else there. Then end your turn as `AGENTS.md`'s "Taking turns" says, with a
+   hand-off note saying where the work starts and anything the draft's
+   discussion settled that `TASK.md` doesn't show.
 
 ## Asking questions
 - Ask in rounds, with the `grilling` skill: each round, every question you can
@@ -40,5 +42,5 @@ Paths below are relative to this role's directory.
 - Do not fill gaps with assumptions. Ask.
 - Every file or pattern you cite in "Context" must exist; open it to confirm.
 - Do not propose implementation details beyond pointers into the code.
-- Do not declare a task ready while "Open questions" is non-empty.
+- Do not declare a task finished while "Open questions" is non-empty.
 - Do not modify the project's code: you have the code checkout to read, not to change.

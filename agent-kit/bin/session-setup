@@ -11,7 +11,7 @@
 # missing is an error, not something to create here.
 set -euo pipefail
 : "${AGENT_TASK:?}" "${AGENT_ROLE:?}" "${AGENT_REPO_URL:?}" "${AGENT_PROJECT_DIR:?}" "${AGENT_NOTES_DIR:?}" "${AGENT_KIT_DIR:?}"
-: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_TASK_FILE:?}"
+: "${AGENT_TASK_BRANCH:?}" "${AGENT_NOTES_BRANCH:?}" "${AGENT_TASK_FILE:?}" "${AGENT_STATE_FILE:?}"
 
 role_path="$AGENT_KIT_DIR/roles/$AGENT_ROLE"
 [[ -f "$role_path/gitconfig" ]] || { echo "session-setup: $role_path/gitconfig is missing" >&2; exit 1; }
@@ -75,6 +75,11 @@ task_md_path="$AGENT_NOTES_DIR/$AGENT_TASK_FILE"
     echo "session-setup: $AGENT_NOTES_BRANCH has no $AGENT_TASK_FILE; push the task's TASK.md there, then run again." >&2
     exit 1
 }
+
+# --- Turn ---------------------------------------------------------------------
+# Only the role whose turn it is starts; bin/task begin says why not otherwise.
+
+"$AGENT_KIT_DIR/bin/task" begin || { echo "session-setup: not starting $AGENT_ROLE." >&2; exit 1; }
 
 # --- Agent instructions -------------------------------------------------------
 # Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @

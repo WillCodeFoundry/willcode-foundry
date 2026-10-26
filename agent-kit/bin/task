@@ -1,0 +1,540 @@
+#!/usr/bin/env python3
+"""The agent's command for its task's state, inside a sandbox.
+
+    task show                       the task's lifecycle, state, assignee, counts, hand-off note, and events
+    task EVENT NOTE                 end your turn: apply EVENT (submit, approve, reject, block, ...) with a
+                                    hand-off note for the next assignee; writes, commits and pushes STATE.json
+    task begin                      start a launch (session-setup): bring the notes checkout up to date, check
+                                    it is $AGENT_ROLE's turn, and record the launch in ~/.claude/launch.json
+    task check-turn                 exit 0 if it is $AGENT_ROLE's turn (pre-push)
+    task check-state                exit 0 unless this sandbox changed STATE.json other than with this
+                                    command since the launch task begin recorded, or the task state can't
+                                    be read (the Stop hook)
+
+Exit status: 0 done; 1 refused (not your turn, an event the state doesn't accept, …); 2 usage; 3 the task
+has no task state (created before task states), so there is nothing to check; 4 the task state couldn't be
+read (origin unreachable, STATE.json malformed, its lifecycle missing or invalid), or this command failed
+unexpectedly. A read failure is never reported as someone else's turn: it needs a human to look at it.
+
+The task state is $AGENT_STATE_FILE on $AGENT_NOTES_BRANCH. Every verb reads it as origin has it, freshly
+fetched: origin's is the task state, whatever the notes checkout holds, so changes the human or another
+role pushed count at once. Its lifecycle, a state machine, is $AGENT_KIT_DIR/lifecycle/<name>.json:
+
+    {"initial": STATE, "on": {EVENT: TRANSITION},
+     "states": {STATE: {"assignee": ROLE, "skill": SKILL, "on": {EVENT: TRANSITION}}}}
+
+A role's state names the skill its work is done with. A transition is {"target": STATE, "when": TEXT},
+where "when" says when to send the event; with "limit": N and optionally "fallback": STATE, the event
+goes to target at most N times, then to fallback (refused without one). A state's own "on" adds to the
+top-level one, which applies only in states assigned to a role. A state assigned to "human" has
+nothing else, and accepts no events: the human moves the task with `foundry task move`. A final state
+is {"final": true}. task show tells the agent its state's skill and events, so no instructions need to
+name them.
+
+Every event but block refuses while the code checkout has work origin doesn't. block refuses only
+uncommitted changes: it pushes the role's unpushed commits itself, while it is still the role's turn, so
+a stuck role's work reaches the human instead of being stranded once the turn has passed.
+
+Each commit this command makes carries the trailer "Task-State: bin/task", which is how check-state
+tells it from a hand edit by the same role.
+
+Standard library only: this runs on the sandbox's python3.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import traceback
+from pathlib import Path
+from typing import Any, NamedTuple
+
+HUMAN = "human"
+VERBS = ("show", "begin", "check-turn", "check-state")
+STATE_KEYS = {"lifecycle", "state", "previous", "counts", "handoff"}
+TRAILER = "Task-State: bin/task"
+PUSH_ATTEMPTS = 3
+LAUNCH_RECORD = Path.home() / ".claude" / "launch.json"
+USAGE = "usage: task show | task EVENT NOTE | task begin | task check-turn | task check-state"
+
+
+class TaskError(Exception):
+    """Why task stopped, reported as its message, with the exit status that tells the hooks which case it is."""
+
+    exit_status: int
+
+
+class Refusal(TaskError):
+    """A problem the agent can act on."""
+
+    exit_status = 1
+
+
+class NoState(TaskError):
+    """The task was created before task states: there is nothing to check."""
+
+    exit_status = 3
+
+
+class Unreadable(TaskError):
+    """The task state couldn't be read: a human needs to look."""
+
+    exit_status = 4
+
+    def __init__(self, problem: str) -> None:
+        super().__init__(f"couldn't read the task state: {problem}")
+
+
+class Outcome(NamedTuple):
+    """What applying an event does: the new state and counts, and what happened, for messages."""
+
+    state: str
+    counts: dict[str, int]
+    happened: str
+
+
+def count_key(state: str, event: str) -> str:
+    """The key a limited event's count is kept under, in STATE.json's counts."""
+    return f"{state}.{event}"
+
+
+def transition_message(task: str, before: str, after: str, why: str) -> str:
+    """The notes commit's summary for a transition; the host's task_state writes the same for a move by hand."""
+    return f"{task}: {before} → {after} ({why})"
+
+
+def env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise Refusal(f"{name} is not set: task runs inside a foundry sandbox, which sets it")
+    return value
+
+
+def git(cwd: str, *args: str) -> str:
+    result = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise Refusal(f"git {args[0]} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+# --- reading ----------------------------------------------------------------------
+
+
+def parse_state(text: str, where: str) -> dict[str, Any]:
+    """A task state record, checked for the shape this command writes."""
+    try:
+        record = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise Unreadable(f"{where} is not valid JSON: {error}") from None
+    well_formed = (
+        isinstance(record, dict)
+        and set(record) == STATE_KEYS
+        and isinstance(record["lifecycle"], str)
+        and isinstance(record["state"], str)
+        and (record["previous"] is None or isinstance(record["previous"], str))
+        and isinstance(record["counts"], dict)
+        and all(isinstance(key, str) and type(count) is int and count >= 0 for key, count in record["counts"].items())
+        and isinstance(record["handoff"], dict)
+        and set(record["handoff"]) == {"commit", "note"}
+        and all(isinstance(value, str) for value in record["handoff"].values())
+    )
+    if not well_formed:
+        raise Unreadable(f"{where} is not a task state: it needs exactly {', '.join(sorted(STATE_KEYS))}")
+    return record
+
+
+def fetch_notes() -> None:
+    try:
+        git(env("AGENT_NOTES_DIR"), "fetch", "-q", "origin", env("AGENT_NOTES_BRANCH"))
+    except Refusal as error:
+        raise Unreadable(f"origin can't be fetched: {error}") from None
+
+
+def origin_state() -> dict[str, Any]:
+    """The task state record as origin has it, as of the last fetch."""
+    where = f"origin/{env('AGENT_NOTES_BRANCH')}:{env('AGENT_STATE_FILE')}"
+    result = subprocess.run(
+        ["git", "-C", env("AGENT_NOTES_DIR"), "show", where], capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        raise NoState(
+            f"task {env('AGENT_TASK')} has no {Path(env('AGENT_STATE_FILE')).name}: it was created before task "
+            "states, so it has no turns. Work as AGENTS.md says without one, and tell the human."
+        )
+    return parse_state(result.stdout, where)
+
+
+def read_state() -> dict[str, Any]:
+    """The task state record as origin has it now."""
+    fetch_notes()
+    return origin_state()
+
+
+def lifecycle_problem(lifecycle: Any) -> str | None:
+    """What keeps ``lifecycle`` from being one this command can apply, or None.
+
+    Only the shape it relies on; tests/test_lifecycle_contract.py holds the kit's lifecycles to the rest.
+    The host's task_state checks the same, and tests/test_task_state_parity.py holds the two to it.
+    """
+    if not isinstance(lifecycle, dict):
+        return "it isn't a JSON object"
+    states = lifecycle.get("states")
+    if not isinstance(states, dict) or not states:
+        return "it has no states"
+    tables = {"the top level": lifecycle.get("on", {})}
+    for name, definition in states.items():
+        if not isinstance(definition, dict):
+            return f"state {name} isn't an object"
+        tables[f"state {name}"] = definition.get("on", {})
+    for where, on in tables.items():
+        if not isinstance(on, dict):
+            return f"{where}'s on isn't an object"
+        for event, transition in on.items():
+            if not (
+                isinstance(transition, dict)
+                and isinstance(transition.get("target"), str)
+                and isinstance(transition.get("when"), str)
+            ):
+                return f"{where}'s {event} needs a target and a when"
+            if "limit" in transition and not (type(transition["limit"]) is int and transition["limit"] >= 1):
+                return f"{where}'s {event} has a limit that isn't a whole number from 1"
+            for key in ("target", "fallback"):
+                if key in transition and (not isinstance(transition[key], str) or transition[key] not in states):
+                    return f"{where}'s {event} has a {key} that isn't one of its states"
+    return None
+
+
+def read_lifecycle(name: str) -> dict[str, Any]:
+    path = Path(env("AGENT_KIT_DIR")) / "lifecycle" / f"{name}.json"
+    try:
+        lifecycle = json.loads(path.read_text())
+    except FileNotFoundError:
+        raise Unreadable(f"the task's lifecycle {name!r} has no file {path}") from None
+    except json.JSONDecodeError as error:
+        raise Unreadable(f"{path} is not valid JSON: {error}") from None
+    problem = lifecycle_problem(lifecycle)
+    if problem:
+        raise Unreadable(f"{path} is not a lifecycle: {problem}")
+    loaded: dict[str, Any] = lifecycle
+    return loaded
+
+
+def state_def(lifecycle: dict[str, Any], name: str) -> dict[str, Any]:
+    states: dict[str, Any] = lifecycle["states"]
+    if name not in states:
+        raise Unreadable(f"the task is in {name!r}, which its lifecycle doesn't have")
+    found: dict[str, Any] = states[name]
+    return found
+
+
+def assignee(lifecycle: dict[str, Any], name: str) -> str | None:
+    """The role or human whose turn the state is; None for a final state."""
+    found = state_def(lifecycle, name).get("assignee")
+    return found if isinstance(found, str) else None
+
+
+def accepted(lifecycle: dict[str, Any], name: str) -> dict[str, Any]:
+    """The events the state accepts, with their transitions: its own, then the top-level ones it doesn't redefine."""
+    if assignee(lifecycle, name) in (None, HUMAN):
+        return {}
+    events = dict(state_def(lifecycle, name).get("on", {}))
+    for event, spec in lifecycle.get("on", {}).items():
+        events.setdefault(event, spec)
+    return events
+
+
+def whose_turn(lifecycle: dict[str, Any], record: dict[str, Any]) -> str:
+    """Whose turn it is, said for a message."""
+    who = assignee(lifecycle, record["state"])
+    if who is None:
+        return f"task {env('AGENT_TASK')} is done"
+    if who == HUMAN:
+        return f"task {env('AGENT_TASK')} is waiting for the human"
+    return f"it's {who}'s turn on task {env('AGENT_TASK')}"
+
+
+# --- applying an event -------------------------------------------------------------
+
+
+def apply(lifecycle: dict[str, Any], record: dict[str, Any], event: str) -> Outcome:
+    """What the event does to the task state: the lifecycle's rules, and nothing else."""
+    events = accepted(lifecycle, record["state"])
+    if event not in events:
+        listed = "".join(f"\n  {line}" for line in event_lines(record, events)) or " none"
+        raise Refusal(f"{record['state']} doesn't accept {event}; the events it accepts:{listed}")
+    transition = events[event]
+    counts = dict(record["counts"])
+    if "limit" not in transition:
+        return Outcome(transition["target"], counts, event)
+    key = count_key(record["state"], event)
+    used, limit = counts.get(key, 0), transition["limit"]
+    if used < limit:
+        counts[key] = used + 1
+        return Outcome(transition["target"], counts, f"{event} ({used + 1} of {limit})")
+    if "fallback" in transition:
+        return Outcome(transition["fallback"], counts, f"{event} (limit of {limit} reached)")
+    others = ", ".join(name for name in events if name != event) or "none"
+    raise Refusal(f"{event} has reached its limit of {limit} in {record['state']}; the other events: {others}")
+
+
+def pushed_head(*, push_commits: bool = False) -> str:
+    """The task branch's head on origin, refusing while the code checkout has work origin doesn't have.
+
+    With ``push_commits`` (block), commits origin doesn't have are pushed first, while it is still the role's
+    turn: once the task is handed on, the role can push no more code, so they would be stranded. Uncommitted
+    changes are refused either way, since nothing could push them afterwards.
+    """
+    code, branch = env("AGENT_PROJECT_DIR"), env("AGENT_TASK_BRANCH")
+    git(code, "fetch", "-q", "origin", branch)
+    if git(code, "status", "--porcelain", "--untracked-files=no"):
+        raise Refusal(
+            "the code checkout has uncommitted changes: commit them (unfinished work is fine), then run this "
+            "again; block pushes your commits for you"
+            if push_commits
+            else "the code checkout has uncommitted changes: commit and push them first, so the next role sees them"
+        )
+    if not git(code, "log", "--oneline", f"origin/{branch}..HEAD"):
+        return git(code, "rev-parse", f"origin/{branch}")
+    if not push_commits:
+        raise Refusal(f"the code checkout has commits not pushed to origin/{branch}: push them first")
+    pushed = subprocess.run(
+        ["git", "-C", code, "push", "-q", "origin", f"HEAD:refs/heads/{branch}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if pushed.returncode != 0:
+        raise Refusal(
+            f"couldn't push your commits to origin/{branch}, so nothing changed: {pushed.stderr.strip()} "
+            "Push them yourself, then run this again."
+        )
+    return git(code, "rev-parse", "HEAD")
+
+
+def turn_or_refuse(role: str, lifecycle: dict[str, Any], record: dict[str, Any]) -> None:
+    if assignee(lifecycle, record["state"]) != role:
+        raise Refusal(f"{whose_turn(lifecycle, record)}, not {role}'s (the task is in {record['state']})")
+
+
+def transition(event: str, note: str) -> None:
+    role, notes = env("AGENT_ROLE"), env("AGENT_NOTES_DIR")
+    branch, state_file = env("AGENT_NOTES_BRANCH"), env("AGENT_STATE_FILE")
+    record = read_state()
+    lifecycle = read_lifecycle(record["lifecycle"])
+    turn_or_refuse(role, lifecycle, record)
+    if not note.strip():
+        raise Refusal("give a hand-off note: what the next assignee needs to know first")
+    outcome = apply(lifecycle, record, event)
+    if git(notes, "status", "--porcelain", "--", state_file):
+        raise Refusal(
+            f"{state_file} has changes in the notes checkout that bin/task didn't make: "
+            f'restore it (git -C "$AGENT_NOTES_DIR" checkout -- "$AGENT_STATE_FILE"), then run this again'
+        )
+    written = {
+        "lifecycle": record["lifecycle"],
+        "state": outcome.state,
+        "previous": record["state"],
+        "counts": outcome.counts,
+        "handoff": {"commit": pushed_head(push_commits=event == "block"), "note": note.strip()},
+    }
+    message = transition_message(env("AGENT_TASK"), record["state"], outcome.state, outcome.happened)
+
+    # Commit on top of origin's notes branch and push; if another task's push wins the race, start again
+    # from origin. A commit that can't be pushed is undone, so the notes checkout never holds a transition
+    # origin doesn't have.
+    error = ""
+    for _ in range(PUSH_ATTEMPTS):
+        rebase_on_origin(notes, branch)
+        if origin_state() != record:
+            raise Refusal("the task state changed on origin while you were working: run task show, then decide again")
+        (Path(notes) / state_file).write_text(json.dumps(written, indent=2, ensure_ascii=False) + "\n")
+        git(notes, "add", "--", state_file)
+        git(notes, "commit", "-q", "-m", message, "-m", TRAILER, "--", state_file)
+        pushed = subprocess.run(
+            ["git", "-C", notes, "push", "-q", "origin", branch], capture_output=True, text=True, check=False
+        )
+        if pushed.returncode == 0:
+            next_turn = whose_turn(lifecycle, written).capitalize()
+            print(f"{outcome.happened}: {record['state']} → {outcome.state}. {next_turn}.")
+            return
+        error = pushed.stderr.strip()
+        git(notes, "reset", "-q", "--soft", "HEAD~1")
+        git(notes, "restore", "-q", "--staged", "--worktree", "--", state_file)
+        fetch_notes()
+    raise Refusal(f"couldn't push the task state after {PUSH_ATTEMPTS} attempts, so nothing changed: {error}")
+
+
+def rebase_on_origin(notes: str, branch: str) -> None:
+    """Bring the notes checkout up to date with origin, keeping its own commits on top."""
+    pulled = subprocess.run(
+        ["git", "-C", notes, "pull", "-q", "--rebase", "--autostash", "origin", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if pulled.returncode != 0:
+        subprocess.run(["git", "-C", notes, "rebase", "--abort"], capture_output=True, check=False)
+        raise Refusal(
+            f"the notes checkout can't be rebased on origin/{branch}: {pulled.stderr.strip()} "
+            "Resolve that as AGENTS.md's notes rules say, then run this again."
+        )
+
+
+# --- the other verbs ----------------------------------------------------------------
+
+
+def event_lines(record: dict[str, Any], events: dict[str, Any]) -> list[str]:
+    """One line per event: its name, when to send it, and how much of its limit is used."""
+    lines = []
+    width = max((len(event) for event in events), default=0)
+    for event, transition in events.items():
+        line = f"{event:<{width}}  when {transition['when']}"
+        if "limit" in transition:
+            used = record["counts"].get(count_key(record["state"], event), 0)
+            after = f", then {transition['fallback']}" if "fallback" in transition else ""
+            line += f" ({used} of {transition['limit']} used{after})"
+        lines.append(line)
+    return lines
+
+
+def show() -> None:
+    record = read_state()
+    lifecycle = read_lifecycle(record["lifecycle"])
+    who = assignee(lifecycle, record["state"])
+    turn = "your turn" if who == env("AGENT_ROLE") else whose_turn(lifecycle, record)
+    print(f"task {env('AGENT_TASK')}: {record['lifecycle']} lifecycle, in {record['state']} ({turn})")
+    if record["previous"]:
+        print(f"previous state: {record['previous']}")
+    print(f"hand-off note: {record['handoff']['note'] or '(none)'}")
+    events = accepted(lifecycle, record["state"])
+    if not events:
+        print("no events: only the human moves the task from here")
+        return
+    skill = state_def(lifecycle, record["state"]).get("skill")
+    print(f"do this turn's work with the {skill} skill, then end your turn with one of:")
+    for line in event_lines(record, events):
+        print(f"  {line}")
+
+
+def check_turn() -> None:
+    record = read_state()
+    lifecycle = read_lifecycle(record["lifecycle"])
+    if assignee(lifecycle, record["state"]) != env("AGENT_ROLE"):
+        note = record["handoff"]["note"]
+        raise Refusal(f"{whose_turn(lifecycle, record)} (in {record['state']})" + (f": {note}" if note else ""))
+
+
+def begin() -> None:
+    """Start a launch: only on the role's turn, as origin has the task state, recording origin's notes commit.
+
+    The record is what check-state compares against, so the Stop hook can tell this sandbox's own changes to
+    the task state from the human's or another role's. A task with no task state starts with a warning and
+    no record. The notes checkout is brought up to date where it can be; the turn doesn't depend on it.
+    """
+    notes, branch = env("AGENT_NOTES_DIR"), env("AGENT_NOTES_BRANCH")
+    try:
+        check_turn()
+    except NoState as no_state:
+        LAUNCH_RECORD.unlink(missing_ok=True)
+        print(f"task: warning: {no_state}", file=sys.stderr)
+        return
+    merged = subprocess.run(
+        ["git", "-C", notes, "merge", "-q", "--ff-only", f"origin/{branch}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if merged.returncode != 0:
+        print(
+            f"task: warning: the notes checkout isn't up to date with origin/{branch}: {merged.stderr.strip()}\n"
+            "  Bring it up to date as AGENTS.md's notes rules say (git pull --rebase) before you work.",
+            file=sys.stderr,
+        )
+    LAUNCH_RECORD.parent.mkdir(parents=True, exist_ok=True)
+    LAUNCH_RECORD.write_text(json.dumps({"notes_base": git(notes, "rev-parse", f"origin/{branch}")}) + "\n")
+
+
+def check_state() -> None:
+    """Refuse if this sandbox changed the task state other than with this command since launch, or if the task
+    state can't be read.
+
+    Only this sandbox's own changes count: commits by the human (foundry task move) or another role are
+    the task moving on, and are never refused. An uncommitted edit is refused; so is a commit since launch,
+    made as this role, without this command's trailer. With no launch record (begin writes none for a task
+    without a task state), there is nothing to check.
+    """
+    notes, state_file = env("AGENT_NOTES_DIR"), env("AGENT_STATE_FILE")
+    try:
+        launch = json.loads(LAUNCH_RECORD.read_text())
+        base = launch["notes_base"]
+    except FileNotFoundError:
+        raise NoState(
+            f"{LAUNCH_RECORD} doesn't exist: task begin writes none for a task without a task state"
+        ) from None
+    except (OSError, ValueError, KeyError, TypeError):
+        raise Unreadable(f"{LAUNCH_RECORD} isn't a launch record: task begin writes it; launch again") from None
+    if git(notes, "status", "--porcelain", "--", state_file):
+        raise Refusal(
+            f"{state_file} has changes made other than by $AGENT_KIT_DIR/bin/task: restore it "
+            f'(git -C "$AGENT_NOTES_DIR" checkout -- "$AGENT_STATE_FILE"), then end your turn with '
+            "$AGENT_KIT_DIR/bin/task EVENT NOTE"
+        )
+    fetch_notes()
+    known = subprocess.run(
+        ["git", "-C", notes, "cat-file", "-e", f"{base}^{{commit}}"], capture_output=True, check=False
+    )
+    if known.returncode != 0:
+        raise Unreadable(f"the launch's notes commit {base[:12]} isn't in the notes checkout; launch again")
+    me = git(notes, "config", "user.email")
+    log = git(
+        notes,
+        "log",
+        "--format=%H%x00%ae%x00%B%x1e",
+        f"^{base}",
+        "HEAD",
+        f"origin/{env('AGENT_NOTES_BRANCH')}",
+        "--",
+        state_file,
+    )
+    for entry in filter(None, (part.strip("\n") for part in log.split("\x1e"))):
+        sha, author, body = entry.split("\x00", 2)
+        if author == me and TRAILER not in body.splitlines():
+            raise Refusal(
+                f"{state_file} was changed other than by $AGENT_KIT_DIR/bin/task, in your commit {sha[:12]}: "
+                f'revert it (git -C "$AGENT_NOTES_DIR" revert --no-edit {sha[:12]}), push, then end your turn '
+                "with $AGENT_KIT_DIR/bin/task EVENT NOTE"
+            )
+    # Last, so a hand edit is reported as one, with how to undo it, rather than only as unreadable.
+    record = origin_state()
+    state_def(read_lifecycle(record["lifecycle"]), record["state"])
+
+
+def main(argv: list[str]) -> int:
+    try:
+        match argv:
+            case ["show"]:
+                show()
+            case ["begin"]:
+                begin()
+            case ["check-turn"]:
+                check_turn()
+            case ["check-state"]:
+                check_state()
+            case [event, note] if event not in VERBS and not event.startswith("-"):
+                transition(event, note)
+            case _:
+                print(USAGE, file=sys.stderr)
+                return 2
+    except TaskError as stopped:
+        print(f"task: {stopped}", file=sys.stderr)
+        return stopped.exit_status
+    except Exception:
+        # A bug here must never read as someone else's turn (exit 1) to the hooks.
+        traceback.print_exc()
+        print("task: failed unexpectedly (above): a human needs to look", file=sys.stderr)
+        return Unreadable.exit_status
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

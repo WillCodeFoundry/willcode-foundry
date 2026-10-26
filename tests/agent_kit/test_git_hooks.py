@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry.task import NOTES_BRANCH, Task
+from foundry.task import NOTES_BRANCH, STATE_FILE, Task
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 TASK = Task("T1")
@@ -24,43 +24,9 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
 
 
 @pytest.fixture
-def repo(tmp_path, monkeypatch, kit_env):
+def repo(sandbox_checkouts):
     """(code checkout, notes checkout), made by session-setup, both clean and pushed."""
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))  # keep the developer's global git config out
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for key, value in {"user.name": "t", "user.email": "t@t", "init.defaultBranch": "main"}.items():
-        git(tmp_path, "config", "--global", key, value)
-    # session-setup includes the role's gitconfig, which signs with the role's key; there is no
-    # private key here, so signing is turned off by git's environment override, which beats any file.
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
-
-    origin = tmp_path / "origin.git"
-    git(tmp_path, "init", "--bare", "-q", str(origin))
-    seed = tmp_path / "seed"
-    git(tmp_path, "clone", "-q", str(origin), str(seed))
-    (seed / "README.md").write_text("hi\n")
-    git(seed, "add", ".")
-    git(seed, "commit", "-qm", "init")
-    git(seed, "push", "-q", "origin", "main", f"main:{TASK.branch}")
-    git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    (seed / TASK.notes_dir).mkdir(parents=True)
-    (seed / TASK.task_file).write_text("# Task\n")
-    git(seed, "add", TASK.notes_dir)
-    git(seed, "commit", "-qm", f"{TASK.id}: create task")
-    git(seed, "push", "-q", "origin", NOTES_BRANCH)
-
-    env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{origin}"}
-    for key, value in env.items():
-        monkeypatch.setenv(key, value)
-    setup = subprocess.run(
-        [str(AGENT_KIT_PATH / "bin" / "session-setup")], env=os.environ, capture_output=True, text=True, check=False
-    )
-    assert setup.returncode == 0, setup.stderr
-    return Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
+    return sandbox_checkouts(TASK)
 
 
 def commit(cwd: Path, *message: str) -> subprocess.CompletedProcess[str]:
@@ -160,6 +126,47 @@ def test_push_of_the_task_branch_is_accepted_but_other_refs_are_refused(repo) ->
         assert result.returncode != 0 and "only push" in result.stderr, target
 
 
+def task_state(name: str) -> str:
+    return json.dumps(
+        {"lifecycle": "feature", "state": name, "previous": None, "counts": {}, "handoff": {"commit": "", "note": ""}}
+    )
+
+
+def run_task(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(AGENT_KIT_PATH / "bin" / "task"), *args], env=os.environ, capture_output=True, text=True, check=False
+    )
+
+
+def test_code_is_pushed_only_on_the_roles_turn(sandbox_checkouts, push_task_state) -> None:
+    code, _ = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    change(code, "hello.sh")
+    commit(code, "feat: hello")
+    assert git(code, "push", "-q", "origin", TASK.branch, check=False).returncode == 0
+    assert run_task("submit", "Ready for review.").returncode == 0
+
+    change(code, "more.sh")
+    commit(code, "feat: more")
+    refused = git(code, "push", "origin", TASK.branch, check=False)
+    assert refused.returncode != 0
+    assert "reviewer's turn" in refused.stderr and "push no more code" in refused.stderr
+
+    push_task_state(TASK, task_state("changes"))  # given back, without this sandbox pulling its notes
+    assert git(code, "push", "-q", "origin", TASK.branch, check=False).returncode == 0
+
+
+def test_no_code_is_pushed_while_the_task_state_cant_be_read(sandbox_checkouts, push_task_state) -> None:
+    code, _ = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    push_task_state(TASK, "{not json")
+    change(code, "hello.sh")
+    commit(code, "feat: hello")
+
+    refused = git(code, "push", "origin", TASK.branch, check=False)
+
+    assert refused.returncode != 0
+    assert "couldn't read the task state" in refused.stderr and "can't be told" in refused.stderr
+
+
 # --- notes checkout ----------------------------------------------------------
 
 
@@ -234,6 +241,61 @@ def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: 
     code, _ = repo
     (code / "wip.txt").write_text("x\n")
     assert json.loads(stop(raw_input=raw_input).stdout)["decision"] == "block"
+
+
+def test_stop_is_blocked_while_the_task_state_was_changed_by_hand(sandbox_checkouts) -> None:
+    _, notes = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    (notes / TASK.state_file).write_text(task_state("approved"))
+    git(notes, "commit", "-qam", f"{TASK.id}: approved")
+    git(notes, "push", "-q", "origin", NOTES_BRANCH)
+
+    decision = json.loads(stop().stdout)
+
+    assert decision["decision"] == "block"
+    assert "changed other than by $AGENT_KIT_DIR/bin/task" in decision["reason"]
+
+
+def test_stop_is_blocked_while_the_task_state_cant_be_read(sandbox_checkouts, tmp_path) -> None:
+    sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    (tmp_path / "origin.git").rename(tmp_path / "unreachable.git")
+
+    decision = json.loads(stop().stdout)
+
+    assert decision["decision"] == "block"
+    assert "couldn't read the task state" in decision["reason"] and "Only the human can fix this" in decision["reason"]
+    assert decision["reason"].endswith("your next stop is let through.")
+
+
+def test_stop_is_blocked_while_the_task_state_on_origin_is_malformed(sandbox_checkouts, push_task_state) -> None:
+    _, notes = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    push_task_state(TASK, "{not json")
+    git(notes, "pull", "-q", "--rebase", "origin", NOTES_BRANCH)
+
+    decision = json.loads(stop().stdout)
+
+    assert decision["decision"] == "block"
+    assert "is not valid JSON" in decision["reason"] and "Only the human can fix this" in decision["reason"]
+
+
+def test_block_pushes_the_roles_commits_so_the_session_can_end(sandbox_checkouts) -> None:
+    code, _ = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    change(code, "half-done.sh")
+    commit(code, "feat: start the import")
+
+    assert run_task("block", "Is CSV in scope?").returncode == 0
+
+    head = git(code, "rev-parse", "HEAD").stdout.strip()
+    assert git(code, "ls-remote", "origin", TASK.branch).stdout.split()[0] == head
+    assert stop().stdout.strip() == ""
+
+
+def test_stop_is_allowed_after_bin_task_and_the_humans_move(sandbox_checkouts, push_task_state) -> None:
+    _, notes = sandbox_checkouts(TASK, notes={STATE_FILE: task_state("ready")})
+    assert run_task("block", "Is CSV in scope?").returncode == 0
+    push_task_state(TASK, task_state("ready"))
+    git(notes, "pull", "-q", "--rebase", "origin", NOTES_BRANCH)
+
+    assert stop().stdout.strip() == ""
 
 
 # --- every script -------------------------------------------------------------

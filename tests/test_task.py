@@ -1,6 +1,5 @@
 """foundry/task.py against a real repository on disk, and the `foundry task create` command's report and arguments."""
 
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -12,36 +11,9 @@ from foundry.commands.task import report
 from foundry.errors import FoundryError
 from foundry.git_clone import GitClone
 from foundry.task import Task
+from tests.conftest import SIGNING_KEY, write_gitconfig
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
-SIGNING_KEY = "ssh-ed25519 AAAATESTKEY"
-
-# Stands in for ssh-keygen as git's SSH signer: git runs it as <program> -Y sign ... -f <key file> ... <payload>,
-# and it writes <payload>.sig holding the key it was asked to sign with, so a test can see which key signed.
-SIGNER = """#!/bin/sh
-while [ $# -gt 1 ]; do case "$1" in -f) key="$2"; shift 2 ;; *) shift ;; esac; done
-printf '%s\\n' "-----BEGIN SSH SIGNATURE-----" "$(cat "$key")" "-----END SSH SIGNATURE-----" > "$1.sig"
-"""
-
-
-def write_gitconfig(home_dir: Path, *, signing_key: str | None = SIGNING_KEY) -> None:
-    """Your git config: an identity, your signing key unless None, and SIGNER standing in for ssh-keygen."""
-    signer = home_dir / "signer"
-    signer.write_text(SIGNER)
-    signer.chmod(0o755)
-    user = "[user]\n\tname = Owner\n\temail = owner@example.com\n"
-    if signing_key is not None:
-        user += f"\tsigningkey = key::{signing_key}\n"
-    (home_dir / ".gitconfig").write_text(f'{user}[gpg "ssh"]\n\tprogram = {signer}\n')
-
-
-@pytest.fixture
-def git_env(tmp_path: Path) -> dict[str, str]:
-    """git with a throwaway identity, and none of the developer's own config."""
-    home_dir = tmp_path / "home"
-    home_dir.mkdir()
-    write_gitconfig(home_dir)
-    return {"PATH": os.environ["PATH"], "HOME": str(home_dir), "GIT_CONFIG_NOSYSTEM": "1"}
 
 
 def git(env: dict[str, str], *args: str) -> str:
@@ -88,11 +60,12 @@ def head(origin_dir: Path, git_env: dict[str, str], branch: str) -> str:
 
 def test_a_task_is_its_lowercased_id_its_branch_and_its_notes_folder() -> None:
     a_task = Task("WCF-0042")
-    assert (a_task.id, a_task.branch, a_task.notes_dir, a_task.task_file) == (
+    assert (a_task.id, a_task.branch, a_task.notes_dir, a_task.task_file, a_task.state_file) == (
         "wcf-0042",
         "task/wcf-0042",
         ".agent/wcf-0042",
         ".agent/wcf-0042/TASK.md",
+        ".agent/wcf-0042/STATE.json",
     )
     assert a_task == Task("wcf-0042")
 
@@ -215,7 +188,10 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 
 
 def test_the_report_says_what_was_created_and_how_to_run_it() -> None:
-    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry run store ROLE t1"]
+    assert report("store", Task("T1")) == [
+        "created task t1 in store",
+        "once its TASK.md is written, or to have the planner write it: foundry task next store t1",
+    ]
 
 
 def test_create_takes_a_project_and_a_task() -> None:

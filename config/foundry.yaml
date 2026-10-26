@@ -2,7 +2,7 @@
 name: willcode-foundry
 
 projects:
-  # <name>: { url: <ssh clone url> }   -- used as `foundry run <name> <role> [task]`
+  # <name>: { url: <ssh clone url> }   -- used as `foundry task run <name> <task> <role>`
   tkt-store:
     url: git@github.com:WillCodeFoundry/tkt-store.git
   willcode-foundry:

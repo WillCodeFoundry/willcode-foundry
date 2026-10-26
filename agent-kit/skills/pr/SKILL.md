@@ -1,6 +1,6 @@
 ---
 name: pr
-description: 'Use when the dev writes the body of a task''s pull request, once REVIEW.md''s latest round says Verdict: approved.'
+description: 'Use when the dev opens a task''s pull request and writes its body.'
 metadata:
   credits:
     skill: show-me
@@ -15,6 +15,8 @@ metadata:
     license: MIT (see ../LICENSE-mattpocock)
   adapted: for willcode-foundry, edited in place; see Skills in its README
 ---
+
+Open a task's pull request only when `"$AGENT_KIT_DIR/bin/task" show` names this skill for your turn: before that, the work hasn't passed review.
 
 The title is as the `git-conventions` skill says (`$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`): `[<task id>] type(scope): summary`.
 
