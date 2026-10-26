@@ -5,6 +5,7 @@ are run against a temporary directory, owned by the test's user. chmod of sudo a
 The checks are run against sockets, files and stand-in commands of each test's own.
 """
 
+import contextlib
 import os
 import socket
 import stat
@@ -51,11 +52,11 @@ def test_verify_refuses_to_run_as_root(capsys: pytest.CaptureFixture[str]) -> No
 def test_verify_on_a_machine_that_isnt_a_hardened_sandbox_refuses_to_start_the_agent(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """This machine has no managed settings installed, and the kit is a writable checkout, whatever else."""
+    """This machine has no managed settings installed, whatever else it allows."""
     assert harden.verify({contract.KIT_DIR: str(AGENT_KIT_PATH)}) == 1
     err = capsys.readouterr().err
     assert "not starting the agent" in err
-    assert "managed settings" in err and "change the agent kit" in err
+    assert "managed settings" in err
 
 
 # --- root mode's file steps ----------------------------------------------------------
@@ -294,3 +295,69 @@ def test_a_sudo_hardening_left_unexecutable_is_no_sudo_and_no_crash(tmp_path: Pa
 
     assert harden.can_sudo(str(sudo)) is False
     assert harden.check_sudo(str(sudo)) == []
+
+
+def test_a_sudo_that_cant_be_found_is_refused_before_changing_anything(tmp_path: Path) -> None:
+    with pytest.raises(harden.HardenError, match="can't find"):
+        harden.harden_sudo_and_su(str(tmp_path / "absent"))
+
+
+@contextlib.contextmanager
+def read_only(kit: Path) -> Iterator[None]:
+    """The kit as its mount makes it, as far as file modes can: nothing in it writable by its owner."""
+    paths = [kit, *kit.rglob("*")]
+    for path in paths:
+        if not path.is_symlink():
+            path.chmod(0o555 if path.is_dir() else 0o444)
+    try:
+        yield
+    finally:
+        for path in paths:
+            if path.is_dir() and not path.is_symlink():
+                path.chmod(0o755)
+
+
+@needs_non_root
+def test_a_link_to_a_writable_target_outside_the_kit_fails(kit: Path, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (kit / "hooks" / "link").symlink_to(outside)
+
+    with read_only(kit):
+        found = harden.check_kit_read_only(kit)
+
+    assert found == [f"change the agent kit: {kit / 'hooks' / 'link'} is writable"]
+
+
+@needs_non_root
+def test_a_link_to_nothing_fails(kit: Path, tmp_path: Path) -> None:
+    (kit / "hooks" / "link").symlink_to(tmp_path / "nothing")
+
+    with read_only(kit):
+        found = harden.check_kit_read_only(kit)
+
+    assert found == [
+        f"change the agent kit: {kit / 'hooks' / 'link'} links to {tmp_path / 'nothing'}, which doesn't exist"
+    ]
+
+
+@needs_non_root
+def test_a_read_only_kit_with_links_inside_it_passes(kit: Path) -> None:
+    (kit / "hooks" / "link").symlink_to("pre-commit")
+
+    with read_only(kit):
+        assert harden.check_kit_read_only(kit) == []
+
+
+@needs_non_root
+def test_a_folder_that_cant_be_listed_fails(kit: Path) -> None:
+    with read_only(kit):
+        (kit / "hooks").chmod(0o000)
+        (found,) = harden.check_kit_read_only(kit)
+
+    assert found.startswith(f"change the agent kit unchecked: {kit / 'hooks'} can't be listed")
+
+
+def test_a_missing_kit_fails(tmp_path: Path) -> None:
+    (found,) = harden.check_kit_read_only(tmp_path / "absent")
+    assert "can't be listed" in found

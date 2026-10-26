@@ -72,11 +72,16 @@ def check_managed_settings(installed: Path, kit_copy: Path, owner: int = 0) -> l
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def harden_sudo_and_su() -> None:
-    """sudo can't run, whatever its rules say; su needs root's password, and there is none."""
-    sudo = shutil.which("sudo")
-    if sudo is not None:
-        Path(sudo).resolve().chmod(0)
+def harden_sudo_and_su(sudo: str = "sudo") -> None:
+    """sudo can't run, whatever its rules say; su needs root's password, and there is none.
+
+    Refuses, changing nothing, if ``sudo`` can't be found: hardening runs through sudo, so it is there to
+    remove, and reporting it removed when it wasn't found would be wrong.
+    """
+    found = shutil.which(sudo)
+    if found is None:
+        raise HardenError(f"can't find {sudo} to remove it; check the sandbox template's PATH and sudo")
+    Path(found).resolve().chmod(0)
     subprocess.run(["passwd", "-l", "root"], stdout=subprocess.DEVNULL, check=True)
 
 
@@ -143,11 +148,20 @@ def check_docker_sockets(sockets: Iterable[Path]) -> list[str]:
 
 def check_kit_read_only(kit_dir: Path) -> list[str]:
     """The agent can't write anywhere in the agent kit, which holds the runtime every hook runs and the
-    settings above are compared with. Proves the mount is read-only rather than assuming it."""
-    for directory, subdirectories, files in os.walk(kit_dir):
+    settings above are compared with. Proves the mount is read-only rather than assuming it.
+
+    A link is judged by its target, wherever that is; a link to nothing fails, since creating its target
+    would put a file in the kit. A folder that can't be listed fails too: what's in it can't be checked.
+    """
+    unreadable: list[OSError] = []
+    for directory, subdirectories, files in os.walk(kit_dir, onerror=unreadable.append):
         for path in (Path(directory), *(Path(directory) / name for name in (*subdirectories, *files))):
-            if not path.is_symlink() and os.access(path, os.W_OK):
+            if path.is_symlink() and not path.exists():
+                return [f"change the agent kit: {path} links to {os.readlink(path)}, which doesn't exist"]
+            if os.access(path, os.W_OK):
                 return [f"change the agent kit: {path} is writable"]
+    if unreadable:
+        return [f"change the agent kit unchecked: {unreadable[0].filename} can't be listed ({unreadable[0].strerror})"]
     return []
 
 
