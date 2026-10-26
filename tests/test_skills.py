@@ -69,8 +69,11 @@ def foundry_root(tmp_path: Path, upstream: Path) -> Path:
     return root
 
 
-def update(foundry_root: Path, upstream: Path, commit: str = "HEAD") -> skills.Updated:
-    return skills.update(foundry_root, commit, url_for=lambda repo: str(upstream))
+def update(foundry_root: Path, upstream: Path, commit: str = "HEAD") -> tuple[list[str], list[str]]:
+    """(the lines it reported, the skills left with conflicts)."""
+    reported: list[str] = []
+    conflicted = skills.update(foundry_root, commit, url_for=lambda repo: str(upstream), report=reported.append)
+    return reported, conflicted
 
 
 def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(foundry_root, upstream) -> None:
@@ -81,10 +84,10 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
     (upstream / "LICENSE").write_text("MIT, second\n")
     second = commit_all(upstream, "second")
 
-    updated = update(foundry_root, upstream)
+    reported, conflicted = update(foundry_root, upstream)
 
     skill_dir = foundry_root / "agent-kit" / "skills" / "tdd"
-    assert updated == skills.Updated(lines=[f"tdd: updated to {second[:12]}"], conflicted=[])
+    assert (reported, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
     assert (skill_dir / "SKILL.md").read_text() == copied_skill_md(
         second, "\nFirst, for the foundry.\nSecond.\nThird, improved.\n"
     )
@@ -96,9 +99,9 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
 def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream) -> None:
     before = git(foundry_root, "status", "--porcelain")
 
-    updated = update(foundry_root, upstream)
+    reported, _ = update(foundry_root, upstream)
 
-    assert updated.lines == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD')[:12]}"]
+    assert reported == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD')[:12]}"]
     assert git(foundry_root, "status", "--porcelain") == before == ""
 
 
@@ -107,9 +110,9 @@ def test_a_line_both_sides_changed_is_left_as_a_conflict(foundry_root, upstream)
     skill_md.write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))
     second = commit_all(upstream, "second")
 
-    updated = update(foundry_root, upstream)
+    _, conflicted = update(foundry_root, upstream)
 
-    assert updated.conflicted == ["tdd"]
+    assert conflicted == ["tdd"]
     text = (foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md").read_text()
     assert "<<<<<<<" in text and f"    commit: {second}\n" in text
 
@@ -121,7 +124,7 @@ def test_a_given_commit_is_the_one_updated_to(foundry_root, upstream) -> None:
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved twice."))
     commit_all(upstream, "third")
 
-    assert update(foundry_root, upstream, second).lines == [f"tdd: updated to {second[:12]}"]
+    assert update(foundry_root, upstream, second)[0] == [f"tdd: updated to {second[:12]}"]
     assert "Third, improved.\n" in (foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md").read_text()
 
 
