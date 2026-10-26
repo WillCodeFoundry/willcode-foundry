@@ -2,7 +2,8 @@
 
 The kit runs in the sandbox without foundry's package, so each side has its own code for the same files.
 These tests run the same inputs through both, so the two can't drift apart unnoticed: which STATE.json
-they accept, and whose turn each state is.
+they accept, which lifecycles they refuse and why, which counts a lifecycle keeps (what foundry task move
+--reset can clear), whose turn each state is, and how a transition's commit is summed up.
 """
 
 import importlib.machinery
@@ -81,6 +82,21 @@ def test_both_accept_the_same_task_states(text: str) -> None:
 
 LIFECYCLES: dict[str, dict[str, Any]] = {
     **{path.stem: json.loads(path.read_text()) for path in sorted(paths.lifecycle_dir(REPO_ROOT).glob("*.json"))},
+    # A limited top-level event, which one state redefines without a limit.
+    "top-level-limit": {
+        "initial": "work",
+        "on": {"block": {"target": "stuck", "when": "x", "limit": 2, "fallback": "stuck"}},
+        "states": {
+            "work": {"assignee": "dev", "skill": "tdd", "on": {"submit": {"target": "check", "when": "x"}}},
+            "check": {
+                "assignee": "reviewer",
+                "skill": "code-review",
+                "on": {"block": {"target": "stuck", "when": "x"}, "approve": {"target": "end", "when": "x"}},
+            },
+            "stuck": {"assignee": "human"},
+            "end": {"final": True},
+        },
+    },
 }
 
 
@@ -92,6 +108,25 @@ def lifecycle(request, tmp_path) -> tuple[dict[str, Any], task_state.Lifecycle]:
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(raw))
     return raw, task_state.load_lifecycle(tmp_path, request.param)
+
+
+def test_both_keep_the_same_counts(lifecycle) -> None:
+    """The counts bin/task's own apply writes, applying each limited event once in each state that accepts it."""
+    raw, host = lifecycle
+    ours = set()
+    for name in raw["states"]:
+        record = {"lifecycle": "x", "state": name, "previous": None, "counts": {}, "handoff": {}}
+        for event, transition in kit.accepted(raw, name).items():
+            if "limit" in transition:
+                ours |= set(kit.apply(raw, record, event).counts)
+
+    assert sorted(host.limited_events()) == sorted(ours)
+
+
+def test_both_sum_up_a_transition_alike() -> None:
+    assert task_state.transition_message("t1", "blocked", "changes", "moved by hand") == kit.transition_message(
+        "t1", "blocked", "changes", "moved by hand"
+    )
 
 
 def test_both_give_each_state_to_the_same_assignee(lifecycle) -> None:

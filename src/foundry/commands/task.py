@@ -1,7 +1,7 @@
 """foundry task: everything done to one task, each subcommand taking PROJECT TASK first.
 
 create makes the task; run launches a role on it, and next the role whose turn it is; list shows
-where every task stands.
+where every task stands; move takes a task to any state of its lifecycle, by hand.
 """
 
 import argparse
@@ -23,7 +23,7 @@ _TASK_HELP = "task id, e.g. wcf-0042"
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    parser = subparsers.add_parser("task", help="create, run and list tasks")
+    parser = subparsers.add_parser("task", help="create, run, list and move tasks")
     actions = parser.add_subparsers(dest="action", required=True)
 
     create = actions.add_parser(
@@ -60,6 +60,24 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     )
     list_.add_argument("project_name", metavar="PROJECT", nargs="?", default=None, help=_PROJECT_HELP)
     list_.set_defaults(func=list_main)
+
+    move = actions.add_parser(
+        "move",
+        help="move TASK to any STATE of its lifecycle, with a hand-off note",
+        description="Commits the task state as you, signed, and pushes the notes branch. Use it to answer a "
+        "blocked task, accept or extend a review that ran out of rounds, or reopen a done one.",
+    )
+    _add_project_and_task(move)
+    move.add_argument("state", metavar="STATE", help="a state of the task's lifecycle, e.g. changes")
+    move.add_argument("--note", required=True, help="the hand-off note: what the next assignee should know first")
+    move.add_argument(
+        "--reset",
+        action="append",
+        default=[],
+        metavar="COUNT",
+        help="clear a count, e.g. review.reject for more review rounds; may be repeated",
+    )
+    move.set_defaults(func=move_main)
 
 
 def _add_project_and_task(parser: argparse.ArgumentParser) -> None:
@@ -184,6 +202,27 @@ def list_lines(
             "  " + "  ".join(part for part in (task_id, state.lifecycle, state.state, turn, *counts, note) if part)
         )
     return lines if states else [project_name, "  no tasks"]
+
+
+# --- move --------------------------------------------------------------------------
+
+
+def move_main(args: argparse.Namespace) -> int:
+    """Composition root: the notes branch in a scratch clone, committed as you."""
+    foundry_root = paths.find_foundry_root()
+    project = config.load(foundry_root).project(args.project_name)
+    the_task = Task(args.task_id)
+    with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
+        move = task_state.move_task(
+            _notes_clone(project.url, Path(scratch_dir)),
+            the_task,
+            foundry_root=foundry_root,
+            to=args.state,
+            note=args.note,
+            reset=args.reset,
+        )
+    print(f"moved task {the_task.id} in {project.name}: {move.before.state} → {move.after.state}")
+    return 0
 
 
 def _notes_clone(url: str, work_dir: Path) -> GitClone:

@@ -1,4 +1,4 @@
-"""foundry/task_state.py: task states as the host reads them, against a throwaway repository on disk;
+"""foundry/task_state.py: task states as the host reads and moves them, against a throwaway repository on disk;
 and the `foundry task` subcommands' arguments and output."""
 
 import json
@@ -13,6 +13,7 @@ from foundry.errors import FoundryError
 from foundry.git_clone import GitClone
 from foundry.task import NOTES_BRANCH, Task
 from foundry.task_state import Lifecycle, TaskState
+from tests.conftest import SIGNING_KEY
 
 REPO_ROOT = Path(__file__).parents[1]
 
@@ -175,6 +176,74 @@ def test_next_on_a_task_without_a_state_says_to_name_the_role() -> None:
         task_state.next_role(None, None, Task("t0"), project_name="store")
 
 
+# --- task move --------------------------------------------------------------------
+
+
+def test_move_writes_the_state_signs_and_pushes(notes_clone, origin_dir, git_env) -> None:
+    move = task_state.move_task(
+        notes_clone,
+        Task("t2"),
+        foundry_root=REPO_ROOT,
+        to="changes",
+        note="Two more rounds; R7 is about the retry path.",
+        reset=["review.reject"],
+    )
+
+    assert (move.before.state, move.after.state) == ("blocked", "changes")
+    pushed = json.loads(git(git_env, f"--git-dir={origin_dir}", "show", f"{NOTES_BRANCH}:{Task('t2').state_file}"))
+    assert pushed == {
+        "lifecycle": "feature",
+        "state": "changes",
+        "previous": "blocked",
+        "counts": {},
+        "handoff": {"commit": "abc123", "note": "Two more rounds; R7 is about the retry path."},
+    }
+    commit = git(git_env, f"--git-dir={origin_dir}", "cat-file", "commit", NOTES_BRANCH)
+    assert f"gpgsig -----BEGIN SSH SIGNATURE-----\n {SIGNING_KEY}\n" in commit
+    assert commit.endswith("t2: blocked → changes (moved by hand)")
+
+
+def test_move_resets_a_count_not_started_yet(notes_clone) -> None:
+    new = task_state.move_task(
+        notes_clone, Task("t1"), foundry_root=REPO_ROOT, to="changes", note="Fresh rounds.", reset=["review.reject"]
+    ).after
+
+    assert new.counts == {}
+
+
+def test_move_reopens_a_done_task(notes_clone) -> None:
+    task_state.move_task(notes_clone, Task("t1"), foundry_root=REPO_ROOT, to="done", note="Merged.", reset=[])
+
+    new = task_state.move_task(
+        notes_clone, Task("t1"), foundry_root=REPO_ROOT, to="changes", note="Comments on the PR.", reset=[]
+    ).after
+
+    assert (new.state, new.previous) == ("changes", "done")
+
+
+@pytest.mark.parametrize(
+    ("task_id", "to", "note", "reset", "message"),
+    [
+        ("t1", "nowhere", "x", [], r"feature has no state 'nowhere'; its states: draft, ready, review"),
+        ("t1", "changes", " ", [], r"give a hand-off note"),
+        (
+            "t2",
+            "changes",
+            "x",
+            ["review.approve"],
+            r"feature has no count 'review\.approve'; its counts: review\.reject",
+        ),
+        ("t0", "ready", "x", [], r"task t0 has no STATE\.json"),
+    ],
+)
+def test_move_refuses_and_changes_nothing(notes_clone, origin_dir, git_env, task_id, to, note, reset, message) -> None:
+    before = git(git_env, f"--git-dir={origin_dir}", "rev-parse", NOTES_BRANCH)
+
+    with pytest.raises(FoundryError, match=message):
+        task_state.move_task(notes_clone, Task(task_id), foundry_root=REPO_ROOT, to=to, note=note, reset=reset)
+    assert git(git_env, f"--git-dir={origin_dir}", "rev-parse", NOTES_BRANCH) == before
+
+
 # --- the commands -----------------------------------------------------------------
 
 
@@ -214,6 +283,10 @@ def test_list_of_a_project_without_tasks() -> None:
         (["task", "next", "store", "T1"], {"project_name": "store", "task_id": "T1"}),
         (["task", "list"], {"project_name": None}),
         (["task", "list", "store"], {"project_name": "store"}),
+        (
+            ["task", "move", "store", "T1", "changes", "--note", "More.", "--reset", "review.reject"],
+            {"project_name": "store", "task_id": "T1", "state": "changes", "note": "More.", "reset": ["review.reject"]},
+        ),
     ],
 )
 def test_the_task_subcommands_take_project_and_task_first(argv: list[str], expected: dict[str, object]) -> None:

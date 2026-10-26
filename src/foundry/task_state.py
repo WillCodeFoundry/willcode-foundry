@@ -2,11 +2,12 @@
 
 A task state is the STATE_FILE in a task's notes folder; its lifecycle is a state machine in
 agent-kit/lifecycle/ (see agent-kit/bin/task for the format). Agents move tasks only with the kit's
-bin/task, which alone applies events and their rules; foundry never does.
+bin/task, which alone applies events and their rules; foundry never does. The human moves a task to
+any state of its lifecycle with `foundry task move`, which this module carries out.
 """
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -17,6 +18,16 @@ from foundry.git_clone import GitClone
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, STATE_FILE, Task
 
 HUMAN: Final = "human"
+
+
+def count_key(state: str, event: str) -> str:
+    """The key a limited event's count is kept under, in a task state's counts."""
+    return f"{state}.{event}"
+
+
+def transition_message(task: str, before: str, after: str, why: str) -> str:
+    """The notes commit's summary for a transition, as bin/task writes it for an agent's."""
+    return f"{task}: {before} → {after} ({why})"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,6 +100,19 @@ class Lifecycle:
             raise FoundryError(f"lifecycle {self.name} has no state {state!r}; its states: {', '.join(self.states)}")
         assignee = self.states[state].get("assignee")
         return assignee if isinstance(assignee, str) else None
+
+    def limited_events(self) -> list[str]:
+        """The counts its limited events keep, by count_key: what --reset can clear.
+
+        A role's state accepts the top-level events too, so a limited one is counted in each such state.
+        """
+        return [
+            count_key(state, event)
+            for state, definition in self.states.items()
+            if definition.get("assignee") not in (None, HUMAN)
+            for event, transition in {**self.on, **definition.get("on", {})}.items()
+            if isinstance(transition, dict) and "limit" in transition
+        ]
 
 
 def lifecycle_problem(lifecycle: Any) -> str | None:
@@ -191,3 +215,51 @@ def next_role(state: TaskState | None, lifecycle: Lifecycle | None, task: Task, 
             "  or move it anywhere else in its lifecycle; the README's Task states section lists the usual moves"
         )
     return assignee
+
+
+# --- moving a task by hand --------------------------------------------------------------
+
+
+def move(state: TaskState, lifecycle: Lifecycle, task: Task, *, to: str, note: str, reset: Sequence[str]) -> TaskState:
+    """``state`` moved to ``to`` by the human, with a hand-off note, and the named counts cleared."""
+    if to not in lifecycle.states:
+        raise FoundryError(f"{lifecycle.name} has no state {to!r}; its states: {', '.join(lifecycle.states)}")
+    if not note.strip():
+        raise FoundryError("give a hand-off note: what the next assignee should know first")
+    countable = lifecycle.limited_events()
+    unknown = [key for key in reset if key not in countable]
+    if unknown:
+        raise FoundryError(
+            f"{lifecycle.name} has no count {unknown[0]!r}; its counts: {', '.join(countable) or 'none'}"
+        )
+    return TaskState(
+        lifecycle=state.lifecycle,
+        state=to,
+        previous=state.state,
+        counts={key: count for key, count in state.counts.items() if key not in reset},
+        commit=state.commit,
+        note=note.strip(),
+    )
+
+
+@dataclass(frozen=True)
+class Move:
+    """A task's state before and after a move by hand."""
+
+    before: TaskState
+    after: TaskState
+
+
+def move_task(clone: GitClone, task: Task, *, foundry_root: Path, to: str, note: str, reset: Sequence[str]) -> Move:
+    """Move the task, then commit (signed) and push NOTES_BRANCH alone.
+
+    ``clone`` must have NOTES_BRANCH checked out. Nothing is pushed if the move is refused.
+    """
+    before = read(clone, task)
+    if before is None:
+        raise FoundryError(f"task {task.id} has no {STATE_FILE}: it was created before task states")
+    after = move(before, load_lifecycle(foundry_root, before.lifecycle), task, to=to, note=note, reset=reset)
+    clone.write({task.state_file: after.to_json()})
+    clone.commit(transition_message(task.id, before.state, after.state, "moved by hand"))
+    clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
+    return Move(before, after)
