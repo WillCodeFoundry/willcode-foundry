@@ -7,7 +7,10 @@ One instance of a willcode foundry: the configuration, role definitions, memory 
 ```console
 $ uv sync
 $ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
-$ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
+$ uv run foundry task next tkt-store wcf-0042              # start, or re-attach to, whichever role's turn it is on wcf-0042
+$ uv run foundry task run tkt-store wcf-0042 dev           # start the dev role on wcf-0042, or re-attach
+$ uv run foundry task list                                 # every task: its state, whose turn it is, its hand-off note
+$ uv run foundry task move tkt-store wcf-0042 changes --note "…"  # move a task by hand (see Task states)
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
 $ scripts/update-skills                                    # merge upstream's changes into the agent kit's copied skills
 ```
@@ -31,13 +34,15 @@ $ scripts/update-skills                                    # merge upstream's ch
 │   └── task-template/            # what a new task's .agent/<task>/ starts with (foundry task create)
 │       ├── TASK.md               # the skeleton the planner fills in once you approve its draft, or you do
 │       ├── PROGRESS.md           # the sections AGENTS.md requires
-│       └── LEARNINGS.md
+│       ├── LEARNINGS.md
+│       └── STATE.json            # the task state: a new task is in its lifecycle's initial state
 ├── agent-kit/                    # everything an agent is given (read-only mount)
 │   ├── AGENTS.md                 # instructions shared by every role
 │   ├── bin/
 │   │   ├── session-init          # what the launcher runs: session-setup, hardening on the first launch, then the verify on every launch
 │   │   ├── session-setup         # the agent user's part: clones the project, sets up checkouts, hooks, identity, instructions
 │   │   ├── session-harden        # as root: installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; --verify, as the agent: checks it all
+│   │   └── task                  # the agent's command for its task state: show, an event to end its turn; begin, check-turn and check-state for session-setup and the hooks
 │   ├── claude/
 │   │   ├── managed-settings.json # Claude Code policy: only these hooks and permissions apply
 │   │   └── hooks/                # guard-bash (PreToolUse), session-check (Stop)
@@ -50,6 +55,7 @@ $ scripts/update-skills                                    # merge upstream's ch
 │   │   └── pre-push              # only this task's branch and agent-notes
 │   ├── lib/
 │   │   └── hooks.sh              # helpers the git hooks share: refusals, the current branch
+│   ├── lifecycle/<name>.json     # a lifecycle: the states a type of task goes through (see Task states)
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
 │   │   ├── gitconfig             # name, email, key::signing key; includes ../../git/gitconfig
@@ -95,21 +101,44 @@ The words used here, and in the code:
 | **deviation** | One way a repository differs from the repo policy, with its diff |
 | **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
-| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
+| **lifecycle** | A state machine for one type of task, named by its file in `agent-kit/lifecycle/` (`feature` for now): its states, each state's assignee, and the events that move a task between them |
+| **task state** | A task's `STATE.json` in its task notes: its lifecycle, the state it's in, the previous state, its counts and its hand-off note. A task *is in* a state: "the task is in `review`" |
+| **assignee** | The role assigned a state, or `human` |
+| **turn** | A role's turn: while it is the assignee of the task's current state. Only that role may be launched on the task, or push to its branch |
+| **event** | What an agent reports to end its turn: `submit`, `approve`, `reject`, `block`. The lifecycle decides which state it leads to |
+| **transition** | An event applied to a task state, moving the task from one state to another. Agents make them only with `agent-kit/bin/task`, and you with `foundry task move` |
+| **hand-off note** | The note a transition leaves for the next assignee: the first thing that assignee reads |
+| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), reads, writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
 
-1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. A session a stopped launch left without its definition is finished if it holds only an empty `workspace/`, and refused otherwise. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name, and so is a sandbox whose session variables this foundry would no longer set: one created before a variable was added or renamed, whose kit would use the old names. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its session variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`, and the task's names from `Task`: `AGENT_TASK_BRANCH`, `AGENT_NOTES_BRANCH`, `AGENT_NOTES_ROOT`, `AGENT_TASK_NOTES`, `AGENT_TASK_FILE`, so the kit and its instructions spell none of them out.
+1. `foundry task run PROJECT TASK ROLE`, or `foundry task next PROJECT TASK`, which reads the task state and runs its assignee, looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. A session a stopped launch left without its definition is finished if it holds only an empty `workspace/`, and refused otherwise. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name, and so is a sandbox whose session variables this foundry would no longer set: one created before a variable was added or renamed, whose kit would use the old names. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its session variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`, and the task's names from `Task`: `AGENT_TASK_BRANCH`, `AGENT_NOTES_BRANCH`, `AGENT_NOTES_ROOT`, `AGENT_TASK_NOTES`, `AGENT_TASK_FILE`, `AGENT_STATE_FILE`, so the kit and its instructions spell none of them out.
 2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`; one a launch prepared in the last 10 minutes is spared. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
-3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which first runs `session-setup` as the agent user: it clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, links the role's `skills/` folder as `~/.claude/skills` (see [Skills](#skills)). On the first launch, `session-init` then runs `session-harden` as root: it installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), On every launch, `session-init` then runs `session-harden --verify` as the agent, with the groups sbx gives it: it checks that the agent can't run sudo, can't `su` to root, can't write to the Docker socket, and that the managed settings are root-owned, read-only and the same as `agent-kit/claude/managed-settings.json`. A sandbox that fails any check doesn't start the agent; one hardened by an older kit needs recreating. The launch aborts if any step fails.
+3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which first runs `session-setup` as the agent user: it clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, links the role's `skills/` folder as `~/.claude/skills` (see [Skills](#skills)). It then runs `bin/task begin`, which refuses to start a role whose turn it isn't, as origin has the task state, brings the notes checkout up to date where it can (warning where it can't), and records origin's notes commit as the launch's in `~/.claude/launch.json` (see [Task states](#task-states)). On the first launch, `session-init` then runs `session-harden` as root: it installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), On every launch, `session-init` then runs `session-harden --verify` as the agent, with the groups sbx gives it: it checks that the agent can't run sudo, can't `su` to root, can't write to the Docker socket, and that the managed settings are root-owned, read-only and the same as `agent-kit/claude/managed-settings.json`. A sandbox that fails any check doesn't start the agent; one hardened by an older kit needs recreating. The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.check_project` and `fix_project`), which is what the tests call, with fakes for GitHub, the sandbox and the host's processes (`FakeGitHub` in `tests/test_repo_policy.py`, its only user, and fixtures in `tests/agent_sandbox/conftest.py`) and no patching.
+Each command has a composition root that builds the real dependencies (`task.run_main`, `task.create_main`, `task.next_main`, `task.list_main`, `task.move_main`, `repo.check_main`) and a function that takes them as parameters (`task.prepare_launch`, `task.create`, `task_state.read_all`, `next_role` and `move_task`, `repo_policy.check_project` and `fix_project`), which is what the tests call, with fakes for GitHub, the sandbox and the host's processes (`FakeGitHub` in `tests/test_repo_policy.py`, its only user, and fixtures in `tests/agent_sandbox/conftest.py`) and no patching.
 
 **Sandboxes created with other session variables**, before one was added or renamed, are refused with the variables that differ. Recreate one as below: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`, and launch again.
 
 **Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
 
-Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`; a template without a `TASK.md` is refused). Task ids are lowercased, by `foundry task create` and `foundry run` alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md` yourself, or run the planner, which drafts it with you and writes it once you approve. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
+Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `STATE.json`; a template without a `TASK.md` is refused). Task ids are lowercased, by every `foundry task` command alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md` yourself, or run the planner, which drafts it with you and writes it once you approve. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
+
+## Task states
+
+A task goes from role to role along its lifecycle, a state machine in `agent-kit/lifecycle/`. Its task state, `.agent/<task>/STATE.json` on `agent-notes`, says which state it's in, whose turn that makes it, and the hand-off note the last turn left. `foundry task list` shows every task's; `foundry task next` launches whoever's turn it is.
+
+`feature`, the one lifecycle so far, is `agent-kit/lifecycle/feature.json`: the planner drafts the task with you, the dev implements it, the reviewer reviews it in rounds with the dev answering, and the dev opens the pull request, which you merge. Each state names who acts, the skill they act with, and the events that end their turn, each with when to send it; `bin/task show` tells an agent all of that for the state it's in, so no instructions in the kit name a state or an event, and a new lifecycle needs no edits to them. `block` is the exception: every lifecycle must accept it everywhere, sending the task to a state of yours, so `AGENTS.md` can tell every role to use it.
+
+An agent ends its turn with `agent-kit/bin/task <event> "<hand-off note>"`, which checks the event, records the task branch's pushed head and the note, and commits and pushes the task state. Every event refuses while the code checkout has uncommitted changes, and every event but `block` while it has unpushed commits: `block` pushes those itself, while it is still the role's turn, since a stuck role is the likeliest to have some and could push nothing once the task is yours. If the push loses a race with another task's, it starts again from origin; if it can't push, it undoes its commit, so nothing is half-done. Agents never edit `STATE.json` otherwise: `session-setup` starts only the role whose turn it is, `pre-push` refuses code from a role whose turn it isn't, and the Stop hook refuses a session that changed `STATE.json` other than through `bin/task` (each of its commits carries a `Task-State: bin/task` trailer). All three are mistakes-only checks, like the git hooks, and all read the task state as origin has it, freshly fetched: your moves and other roles' count at once, and are never taken for a hand edit, so a role you hand a task back to while it's still running just carries on. A task state that can't be read (origin unreachable, `STATE.json` malformed, its lifecycle missing or not one `bin/task` can apply) stops all three, saying "couldn't read the task state". The Stop hook refuses only once, since the agent may be able to do nothing about it (with origin unreachable it can't push its notes either), and lets its next stop through. If origin was unreachable, launch again once it answers; otherwise fix the file by hand on `agent-notes`, or the lifecycle in `agent-kit/lifecycle/`, then launch again. An event can be limited: in `feature`, the reviewer's fourth `reject` goes to you instead of back to the dev, so a dev and a reviewer who can't agree reach you instead of looping.
+
+You move a task by hand, to any state of its lifecycle, with `foundry task move PROJECT TASK STATE --note "<hand-off note>"`. It commits the task state as you, signed, and pushes `agent-notes`. Nothing in a lifecycle lists your choices; `foundry task list` and `foundry task next` show the state a task waiting on you came from, and the hand-off note says why. The usual moves:
+
+- **after an agent's question:** answer it, in `TASK.md` or the hand-off note, and move the task back to the state it came from;
+- **after a limited event ran out** (the reviewer's rounds, in `feature`): move it on as if the event had passed, back with `--reset <state>.<event>` for more, or to the lifecycle's first state to rescope it;
+- **after it's done:** if the pull request needs more work, move it back to the state where that work is done.
+
+A lifecycle is JSON with generic keys: `initial`, and `states`, each with an `assignee` (a role, or `human`), a `skill` and `on`, mapping each event to `{"target", "when"}`, plus `"limit"` and an optional `"fallback"` for an event allowed a limited number of times; a human state is just `{"assignee": "human"}`, a final state `{"final": true}`, and a top-level `on` holds events every role's state accepts, `block` among them. `agent-kit/bin/task` documents the format and applies it. To add a lifecycle for another type of task, add its file: each state's skill must be on its assignee's skills list, and `tests/test_lifecycle_contract.py` checks that and the rest. Tasks created before task states have no `STATE.json`: they have no turns, so launch roles on them with `foundry task run`.
 
 ## What protects what
 
@@ -123,11 +152,12 @@ Two kinds of control, and only the first is a boundary:
 | Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets | anything with the role's credentials |
 | Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
 | `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
-| `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
+| `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push, or editing the task state by hand |
+| Turns: `session-setup` and `pre-push`, through `agent-kit/bin/task` | the kit, at launch and on push | mistakes only |
 
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
-- `pre-push`: push only `task/<this task>` and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another.
+- `pre-push`: push only `task/<this task>` and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another. Code goes to the task branch only on the role's turn.
 - `pre-commit`: no task notes on the task branch (anything under `.agent/`); on `agent-notes`, only this task's `.agent/<task>/` folder.
 - `prepare-commit-msg`: adds the `Task: <task>` trailer to commits on the task branch, so agents don't have to; `--no-verify` doesn't skip it.
 - `guard-bash`: refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the hooks above.
@@ -163,14 +193,14 @@ Two of those rules rely on the project's own files, which `--fix` never writes; 
 ```
 src/foundry/
 ├── cli.py              # `foundry` command; one subcommand per module in commands/
-├── commands/run.py     # foundry run
-├── commands/task.py    # foundry task create
+├── commands/task.py    # foundry task create, run, next, list, move
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
+├── task_state.py       # task states on the host: reading them and lifecycles, whose turn it is, moving a task by hand
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
-├── git_clone.py        # GitClone: a shallow clone of a project's repository, through git: check out, write, commit, push
+├── git_clone.py        # GitClone: a shallow clone of a project's repository, through git: check out, read, write, commit, push
 ├── paths.py            # the only module that knows the instance layout; functions taking root
 ├── config.py           # loads and validates config/foundry.yaml; Role: a role's SSH key and optional token
 ├── session.py          # open_or_create: names the sandbox, creates its session once, refuses a collision; SessionVariables
@@ -193,9 +223,9 @@ Development:
 ```console
 $ uv sync --group dev
 $ uv run pytest
-$ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
+$ uv run ruff check . agent-kit/claude/hooks/guard-bash agent-kit/bin/task && uv run ruff format --check . agent-kit/claude/hooks/guard-bash agent-kit/bin/task
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh scripts/update-skills
+$ shellcheck --severity=warning --external-sources agent-kit/bin/session-init agent-kit/bin/session-setup agent-kit/bin/session-harden agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh scripts/update-skills
 ```
 
 These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the kit's `source` directives are relative to it.
@@ -231,7 +261,7 @@ Agents write nothing to this repository. Their work goes to the project reposito
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task-id>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | all roles, each only in its own task folder |
+| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md`, `STATE.json` | all roles, each only in its own task folder; `STATE.json` only through `agent-kit/bin/task` and `foundry task move` |
 
 `TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Your commits on `agent-notes` are signed with SSH, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. `foundry task create` always signs the commit that creates the task, with SSH and your `user.signingkey`, and refuses to create the task if it can't. Name your key in your global git config; that alone turns signing on nowhere:
 
