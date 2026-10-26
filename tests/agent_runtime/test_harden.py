@@ -1,8 +1,15 @@
-"""agent_runtime.harden: its refusals, the root mode's file steps, and the checks `harden --verify` runs.
+"""agent_runtime.harden, through its two modes, on a temporary machine instead of the real one.
 
-Root mode removes sudo from the machine it runs on, so it is only run as far as its refusal; its file steps
-are run against a temporary directory, owned by the test's user. chmod of sudo and `passwd -l` stay untested.
-The checks are run against sockets, files and stand-in commands of each test's own.
+Each test builds a harden.Machine of its own under tmp_path: managed settings, Docker configuration and
+sockets, an interpreter, and stand-in sudo, su and passwd. The round trip runs root mode, then agent mode,
+on the same files, as the first launch does. Every way the agent could still reach root is a case that
+breaks one thing on a hardened machine and expects verify to refuse it; every refusal of root mode must
+leave the machine as it found it.
+
+chmod of sudo and `passwd -l` run against stand-ins: their effect on a real sandbox is checked only by a real
+launch. The machine models the agent as a user who is neither owner nor in the group of what it touches (see
+TemporaryMachine), since in a test root and the agent are one user. No test hardens the real machine: harden
+and verify are always given a temporary one, and SANDBOX is only checked against its literal values.
 """
 
 import contextlib
