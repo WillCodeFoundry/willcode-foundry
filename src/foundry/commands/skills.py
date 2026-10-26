@@ -37,8 +37,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 def update_main(args: argparse.Namespace) -> int:
     """Composition root: this foundry's skills, against their upstream repositories on GitHub."""
-    updated = update(paths.find_foundry_root(), args.commit)
-    print("\n".join(updated.lines))
+    updated = update(paths.find_foundry_root(), args.commit, report=lambda line: print(line, flush=True))
     if updated.conflicted:
         print(
             f"skills update: not merged cleanly: {' '.join(updated.conflicted)}; "
@@ -70,12 +69,24 @@ class Source:
     commit: str
 
 
-def update(foundry_root: Path, commit: str = "HEAD", url_for: Callable[[str], str] = github_url) -> Updated:
+def update(
+    foundry_root: Path,
+    commit: str = "HEAD",
+    url_for: Callable[[str], str] = github_url,
+    report: Callable[[str], None] = lambda line: None,
+) -> Updated:
     """Update every copied skill in the foundry's agent kit to ``commit`` of its upstream repository.
 
-    Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it.
+    Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
+    skill's line goes to ``report`` as soon as it is done, so a FoundryError from a later skill doesn't hide
+    what earlier ones changed on disk.
     """
     updated = Updated()
+
+    def done(line: str) -> None:
+        updated.lines.append(line)
+        report(line)
+
     skills_dir = paths.agent_kit_dir(foundry_root) / "skills"
     for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
         source = read_source(skill_md)
@@ -86,17 +97,15 @@ def update(foundry_root: Path, commit: str = "HEAD", url_for: Callable[[str], st
         _git(foundry_root, "fetch", "--quiet", "--no-tags", url, commit)
         new = _git(foundry_root, "rev-parse", "FETCH_HEAD").strip()
         if new == source.commit:
-            updated.lines.append(f"{skill_dir.name}: already at {source.commit[:12]}")
+            done(f"{skill_dir.name}: already at {source.commit[:12]}")
             continue
         _git(foundry_root, "fetch", "--quiet", "--no-tags", url, source.commit)
         if not _apply_upstream_changes(foundry_root, source, new, skill_dir):
             updated.conflicted.append(skill_dir.name)
         skill_md.write_text(_with_commit(skill_md.read_text(), source.commit, new))
-        license_text = subprocess.run(
-            ["git", "show", f"{new}:LICENSE"], cwd=foundry_root, capture_output=True, check=True
-        ).stdout
-        (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_bytes(license_text)
-        updated.lines.append(f"{skill_dir.name}: updated to {new[:12]}")
+        license_text = _git(foundry_root, "show", f"{new}:LICENSE")
+        (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_text(license_text)
+        done(f"{skill_dir.name}: updated to {new[:12]}")
     return updated
 
 

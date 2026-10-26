@@ -140,3 +140,21 @@ def test_the_kits_copied_skills_all_have_a_source() -> None:
 
     assert sorted(name for name, source in sources.items() if source is None) == ["git-conventions"]
     assert {source.repo for source in sources.values() if source is not None} == {"mattpocock/skills"}
+
+
+def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, upstream: Path, tmp_path: Path) -> None:
+    """A later skill's upstream can't be fetched: the earlier one is already changed on disk, and says so."""
+    skill_md = upstream / "skills" / "engineering" / "tdd" / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
+    second = commit_all(upstream, "second")
+    (foundry_root / "agent-kit" / "skills" / "zz").mkdir()
+    (foundry_root / "agent-kit" / "skills" / "zz" / "SKILL.md").write_text(
+        copied_skill_md("0" * 40, "\nOther.\n").replace("mattpocock/skills", "other/skills")
+    )
+    reported: list[str] = []
+    urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
+
+    with pytest.raises(FoundryError, match="git fetch"):
+        skills.update(foundry_root, url_for=urls.__getitem__, report=reported.append)
+
+    assert reported == [f"tdd: updated to {second[:12]}"]
