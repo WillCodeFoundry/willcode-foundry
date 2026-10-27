@@ -7,6 +7,7 @@ AGENT_PROJECT_DIR. Assumes `foundry task create` has already created the task: i
 folder, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
 """
 
+import os
 import shlex
 import sys
 from pathlib import Path
@@ -111,13 +112,21 @@ def _write_instructions(kit: AgentKit, role: RoleDir, task_md_path: Path) -> Non
     """Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @ imports without the approval
     dialog it shows for imports in a project file. Rewritten at every launch, so edits made inside the sandbox
     don't persist."""
-    claude_dir = Path.home() / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
+    claude_md = Path.home() / ".claude" / "CLAUDE.md"
     imports = [kit.agents_md, role.role_md, task_md_path]
-    (claude_dir / "CLAUDE.md").write_text(
-        "<!-- Written by session-init at every launch; edits here are discarded. -->\n"
-        + "".join(f"@{_escape_spaces(path)}\n" for path in imports)
+    text = "<!-- Written by session-init at every launch; edits here are discarded. -->\n" + "".join(
+        f"@{_escape_spaces(path)}\n" for path in imports
     )
+    # Written beside it and renamed over it, so a link left in its place is replaced, not written through.
+    partial = claude_md.with_name(f".{claude_md.name}.partial")
+    try:
+        claude_md.parent.mkdir(parents=True, exist_ok=True)
+        partial.write_text(text)
+        os.replace(partial, claude_md)
+    except OSError as error:
+        raise SetupError(f"can't write the agent's instructions to {claude_md}: {error.strerror}") from None
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def _escape_spaces(path: Path) -> str:

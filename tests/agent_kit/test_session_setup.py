@@ -88,6 +88,35 @@ def test_the_agent_starts_briefed_with_its_roles_skills(tmp_path, built_kit, kit
     assert (claude_dir / "skills").readlink() == built_kit / "roles" / "dev" / "skills"
 
 
+def test_instructions_replace_a_link_rather_than_write_through_it(tmp_path, kit_env, created_task) -> None:
+    """~/.claude/CLAUDE.md is rewritten at every launch; a link the agent left there points elsewhere."""
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_text("left alone\n")
+    claude_dir = tmp_path / "home" / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / "CLAUDE.md").symlink_to(elsewhere)
+
+    assert session_setup(kit_env(TASK), created_task).returncode == 0
+
+    assert elsewhere.read_text() == "left alone\n"
+    assert not (claude_dir / "CLAUDE.md").is_symlink()
+    assert "@" in (claude_dir / "CLAUDE.md").read_text()
+
+
+def test_instructions_that_cant_be_written_are_a_setup_error(tmp_path, kit_env, created_task) -> None:
+    claude_dir = tmp_path / "home" / ".claude"
+    claude_dir.mkdir(parents=True)
+    claude_dir.chmod(0o555)
+    try:
+        result = session_setup(kit_env(TASK), created_task)
+    finally:
+        claude_dir.chmod(0o755)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert f"session-setup: can't write the agent's instructions to {claude_dir / 'CLAUDE.md'}: " in result.stderr
+
+
 def test_a_second_run_succeeds_and_changes_nothing(tmp_path, kit_env, created_task) -> None:
     env = kit_env(TASK)
     assert session_setup(env, created_task).returncode == 0
