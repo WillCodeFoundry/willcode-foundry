@@ -105,8 +105,8 @@ SANDBOX = Machine(
 )
 
 
-class _HardenError(Exception):
-    """A step can't go ahead; the message says why and what to change."""
+class _Refused(Exception):
+    """Root mode can't go ahead; the message says why and what to change. sudo is still there."""
 
 
 # --- Claude's managed settings -------------------------------------------------------
@@ -160,22 +160,25 @@ def _check_hooks_runtime(link: Path, kit_runtime: Path, machine: Machine) -> lis
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def _find(command: str, why: str) -> str:
-    """Where ``command`` is, or a refusal: root mode checks before its first step. Hardening runs through sudo,
-    so it is there to remove, and reporting it removed when it wasn't found would be wrong."""
-    found = shutil.which(command)
+def _require_command(name: str, purpose: str) -> str:
+    """Where ``name`` is. Hardening runs through sudo, so it is there to remove: not finding it is a refusal,
+    not a step done."""
+    found = shutil.which(name)
     if found is None:
-        raise _HardenError(f"can't find {command} {why}; check the sandbox template's PATH")
+        raise _Refused(f"can't find {name}, {purpose}; check the sandbox template's PATH")
     return found
 
 
-def _harden_sudo_and_su(sudo: str, passwd: str) -> None:
-    """sudo can't run, whatever its rules say; su needs root's password, and there is none. Both found
-    beforehand, by _find."""
-    Path(sudo).resolve().chmod(0)
+def _lock_roots_password(passwd: str) -> None:
+    """su needs root's password, and there is none."""
     locked = subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=False)
     if locked.returncode != 0:
-        raise OSError(f"`{passwd} -l root` failed with exit code {locked.returncode}")
+        raise _Refused(f"`{passwd} -l root` failed with exit code {locked.returncode}{_SUDO_UNTOUCHED}")
+
+
+def _remove_sudo(sudo: str) -> None:
+    """sudo can't run, whatever its rules say. The one step that can't be undone, so it comes last."""
+    Path(sudo).resolve().chmod(0)
 
 
 def can_sudo(sudo: str) -> bool:
@@ -206,7 +209,7 @@ def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None
     group instead. dockerd reads daemon.json each time it starts and recreates its socket owned by that group;
     the socket that exists now changes too.
 
-    The template's own daemon.json is refused beforehand, by _refuse_templates_docker_config.
+    A template's own daemon.json is refused before any step.
     """
     _install_dir(daemon_config.parent, owner)
     atomic_write(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner=owner)
@@ -214,11 +217,15 @@ def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None
         os.chown(socket_path, -1, owner.gid)
 
 
-def _refuse_templates_docker_config(daemon_config: Path) -> None:
+def _refuse_template_docker_config(daemon_config: Path) -> None:
     """Assumption: the sandbox template doesn't configure dockerd itself. If it ever does, stop with a clear
     message rather than merge into its settings. A daemon.json root mode wrote on an earlier launch is its own."""
-    if daemon_config.exists() and daemon_config.read_text().rstrip("\n") != _DOCKER_CONFIG:
-        raise _HardenError(
+    try:
+        config = daemon_config.read_text() if daemon_config.exists() else None
+    except (OSError, UnicodeDecodeError) as error:
+        raise _Refused(f"can't read {daemon_config}: {error}") from None
+    if config is not None and config.rstrip("\n") != _DOCKER_CONFIG:
+        raise _Refused(
             f"this sandbox's template already has {daemon_config}.\n"
             "  foundry assumes the template leaves dockerd unconfigured, so that it can write\n"
             f"  {_DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
@@ -294,22 +301,9 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         )
         return 1
     try:
-        # Everything the steps need is checked first, changing nothing: removing sudo can't be undone, and root
-        # mode can only run again while sudo works.
-        _refuse_templates_docker_config(machine.docker_daemon_config)
-        sudo = _find(machine.sudo, "to remove it")
-        passwd = _find(machine.passwd, "to lock root's password")
-        try:
-            _harden_managed_settings(AgentKit(kit_dir).managed_settings, machine.managed_settings, machine.root)
-            _harden_hooks_runtime(machine.hooks_runtime, AgentKit(kit_dir).runtime, machine.root)
-            _harden_sudo_and_su(sudo, passwd)
-            _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
-        except OSError as error:
-            raise _HardenError(
-                f"{error}\n  This sandbox may be part-hardened, its sudo already gone, so root mode can't run in it"
-                " again: recreate the sandbox (sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/)."
-            ) from None
-    except _HardenError as error:
+        sudo, passwd = _preflight(machine)
+        _run_steps(AgentKit(kit_dir), machine, sudo=sudo, passwd=passwd)
+    except _Refused as error:
         print(f"harden: refusing: {error}", file=sys.stderr)
         return 1
     # Checked by `harden --verify`, which session-init runs next, as the agent.
@@ -318,6 +312,27 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         "Docker socket made root-only"
     )
     return 0
+
+
+_SUDO_UNTOUCHED = "; sudo is untouched, so the next launch runs this again"
+
+
+def _preflight(machine: Machine) -> tuple[str, str]:
+    """Everything the steps need, checked before any of them: (sudo, passwd). Changes nothing."""
+    _refuse_template_docker_config(machine.docker_daemon_config)
+    return _require_command(machine.sudo, "to remove it"), _require_command(machine.passwd, "to lock root's password")
+
+
+def _run_steps(agent_kit: AgentKit, machine: Machine, *, sudo: str, passwd: str) -> None:
+    """Each step root mode takes, removing sudo last: a failure before it leaves root mode able to run again."""
+    try:
+        _harden_managed_settings(agent_kit.managed_settings, machine.managed_settings, machine.root)
+        _harden_hooks_runtime(machine.hooks_runtime, agent_kit.runtime, machine.root)
+        _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
+        _lock_roots_password(passwd)
+        _remove_sudo(sudo)
+    except OSError as error:
+        raise _Refused(f"{error}{_SUDO_UNTOUCHED}") from None
 
 
 def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:

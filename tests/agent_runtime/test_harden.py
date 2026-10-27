@@ -670,10 +670,11 @@ def test_a_command_root_mode_needs_that_cant_be_found_is_refused_changing_nothin
     assert snapshot(machine) == before
 
 
-def test_a_step_that_fails_after_sudo_is_gone_says_to_recreate_the_sandbox(
+def test_a_failing_step_leaves_sudo_for_the_next_launch(
     machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """passwd fails once sudo is mode 0: root mode can't run again in this sandbox, and says so, no traceback."""
+    """Removing sudo comes last, being the one step that can't be undone: whatever fails before it, the next
+    launch can run root mode again. No traceback."""
     failing_passwd = stand_in(machine.dir, "failing-passwd", 1)
     root_mode = dataclasses.replace(machine.root_mode, passwd=failing_passwd)
 
@@ -681,5 +682,28 @@ def test_a_step_that_fails_after_sudo_is_gone_says_to_recreate_the_sandbox(
 
     err = capsys.readouterr().err
     assert "Traceback" not in err
-    assert f"harden: refusing: `{failing_passwd} -l root` failed" in err
-    assert "recreate the sandbox" in err
+    assert f"harden: refusing: `{failing_passwd} -l root` failed with exit code 1" in err
+    assert "sudo is untouched, so the next launch runs this again" in err
+    assert stat.S_IMODE(Path(root_mode.sudo).stat().st_mode) == 0o755
+
+
+@pytest.mark.parametrize("damage", ["not UTF-8", "unreadable"])
+def test_a_daemon_config_that_cant_be_read_is_refused_changing_nothing(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str], damage: str
+) -> None:
+    daemon_config = machine.root_mode.docker_daemon_config
+    daemon_config.parent.mkdir(parents=True)
+    daemon_config.write_bytes(b"\xff\xfe")
+    mode = stat.S_IMODE(daemon_config.stat().st_mode)
+    before = snapshot(machine)
+    if damage == "unreadable":
+        daemon_config.chmod(0)
+
+    try:
+        assert harden.harden(read_only_kit, "agent", machine.root_mode) == 1
+    finally:
+        daemon_config.chmod(mode)
+
+    err = capsys.readouterr().err
+    assert "Traceback" not in err and f"harden: refusing: can't read {daemon_config}" in err
+    assert snapshot(machine) == before
