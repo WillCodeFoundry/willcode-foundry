@@ -80,13 +80,33 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
+GIT_REPOSITORY_VARIABLES = tuple(
+    subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, check=True).stdout.split()
+)
+"""The variables that point git at a repository or add configuration, as git lists them: GIT_DIR,
+GIT_INDEX_FILE, GIT_CONFIG_PARAMETERS, GIT_CONFIG_COUNT and the rest. A git hook exports some of them."""
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test's git acts on the repository it names, never one this run inherited: as when the suite runs
+    from a git hook."""
+    for name in GIT_REPOSITORY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A throwaway HOME under tmp_path, with a global git identity and signing off: the developer's own git
-    configuration, global or system, stays out. Returns the HOME."""
+    configuration, global or system, stays out. Returns the HOME.
+
+    git finds global configuration through XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL as well as HOME, so both are
+    pointed into the throwaway HOME, or `git config --global` would write to the developer's own file."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
         git(tmp_path, "config", "--global", key, value)
