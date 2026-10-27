@@ -325,7 +325,10 @@ def test_a_missing_kit_is_refused(hardened, tmp_path) -> None:
     failures = harden.check(kit, hardened.agent_mode)
 
     assert any("can't be listed" in failure for failure in failures), failures
-    assert f"run with managed settings that can't be checked: {kit_copy} can't be read" in failures
+    assert (
+        f"run with managed settings that can't be checked: {kit_copy} can't be read (No such file or directory)"
+        in failures
+    )
     assert not any("older managed settings" in failure for failure in failures)
 
 
@@ -550,9 +553,48 @@ def test_a_kit_reached_through_a_link_is_refused(hardened, read_only_kit, tmp_pa
 
 
 @pytest.mark.parametrize(
+    ("settings", "reason"),
+    [("[]", "isn't a JSON object"), ("{", "isn't JSON")],
+    ids=["not an object", "not JSON"],
+)
+def test_settings_that_arent_a_json_object_are_refused_not_a_traceback(
+    hardened, read_only_kit, settings: str, reason: str
+) -> None:
+    kit_settings = AgentKit(read_only_kit).managed_settings
+    with writable(kit_settings.parent):
+        kit_settings.chmod(0o644)
+        kit_settings.write_text(settings)
+        kit_settings.chmod(0o444)
+    hardened.root_mode.managed_settings.write_text(settings)
+
+    failures = harden.check(read_only_kit, hardened.agent_mode)
+
+    assert any(
+        failure.startswith(f"run with managed settings that can't be checked: {kit_settings} {reason}")
+        for failure in failures
+    ), failures
+
+
+def test_installed_settings_the_agent_cant_read_are_refused_not_a_traceback(hardened, read_only_kit) -> None:
+    installed = hardened.agent_mode.managed_settings
+    installed.chmod(0o000)
+    try:
+        failures = harden.check(read_only_kit, hardened.agent_mode)
+    finally:
+        installed.chmod(0o444)
+
+    assert f"run with managed settings that can't be checked: {installed} can't be read (Permission denied)" in failures
+
+
+@pytest.mark.parametrize(
     "settings",
-    ['{"hooks": []}', '{"hooks": {"Stop": [{"hooks": [{"command": "python3 \'unbalanced"}]}]}}', "[]"],
-    ids=["hooks not a mapping", "unbalanced quote", "not an object"],
+    [
+        '{"hooks": []}',
+        "{}",
+        '{"hooks": {"Stop": [{"hooks": [{"command": 42}]}]}}',
+        '{"hooks": {"Stop": [{"hooks": [{"command": "python3 \'unbalanced"}]}]}}',
+    ],
+    ids=["hooks not a mapping", "no hooks", "command not a string", "unbalanced quote"],
 )
 def test_settings_whose_hooks_the_check_cant_read_are_refused_not_a_traceback(
     hardened, read_only_kit, settings: str

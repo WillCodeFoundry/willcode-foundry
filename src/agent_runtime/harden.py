@@ -21,7 +21,7 @@ import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from agent_runtime import contract
 from agent_runtime.agent_kit import PYTHON, RUNTIME_PYZ, AgentKit
@@ -129,15 +129,19 @@ def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
         return failures
     if failures := _check_root_folder(installed.parent, machine, label="Claude's managed settings"):
         return failures
-    kit_settings = _read_or_none(agent_kit.managed_settings)
-    if kit_settings is None:
-        return [f"run with managed settings that can't be checked: {agent_kit.managed_settings} can't be read"]
-    if installed.read_bytes() != kit_settings:
+    try:
+        kit_settings = _read_settings(agent_kit.managed_settings)
+        installed_settings = _read_settings(installed)
+    except OSError as error:
+        return [f"run with managed settings that can't be checked: {error.filename} can't be read ({error.strerror})"]
+    except ValueError as error:
+        return [f"run with managed settings that can't be checked: {error}"]
+    if installed_settings != kit_settings:
         return [f"run with older managed settings: {installed} differs from {agent_kit.managed_settings}"]
     link = str(machine.hooks_runtime_link)
     try:
         commands = [(command, shlex.split(command)) for command in _hook_commands(kit_settings)]
-    except (ValueError, TypeError, AttributeError, KeyError) as error:  # JSONDecodeError is a ValueError
+    except ValueError as error:
         return [f"run hooks the check can't read: {machine.managed_settings} ({error})"]
     return [
         f"run a hook that skips the runtime's link, {link}: {command}"
@@ -146,14 +150,33 @@ def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
     ]
 
 
-def _hook_commands(settings: bytes) -> list[str]:
-    """Every hook command in Claude Code's settings: hooks.<event>[].hooks[].command. Settings of another shape
-    raise a ValueError, TypeError, AttributeError or KeyError."""
-    parsed = json.loads(settings)
-    hooks = parsed.get("hooks") if isinstance(parsed, dict) else None
-    if not isinstance(hooks, dict):
-        raise TypeError("hooks isn't a mapping of events")
-    return [hook["command"] for entries in hooks.values() for entry in entries for hook in entry.get("hooks", [])]
+def _read_settings(path: Path) -> dict[str, Any]:
+    """Claude Code's settings at ``path``. Raises OSError when it can't be read, ValueError when it isn't a JSON
+    object."""
+    try:
+        settings = json.loads(path.read_bytes())
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{path} isn't JSON ({error})") from None
+    if not isinstance(settings, dict):
+        raise ValueError(f"{path} isn't a JSON object")
+    return settings
+
+
+def _hook_commands(settings: dict[str, Any]) -> list[str]:
+    """Every hook command in Claude Code's settings: hooks.<event>[].hooks[].command. Raises ValueError for
+    settings of another shape."""
+    try:
+        commands = [
+            hook["command"]
+            for entries in settings["hooks"].values()
+            for entry in entries
+            for hook in entry.get("hooks", [])
+        ]
+    except (KeyError, TypeError, AttributeError) as error:  # only from walking the shape: nothing else runs here
+        raise ValueError(f"not hooks.<event>[].hooks[].command ({error!r})") from None
+    if not all(isinstance(command, str) for command in commands):
+        raise ValueError("a hook's command isn't a string")
+    return commands
 
 
 # --- the runtime the managed hooks run ----------------------------------------------
@@ -392,13 +415,6 @@ def _install_dir(directory: Path, owner: Owner) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     os.chown(directory, *owner)
     directory.chmod(_ROOTS_FOLDER)
-
-
-def _read_or_none(path: Path) -> bytes | None:
-    try:
-        return path.read_bytes()
-    except OSError:
-        return None
 
 
 def _walk(top: Path, unreadable: list[OSError]) -> Iterator[Path]:
