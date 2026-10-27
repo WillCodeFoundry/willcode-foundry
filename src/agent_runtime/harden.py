@@ -3,7 +3,7 @@ managed settings, and can't change the code those settings and the launch run. T
 
     harden   as root, via sudo, on the first launch, while sudo still exists: installs the managed settings,
              links the runtime their hooks run, and takes away Docker, su and, last, sudo.
-    verify   as the agent, on every launch, before the agent starts: checks all of it.
+    check    as the agent, on every launch, before the agent starts: checks all of it.
 
 Each step sits beside the check that proves it. The checks run as the agent because sbx gives agent processes
 the docker group by number, whatever /etc/group says: root would see other permissions than the agent has.
@@ -138,7 +138,7 @@ def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
     try:
         commands = [(command, shlex.split(command)) for command in _hook_commands(kit_settings)]
     except (ValueError, TypeError, AttributeError, KeyError) as error:  # JSONDecodeError is a ValueError
-        return [f"run hooks verify can't read: {machine.managed_settings} ({error})"]
+        return [f"run hooks the check can't read: {machine.managed_settings} ({error})"]
     return [
         f"run a hook that skips the runtime's link, {link}: {command}"
         for command, words in commands
@@ -343,11 +343,13 @@ def _run_steps(agent_kit: AgentKit, machine: Machine, *, sudo: str, passwd: str)
         raise Refused(f"{error}{_SUDO_UNTOUCHED}") from None
 
 
-def verify(agent_kit_dir: Path, machine: Machine = SANDBOX) -> list[str]:
+def check(agent_kit_dir: Path, machine: Machine = SANDBOX) -> list[str]:
     """Agent mode: what the agent can still do, one line each, after every check against the kit; empty when
     hardened. Raises Refused as root, who can do anything."""
     if machine.euid() == 0:
-        raise Refused("verify: refusing: it runs as the agent, so it sees what the agent can do; root can do anything")
+        raise Refused(
+            "check-hardening: refusing: it runs as the agent, so it sees what the agent can do; root can do anything"
+        )
     agent_kit = AgentKit(agent_kit_dir)
     return [
         *_check_managed_settings(agent_kit, machine),

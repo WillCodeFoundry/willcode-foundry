@@ -54,7 +54,7 @@ def test_a_first_launch_hardens_the_sandbox(sandbox: Sandbox) -> None:
 
     assert launched.returncode == 0, launched.stdout + launched.stderr
     assert "harden: managed settings installed" in launched.stdout
-    assert last_line(launched.stdout) == "verify: hardened"
+    assert last_line(launched.stdout) == "check-hardening: hardened"
     installed = container.run("root", "stat", "-c", "%u:%g %a", SETTINGS)
     assert installed.stdout.strip() == "0:0 644"
     kit_copy = container.run("root", "cat", str(container.agent_kit / "claude" / "managed-settings.json")).stdout
@@ -110,11 +110,11 @@ def test_a_relaunch_only_verifies(sandbox: Sandbox) -> None:
     relaunched = container.session_init(env)
 
     assert relaunched.returncode == 0, relaunched.stdout + relaunched.stderr
-    assert last_line(relaunched.stdout) == "verify: hardened"
+    assert last_line(relaunched.stdout) == "check-hardening: hardened"
     assert "harden: managed settings installed" not in relaunched.stdout  # root mode didn't run
 
 
-def test_verify_sees_real_permissions(sandbox: Sandbox) -> None:
+def test_the_check_sees_real_permissions(sandbox: Sandbox) -> None:
     container, env = first_launch(sandbox)
     assert container.run("root", "chmod", "0666", SETTINGS).returncode == 0
 
@@ -125,7 +125,7 @@ def test_verify_sees_real_permissions(sandbox: Sandbox) -> None:
 
 
 def test_the_mount_not_file_modes_protects_the_kit(sandbox: Sandbox) -> None:
-    """The same world-writable kit, mounted read-write: verify refuses the first launch."""
+    """The same world-writable kit, mounted read-write: the check refuses the first launch."""
     container, env = sandbox(read_only=False)
 
     launched = container.session_init(env)

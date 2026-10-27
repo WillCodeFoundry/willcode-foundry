@@ -26,7 +26,7 @@ COMMANDS: dict[str, tuple[Callable[[], int], str]] = {
     "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),
     "session-setup": (lambda: _ran(session_setup.session_setup), "the agent user's part of session-init"),
     "harden": (session_init.harden, "as root: harden the sandbox"),
-    "verify": (session_init.verify, "as the agent: check the sandbox is hardened"),
+    "check-hardening": (session_init.check_hardening, "as the agent: check the sandbox is hardened"),
 }
 CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "guard-bash": claude_hooks.guard_bash,

@@ -146,10 +146,10 @@ def smoke() -> Iterator[Smoke]:
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
-    verified = smoke.run(*AgentKit(smoke.agent_kit).command("verify"))
+    verified = smoke.run(*AgentKit(smoke.agent_kit).command("check-hardening"))
 
     assert verified.returncode == 0, verified.stdout + verified.stderr
-    assert "verify: hardened" in verified.stdout
+    assert "check-hardening: hardened" in verified.stdout
     # What only root mode prints: a relaunch of a sandbox left from an earlier run wouldn't.
     assert smoke.started is not None
     assert "harden: managed settings installed" in smoke.started.init_output
@@ -177,7 +177,7 @@ def test_a_relaunch_only_verifies(smoke: Smoke) -> None:
     relaunched = smoke.run(*smoke.request.init_command)
 
     assert relaunched.returncode == 0, relaunched.stdout + relaunched.stderr
-    assert "verify: hardened" in relaunched.stdout
+    assert "check-hardening: hardened" in relaunched.stdout
     assert "harden: managed settings installed" not in relaunched.stdout
 
 

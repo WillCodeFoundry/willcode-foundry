@@ -1,6 +1,6 @@
 """agent_runtime.harden, through its two modes, on a temporary machine (tests/support/machine.py), never the
 real one: root mode then agent mode on the same files, as the first launch does; every way the agent could still
-reach root as a case verify must refuse; every refusal of root mode leaving the machine as it found it.
+reach root as a case the check must refuse; every refusal of root mode leaving the machine as it found it.
 
 chmod of sudo and `passwd -l` run against stand-ins here; tests/sandbox_image runs them for real.
 """
@@ -58,9 +58,9 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
 
 
 def test_root_mode_then_agent_mode_on_one_machine(machine: TemporaryMachine, read_only_kit: Path) -> None:
-    """What the first launch does: harden as root, then verify as the agent, on the same files."""
+    """What the first launch does: harden as root, then check-hardening as the agent, on the same files."""
     harden.harden(read_only_kit, SUDO_USER, machine.root_mode)
-    assert harden.verify(read_only_kit, machine.agent_mode) == []
+    assert harden.check(read_only_kit, machine.agent_mode) == []
 
     root_mode = machine.root_mode
     installed = root_mode.managed_settings
@@ -305,7 +305,7 @@ def test_a_sticky_folder_above_the_kit_counts_only_for_what_the_agent_owns(
     sticky, child = read_only_kit.parent.parent, read_only_kit.parent
     sticky.chmod(0o1777)
     try:
-        assert harden.verify(read_only_kit, hardened.agent_mode) == []
+        assert harden.check(read_only_kit, hardened.agent_mode) == []
         capsys.readouterr()
         hardened.owners[child] = AGENT_UID
         refused(
@@ -316,12 +316,12 @@ def test_a_sticky_folder_above_the_kit_counts_only_for_what_the_agent_owns(
 
 
 def test_a_missing_kit_is_refused(hardened, tmp_path) -> None:
-    """Without the kit's copy of the settings, the installed ones can't be compared: verify says so, rather
+    """Without the kit's copy of the settings, the installed ones can't be compared: the check says so, rather
     than that they're older."""
     kit = tmp_path / "absent"
     kit_copy = kit / "claude" / "managed-settings.json"
 
-    failures = harden.verify(kit, hardened.agent_mode)
+    failures = harden.check(kit, hardened.agent_mode)
 
     assert any("can't be listed" in failure for failure in failures), failures
     assert f"run with managed settings that can't be checked: {kit_copy} can't be read" in failures
@@ -332,7 +332,7 @@ def test_a_missing_interpreter_is_refused(hardened, read_only_kit) -> None:
     python = Path(hardened.agent_mode.python)
     python.resolve().unlink()
 
-    failures = harden.verify(read_only_kit, hardened.agent_mode)
+    failures = harden.check(read_only_kit, hardened.agent_mode)
 
     assert any(f.startswith("run without the hooks' interpreter:") and "is missing" in f for f in failures), failures
 
@@ -364,19 +364,19 @@ def test_a_sudo_that_cant_reach_root_passes(
     hardened, read_only_kit, tmp_path, sudo: Callable[[harden.Machine, Path], harden.Machine]
 ) -> None:
     """Unexecutable is what root mode leaves, and what every later launch finds: it must count as no sudo."""
-    assert harden.verify(read_only_kit, sudo(hardened.agent_mode, tmp_path)) == []
+    assert harden.check(read_only_kit, sudo(hardened.agent_mode, tmp_path)) == []
 
 
 def test_a_missing_su_passes(hardened, read_only_kit, tmp_path) -> None:
     agent_mode = dataclasses.replace(hardened.agent_mode, su=str(tmp_path / "absent"))
 
-    assert harden.verify(read_only_kit, agent_mode) == []
+    assert harden.check(read_only_kit, agent_mode) == []
 
 
-def test_verify_refuses_to_run_as_root(hardened, read_only_kit) -> None:
+def test_the_check_refuses_to_run_as_root(hardened, read_only_kit) -> None:
     """It checks what the agent can do; root can do anything."""
     with pytest.raises(harden.Refused, match="runs as the agent"):
-        harden.verify(read_only_kit, hardened.root_mode)
+        harden.check(read_only_kit, hardened.root_mode)
 
 
 # --- root mode: what it changes, in what order, and what it refuses -----------------------
@@ -543,7 +543,7 @@ def test_a_kit_reached_through_a_link_is_refused(hardened, read_only_kit, tmp_pa
     via_link = through / "agent-kit"
     via_link.symlink_to(read_only_kit)
 
-    failures = harden.verify(via_link, hardened.agent_mode)
+    failures = harden.check(via_link, hardened.agent_mode)
 
     assert f"replace the agent kit: {via_link} reaches it through a link, to {read_only_kit}" in failures
 
@@ -553,7 +553,7 @@ def test_a_kit_reached_through_a_link_is_refused(hardened, read_only_kit, tmp_pa
     ['{"hooks": []}', '{"hooks": {"Stop": [{"hooks": [{"command": "python3 \'unbalanced"}]}]}}', "[]"],
     ids=["hooks not a mapping", "unbalanced quote", "not an object"],
 )
-def test_settings_verify_cant_read_the_hooks_of_are_refused_not_a_traceback(
+def test_settings_whose_hooks_the_check_cant_read_are_refused_not_a_traceback(
     hardened, read_only_kit, settings: str
 ) -> None:
     kit_settings = AgentKit(read_only_kit).managed_settings
@@ -563,6 +563,6 @@ def test_settings_verify_cant_read_the_hooks_of_are_refused_not_a_traceback(
         kit_settings.chmod(0o444)
     hardened.root_mode.managed_settings.write_text(settings)
 
-    failures = harden.verify(read_only_kit, hardened.agent_mode)
+    failures = harden.check(read_only_kit, hardened.agent_mode)
 
-    assert any(failure.startswith("run hooks verify can't read:") for failure in failures), failures
+    assert any(failure.startswith("run hooks the check can't read:") for failure in failures), failures

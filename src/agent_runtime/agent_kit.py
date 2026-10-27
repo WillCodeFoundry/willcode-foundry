@@ -66,7 +66,7 @@ class AgentKit:
 
     @property
     def managed_settings(self) -> Path:
-        """Claude Code's managed settings, which root mode installs and verify compares with."""
+        """Claude Code's managed settings, which root mode installs and the check compares with."""
         return self.dir / "claude" / "managed-settings.json"
 
     @property

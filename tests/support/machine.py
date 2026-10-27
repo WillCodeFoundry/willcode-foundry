@@ -104,8 +104,8 @@ def writable(directory: Path) -> Iterator[None]:
 
 
 def assert_refused(kit: Path, machine: harden.Machine, *lines: str, startswith: str = "") -> None:
-    """verify finds something the agent can still do, and says each of ``lines``."""
-    failures = harden.verify(kit, machine)
+    """the check finds something the agent can still do, and says each of ``lines``."""
+    failures = harden.check(kit, machine)
     assert failures
     for line in lines:
         assert line in failures, failures

@@ -22,14 +22,14 @@ def session_init(
     machine: hardening.Machine = hardening.SANDBOX,
     run_as_root: RunAsRoot | None = None,
 ) -> int:
-    """Set up as the agent; harden as root on the first launch, while sudo still works; verify as the agent on
-    every launch, with the groups sbx gives it. The launch stops unless the agent can't become root."""
+    """Set up as the agent; harden as root on the first launch, while sudo still works; check the hardening as the
+    agent on every launch, with the groups sbx gives it. The launch stops unless the agent can't become root."""
     session = session or contract.read_environ()
     session_setup.session_setup(session)
     if hardening.can_sudo(machine.sudo):
         if (returncode := (run_as_root or _through_sudo)(machine, session.agent_kit_dir)) != 0:
             return returncode
-    return _verify(session.agent_kit_dir, machine)
+    return _check_hardening(session.agent_kit_dir, machine)
 
 
 def harden() -> int:
@@ -37,9 +37,9 @@ def harden() -> int:
     return _harden(_read_agent_kit_dir(), os.environ.get("SUDO_USER", ""), hardening.SANDBOX)
 
 
-def verify() -> int:
-    """`verify`: the check session_init runs after root mode, given AGENT_KIT_DIR alone."""
-    return _verify(_read_agent_kit_dir(), hardening.SANDBOX)
+def check_hardening() -> int:
+    """`check-hardening`: the check session_init runs after root mode, given AGENT_KIT_DIR alone."""
+    return _check_hardening(_read_agent_kit_dir(), hardening.SANDBOX)
 
 
 def _harden(agent_kit_dir: Path, sudo_user: str, machine: hardening.Machine) -> int:
@@ -51,15 +51,15 @@ def _harden(agent_kit_dir: Path, sudo_user: str, machine: hardening.Machine) -> 
     return 0
 
 
-def _verify(agent_kit_dir: Path, machine: hardening.Machine) -> int:
-    if failures := hardening.verify(agent_kit_dir, machine):
+def _check_hardening(agent_kit_dir: Path, machine: hardening.Machine) -> int:
+    if failures := hardening.check(agent_kit_dir, machine):
         lines = "".join(f"  {line}\n" for line in failures)
         sys.stderr.write(
-            f"verify: not starting the agent; it can still:\n{lines}"
+            f"check-hardening: not starting the agent; it can still:\n{lines}"
             "This sandbox needs recreating: see Recreating a sandbox in the foundry's README.\n"
         )
         return 1
-    print("verify: hardened")
+    print("check-hardening: hardened")
     return 0
 
 

@@ -2,7 +2,7 @@
 
 What only this shows: the exact command session-init hands sudo, the runtime's isolated interpreter and the kit
 alone preserved, through the real exec of a sudo found on PATH. The order of the launch, and what root mode and
-the verify do, are tested in-process, in tests/agent_runtime/test_session_init.py.
+the check do, are tested in-process, in tests/agent_runtime/test_session_init.py.
 
 sudo is a stand-in that answers the probe, and records any other call without running it. PATH holds only it
 and git: the exec search skips an entry it can't execute and tries the next, so with the machine's own PATH
@@ -60,7 +60,7 @@ def first_launch(
 def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
     tmp_path: Path, kit_env, created_task: Path
 ) -> None:
-    """sudo still works on the first launch: root mode runs through it, given AGENT_KIT_DIR alone, then verify."""
+    """sudo still works on the first launch: root mode runs through it, given AGENT_KIT_DIR alone, then the check."""
     kit_dir = Path(kit_env(TASK)["AGENT_KIT_DIR"])
 
     result, record = first_launch(tmp_path, kit_env, created_task, root_exit_code=0)
@@ -70,6 +70,6 @@ def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
     assert record.read_text().splitlines() == [
         f"--preserve-env=AGENT_KIT_DIR /usr/bin/python3 -IS {kit_dir / '.build' / 'agent_runtime.pyz'} harden"
     ]
-    # This machine isn't a hardened sandbox, so verify refuses.
-    assert "verify: " in result.stderr
+    # This machine isn't a hardened sandbox, so the check refuses.
+    assert "check-hardening: " in result.stderr
     assert result.returncode == 1
