@@ -127,29 +127,35 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     """
     sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
-    wanted = SessionVariables(
+    wanted = _wanted_variables(foundry_root, project, role, task)
+    created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
+    if created:
+        _create(session_dir, _definition(foundry_root, sandbox_name, wanted))
+    definition = SandboxDefinition.read(session_dir)
+    recorded = _recorded_variables(definition)
+    _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
+    _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
+    return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
+
+
+def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Task) -> SessionVariables:
+    """What this foundry would tell a new sandbox for this role on this task."""
+    return SessionVariables(
         role_name=role.name,
         task=task,
         repo_url=project.url,
         agent_kit_dir=paths.agent_kit_dir(foundry_root),
         project_dir=f"{SANDBOX_WORK_DIR}/{_slug(project.name)}",
     )
-    created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
-    if created:
-        _create(
-            session_dir,
-            SandboxDefinition(
-                name=sandbox_name,
-                workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
-                agent_kit_dir=wanted.agent_kit_dir,
-                variables=wanted.to_env(),
-            ),
-        )
-    definition = SandboxDefinition.read(session_dir)
-    recorded = _recorded_variables(definition)
-    _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
-    _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
-    return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
+
+
+def _definition(foundry_root: Path, sandbox_name: str, variables: SessionVariables) -> SandboxDefinition:
+    return SandboxDefinition(
+        name=sandbox_name,
+        workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
+        agent_kit_dir=variables.agent_kit_dir,
+        variables=variables.to_env(),
+    )
 
 
 def _slug(text: str) -> str:

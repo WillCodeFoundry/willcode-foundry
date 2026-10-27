@@ -18,6 +18,8 @@ from typing import TextIO
 from agent_runtime import contract
 from agent_runtime.git import Git, GitError
 
+_BLOCK = 2
+"""Claude Code: a PreToolUse hook exiting 2 blocks the tool call and shows its stderr to the agent."""
 _NO_VERIFY = re.compile(r"(?<![\w-])--no-verify(?![\w-])")
 _QUOTING = re.compile(r"['\"\\]")
 _SHELL_PUNCTUATION = "()$`;&|<>{}"
@@ -70,7 +72,7 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
         "  Blockers in PROGRESS.md and ask.",
         file=stderr or sys.stderr,
     )
-    return 2
+    return _BLOCK
 
 
 def session_check(

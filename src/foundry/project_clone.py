@@ -1,6 +1,5 @@
-"""ProjectClone: a shallow clone of a project's repository, in a folder you give it, made and pushed with git and
-your own access. It speaks in branches and files; the git details (fetching one commit deep, the remote's
-name, refspecs) stay inside it."""
+"""ProjectClone: a project's repository as branches and files; the git details (fetching one commit deep, the
+remote's name, refspecs) stay inside it."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -11,11 +10,9 @@ _REMOTE_NAME = "origin"
 
 
 class ProjectClone:
-    """A clone of the repository at a URL, in a folder you give it, holding nothing until a branch is checked out.
-
-    Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
-    writes files in it, commits them, and pushes branches together. Only the branches needed are fetched, one
-    commit deep. Every commit is signed with SSH, using the signing key in your git config.
+    """A shallow clone of the repository at a URL, made with your own access in a folder you give it, holding
+    nothing until a branch is checked out. Only the branches needed are fetched, one commit deep. Every commit is
+    signed with SSH, using the signing key in your git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
     A git failure is a GitError; a failed commit's adds how to sign.

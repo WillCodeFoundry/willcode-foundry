@@ -28,6 +28,10 @@ from agent_runtime.agent_kit import PYTHON, RUNTIME_PYZ, AgentKit
 from agent_runtime.files import atomic_symlink, atomic_write
 
 _DOCKER_CONFIG = '{"group": "root"}'
+_ROOTS_FOLDER = 0o755
+"""A folder root installs into: everyone may read and enter it; only root may change it."""
+_NO_PERMISSIONS = 0
+"""What sudo is left with: nobody may run it, root included, whatever its rules say."""
 SANDBOX_USER = contract.SANDBOX_USER
 
 
@@ -192,7 +196,7 @@ def _lock_roots_password(passwd: str) -> None:
 
 def _remove_sudo(sudo: str) -> None:
     """sudo can't run, whatever its rules say. The one step that can't be undone, so it comes last."""
-    Path(sudo).resolve().chmod(0)
+    Path(sudo).resolve().chmod(_NO_PERMISSIONS)
 
 
 def can_sudo(sudo: str) -> bool:
@@ -221,8 +225,6 @@ def _harden_docker(machine: Machine) -> None:
     by number, whatever /etc/group says, so leaving the group changes nothing: the socket has to leave the
     group instead. dockerd reads daemon.json each time it starts and recreates its socket owned by that group;
     the socket that exists now changes too.
-
-    A template's own daemon.json is refused before any step.
     """
     _install_dir(machine.docker_daemon_config.parent, machine.root_owner)
     atomic_write(machine.docker_daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner=machine.root_owner)
@@ -381,7 +383,7 @@ def _check_root_folder(folder: Path, machine: Machine, *, label: str) -> list[st
 def _install_dir(directory: Path, owner: Owner) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     os.chown(directory, *owner)
-    directory.chmod(0o755)  # everyone may read and enter it; only root may change it
+    directory.chmod(_ROOTS_FOLDER)
 
 
 def _read_or_none(path: Path) -> bytes | None:

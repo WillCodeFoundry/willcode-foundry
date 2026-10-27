@@ -1,8 +1,6 @@
-"""Prepare a sandbox for an agent session: what the launcher runs inside the sandbox, as the agent user,
-before the agent starts. Idempotent: safe to run again on a re-attached sandbox.
-
-Owns both ends of the launch's handoff to root, and the two hardening entries: ``harden``, which the root
-command reaches through sudo, and ``verify``. What each mode does is agent_runtime.harden's, imported as hardening.
+"""Prepare a sandbox for an agent session: what the launcher runs inside the sandbox, as the agent user, before
+the agent starts. Idempotent: safe to run again on a re-attached sandbox. Owns both ends of the handoff to root;
+what each hardening mode does is agent_runtime.harden's.
 """
 
 import os
