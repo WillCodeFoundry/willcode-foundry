@@ -1,24 +1,3 @@
-#!/usr/bin/python3 -IS
-"""git's pre-push hook: runs agent_runtime.git_hooks.pre_push from the runtime built into this kit.
-
-The runtime is found from this file, never from $AGENT_KIT_DIR, which the agent sets for its own git
-commands. Without it, this hook fails and git stops rather than run without the rule.
-"""
-
-import sys
-from pathlib import Path
-
-RUNTIME = Path(__file__).resolve().parent.parent / ".build" / "agent_runtime.pyz"
-if not RUNTIME.is_file():
-    sys.exit(f"pre-push: refusing: {RUNTIME} is missing; the sandbox's launch builds it, so launch again")
-sys.path.insert(0, str(RUNTIME))
-
-from agent_runtime import git_hooks  # noqa: E402
-from agent_runtime.git import GitError  # noqa: E402
-
-try:
-    git_hooks.pre_push()
-except git_hooks.Refused as error:
-    sys.exit(str(error))  # printed, and git stops
-except GitError as error:
-    sys.exit(f"pre-push: refusing: {error}")
+#!/bin/sh
+# Run by git from core.hooksPath, through the root-owned link to the runtime that hardening makes.
+exec /usr/bin/python3 -IS /etc/claude-code/agent_runtime.pyz git-hook pre-push "$@"

@@ -17,8 +17,9 @@ if sys.version_info < MINIMUM_PYTHON:
 
 import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
+from functools import partial  # noqa: E402
 
-from agent_runtime import claude_hooks, contract, session_init, session_setup  # noqa: E402
+from agent_runtime import claude_hooks, contract, git_hooks, session_init, session_setup  # noqa: E402
 from agent_runtime import harden as hardening  # noqa: E402
 from agent_runtime.git import GitError  # noqa: E402
 
@@ -32,7 +33,13 @@ CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "guard-bash": claude_hooks.guard_bash,
     "session-check": claude_hooks.session_check,
 }
-_EXPECTED = (contract.MissingVariables, hardening.Refused, session_setup.SetupError, GitError)
+GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
+    "pre-commit": lambda _args: git_hooks.pre_commit(),
+    "prepare-commit-msg": git_hooks.prepare_commit_msg,
+    "pre-push": lambda _args: git_hooks.pre_push(),
+}
+"""What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
+_EXPECTED = (contract.MissingVariables, hardening.Refused, session_setup.SetupError, git_hooks.Refused, GitError)
 """What a command raises to stop with a message, rather than a traceback."""
 
 
@@ -49,19 +56,28 @@ def build_parser() -> argparse.ArgumentParser:
         subparsers.add_parser(name, help=help_text).set_defaults(func=func)
     hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
     hook.add_argument("name", choices=CLAUDE_HOOKS)
+    git_hook = subparsers.add_parser("git-hook", help="a git hook, as agent-kit/hooks/ runs it")
+    git_hook.add_argument("name", choices=GIT_HOOKS)
+    git_hook.add_argument("args", nargs=argparse.REMAINDER, help="what git passed the hook")
     return parser
 
 
 def run(argv: Sequence[str] | None = None) -> int:
     """Run one command; returns its exit code. What it raises to stop is printed, not a traceback."""
     args = build_parser().parse_args(argv)
-    func: Callable[[], int] = CLAUDE_HOOKS[args.name] if args.command == "hook" else args.func
+    func: Callable[[], int]
+    if args.command == "hook":
+        func = CLAUDE_HOOKS[args.name]
+    elif args.command == "git-hook":
+        func = partial(_ran, partial(GIT_HOOKS[args.name], args.args))
+    else:
+        func = args.func
     try:
         return func()
     except _EXPECTED as error:
         if isinstance(error, (contract.MissingVariables, GitError)):
             # Messages that don't say which command they come from; a hook says its own name.
-            command = args.name if args.command == "hook" else args.command
+            command = args.name if args.command in ("hook", "git-hook") else args.command
             print(f"agent_runtime {command}: {error}", file=sys.stderr)
         else:
             print(error, file=sys.stderr)

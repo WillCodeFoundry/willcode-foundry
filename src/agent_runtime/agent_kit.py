@@ -1,9 +1,8 @@
 """Where things sit in the agent kit: the agreement between foundry, which builds into the kit and checks it,
 and the runtime, which reads it in the sandbox. Every path inside the kit is spelled here, and only here.
 
-Two copies outside Python stay, since neither can import this: the git hooks' stubs, which must find the
-runtime before they can import anything, and the managed settings, which Claude Code reads. Their tests hold
-both to RUNTIME_PYZ.
+What can't import this names no path in the kit: the git hooks' stubs and the managed settings run the runtime
+through the link root mode makes to it (harden.Machine.hooks_runtime_link), and their tests hold them to it.
 """
 
 from dataclasses import dataclass
