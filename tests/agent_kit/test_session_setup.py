@@ -48,10 +48,6 @@ def test_a_task_without_its_task_md_is_explained(tmp_path, kit_env, origin) -> N
     assert not (tmp_path / "home" / ".claude").exists()  # stopped before writing instructions
 
 
-def git_out(cwd: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
-
-
 def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(built_kit, kit_env, created_task) -> None:
     env = kit_env(TASK)
 
@@ -59,20 +55,22 @@ def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(built_kit, kit_e
 
     assert result.returncode == 0, result.stderr
     code, notes = Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
-    assert git_out(code, "branch", "--show-current") == TASK.branch
-    assert git_out(notes, "branch", "--show-current") == NOTES_BRANCH
+    assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
+    assert git(notes, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
     assert (notes / TASK.task_file).read_text() == "# Task\n"
-    assert git_out(code, "config", "core.hooksPath") == str(built_kit / "hooks")
+    assert git(code, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")
 
 
 def test_the_git_identity_is_the_roles(tmp_path, built_kit, kit_env, created_task) -> None:
     assert session_setup(kit_env(TASK), created_task).returncode == 0
 
-    assert git_out(tmp_path, "config", "--global", "include.path") == str(built_kit / "roles" / "dev" / "gitconfig")
-    assert git_out(tmp_path, "config", "--global", "gpg.ssh.allowedSignersFile") == str(
+    assert git(tmp_path, "config", "--global", "include.path").stdout.strip() == str(
+        built_kit / "roles" / "dev" / "gitconfig"
+    )
+    assert git(tmp_path, "config", "--global", "gpg.ssh.allowedSignersFile").stdout.strip() == str(
         built_kit / "git" / "allowed_signers"
     )
-    assert git_out(tmp_path, "config", "user.name") == "wc-foundry-dev"
+    assert git(tmp_path, "config", "user.name").stdout.strip() == "wc-foundry-dev"
 
 
 def test_the_agent_starts_briefed_with_its_roles_skills(tmp_path, built_kit, kit_env, created_task) -> None:
@@ -94,13 +92,16 @@ def test_a_second_run_succeeds_and_changes_nothing(tmp_path, kit_env, created_ta
     env = kit_env(TASK)
     assert session_setup(env, created_task).returncode == 0
     code = Path(env["AGENT_PROJECT_DIR"])
-    before = (git_out(code, "rev-parse", "HEAD"), (tmp_path / "home" / ".claude" / "CLAUDE.md").read_text())
+    before = (git(code, "rev-parse", "HEAD").stdout.strip(), (tmp_path / "home" / ".claude" / "CLAUDE.md").read_text())
 
     result = session_setup(env, created_task)
 
     assert result.returncode == 0, result.stderr
-    assert (git_out(code, "rev-parse", "HEAD"), (tmp_path / "home" / ".claude" / "CLAUDE.md").read_text()) == before
-    assert git_out(code, "branch", "--show-current") == TASK.branch
+    assert (
+        git(code, "rev-parse", "HEAD").stdout.strip(),
+        (tmp_path / "home" / ".claude" / "CLAUDE.md").read_text(),
+    ) == before
+    assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
 
 
 def test_a_role_that_signs_without_a_key_is_refused(tmp_path, built_kit, kit_env, created_task) -> None:

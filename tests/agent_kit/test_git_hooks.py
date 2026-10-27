@@ -16,48 +16,24 @@ import pytest
 
 from foundry.task import NOTES_BRANCH, Task
 from tests.agent_kit.conftest import runtime_command
+from tests.conftest import TASK, git
 
 SETTINGS = json.loads((Path(__file__).parents[2] / "agent-kit" / "claude" / "managed-settings.json").read_text())
 (STOP_COMMAND,) = (hook["command"] for entry in SETTINGS["hooks"]["Stop"] for hook in entry["hooks"])
-TASK = Task("T1")
 OTHER_TASK = Task("T2")
 
 
-def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
-
-
 @pytest.fixture
-def repo(tmp_path, monkeypatch, kit_env):
-    """(code checkout, notes checkout), made by session-setup, both clean and pushed."""
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))  # keep the developer's global git config out
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for key, value in {"user.name": "t", "user.email": "t@t", "init.defaultBranch": "main"}.items():
-        git(tmp_path, "config", "--global", key, value)
+def repo(monkeypatch, kit_env, created_task):
+    """(code checkout, notes checkout), made by session-setup from a created task's origin, both clean and
+    pushed."""
     # session-setup includes the role's gitconfig, which signs with the role's key; there is no
     # private key here, so signing is turned off by git's environment override, which beats any file.
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
     monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
 
-    origin = tmp_path / "origin.git"
-    git(tmp_path, "init", "--bare", "-q", str(origin))
-    seed = tmp_path / "seed"
-    git(tmp_path, "clone", "-q", str(origin), str(seed))
-    (seed / "README.md").write_text("hi\n")
-    git(seed, "add", ".")
-    git(seed, "commit", "-qm", "init")
-    git(seed, "push", "-q", "origin", "main", f"main:{TASK.branch}")
-    git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    (seed / TASK.notes_dir).mkdir(parents=True)
-    (seed / TASK.task_file).write_text("# Task\n")
-    git(seed, "add", TASK.notes_dir)
-    git(seed, "commit", "-qm", f"{TASK.id}: create task")
-    git(seed, "push", "-q", "origin", NOTES_BRANCH)
-
-    env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{origin}"}
+    env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}"}
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     setup = subprocess.run(

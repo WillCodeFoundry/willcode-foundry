@@ -75,19 +75,27 @@ def built_kit(tmp_path_factory: pytest.TempPathFactory) -> Path:
 TASK = Task("T1")
 
 
-def git(cwd: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
+def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    """``git *args`` in ``cwd``, its output captured as text; a failure raises unless ``check`` is False."""
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
 @pytest.fixture
-def origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A repository with only main: no task branch, no agent-notes."""
+def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A throwaway HOME under tmp_path, with a global git identity and signing off: the developer's own git
+    configuration, global or system, stays out. Returns the HOME."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
         git(tmp_path, "config", "--global", key, value)
+    return home
+
+
+@pytest.fixture
+def origin(tmp_path: Path, git_identity: Path) -> Path:
+    """A repository with only main: no task branch, no agent-notes."""
     bare = tmp_path / "origin.git"
     git(tmp_path, "init", "--bare", "-q", "-b", "main", str(bare))
     seed = tmp_path / "seed"

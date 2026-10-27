@@ -1,34 +1,22 @@
 """foundry skills update, against a local "upstream" repository standing in for GitHub."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from foundry.commands import skills
 from foundry.errors import FoundryError
+from tests.conftest import git
+
+pytestmark = pytest.mark.usefixtures("git_identity")
 
 UPSTREAM_SKILL = "---\nname: tdd\n---\n\nFirst.\nSecond.\nThird.\n"
-
-
-def git(cwd: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
 
 
 def commit_all(cwd: Path, message: str) -> str:
     git(cwd, "add", "-A")
     git(cwd, "commit", "-qm", message)
-    return git(cwd, "rev-parse", "HEAD")
-
-
-@pytest.fixture(autouse=True)
-def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
-        git(tmp_path, "config", "--global", key, value)
+    return git(cwd, "rev-parse", "HEAD").stdout.strip()
 
 
 @pytest.fixture
@@ -60,7 +48,7 @@ def foundry_root(tmp_path: Path, upstream: Path) -> Path:
     (root / "config" / "foundry.yaml").write_text("name: t\n")
     skills_dir = root / "agent-kit" / "skills"
     (skills_dir / "tdd").mkdir(parents=True)
-    first = git(upstream, "rev-parse", "HEAD")
+    first = git(upstream, "rev-parse", "HEAD").stdout.strip()
     (skills_dir / "tdd" / "SKILL.md").write_text(copied_skill_md(first, "\nFirst, for the foundry.\nSecond.\nThird.\n"))
     (skills_dir / "own").mkdir()
     (skills_dir / "own" / "SKILL.md").write_text("---\nname: own\n---\n\nOurs.\n")
@@ -97,12 +85,12 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
 
 
 def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream) -> None:
-    before = git(foundry_root, "status", "--porcelain")
+    before = git(foundry_root, "status", "--porcelain").stdout.strip()
 
     reported, _ = update(foundry_root, upstream)
 
-    assert reported == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD')[:12]}"]
-    assert git(foundry_root, "status", "--porcelain") == before == ""
+    assert reported == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD').stdout.strip()[:12]}"]
+    assert git(foundry_root, "status", "--porcelain").stdout.strip() == before == ""
 
 
 def test_a_line_both_sides_changed_is_left_as_a_conflict(foundry_root, upstream) -> None:
