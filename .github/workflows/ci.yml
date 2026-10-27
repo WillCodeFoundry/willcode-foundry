@@ -81,6 +81,16 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --group dev
+      # Anonymous Docker Hub pulls are rate-limited for hours; with a read-only token in these secrets, the pull
+      # is counted against that account instead. Without them, this step does nothing.
+      - name: Log in to Docker Hub, if the secrets are set
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          fi
       - run: uv run pytest -m docker
 
   # Required by config/repo-policy/rulesets.yaml: passes only if every job above did.
