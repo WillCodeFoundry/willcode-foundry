@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -I
+#!/usr/bin/python3 -IS
 """git's prepare-commit-msg hook: runs agent_runtime.git_hooks.prepare_commit_msg from the runtime built into this kit.
 
 The runtime is found from this file, never from $AGENT_KIT_DIR, which the agent sets for its own git

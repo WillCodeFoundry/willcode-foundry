@@ -1,4 +1,4 @@
-"""The built agent runtime, run as the kit's hooks and the launcher run it: ``python -I <pyz> ...``."""
+"""The built agent runtime, run as the kit's hooks and the launcher run it: ``python -IS <pyz> ...``."""
 
 import ast
 import os
@@ -16,7 +16,7 @@ RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
 
 
 def run_python(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, "-I", *args], capture_output=True, text=True, check=False)
+    return subprocess.run([sys.executable, contract.PYTHON_FLAGS, *args], capture_output=True, text=True, check=False)
 
 
 def test_the_runtime_imports_only_the_standard_library(built_kit: Path) -> None:
@@ -94,7 +94,7 @@ def test_root_mode_without_the_kit_names_it(built_kit: Path) -> None:
 
 # --- every command a sandbox runs, outside one --------------------------------------
 
-RUNTIME = ("<python>", "-I", f"<kit>/{RUNTIME_PYZ}")
+RUNTIME = ("<python>", contract.PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
 
 
 @pytest.mark.parametrize(

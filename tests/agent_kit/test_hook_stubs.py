@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from agent_runtime import git_hooks
+from agent_runtime import contract, git_hooks
 from agent_runtime.agent_kit import RUNTIME_PYZ
 
 HOOKS_DIR = Path(__file__).parents[2] / "agent-kit" / "hooks"
@@ -31,6 +31,11 @@ def test_a_stub_finds_the_runtime_where_the_build_puts_it(stub: Path) -> None:
 
     assert match is not None
     assert PurePosixPath(*re.findall(r'"([^"]+)"', match.group(1))) == RUNTIME_PYZ
+
+
+@pytest.mark.parametrize("stub", STUBS, ids=lambda stub: stub.name)
+def test_a_stub_runs_on_the_template_interpreter_with_the_runtimes_flags(stub: Path) -> None:
+    assert stub.read_text().splitlines()[0] == f"#!{contract.PYTHON} {contract.PYTHON_FLAGS}"
 
 
 def test_the_stubs_differ_only_in_their_hook() -> None:

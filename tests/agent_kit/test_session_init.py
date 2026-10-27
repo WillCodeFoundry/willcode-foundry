@@ -81,7 +81,7 @@ def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
     assert "Traceback" not in result.stderr
     assert "session-setup: checkouts ready" in result.stdout
     assert record.read_text().splitlines() == [
-        f"--preserve-env=AGENT_KIT_DIR /usr/bin/python3 -I {kit_dir / '.build' / 'agent_runtime.pyz'} harden"
+        f"--preserve-env=AGENT_KIT_DIR /usr/bin/python3 -IS {kit_dir / '.build' / 'agent_runtime.pyz'} harden"
     ]
     # This machine isn't a hardened sandbox, so verify refuses.
     assert "harden --verify: " in result.stderr

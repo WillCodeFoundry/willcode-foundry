@@ -38,7 +38,7 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
     assert SessionVariables.from_env(SandboxDefinition.read(session_dir).variables).task == Task("wcf-0042")
     assert request.init_command == (
         "/usr/bin/python3",
-        "-I",
+        "-IS",
         str(foundry_root / "agent-kit" / ".build" / "agent_runtime.pyz"),
         "session-init",
     )

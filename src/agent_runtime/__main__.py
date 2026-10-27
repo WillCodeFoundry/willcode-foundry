@@ -1,4 +1,4 @@
-"""The runtime's command line: ``/usr/bin/python3 -I agent_runtime.pyz <command>``.
+"""The runtime's command line: ``/usr/bin/python3 -IS agent_runtime.pyz <command>``.
 
 The version is checked before anything else is imported, and this file uses only syntax that old
 interpreters parse, so a template that ships an older python3 prints what it needs instead of a

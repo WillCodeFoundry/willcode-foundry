@@ -46,10 +46,17 @@ PYTHON: Final = "/usr/bin/python3"
 """The interpreter every call into the runtime uses: the template's own, root-owned, never ``env python3``."""
 
 
+PYTHON_FLAGS: Final = "-IS"
+"""How every call into the runtime runs PYTHON: ``-I`` ignores PYTHONPATH, PYTHON* variables and user
+site-packages, and ``-S`` skips site, so no .pth file in a site-packages folder runs either: the runtime needs
+only the standard library. One argument, as a shebang line passes; the git hooks' stubs and the managed
+settings spell it out, held to this by their tests."""
+
+
 def command(kit_dir: Path, *args: str) -> tuple[str, ...]:
-    """A call into the runtime in ``kit_dir``. ``-I`` ignores PYTHONPATH, PYTHON* and user site-packages,
-    so nothing the agent sets can shadow the package."""
-    return (PYTHON, "-I", str(AgentKit(kit_dir).runtime), *args)
+    """A call into the runtime in ``kit_dir``, isolated by PYTHON_FLAGS, so nothing the agent sets or installs
+    can shadow the package or run before it."""
+    return (PYTHON, PYTHON_FLAGS, str(AgentKit(kit_dir).runtime), *args)
 
 
 class MissingVariables(Exception):
