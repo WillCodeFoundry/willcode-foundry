@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -8,6 +9,14 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from foundry.session import SessionVariables
 from foundry.task import Task
+
+SETTINGS = json.loads(AgentKit(Path(__file__).parents[2] / "agent-kit").managed_settings.read_text())
+"""The kit's managed settings, as Claude Code reads them."""
+HOOK_COMMANDS = {
+    event: [hook["command"] for entry in entries for hook in entry["hooks"]]
+    for event, entries in SETTINGS["hooks"].items()
+}
+"""Each hook event's commands, as written in the managed settings."""
 
 
 @pytest.fixture

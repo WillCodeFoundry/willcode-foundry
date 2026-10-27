@@ -9,17 +9,15 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit.conftest import runtime_command
+from tests.agent_kit.conftest import HOOK_COMMANDS, runtime_command
 from tests.conftest import TASK, git
 
-SETTINGS = json.loads((Path(__file__).parents[2] / "agent-kit" / "claude" / "managed-settings.json").read_text())
-(STOP_COMMAND,) = (hook["command"] for entry in SETTINGS["hooks"]["Stop"] for hook in entry["hooks"])
+(STOP_COMMAND,) = HOOK_COMMANDS["Stop"]
 OTHER_TASK = Task("T2")
 
 
@@ -246,28 +244,3 @@ def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: 
     code, _ = repo
     (code / "wip.txt").write_text("x\n")
     assert json.loads(stop(raw_input=raw_input).stdout)["decision"] == "block"
-
-
-# --- every script -------------------------------------------------------------
-
-RUNTIME = ("<python>", "-I", "<kit>/.build/agent_runtime.pyz")
-
-
-@pytest.mark.parametrize(
-    "command",
-    [
-        ("<kit>/hooks/pre-commit",),
-        ("<kit>/hooks/pre-push",),
-        ("<kit>/hooks/prepare-commit-msg", "<kit>/message"),
-        (*RUNTIME, "hook", "session-check"),
-        (*RUNTIME, "session-init"),
-        (*RUNTIME, "session-setup"),
-    ],
-)
-def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, command: tuple[str, ...]) -> None:
-    argv = [arg.replace("<kit>", str(built_kit)).replace("<python>", sys.executable) for arg in command]
-    result = subprocess.run(
-        argv, env={"PATH": os.environ["PATH"]}, input="", capture_output=True, text=True, check=False
-    )
-    assert result.returncode != 0
-    assert "AGENT_" in result.stderr and "not set" in result.stderr

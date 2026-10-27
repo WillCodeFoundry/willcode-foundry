@@ -6,8 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from agent_runtime import contract
-from agent_runtime.agent_kit import AgentKit
+from agent_runtime.agent_kit import RUNTIME_PYZ, AgentKit
 from tests.agent_kit.conftest import runtime_command
 
 RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
@@ -88,3 +90,28 @@ def test_root_mode_without_the_kit_names_it(built_kit: Path) -> None:
     assert result.stderr == (
         "agent_runtime harden: AGENT_KIT_DIR not set; this runs inside a foundry sandbox, which sets them\n"
     )
+
+
+# --- every command a sandbox runs, outside one --------------------------------------
+
+RUNTIME = ("<python>", "-I", f"<kit>/{RUNTIME_PYZ}")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ("<kit>/hooks/pre-commit",),
+        ("<kit>/hooks/pre-push",),
+        ("<kit>/hooks/prepare-commit-msg", "<kit>/message"),
+        (*RUNTIME, "hook", "session-check"),
+        (*RUNTIME, "session-init"),
+        (*RUNTIME, "session-setup"),
+    ],
+)
+def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, command: tuple[str, ...]) -> None:
+    argv = [arg.replace("<kit>", str(built_kit)).replace("<python>", sys.executable) for arg in command]
+    result = subprocess.run(
+        argv, env={"PATH": os.environ["PATH"]}, input="", capture_output=True, text=True, check=False
+    )
+    assert result.returncode != 0
+    assert "AGENT_" in result.stderr and "not set" in result.stderr
