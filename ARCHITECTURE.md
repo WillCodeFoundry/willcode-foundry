@@ -27,7 +27,7 @@ A launch, end to end:
 | `commands/` | One module per subcommand: `task` (`create`, `run`, `list`, `move`), `repo`, `prune`, `skills`. Each builds its real dependencies in a composition root and passes them to the code that uses them, so the tests can pass fakes instead. |
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches (`SessionVariables`). |
 | `task.py` | `Task`: the one place a task's names are spelled; creating a task, and reading its task state. |
-| `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task create` commits and pushes from. |
+| `project_clone.py` | `ProjectClone`: the throwaway clone the `foundry task` commands read task states from, and commit and push from. |
 | `runtime_build.py` | Builds the runtime into the kit, replacing it only when it changed. |
 | `repo_policy.py`, `github.py` | `foundry repo check`: compares each project's repository with the repo policy, through `gh`. |
 | `skills.py` | `foundry skills update`: merges upstream's changes into the copied skills. |

@@ -5,8 +5,9 @@ the dev, qa and reviewer roles can each act on without asking anything.
 
 You run interactively, on a task `foundry task create` has just made: its
 `TASK.md` is still the template's skeleton. "Your task notes" and "Workflow"
-in `AGENTS.md` don't apply to you, nor its "Code checkout" rules; its "Taking
-turns", "Notes checkout" rules, "When to stop and ask" and "Safety" do.
+in `AGENTS.md` don't apply to you, except "Workflow"'s "Taking turns", nor its
+"Code checkout" rules; its "Notes checkout" rules, "When to stop and ask" and
+"Safety" do.
 
 Paths below are relative to this role's directory.
 
