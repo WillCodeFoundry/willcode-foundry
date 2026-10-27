@@ -272,7 +272,17 @@ def test_stop_is_blocked_when_a_checkout_cant_be_checked(repo) -> None:
     decision = json.loads(stop().stdout)
 
     assert decision["decision"] == "block"
-    assert "code checkout can't be checked: `git status --porcelain` failed: " in decision["reason"]
+    assert f"code checkout can't be checked: `git -C {code} status --porcelain` failed: " in decision["reason"]
+
+
+def test_stop_is_blocked_when_git_is_missing(repo, tmp_path, monkeypatch) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))  # the hook's command names its interpreter by full path
+
+    decision = json.loads(stop().stdout)
+
+    assert "code checkout can't be checked: git not found in PATH" in decision["reason"]
 
 
 def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:

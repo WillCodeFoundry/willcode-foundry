@@ -3,7 +3,9 @@
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
 ``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
 or can't be checked.
-Both are guardrails against mistakes, not boundaries: see "What protects what" in the README.
+Both are guardrails against mistakes, not boundaries: see "What protects what" in the README. Both trust the
+environment Claude Code gives them, which a settings file the agent writes can change: session-check reads the
+checkouts' paths from the session variables, and runs the git on PATH.
 """
 
 import json
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import TextIO
 
 from agent_runtime import contract
-from agent_runtime.git import Git
+from agent_runtime.git import Git, GitError
 
 _NO_VERIFY = re.compile(r"(?<![\w-])--no-verify(?![\w-])")
 _QUOTING = re.compile(r"['\"\\]")
@@ -105,25 +107,37 @@ def _stop_hook_active(stdin: TextIO) -> bool:
     return isinstance(event, dict) and event.get("stop_hook_active") is True
 
 
+class _CantCheck(Exception):
+    """A git command session-check needs failed; the message names it and git's first line."""
+
+
 def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
-    """What in ``checkout`` isn't saved on origin: uncommitted changes, and commits on ``branch``, or at HEAD if
-    that is elsewhere, that origin/``branch`` lacks. A git command failing is a problem too, not a pass."""
+    """What in ``checkout`` isn't saved on origin. When git can't tell, that is reported too: the stop is
+    blocked rather than let through unchecked."""
     git = Git(checkout)
-    status = git.result("status", "--porcelain")
-    if status.returncode != 0:
-        return [_cant_check(label, ("status", "--porcelain"), status.stderr)]
-    problems = [f"{label} has uncommitted changes"] if status.stdout.strip() else []
+    try:
+        return [*_uncommitted(git, label), *_unpushed(git, branch, label)]
+    except (_CantCheck, GitError) as error:
+        return [f"{label} can't be checked: {error}"]
+
+
+def _uncommitted(git: Git, label: str) -> list[str]:
+    return [f"{label} has uncommitted changes"] if _checked(git, "status", "--porcelain").strip() else []
+
+
+def _unpushed(git: Git, branch: str, label: str) -> list[str]:
+    """Commits origin/``branch`` lacks: on the branch, and at HEAD, which a detached HEAD moves off it."""
     git.result("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
     for rev in (f"refs/heads/{branch}", "HEAD"):
-        args = ("rev-list", "--count", f"origin/{branch}..{rev}")
-        ahead = git.result(*args)
-        if ahead.returncode != 0:
-            return [*problems, _cant_check(label, args, ahead.stderr)]
-        if int(ahead.stdout) > 0:
-            return [*problems, f"{label} has commits not pushed to origin/{branch}"]
-    return problems
+        if int(_checked(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0:
+            return [f"{label} has commits not pushed to origin/{branch}"]
+    return []
 
 
-def _cant_check(label: str, args: tuple[str, ...], stderr: str) -> str:
-    message = stderr.strip().splitlines()[0] if stderr.strip() else "no message"
-    return f"{label} can't be checked: `git {' '.join(args)}` failed: {message}"
+def _checked(git: Git, *args: str) -> str:
+    """The command's output; a failure raises _CantCheck naming it, with git's first line."""
+    result = git.result(*args)
+    if result.returncode != 0:
+        first_line = result.stderr.strip().splitlines()[0] if result.stderr.strip() else "no message"
+        raise _CantCheck(f"`{git.describe(*args)}` failed: {first_line}")
+    return result.stdout

@@ -72,6 +72,10 @@ class Git:
             raise GitError(args, "", found=False) from None
         return run.returncode == 0
 
+    def describe(self, *args: str) -> str:
+        """The command as a person would type it, ``-C <folder>`` included, quoted with shlex.join."""
+        return shlex.join(self._argv(args))
+
     def current_branch(self) -> str:
         """The branch checked out, or "detached"."""
         result = self.result("symbolic-ref", "--short", "HEAD")

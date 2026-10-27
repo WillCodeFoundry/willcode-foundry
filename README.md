@@ -125,7 +125,7 @@ Two kinds of control, and only the first is a boundary:
 | Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets | anything with the role's credentials |
 | Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
 | `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
-| `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
+| `session-check` (Stop) | Claude Code, at end of turn; it trusts the environment Claude Code gives it, which a settings file the agent writes can change | forgetting to commit or push |
 
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
