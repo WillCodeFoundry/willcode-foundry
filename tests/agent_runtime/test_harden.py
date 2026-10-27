@@ -533,3 +533,36 @@ def test_a_daemon_config_that_cant_be_read_is_refused_changing_nothing(
     err = str(refused_by.value)
     assert "Traceback" not in err and f"harden: refusing: can't read {daemon_config}" in err
     assert snapshot(machine) == before
+
+
+def test_a_kit_reached_through_a_link_is_refused(hardened, read_only_kit, tmp_path) -> None:
+    """Whoever can write the link's folder can point the link, and with it the hooks' runtime, elsewhere: the
+    folders above the real kit prove nothing then."""
+    through = tmp_path / "through"
+    through.mkdir()
+    via_link = through / "agent-kit"
+    via_link.symlink_to(read_only_kit)
+
+    failures = harden.verify(via_link, hardened.agent_mode)
+
+    assert f"replace the agent kit: {via_link} reaches it through a link, to {read_only_kit}" in failures
+
+
+@pytest.mark.parametrize(
+    "settings",
+    ['{"hooks": []}', '{"hooks": {"Stop": [{"hooks": [{"command": "python3 \'unbalanced"}]}]}}', "[]"],
+    ids=["hooks not a mapping", "unbalanced quote", "not an object"],
+)
+def test_settings_verify_cant_read_the_hooks_of_are_refused_not_a_traceback(
+    hardened, read_only_kit, settings: str
+) -> None:
+    kit_settings = AgentKit(read_only_kit).managed_settings
+    with writable(kit_settings.parent):
+        kit_settings.chmod(0o644)
+        kit_settings.write_text(settings)
+        kit_settings.chmod(0o444)
+    hardened.root_mode.managed_settings.write_text(settings)
+
+    failures = harden.verify(read_only_kit, hardened.agent_mode)
+
+    assert any(failure.startswith("run hooks verify can't read:") for failure in failures), failures

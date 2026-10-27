@@ -45,8 +45,8 @@ def verify() -> int:
 def _harden(agent_kit_dir: Path, sudo_user: str, machine: hardening.Machine) -> int:
     hardening.harden(agent_kit_dir, sudo_user, machine)
     print(
-        f"harden: managed settings installed, their hooks' runtime linked; sudo and su removed for {sudo_user}; "
-        "Docker socket made root-only"
+        "harden: managed settings installed, their hooks' runtime linked; Docker socket made root-only; root's "
+        f"password locked and sudo removed for {sudo_user}"
     )
     return 0
 
@@ -54,7 +54,10 @@ def _harden(agent_kit_dir: Path, sudo_user: str, machine: hardening.Machine) -> 
 def _verify(agent_kit_dir: Path, machine: hardening.Machine) -> int:
     if failures := hardening.verify(agent_kit_dir, machine):
         lines = "".join(f"  {line}\n" for line in failures)
-        sys.stderr.write(f"verify: not starting the agent; it can still:\n{lines}This sandbox needs recreating.\n")
+        sys.stderr.write(
+            f"verify: not starting the agent; it can still:\n{lines}"
+            "This sandbox needs recreating: see Recreating a sandbox in the foundry's README.\n"
+        )
         return 1
     print("verify: hardened")
     return 0

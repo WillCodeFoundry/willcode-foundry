@@ -135,22 +135,25 @@ def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
     if installed.read_bytes() != kit_settings:
         return [f"run with older managed settings: {installed} differs from {agent_kit.managed_settings}"]
     link = str(machine.hooks_runtime_link)
+    try:
+        commands = [(command, shlex.split(command)) for command in _hook_commands(kit_settings)]
+    except (ValueError, TypeError, AttributeError, KeyError) as error:  # JSONDecodeError is a ValueError
+        return [f"run hooks verify can't read: {machine.managed_settings} ({error})"]
     return [
         f"run a hook that skips the runtime's link, {link}: {command}"
-        for command in _hook_commands(kit_settings)
-        if link not in shlex.split(command)
+        for command, words in commands
+        if link not in words
     ]
 
 
 def _hook_commands(settings: bytes) -> list[str]:
-    """Every hook command in Claude Code's settings: hooks.<event>[].hooks[].command."""
-    try:
-        hooks = json.loads(settings).get("hooks", {})
-    except (json.JSONDecodeError, AttributeError):
-        return ["(the settings aren't a JSON object)"]
-    return [
-        hook.get("command", "") for entries in hooks.values() for entry in entries for hook in entry.get("hooks", [])
-    ]
+    """Every hook command in Claude Code's settings: hooks.<event>[].hooks[].command. Settings of another shape
+    raise a ValueError, TypeError, AttributeError or KeyError."""
+    parsed = json.loads(settings)
+    hooks = parsed.get("hooks") if isinstance(parsed, dict) else None
+    if not isinstance(hooks, dict):
+        raise TypeError("hooks isn't a mapping of events")
+    return [hook["command"] for entries in hooks.values() for entry in entries for hook in entry.get("hooks", [])]
 
 
 # --- the runtime the managed hooks run ----------------------------------------------
@@ -281,6 +284,9 @@ def _check_folders_above_kit(agent_kit: AgentKit, machine: Machine) -> list[str]
     kit = agent_kit.dir.resolve()
     if not kit.is_dir():
         return []  # the kit's own check reports it
+    if kit != agent_kit.dir.absolute():
+        # The link itself could be repointed by whoever can write its folder.
+        return [f"replace the agent kit: {agent_kit.dir} reaches it through a link, to {kit}"]
     for folder, child in zip(reversed(kit.parents), [*reversed(kit.parents[:-1]), kit], strict=True):
         if machine.owner_of(folder) != machine.root_owner.uid:
             return [f"replace the agent kit: {folder}, above it, isn't owned by uid {machine.root_owner.uid}"]

@@ -296,6 +296,15 @@ def test_a_skill_without_a_source_is_the_foundrys_own(tmp_path: Path, front_matt
     assert skills.read_source(skill_md) is None
 
 
+@pytest.mark.parametrize("front_matter", ["---\njust text\n---\n", "---\nmetadata: [a]\n---\n"])
+def test_front_matter_of_the_wrong_shape_is_reported(tmp_path: Path, front_matter: str) -> None:
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text(front_matter)
+
+    with pytest.raises(FoundryError, match=r"isn't a mapping"):
+        skills.read_source(skill_md)
+
+
 def test_a_source_with_an_empty_repo_is_reported_not_skipped(tmp_path: Path) -> None:
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text("---\nmetadata:\n  source:\n    repo:\n    path: p\n    commit: 0000\n---\n")

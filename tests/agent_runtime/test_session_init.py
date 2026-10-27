@@ -115,5 +115,5 @@ def test_an_unhardened_machine_is_refused_naming_what_the_agent_can_still_do(
     assert capsys.readouterr().err == (
         "verify: not starting the agent; it can still:\n"
         f"  change Claude's managed settings: {machine.root_mode.managed_settings} is writable\n"
-        "This sandbox needs recreating.\n"
+        "This sandbox needs recreating: see Recreating a sandbox in the foundry's README.\n"
     )

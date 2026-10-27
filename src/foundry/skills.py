@@ -157,7 +157,10 @@ def read_source(skill_md: Path) -> Source | None:
         front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}
     except yaml.YAMLError as error:
         raise FoundryError(f"{skill_md}: its front matter is not valid YAML: {error}") from None
-    raw = front.get("metadata", {}).get("source") if isinstance(front.get("metadata"), dict) else None
+    metadata = front.get("metadata", {}) if isinstance(front, dict) else None
+    if not isinstance(metadata, dict):
+        raise FoundryError(f"{skill_md}: its front matter, or its metadata, isn't a mapping")
+    raw = metadata.get("source")
     if raw is None:
         return None
     missing = [field for field in ("repo", "path", "commit") if not (isinstance(raw, dict) and raw.get(field))]
