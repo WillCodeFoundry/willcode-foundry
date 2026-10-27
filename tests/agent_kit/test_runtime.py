@@ -72,3 +72,19 @@ def test_root_mode_is_given_the_kit_alone(built_kit: Path) -> None:
 
     assert result.returncode == 1
     assert "only runs inside a foundry sandbox" in result.stderr
+
+
+def test_root_mode_without_the_kit_names_it(built_kit: Path) -> None:
+    """Root mode is given AGENT_KIT_DIR alone; without it, it says so, as every command does, and changes nothing."""
+    result = subprocess.run(
+        runtime_command(built_kit, "harden"),
+        env={"PATH": os.environ["PATH"]},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == (
+        "agent_runtime harden: AGENT_KIT_DIR not set; this runs inside a foundry sandbox, which sets them\n"
+    )

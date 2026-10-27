@@ -140,8 +140,8 @@ def _harden_sudo_and_su(sudo: str, passwd: str) -> None:
     subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=True)
 
 
-def can_sudo(sudo: str = "sudo") -> bool:
-    """Whether sudo runs without a password. False, not an error, when it is missing or can't execute: on
+def can_sudo(sudo: str) -> bool:
+    """Whether ``sudo`` runs without a password. False, not an error, when it is missing or can't execute: on
     every launch after the first, hardening has left it mode 0."""
     return _succeeds([sudo, "-n", "true"])
 

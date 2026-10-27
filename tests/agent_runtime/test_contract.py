@@ -29,12 +29,6 @@ def test_every_missing_variable_is_named_at_once() -> None:
     assert "AGENT_ROLE, AGENT_KIT_DIR" in str(raised.value)
 
 
-def test_hardening_needs_only_the_kit() -> None:
-    assert contract.read_kit_dir({contract.KIT_DIR: "/kit"}) == Path("/kit")
-    with pytest.raises(contract.MissingVariables, match="AGENT_KIT_DIR not set"):
-        contract.read_kit_dir({})
-
-
 def test_a_command_runs_the_kits_runtime_isolated() -> None:
     assert contract.command(Path("/kit"), "hook", "guard-bash") == (
         "/usr/bin/python3",

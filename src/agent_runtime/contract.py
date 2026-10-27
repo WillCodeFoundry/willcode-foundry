@@ -100,13 +100,6 @@ def read_environ(environ: Mapping[str, str] | None = None) -> Environ:
     )
 
 
-def read_kit_dir(environ: Mapping[str, str] | None = None) -> Path:
-    """Only AGENT_KIT_DIR: all that hardening, run as root through sudo, is given."""
-    env = os.environ if environ is None else environ
-    _require(env, (KIT_DIR,))
-    return Path(env[KIT_DIR])
-
-
 def _require(env: Mapping[str, str], names: tuple[str, ...]) -> None:
     missing = [name for name in names if not env.get(name)]
     if missing:
