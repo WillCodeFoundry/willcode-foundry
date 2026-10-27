@@ -4,8 +4,10 @@
     task EVENT "<hand-off note>"    end your turn: apply EVENT, then commit and push STATE.json alone
 
 Both read the task state as origin has it, freshly fetched. Ending a turn needs both checkouts clean and pushed
-first, the test session-check uses. A push that fails drops the commit, so running the same command again works;
-it never retries (ARCHITECTURE.md, design rule 6). Runs only in the sandbox: foundry never imports it.
+first, the test session-check uses. A commit or push that fails leaves the notes checkout as it was, so running
+the same command again works; it never retries (ARCHITECTURE.md, design rule 6).
+
+Runs only in the sandbox: foundry never imports it.
 """
 
 import sys
@@ -65,21 +67,24 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     if problems := unsaved_work(session):
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
     notes, branch, path = Git(session.agent_notes_dir), session.agent_notes_branch, _state_path(session)
+    found = notes.output("rev-parse", "HEAD").strip()
     notes.output("fetch", "--quiet", "origin", branch)
     notes.output("merge", "--ff-only", "--quiet", f"origin/{branch}")
     before = _read(notes, f"HEAD:{path}", session)
     after = before.after(event, session.agent_role, note)
-    (session.agent_notes_dir / path).write_text(after.to_json())
-    head = notes.output("rev-parse", "HEAD").strip()
-    notes.output("add", "--", path)
     subject = f"{session.agent_task}: {before.state} → {after.state} ({event})"
-    notes.output("commit", "--quiet", "--message", subject, "--message", f"{TRAILER_KEY}: {event}")
-    pushed = notes.run_captured("push", "--quiet", "origin", branch)
-    if pushed.returncode != 0:
-        notes.output("reset", "--quiet", "--hard", head)
+    (session.agent_notes_dir / path).write_text(after.to_json())
+    notes.output("add", "--", path)
+    committed = notes.run_captured("commit", "--quiet", "--message", subject, "--message", f"{TRAILER_KEY}: {event}")
+    pushed = notes.run_captured("push", "--quiet", "origin", branch) if committed.returncode == 0 else None
+    if pushed is None or pushed.returncode != 0:
+        notes.output("reset", "--quiet", "--hard", found)
+        failed = committed if pushed is None else pushed
+        step = "commit STATE.json" if pushed is None else f"push {branch}"
         raise TaskStateRefused(
-            f"couldn't push {branch}: {pushed.stderr.strip()}\n"
-            "Your turn has not ended, and nothing changed. If another push landed first, run the same command again."
+            f"couldn't {step}: {(failed.stderr or failed.stdout).strip()}\n"
+            "Your turn has not ended, and the notes checkout is as it was. "
+            "If another push landed first, run the same command again."
         )
     print(f"{subject}\n{_whose_turn_now(after)}", file=out)
 

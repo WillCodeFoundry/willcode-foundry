@@ -1,15 +1,18 @@
 """agent_runtime.task.command, in-process, against real checkouts session_setup made from a local origin.
 
-The git hooks are off here: tests/agent_runtime/test_git_hooks.py tests the STATE.json rule, and
+The git hooks are off here, except at the end, where the command's own commit goes through the built runtime's
+pre-commit. tests/agent_runtime/test_git_hooks.py tests the STATE.json rule itself, and
 tests/agent_kit/test_task_command.py the stub that runs this command.
 """
 
 import io
+import sys
 from pathlib import Path
 
 import pytest
 
 from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 from agent_runtime.task.command import task
 from agent_runtime.task.lifecycles import FEATURE
 from agent_runtime.task.state import TaskState, TaskStateRefused
@@ -190,3 +193,52 @@ def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Che
     hook.unlink()
     run(session, "submit", "All met.")
     assert origin_state(session).state == "review"
+
+
+# --- through the real pre-commit -----------------------------------------------
+
+
+def hooks_dir(tmp_path: Path, built_kit: Path, pre_commit: str | None = None) -> Path:
+    """A hooks dir whose pre-commit runs the built runtime's, as the kit's stub does through its link; or
+    ``pre_commit``, a script of the test's own."""
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    script = (
+        pre_commit or f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook pre-commit "$@"\n'
+    )
+    (hooks / "pre-commit").write_text(script)
+    (hooks / "pre-commit").chmod(0o755)
+    return hooks
+
+
+def use_hooks(monkeypatch: pytest.MonkeyPatch, session: contract.Environ, hooks: Path) -> None:
+    """Point the checkouts' git at ``hooks``, with the session variables a hook reads set as the sandbox sets them."""
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", str(hooks))
+    for name in contract.NAMES:
+        monkeypatch.setenv(name, str(getattr(session, name.lower())))
+
+
+def test_the_commands_own_commit_passes_the_real_pre_commit_guard(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, _, _ = turn
+    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit))
+
+    run(session, "block", "Which base branch?")
+
+    assert origin_state(session).state == "blocked"
+
+
+def test_a_refused_commit_leaves_the_notes_checkout_as_it_was(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, _, notes = turn
+    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit, "#!/bin/sh\necho 'signing failed' >&2\nexit 1\n"))
+    head = git(notes, "rev-parse", "HEAD").stdout
+
+    message = refusal(session, "submit", "All met.")
+
+    assert message.startswith("couldn't commit STATE.json: signing failed")
+    assert git(notes, "rev-parse", "HEAD").stdout == head
+    assert git(notes, "status", "--porcelain").stdout == ""
+    assert origin_state(session).state == "implement"
