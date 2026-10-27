@@ -43,3 +43,60 @@ def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, c
     assert result.returncode == 1
     assert "harden --verify: " in result.stderr
     assert "harden: " not in result.stderr  # root mode never ran
+
+
+def first_launch(
+    tmp_path: Path, kit_env, created_task: Path, root_exit_code: int
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """session-init on a sandbox whose sudo still works: a stand-in that exits 0 for `sudo -n true`, and for any
+    other call records its arguments, one line per call, and exits with ``root_exit_code``. It never runs what
+    it is given. Returns the run and the stand-in's record."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "sudo.calls"
+    sudo = bin_dir / "sudo"
+    sudo.write_text(
+        f'#!/bin/sh\n[ "$*" = "-n true" ] && exit 0\nprintf \'%s\\n\' "$*" >> \'{record}\'\nexit {root_exit_code}\n'
+    )
+    sudo.chmod(0o755)
+    git = shutil.which("git")
+    assert git is not None
+    (bin_dir / "git").symlink_to(git)
+    path = str(bin_dir)
+    assert shutil.which("sudo", path=path) == str(sudo)  # the stand-in is the only sudo this run can reach
+    env = {**os.environ, **kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}", "PATH": path}
+
+    result = subprocess.run(
+        runtime_command(Path(env["AGENT_KIT_DIR"]), "session-init"),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result, record
+
+
+def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
+    tmp_path: Path, kit_env, created_task: Path
+) -> None:
+    """sudo still works on the first launch: root mode runs through it, given AGENT_KIT_DIR alone, then verify."""
+    kit_dir = Path(kit_env(TASK)["AGENT_KIT_DIR"])
+
+    result, record = first_launch(tmp_path, kit_env, created_task, root_exit_code=0)
+
+    assert "Traceback" not in result.stderr
+    assert "session-setup: checkouts ready" in result.stdout
+    assert record.read_text().splitlines() == [
+        f"--preserve-env=AGENT_KIT_DIR /usr/bin/python3 -I {kit_dir / '.build' / 'agent_runtime.pyz'} harden"
+    ]
+    # This machine isn't a hardened sandbox, so verify refuses: as root before its checks, otherwise after them.
+    assert "harden --verify: " in result.stderr
+    assert result.returncode == 1
+
+
+def test_a_failing_root_mode_stops_the_launch_before_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
+    result, record = first_launch(tmp_path, kit_env, created_task, root_exit_code=3)
+
+    assert len(record.read_text().splitlines()) == 1
+    assert result.returncode == 3
+    assert "harden --verify: " not in result.stderr
