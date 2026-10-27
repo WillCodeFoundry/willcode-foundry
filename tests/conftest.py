@@ -23,6 +23,18 @@ def pytest_configure(config: pytest.Config) -> None:
         )
 
 
+SANDBOX_IMAGE = pytest.StashKey[str]()
+"""The template image a -m docker run tested, digest included: recorded by tests/sandbox_image's image fixture,
+printed below. pytest honours summary hooks only in this, the root conftest."""
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter, config: pytest.Config) -> None:
+    """Name the image a -m docker run tested, pass or fail: the tests follow its tag, so the digest is what
+    tells two runs' images apart."""
+    if (image := config.stash.get(SANDBOX_IMAGE, None)) is not None:
+        terminalreporter.write_line(f"sandbox image: {image}")
+
+
 @pytest.fixture
 def session_variables(tmp_path: Path) -> Callable[[Task], SessionVariables]:
     """The session variables a new sandbox for a task gets, from a real session under tmp_path/foundry.

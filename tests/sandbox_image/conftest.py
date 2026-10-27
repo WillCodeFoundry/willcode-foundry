@@ -24,7 +24,7 @@ import pytest
 from agent_runtime import contract
 from foundry.session import SessionVariables
 from foundry.task import Task
-from tests.conftest import TASK
+from tests.conftest import SANDBOX_IMAGE, TASK
 
 IMAGE = "docker/sandbox-templates:claude-code-docker"
 """Followed by tag, not pinned, as sbx follows it."""
@@ -39,7 +39,7 @@ def docker(*args: str, input: str | None = None) -> subprocess.CompletedProcess[
 
 
 @pytest.fixture(scope="session")
-def image() -> str:
+def image(pytestconfig: pytest.Config) -> str:
     """The template image, pulled at its tag's current version. -m docker asked for it, so a missing Docker
     daemon fails rather than skips."""
     try:
@@ -51,7 +51,15 @@ def image() -> str:
     pulled = docker("pull", "--quiet", IMAGE)
     if pulled.returncode != 0:
         pytest.fail(f"can't pull {IMAGE}:\n{pulled.stderr.strip()}", pytrace=False)
+    pytestconfig.stash[SANDBOX_IMAGE] = f"{IMAGE}@{repo_digest(IMAGE)}"
     return IMAGE
+
+
+def repo_digest(image: str) -> str:
+    """The digest of the image pulled at this tag: `docker image inspect` gives "<repository>@sha256:…"."""
+    inspected = docker("image", "inspect", "--format", "{{index .RepoDigests 0}}", image)
+    assert inspected.returncode == 0, inspected.stderr
+    return inspected.stdout.strip().partition("@")[2]
 
 
 @pytest.fixture(scope="session")
