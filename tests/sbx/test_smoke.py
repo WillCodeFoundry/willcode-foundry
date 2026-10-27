@@ -100,22 +100,30 @@ class Smoke:
         return self.started.definition.agent_kit_dir
 
 
+def sbx_sandboxes() -> dict[str, str]:
+    """Every sandbox sbx knows, running or stopped, by name, with its status."""
+    listed = subprocess.run(["sbx", "ls", "--json"], capture_output=True, text=True, check=True)
+    return {sandbox["name"]: sandbox["status"] for sandbox in json.loads(listed.stdout)["sandboxes"]}
+
+
 def remove_the_smoke_sandbox(session_dir: Path) -> None:
     """As the README says to recreate a sandbox: sbx env rm --force, then delete its session directory.
 
-    The folder goes only after sbx removed the sandbox, or when it holds no definition, so there was nothing to
-    remove. When sbx fails with a definition there, the run fails naming the command, and the folder stays:
-    the sandbox can still be removed by its path.
+    sbx is asked to remove the sandbox only when it has one by the definition's name: a session prepared but
+    never launched has none, and sbx would fail on it. When sbx fails to remove one it has, the run fails naming
+    the command, and the folder stays: the sandbox can still be removed by its path.
     """
     if not session_dir.exists():
         return
-    command = ["sbx", "env", "rm", "--force", str(session_dir)]
-    removed = subprocess.run(command, capture_output=True, text=True, check=False)
-    if removed.returncode != 0 and (session_dir / SandboxDefinition.FILE_NAME).is_file():
-        pytest.fail(
-            f"`{' '.join(command)}` failed, so {session_dir} is left for you to remove:\n{removed.stderr.strip()}",
-            pytrace=False,
-        )
+    definition = session_dir / SandboxDefinition.FILE_NAME
+    if definition.is_file() and SandboxDefinition.read(session_dir).name in sbx_sandboxes():
+        command = ["sbx", "env", "rm", "--force", str(session_dir)]
+        removed = subprocess.run(command, capture_output=True, text=True, check=False)
+        if removed.returncode != 0:
+            pytest.fail(
+                f"`{' '.join(command)}` failed, so {session_dir} is left for you to remove:\n{removed.stderr.strip()}",
+                pytrace=False,
+            )
     shutil.rmtree(session_dir)
 
 
@@ -204,6 +212,4 @@ def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
 
 def sandbox_status(smoke: Smoke) -> str:
     assert smoke.started is not None
-    listed = subprocess.run(["sbx", "ls", "--json"], capture_output=True, text=True, check=True)
-    statuses = {sandbox["name"]: sandbox["status"] for sandbox in json.loads(listed.stdout)["sandboxes"]}
-    return str(statuses.get(smoke.started.definition.name, "absent"))
+    return str(sbx_sandboxes().get(smoke.started.definition.name, "absent"))
