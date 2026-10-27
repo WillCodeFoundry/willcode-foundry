@@ -25,8 +25,20 @@ ENVIRON = contract.Environ(
 ZERO = "0" * 40
 
 
-def test_pushing_the_task_and_notes_branches_is_accepted() -> None:
-    refs = [f"refs/heads/x {ZERO} refs/heads/task/t1 {ZERO}\n", f"refs/heads/notes {ZERO} refs/heads/notes {ZERO}\n"]
+OLD, NEW = "a" * 40, "b" * 40
+
+
+@pytest.mark.parametrize(
+    ("local_sha", "remote_sha"),
+    [(NEW, OLD), (NEW, ZERO), (ZERO, OLD)],
+    ids=["update", "new branch", "deletion, which the rulesets refuse"],
+)
+def test_pushing_the_task_and_notes_branches_is_accepted(local_sha: str, remote_sha: str) -> None:
+    """git's lines: <local ref> <local sha> <remote ref> <remote sha>; an all-zero local sha means delete."""
+    refs = [
+        f"refs/heads/task/t1 {local_sha} refs/heads/task/t1 {remote_sha}\n",
+        f"refs/heads/notes {local_sha} refs/heads/notes {remote_sha}\n",
+    ]
     git_hooks.pre_push(refs, ENVIRON)
 
 

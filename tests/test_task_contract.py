@@ -73,6 +73,12 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     assert [name for name in session_variables(Task("t1")).to_env() if not is_read(name)] == []
 
 
+def test_the_sandbox_definition_lists_the_variables_in_the_contracts_order(
+    session_variables: Callable[[Task], SessionVariables],
+) -> None:
+    assert list(session_variables(Task("t1")).to_env()) == list(contract.NAMES)
+
+
 def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:

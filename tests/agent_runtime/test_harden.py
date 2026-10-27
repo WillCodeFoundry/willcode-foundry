@@ -222,12 +222,16 @@ def _two_groups() -> tuple[int, int] | None:
     return (groups[0], groups[1]) if len(groups) > 1 else None
 
 
-@pytest.mark.skipif(_two_groups() is None, reason="needs a user in two groups, to start the socket in the other")
 def test_root_mode_gives_the_docker_socket_to_root(machine: TemporaryMachine, read_only_kit: Path) -> None:
     """The socket starts in the agent's group, as sbx's docker group, and ends in root's: the round trip can't
-    show it, since there the two are the same."""
+    show it, since there the two are the same. It is the only host test of that, so on CI, where the runner's
+    user is in several groups, a user in one fails it rather than skips it unseen."""
     groups = _two_groups()
-    assert groups is not None
+    if groups is None:
+        needs = "needs a user in two groups, to start the socket in the other"
+        if os.environ.get("CI"):
+            pytest.fail(f"{needs}; CI's runner user used to be", pytrace=False)
+        pytest.skip(needs)
     agents_group, roots_group = groups
     socket_path = machine.root_mode.regrouped_socket
     os.chown(socket_path, -1, agents_group)
