@@ -8,7 +8,7 @@ definition.
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -42,8 +42,6 @@ class PreparedSandbox:
     sandbox: SbxCli
     init_output: str = ""
     """What the init command printed."""
-    pruned: tuple[str, ...] = ()
-    """The sandboxes whose ssh-agents this start killed, as stopped or removed."""
 
 
 def launch(request: LaunchRequest) -> NoReturn:
@@ -51,16 +49,12 @@ def launch(request: LaunchRequest) -> NoReturn:
 
     Composition root. Raises SandboxError if anything before the hand-over fails.
     """
-    prepared = start(request)
-    if prepared.pruned:
-        print(
-            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(prepared.pruned)}", file=sys.stderr
-        )
+    prepared = start(request, report=lambda line: print(line, file=sys.stderr))
     print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
     prepared.sandbox.attach()
 
 
-def start(request: LaunchRequest) -> PreparedSandbox:
+def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: None) -> PreparedSandbox:
     """Everything launch does before handing over: prune, then prepare the sandbox, up to but not including
     attaching the agent. Raises SandboxError if any of it fails."""
     definition = SandboxDefinition.read(request.definition_dir)
@@ -73,9 +67,11 @@ def start(request: LaunchRequest) -> PreparedSandbox:
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    pruned = ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host))
+    if pruned := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
+        # Reported now, not returned: the preparation below can fail, and what was pruned stays pruned.
+        report(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned)}")
     init_output = prepare(request, definition, ssh_agent, sandbox)
-    return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output, tuple(pruned))
+    return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output)
 
 
 def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> str:

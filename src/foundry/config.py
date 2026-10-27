@@ -83,11 +83,11 @@ def parse(raw: object, *, foundry_root: Path, source: str = "config") -> Config:
 def _role(foundry_root: Path, role_name: str, *, source: str) -> Role:
     """The role, refused unless its folder in the agent kit holds what a sandbox needs from it: the rule is
     agent_kit's, which session-setup applies again in the sandbox."""
-    role = AgentKit(paths.agent_kit_dir(foundry_root)).role(role_name)
-    if not role.dir.is_dir():
-        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role.dir} doesn't exist")
-    if missing := role.missing():
-        raise FoundryError(f"{source}: role {role_name!r}: {role.dir} has no {' or '.join(missing)}")
+    role_dir = AgentKit(paths.agent_kit_dir(foundry_root)).role(role_name)
+    if not role_dir.dir.is_dir():
+        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role_dir.dir} doesn't exist")
+    if missing := role_dir.missing():
+        raise FoundryError(f"{source}: role {role_name!r}: {role_dir.dir} has no {' or '.join(missing)}")
     github_token_path = paths.github_token_path(foundry_root, role_name)
     return Role(
         name=role_name,

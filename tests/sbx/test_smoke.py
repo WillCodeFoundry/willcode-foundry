@@ -126,7 +126,10 @@ def smoke() -> Iterator[Smoke]:
         pytest.fail("-m sbx needs:\n" + "\n".join(f"  - {line}" for line in missing), pytrace=False)
     smoke = Smoke(foundry_root)
     # The session names the sandbox; a leftover from an earlier run is removed from its folder.
-    definition_dir = smoke.prepare().definition_dir
+    try:
+        definition_dir = smoke.prepare().definition_dir
+    except FoundryError as error:
+        pytest.fail(f"a leftover session stops the smoke test before it can remove it: {error}", pytrace=False)
     remove_the_smoke_sandbox(definition_dir)
     try:
         yield smoke
