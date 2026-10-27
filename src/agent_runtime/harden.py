@@ -26,7 +26,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +33,7 @@ from typing import NamedTuple
 
 from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit
+from agent_runtime.files import atomic_symlink, atomic_write
 
 _DOCKER_CONFIG = '{"group": "root"}'
 SANDBOX_USER = "agent"
@@ -117,7 +117,7 @@ def _harden_managed_settings(kit_copy: Path, installed: Path, owner: Owner) -> N
     replace them. The directory is set too, in case it already existed. Written beside its final name and
     renamed over it, as install(1) does."""
     _install_dir(installed.parent, owner)
-    _install_file(installed, kit_copy.read_bytes(), owner)
+    atomic_write(installed, kit_copy.read_bytes(), owner=owner)
 
 
 def _check_managed_settings(installed: Path, kit_copy: Path, machine: Machine) -> list[str]:
@@ -144,11 +144,7 @@ def _harden_hooks_runtime(link: Path, kit_runtime: Path, owner: Owner) -> None:
     """Link the fixed path the managed hooks name to the kit's runtime, in a folder only root can write. A link,
     not a copy, so the runtime a later launch builds into the kit is the one the hooks run."""
     _install_dir(link.parent, owner)
-    partial = link.with_name(f".{link.name}.partial")
-    partial.unlink(missing_ok=True)
-    partial.symlink_to(kit_runtime)
-    os.lchown(partial, *owner)
-    os.replace(partial, link)
+    atomic_symlink(link, kit_runtime, owner=owner)
 
 
 def _check_hooks_runtime(link: Path, kit_runtime: Path, machine: Machine) -> list[str]:
@@ -213,7 +209,7 @@ def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None
     The template's own daemon.json is refused beforehand, by _refuse_templates_docker_config.
     """
     _install_dir(daemon_config.parent, owner)
-    _install_file(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner)
+    atomic_write(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner=owner)
     if _is_socket(socket_path):
         os.chown(socket_path, -1, owner.gid)
 
@@ -382,19 +378,6 @@ def _install_dir(directory: Path, owner: Owner) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     os.chown(directory, *owner)
     directory.chmod(0o755)
-
-
-def _install_file(target: Path, content: bytes, owner: Owner) -> None:
-    descriptor, partial_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
-    partial = Path(partial_name)
-    try:
-        with os.fdopen(descriptor, "wb") as partial_file:
-            partial_file.write(content)
-        os.chown(partial, *owner)
-        partial.chmod(0o644)
-        os.replace(partial, target)
-    finally:
-        partial.unlink(missing_ok=True)
 
 
 def _read_or_none(path: Path) -> bytes | None:

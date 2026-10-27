@@ -4,7 +4,7 @@ The runtime is run from the kit's read-only mount, never copied into the sandbox
 the kit at every launch is how a sandbox gets the runtime of the foundry that launches it.
 """
 
-import os
+import io
 import shutil
 import tempfile
 import zipapp
@@ -12,42 +12,40 @@ from pathlib import Path
 
 import agent_runtime
 from agent_runtime.agent_kit import AgentKit
+from agent_runtime.files import atomic_write
 from foundry.errors import FoundryError
 
 _SOURCE_DIR = Path(agent_runtime.__file__).parent
 
 
-def build_runtime(kit_dir: Path, *, source: Path = _SOURCE_DIR) -> Path:
-    """Build the agent_runtime package at ``source`` into ``kit_dir``'s .build/ and return the zipapp's path.
+def build_runtime(agent_kit_dir: Path, *, source: Path = _SOURCE_DIR) -> Path:
+    """Build the agent_runtime package at ``source`` into the kit's .build/ and return the zipapp's path.
 
-    Every .py file of the package goes in, in its folders. The archive is written beside its final name and
-    renamed over it, so a sandbox that already has the old file open keeps reading all of it. When the source
-    hasn't changed, the archive comes out the same and the old file is left in place. A process starting just
-    as a changed runtime lands can still fail to import, since zipimport reopens the archive by path; a launch
-    after a change to the runtime is when that can happen. Raises FoundryError if the kit is missing or can't
-    be written.
+    Every .py file of the package goes in, in its folders. An unchanged archive leaves the old file in place;
+    a changed one replaces it whole. Raises FoundryError if the kit is missing or can't be written.
     """
-    target = AgentKit(kit_dir).runtime
-    if not kit_dir.is_dir():
-        raise FoundryError(f"can't build the agent runtime: the agent kit {kit_dir} is missing")
+    target = AgentKit(agent_kit_dir).runtime
+    if not agent_kit_dir.is_dir():
+        raise FoundryError(f"can't build the agent runtime: the agent kit {agent_kit_dir} is missing")
     try:
+        archive = _archive(source)
         target.parent.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="agent-runtime-") as staging_dir:
-            staging = Path(staging_dir)
-            shutil.copytree(source, staging / "agent_runtime", ignore=_not_python_source)
-            descriptor, partial_name = tempfile.mkstemp(dir=target.parent, prefix=f"{target.name}.", suffix=".tmp")
-            os.close(descriptor)
-            partial = Path(partial_name)
-            try:
-                zipapp.create_archive(staging, partial, interpreter=None, main="agent_runtime.__main__:main")
-                if not (target.is_file() and target.read_bytes() == partial.read_bytes()):
-                    partial.chmod(0o644)  # mkstemp's 0600 would keep the sandbox's user out
-                    os.replace(partial, target)
-            finally:
-                partial.unlink(missing_ok=True)
+        # zipimport reopens the archive by path: a process starting as a changed one lands may fail to import.
+        if not (target.is_file() and target.read_bytes() == archive):
+            atomic_write(target, archive)
     except OSError as error:
         raise FoundryError(f"can't build the agent runtime into {target}: {error}") from None
     return target
+
+
+def _archive(source: Path) -> bytes:
+    """The zipapp of the package at ``source``: the same bytes for the same files."""
+    with tempfile.TemporaryDirectory(prefix="agent-runtime-") as staging_dir:
+        staging = Path(staging_dir)
+        shutil.copytree(source, staging / "agent_runtime", ignore=_not_python_source)
+        archive = io.BytesIO()
+        zipapp.create_archive(staging, archive, interpreter=None, main="agent_runtime.__main__:main")
+        return archive.getvalue()
 
 
 def _not_python_source(directory: str, names: list[str]) -> set[str]:

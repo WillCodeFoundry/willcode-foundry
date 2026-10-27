@@ -103,6 +103,19 @@ def test_instructions_replace_a_link_rather_than_write_through_it(tmp_path, kit_
     assert "@" in (claude_dir / "CLAUDE.md").read_text()
 
 
+def test_a_link_beside_the_instructions_cant_catch_their_write(tmp_path, kit_env, created_task) -> None:
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_text("left alone\n")
+    claude_dir = tmp_path / "home" / ".claude"
+    claude_dir.mkdir(parents=True)
+    (claude_dir / ".CLAUDE.md.partial").symlink_to(elsewhere)
+
+    assert session_setup(kit_env(TASK), created_task).returncode == 0
+
+    assert elsewhere.read_text() == "left alone\n"
+    assert not (claude_dir / "CLAUDE.md").is_symlink()
+
+
 def test_instructions_that_cant_be_written_are_a_setup_error(tmp_path, kit_env, created_task) -> None:
     claude_dir = tmp_path / "home" / ".claude"
     claude_dir.mkdir(parents=True)
