@@ -26,7 +26,7 @@ def in_process_root(machine: TemporaryMachine, calls: list[Path], exit_code: int
     return run_as_root
 
 
-def test_a_first_launch_sets_up_hardens_as_root_then_verifies(
+def test_a_first_launch_sets_up_hardens_as_root_then_checks(
     session_for: SessionFor,
     created_task: Path,
     machine: TemporaryMachine,
@@ -45,7 +45,7 @@ def test_a_first_launch_sets_up_hardens_as_root_then_verifies(
     assert out.index("session-setup: checkouts ready") < out.index("check-hardening: hardened")
 
 
-def test_a_relaunch_only_verifies(
+def test_a_relaunch_only_checks(
     session_for: SessionFor,
     created_task: Path,
     machine: TemporaryMachine,

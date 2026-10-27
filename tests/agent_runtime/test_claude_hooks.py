@@ -1,7 +1,7 @@
 """agent_runtime.claude_hooks, in-process: guard-bash against the commands it must allow and refuse, and
 session-check against real checkouts that session_setup made.
 
-tests/agent_kit/test_managed_settings.py and test_git_hooks.py run each hook once as the managed settings say.
+tests/agent_kit/test_managed_settings.py and test_stop_hook.py run each hook once as the managed settings say.
 """
 
 import io
@@ -144,7 +144,7 @@ def test_a_stop_goes_through_when_both_checkouts_are_clean_and_pushed(checkouts:
 def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts) -> None:
     session, code, notes = checkouts
     (code / "wip.txt").write_text("x\n")
-    commit(notes, f"{TASK.notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
+    commit(notes, f"{TASK.task_notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
 
     reason = block_reason(session)
 

@@ -1,4 +1,4 @@
-"""agent_runtime.git.Git, against a temporary repository: each of its four ways to run git, and its errors."""
+"""agent_runtime.git.Git, against a temporary repository: each of its ways to run git, and its errors."""
 
 import os
 import subprocess
@@ -31,7 +31,7 @@ def test_output_bytes_keeps_what_git_wrote(repo: Path) -> None:
     assert Git(repo).output_bytes("show", "HEAD:crlf.txt") == b"one\r\ntwo\r\n"
 
 
-def test_result_lets_the_caller_read_the_exit_code(repo: Path) -> None:
+def test_run_captured_lets_the_caller_read_the_exit_code(repo: Path) -> None:
     result = Git(repo).run_captured("config", "--get", "foundry.unset")
 
     assert (result.returncode, result.stdout) == (1, "")

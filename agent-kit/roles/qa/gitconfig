@@ -1,4 +1,3 @@
-# TODO: make a specific user for the planner role, for now use a developer
 [include]
     path = ../../git/gitconfig
 

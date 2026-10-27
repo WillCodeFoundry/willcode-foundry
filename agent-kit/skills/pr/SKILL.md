@@ -13,7 +13,7 @@ metadata:
     commit: 5beb35b040e3de97e54fa9e386d7e42d15c295c2
     author: Matt Pocock
     license: MIT (see ../LICENSE-mattpocock-skills)
-  adapted: for willcode-foundry, edited in place; see Skills in its README
+  adapted: for willcode-foundry, edited in place; see docs/skills.md in its repository
 ---
 
 The title is as the `git-conventions` skill says (`$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`): `[<task id>] type(scope): summary`.
@@ -24,7 +24,7 @@ Use this template for writing the PR body:
 ## Task
 
 - **Task:** `<$AGENT_TASK_FILE>` on `<$AGENT_NOTES_BRANCH>`
-- **Review:** `<$AGENT_TASK_NOTES>/REVIEW.md` on `<$AGENT_NOTES_BRANCH>`
+- **Review:** `<$AGENT_TASK_NOTES_DIR>/REVIEW.md` on `<$AGENT_NOTES_BRANCH>`
 
 - [x] <acceptance criterion, as TASK.md words it>: <how it's met>
 

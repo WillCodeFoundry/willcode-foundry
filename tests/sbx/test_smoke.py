@@ -3,7 +3,7 @@
 It shows what no fake can: that sbx accepts our definition, mounts the kit read-only at its host path, runs
 session-init as the agent with sudo the first time, and that the sandbox's private dockerd keeps its socket
 root's after a restart. Run it after upgrading sbx, and before merging changes to agent-kit/, src/agent_runtime/
-or src/foundry/agent_sandbox/: see "Testing against real sbx" in the README.
+or src/foundry/agent_sandbox/: see "Testing against real sbx" in CONTRIBUTING.md.
 
 It uses this foundry's project foundry-test, role dev and task sbx-smoke, and touches only that sandbox and its
 session directory: removed before it starts and after it ends, whatever the outcome. The tests run in order,
@@ -156,10 +156,10 @@ def smoke() -> Iterator[Smoke]:
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
-    verified = smoke.run(*AgentKit(smoke.agent_kit).command("check-hardening"))
+    checked = smoke.run(*AgentKit(smoke.agent_kit).command("check-hardening"))
 
-    assert verified.returncode == 0, verified.stdout + verified.stderr
-    assert "check-hardening: hardened" in verified.stdout
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert "check-hardening: hardened" in checked.stdout
     # What only root mode prints: a relaunch of a sandbox left from an earlier run wouldn't.
     assert smoke.started is not None
     assert "harden: managed settings installed" in smoke.started.init_output
@@ -180,7 +180,7 @@ def test_the_agent_cant(smoke: Smoke, what: str, script: str) -> None:
     assert smoke.run("sh", "-c", script.format(kit=smoke.agent_kit)).returncode != 0, what
 
 
-def test_a_relaunch_only_verifies(smoke: Smoke) -> None:
+def test_a_relaunch_only_checks(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
     assert smoke.request is not None

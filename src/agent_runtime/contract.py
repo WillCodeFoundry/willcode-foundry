@@ -22,7 +22,7 @@ NOTES_DIR: Final = "AGENT_NOTES_DIR"
 TASK_BRANCH: Final = "AGENT_TASK_BRANCH"
 NOTES_BRANCH: Final = "AGENT_NOTES_BRANCH"
 NOTES_ROOT: Final = "AGENT_NOTES_ROOT"
-TASK_NOTES: Final = "AGENT_TASK_NOTES"
+TASK_NOTES_DIR: Final = "AGENT_TASK_NOTES_DIR"
 TASK_FILE: Final = "AGENT_TASK_FILE"
 
 NAMES: Final = (
@@ -35,7 +35,7 @@ NAMES: Final = (
     TASK_BRANCH,
     NOTES_BRANCH,
     NOTES_ROOT,
-    TASK_NOTES,
+    TASK_NOTES_DIR,
     TASK_FILE,
 )
 """Every session variable, in the order the sandbox definition lists them."""
@@ -62,7 +62,7 @@ class Environ:
     agent_task_branch: str
     agent_notes_branch: str
     agent_notes_root: str
-    agent_task_notes: str
+    agent_task_notes_dir: str
     agent_task_file: str
 
 
@@ -84,7 +84,7 @@ def read_environ(variables: Mapping[str, str] | None = None) -> Environ:
         agent_task_branch=variables[TASK_BRANCH],
         agent_notes_branch=variables[NOTES_BRANCH],
         agent_notes_root=variables[NOTES_ROOT],
-        agent_task_notes=variables[TASK_NOTES],
+        agent_task_notes_dir=variables[TASK_NOTES_DIR],
         agent_task_file=variables[TASK_FILE],
     )
 

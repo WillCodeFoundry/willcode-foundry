@@ -66,7 +66,7 @@ class SessionVariables:
             contract.TASK_BRANCH: self.task.branch,
             contract.NOTES_BRANCH: NOTES_BRANCH,
             contract.NOTES_ROOT: NOTES_ROOT,
-            contract.TASK_NOTES: self.task.notes_dir,
+            contract.TASK_NOTES_DIR: self.task.task_notes_dir,
             contract.TASK_FILE: self.task.task_file,
         }
 

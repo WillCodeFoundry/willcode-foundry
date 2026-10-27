@@ -57,7 +57,7 @@ def first_launch(
     return launch(tmp_path, kit_env, created_task, sudo_script=script, sudo_mode=0o755), record
 
 
-def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
+def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_checks(
     tmp_path: Path, kit_env, created_task: Path
 ) -> None:
     """sudo still works on the first launch: root mode runs through it, given AGENT_KIT_DIR alone, then the check."""

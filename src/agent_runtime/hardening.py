@@ -106,7 +106,7 @@ SANDBOX = Machine(
 )
 
 
-class Refused(Exception):
+class HardeningRefused(Exception):
     """A mode can't go ahead; the message, the whole of it, says why and what to change. In root mode, sudo is
     still there."""
 
@@ -209,7 +209,7 @@ def _require_command(name: str, purpose: str) -> str:
     not a step done."""
     found = shutil.which(name)
     if found is None:
-        raise Refused(f"can't find {name}, {purpose}; check the sandbox template's PATH")
+        raise HardeningRefused(f"can't find {name}, {purpose}; check the sandbox template's PATH")
     return found
 
 
@@ -217,7 +217,7 @@ def _lock_roots_password(passwd: str) -> None:
     """su needs root's password, and there is none."""
     locked = subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=False)
     if locked.returncode != 0:
-        raise Refused(f"`{passwd} -l root` failed with exit code {locked.returncode}{_SUDO_UNTOUCHED}")
+        raise HardeningRefused(f"`{passwd} -l root` failed with exit code {locked.returncode}{_SUDO_UNTOUCHED}")
 
 
 def _remove_sudo(sudo: str) -> None:
@@ -264,9 +264,9 @@ def _refuse_template_docker_config(daemon_config: Path) -> None:
     try:
         config = daemon_config.read_text() if daemon_config.exists() else None
     except (OSError, UnicodeDecodeError) as error:
-        raise Refused(f"can't read {daemon_config}: {error}") from None
+        raise HardeningRefused(f"can't read {daemon_config}: {error}") from None
     if config is not None and config.rstrip("\n") != _DOCKER_CONFIG:
-        raise Refused(
+        raise HardeningRefused(
             f"this sandbox's template already has {daemon_config}.\n"
             "  foundry assumes the template leaves dockerd unconfigured, so that it can write\n"
             f"  {_DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
@@ -330,19 +330,19 @@ def _check_python(machine: Machine) -> list[str]:
 
 
 def harden(agent_kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> None:
-    """Root mode, given the kit to install settings from and the user sudo ran it for. Raises Refused, whose
+    """Root mode, given the kit to install settings from and the user sudo ran it for. Raises HardeningRefused, whose
     message says why, when it can't go ahead. Removing sudo would lock a real machine's owner out: only runs in
     a sandbox, via sudo from its agent user."""
     if machine.euid() != 0 or sudo_user != SANDBOX_USER:
-        raise Refused(
+        raise HardeningRefused(
             f"harden: refusing: only runs inside a foundry sandbox, via sudo from its '{SANDBOX_USER}' user "
             f"(SUDO_USER is '{sudo_user or 'unset'}')"
         )
     try:
         sudo, passwd = _preflight(machine)
         _run_steps(AgentKit(agent_kit_dir), machine, sudo=sudo, passwd=passwd)
-    except Refused as error:
-        raise Refused(f"harden: refusing: {error}") from None
+    except HardeningRefused as error:
+        raise HardeningRefused(f"harden: refusing: {error}") from None
 
 
 _SUDO_UNTOUCHED = "; sudo is untouched, so the next launch runs this again"
@@ -363,14 +363,14 @@ def _run_steps(agent_kit: AgentKit, machine: Machine, *, sudo: str, passwd: str)
         _lock_roots_password(passwd)
         _remove_sudo(sudo)
     except OSError as error:
-        raise Refused(f"{error}{_SUDO_UNTOUCHED}") from None
+        raise HardeningRefused(f"{error}{_SUDO_UNTOUCHED}") from None
 
 
 def check(agent_kit_dir: Path, machine: Machine = SANDBOX) -> list[str]:
     """Agent mode: what the agent can still do, one line each, after every check against the kit; empty when
-    hardened. Raises Refused as root, who can do anything."""
+    hardened. Raises HardeningRefused as root, who can do anything."""
     if machine.euid() == 0:
-        raise Refused(
+        raise HardeningRefused(
             "check-hardening: refusing: it runs as the agent, so it sees what the agent can do; root can do anything"
         )
     agent_kit = AgentKit(agent_kit_dir)

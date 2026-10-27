@@ -48,7 +48,7 @@ def workspace_dir(foundry_root: Path, sandbox_name: str) -> Path:
 
 
 def task_template_dir(foundry_root: Path) -> Path:
-    """What `foundry task create` copies into a new task's notes folder (see Task.notes_dir)."""
+    """What `foundry task create` copies into a new task's notes dir (see Task.task_notes_dir)."""
     return foundry_root / "config" / "task-template"
 
 

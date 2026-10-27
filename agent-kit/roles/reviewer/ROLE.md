@@ -49,7 +49,7 @@ that shared identity, say so in your report.
 
 Review with the `code-review` skill.
 
-Write the result to `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/REVIEW.md`, one file
+Write the result to `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`, one file
 per task, as a new section per round:
 
 ```markdown

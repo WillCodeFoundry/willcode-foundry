@@ -26,7 +26,7 @@ def hook_command(command: str, agent_kit_dir: Path) -> str:
 
 
 def runtime_command(agent_kit_dir: Path, *args: str) -> tuple[str, ...]:
-    """A call into the runtime built into the kit at ``agent_kit_dir``: contract.command's, with only its
+    """A call into the runtime built into the kit at ``agent_kit_dir``: AgentKit.command's, with only its
     interpreter replaced by this one, so a flag added there reaches these tests too.
 
     The tests that run a command exactly as written (managed settings, the git hooks' stubs) use the

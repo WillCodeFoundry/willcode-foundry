@@ -37,7 +37,8 @@ def harden() -> int:
 
 
 def check_hardening() -> int:
-    """`check-hardening`: the check session_init runs after root mode, given AGENT_KIT_DIR alone."""
+    """`check-hardening`: agent mode on its own, given AGENT_KIT_DIR alone. session_init runs the same check
+    in-process."""
     return _check_hardening(_read_agent_kit_dir(), hardening.SANDBOX)
 
 

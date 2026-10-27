@@ -83,7 +83,7 @@ def test_stop_is_allowed_when_both_checkouts_are_clean_and_pushed(repo) -> None:
 def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     code, notes = repo
     (code / "wip.txt").write_text("x\n")
-    change(notes, f"{TASK.notes_dir}/PROGRESS.md")
+    change(notes, f"{TASK.task_notes_dir}/PROGRESS.md")
     commit(notes, f"{TASK.id}: progress")
     decision = json.loads(stop().stdout)
     assert decision["decision"] == "block"

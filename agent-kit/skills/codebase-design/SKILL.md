@@ -8,7 +8,7 @@ metadata:
     commit: 5beb35b040e3de97e54fa9e386d7e42d15c295c2
     author: Matt Pocock
     license: MIT (see ../LICENSE-mattpocock-skills)
-  adapted: for willcode-foundry, edited in place; see Skills in its README
+  adapted: for willcode-foundry, edited in place; see docs/skills.md in its repository
 ---
 
 # Codebase Design
