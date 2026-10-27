@@ -51,7 +51,7 @@ $ uv run foundry skills update                            # merge upstream's cha
 │   │   ├── memory/               # curated knowledge, one file per topic
 │   │   └── skills/<name>         # a link to each of the role's skills (../../../skills/<name>)
 │   └── skills/
-│       ├── LICENSE-mattpocock    # copied from the source repository at that commit
+│       ├── LICENSE-mattpocock-skills  # copied from the source repository at that commit
 │       ├── git-conventions/      # the foundry's own skill: commit messages and pull request titles
 │       └── tdd/, codebase-design/, …  # copied from upstream, edited in place for the foundry
 ├── secrets/                      # untracked except .gitkeep
@@ -259,11 +259,11 @@ These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.py
 
 ## Skills
 
-Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each records in its `SKILL.md`'s frontmatter (`metadata.source`) where it came from: the upstream repository, its path there, the upstream commit it's up to date with, the author and the licence, whose text is `agent-kit/skills/LICENSE-mattpocock`. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
+Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each records in its `SKILL.md`'s frontmatter (`metadata.source`) where it came from: the upstream repository, its path there, the upstream commit it's up to date with, the author and the licence, whose text is `agent-kit/skills/LICENSE-mattpocock-skills`, named after the repository. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
 
 Each role's skills are links in `agent-kit/roles/<role>/skills/`, one per skill (`ls` it to see them); `session-setup` links that folder as the agent's `~/.claude/skills` at every launch, so Claude Code loads them as skills. To give a role a skill, `ln -s ../../../skills/<name> agent-kit/roles/<role>/skills/`; a test checks every link points at a skill, and that a role has every skill its skills call. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are edits to the copies themselves, so change a skill as you would any file in the kit.
 
-- **To update,** by hand: `foundry skills update`, or `foundry skills update COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit.
+- **To update,** by hand: `foundry skills update`, or `foundry skills update COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Each repository's commit is resolved once, into a ref of the foundry's own (`refs/foundry/skills/<owner>/<repo>`), so its skills all reach the same one. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit. A copied skill with uncommitted changes stops the update before anything changes, since git's three-way merge works against the index; a patch git rejects outright stops it too, leaving that skill's recorded commit where it was, so the next run tries again.
 - **To see everything the foundry changed in a skill:** after an update has fetched upstream's commit, `git diff <commit>:skills/engineering/tdd HEAD:agent-kit/skills/tdd`.
 - **To copy another skill:** copy its folder from upstream without `agents/`, add a `metadata.source` block like the others', then edit it.
 

@@ -83,7 +83,8 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
     )
     assert (skill_dir / "NEW.md").read_text() == "New.\n"
     assert not (skill_dir / "agents").exists()
-    assert (foundry_root / "agent-kit" / "skills" / "LICENSE-mattpocock").read_bytes() == "MIT, second, ©\r\n".encode()
+    licence = foundry_root / "agent-kit" / "skills" / "LICENSE-mattpocock-skills"
+    assert licence.read_bytes() == "MIT, second, ©\r\n".encode()
 
 
 def test_files_that_arent_utf_8_arrive_byte_for_byte(foundry_root, upstream) -> None:
@@ -133,6 +134,111 @@ def test_a_given_commit_is_the_one_updated_to(foundry_root, upstream) -> None:
     assert "Third, improved.\n" in (foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md").read_text()
 
 
+def kit_status(foundry_root: Path) -> str:
+    return git(foundry_root, "status", "--porcelain").stdout
+
+
+def test_a_skill_with_uncommitted_changes_is_refused_before_anything_changes(foundry_root, upstream) -> None:
+    """git apply --3way checks against the index: it would reject the whole patch, not merge into the edits."""
+    skill_md = upstream / "skills" / "engineering" / "tdd" / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
+    commit_all(upstream, "second")
+    kit_skill_md = foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md"
+    kit_skill_md.write_text(kit_skill_md.read_text() + "An edit in progress.\n")
+    before = kit_status(foundry_root)
+
+    with pytest.raises(FoundryError, match=r"^tdd: agent-kit/skills/tdd has uncommitted changes; commit them"):
+        update(foundry_root, upstream)
+
+    assert kit_status(foundry_root) == before
+
+
+def test_a_patch_git_rejects_is_an_error_and_the_commit_stays(foundry_root, upstream) -> None:
+    """Upstream changes a file the foundry's copy removed: no conflict to resolve, so the commit mustn't move,
+    or the next run would say it is up to date and upstream's change would be lost."""
+    extra = upstream / "skills" / "engineering" / "tdd" / "EXTRA.md"
+    extra.write_text("Extra.\n")
+    second = commit_all(upstream, "second")
+    kit_skill_md = foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md"
+    first = git(upstream, "rev-parse", "HEAD~").stdout.strip()
+    kit_skill_md.write_text(kit_skill_md.read_text().replace(first, second))  # the copy left EXTRA.md out
+    commit_all(foundry_root, "up to second, without EXTRA.md")
+    extra.write_text("Extra, improved.\n")
+    commit_all(upstream, "third")
+
+    with pytest.raises(FoundryError, match=r"^tdd: git apply rejected upstream's changes"):
+        update(foundry_root, upstream)
+
+    assert kit_status(foundry_root) == ""
+
+
+def test_spaces_after_the_recorded_commit_dont_stop_it_moving(foundry_root, upstream) -> None:
+    kit_skill_md = foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md"
+    first = git(upstream, "rev-parse", "HEAD").stdout.strip()
+    kit_skill_md.write_text(kit_skill_md.read_text().replace(f"commit: {first}\n", f"commit: {first}  \n"))
+    commit_all(foundry_root, "trailing spaces")
+    skill_md = upstream / "skills" / "engineering" / "tdd" / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
+    second = commit_all(upstream, "second")
+
+    update(foundry_root, upstream)
+
+    assert f"    commit: {second}\n" in kit_skill_md.read_text()
+
+
+def test_upstream_without_a_licence_changes_nothing(foundry_root, upstream) -> None:
+    (upstream / "LICENSE").unlink()
+    skill_md = upstream / "skills" / "engineering" / "tdd" / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
+    commit_all(upstream, "second")
+
+    with pytest.raises(GitError, match=r"^git show .*:LICENSE failed"):
+        update(foundry_root, upstream)
+
+    assert kit_status(foundry_root) == ""
+
+
+def test_skills_from_one_repository_reach_one_commit_while_upstream_moves(foundry_root, upstream) -> None:
+    """Upstream is resolved once per repository: a commit landing upstream mid-run doesn't split the skills."""
+    review = upstream / "skills" / "engineering" / "review"
+    review.mkdir()
+    (review / "SKILL.md").write_text("---\nname: review\n---\n\nLook.\n")
+    second = commit_all(upstream, "second")
+    kit_review = foundry_root / "agent-kit" / "skills" / "review"
+    kit_review.mkdir()
+    (kit_review / "SKILL.md").write_text(
+        copied_skill_md(second, "\nLook.\n").replace("skills/engineering/tdd", "skills/engineering/review")
+    )
+    commit_all(foundry_root, "copy review")
+    (review / "SKILL.md").write_text("---\nname: review\n---\n\nLook closely.\n")
+    third = commit_all(upstream, "third")
+    landed: list[str] = []
+
+    def url_for(repo: str) -> str:
+        """Each lookup lands another commit upstream, after the first."""
+        if landed:
+            (upstream / "NEWS").write_text(f"{len(landed)}\n")
+            landed.append(commit_all(upstream, "moved"))
+        else:
+            landed.append(third)
+        return str(upstream)
+
+    skills.update(foundry_root, url_for=url_for)
+
+    for name in ("review", "tdd"):
+        assert f"    commit: {third}\n" in (foundry_root / "agent-kit" / "skills" / name / "SKILL.md").read_text(), name
+
+
+def test_each_copied_skill_names_its_repositorys_licence() -> None:
+    """The licence update writes LICENSE-<owner>-<repo> beside the skills; each copied skill points at it."""
+    skills_dir = Path(__file__).parents[1] / "agent-kit" / "skills"
+    for skill_md in skills_dir.glob("*/SKILL.md"):
+        if (source := skills.read_source(skill_md)) is not None:
+            licence = f"LICENSE-{source.repo.replace('/', '-')}"
+            assert f"(see ../{licence})" in skill_md.read_text(), skill_md
+            assert (skills_dir / licence).is_file()
+
+
 def test_a_source_without_its_commit_is_reported(tmp_path: Path) -> None:
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text("---\nmetadata:\n  source:\n    repo: o/r\n    path: p\n---\n")
@@ -159,6 +265,7 @@ def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, 
     (foundry_root / "agent-kit" / "skills" / "zz" / "SKILL.md").write_text(
         copied_skill_md("0" * 40, "\nOther.\n").replace("mattpocock/skills", "other/skills")
     )
+    commit_all(foundry_root, "copy zz")
     reported: list[str] = []
     urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
 

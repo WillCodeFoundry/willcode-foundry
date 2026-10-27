@@ -71,32 +71,63 @@ def update(
     return the skills git couldn't merge cleanly, whose files hold conflict markers.
 
     Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
-    skill's line, already up to date or updated to which commit, goes to ``report`` as soon as it is done, so
-    a failure from a later skill, a GitError or a FoundryError, doesn't hide what earlier ones changed on disk.
+    repository's ``commit`` is resolved once, so its skills all reach the same commit. A copied skill with
+    uncommitted changes stops the run before anything changes. Each skill's line, already up to date or
+    updated to which commit, goes to ``report`` as soon as it is done, so a failure from a later skill, a
+    GitError or a FoundryError, doesn't hide what earlier ones changed on disk.
     """
-    conflicted: list[str] = []
     git = Git(foundry_root)
     skills_dir = AgentKit(paths.agent_kit_dir(foundry_root)).skills
-    for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
-        source = read_source(skill_md)
-        if source is None:
-            continue  # one of the foundry's own skills
+    copied = [
+        (skill_md, source)
+        for skill_md in sorted(skills_dir.glob("*/SKILL.md"))
+        if (source := read_source(skill_md)) is not None  # None: one of the foundry's own skills
+    ]
+    for skill_md, _ in copied:
+        _refuse_uncommitted(git, skill_md.parent.relative_to(foundry_root))
+    resolved: dict[str, str] = {}
+    conflicted: list[str] = []
+    for skill_md, source in copied:
         skill_dir = skill_md.parent
-        url = url_for(source.repo)
-        git.output("fetch", "--quiet", "--no-tags", url, commit)
-        new = git.output("rev-parse", "FETCH_HEAD").strip()
+        if source.repo not in resolved:
+            resolved[source.repo] = _fetch(git, url_for(source.repo), commit, source.repo)
+        new = resolved[source.repo]
         if new == source.commit:
             report(f"{skill_dir.name}: already at {source.commit[:12]}")
             continue
-        git.output("fetch", "--quiet", "--no-tags", url, source.commit)
-        if not _apply_upstream_changes(git, source, new, skill_dir.relative_to(foundry_root)):
-            conflicted.append(skill_dir.name)
-        skill_md.write_text(_with_commit(skill_md.read_text(), source.commit, new))
-        # Byte for byte: whatever line endings and encoding upstream's licence has.
+        git.output("fetch", "--quiet", "--no-tags", url_for(source.repo), source.commit)
+        # Read before anything is written: a missing licence stops the skill with nothing changed.
         license_bytes = git.output_bytes("show", f"{new}:LICENSE")
-        (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_bytes(license_bytes)
+        updated_skill_md = _with_commit(skill_md, source.commit, new)
+        if not _apply_upstream_changes(git, source, new, skill_dir.relative_to(foundry_root)):
+            if not git.output("ls-files", "--unmerged", "--", str(skill_dir)):
+                raise FoundryError(
+                    f"{skill_dir.name}: git apply rejected upstream's changes; see git's message above. "
+                    f"Nothing was applied, and its commit stays {source.commit[:12]}"
+                )
+            conflicted.append(skill_dir.name)
+        skill_md.write_text(updated_skill_md(skill_md.read_text()))
+        # Byte for byte: whatever line endings and encoding upstream's licence has.
+        (skills_dir / f"LICENSE-{source.repo.replace('/', '-')}").write_bytes(license_bytes)
         report(f"{skill_dir.name}: updated to {new[:12]}")
     return conflicted
+
+
+def _refuse_uncommitted(git: Git, skill_dir: Path) -> None:
+    """git apply --3way checks against the index, so it would reject the whole patch rather than merge into a
+    skill's uncommitted edits."""
+    if git.output("status", "--porcelain", "--", str(skill_dir)):
+        raise FoundryError(
+            f"{skill_dir.name}: {skill_dir} has uncommitted changes; commit them, or stash them, then run again"
+        )
+
+
+def _fetch(git: Git, url: str, commit: str, repo: str) -> str:
+    """``commit`` of the repository at ``url``, fetched into a ref of the foundry's own, not FETCH_HEAD, which
+    another fetch in the checkout, an editor's, say, could change meanwhile."""
+    ref = f"refs/foundry/skills/{repo}"
+    git.output("fetch", "--quiet", "--no-tags", url, f"+{commit}:{ref}")
+    return git.output("rev-parse", ref).strip()
 
 
 def read_source(skill_md: Path) -> Source | None:
@@ -130,5 +161,16 @@ def _apply_upstream_changes(git: Git, source: Source, new: str, skill_dir: Path)
     return git.succeeds("apply", "--3way", "--allow-empty", f"--directory={skill_dir}", input=diff, show_output=True)
 
 
-def _with_commit(skill_md_text: str, old: str, new: str) -> str:
-    return re.sub(rf"^(    commit: ){re.escape(old)}$", rf"\g<1>{new}", skill_md_text, flags=re.MULTILINE)
+def _with_commit(skill_md: Path, old: str, new: str) -> Callable[[str], str]:
+    """What records ``new`` in place of ``old`` in a SKILL.md's text: checked against the file as it is now, so a
+    commit line it can't find stops the skill before upstream's changes are applied."""
+    pattern = re.compile(rf"^(    commit:[ \t]*){re.escape(old)}[ \t]*$", flags=re.MULTILINE)
+
+    def rewrite(text: str) -> str:
+        rewritten, count = pattern.subn(rf"\g<1>{new}", text)
+        if count != 1:
+            raise FoundryError(f"{skill_md}: found {count} lines recording commit {old[:12]}; expected one")
+        return rewritten
+
+    rewrite(skill_md.read_text())
+    return rewrite
