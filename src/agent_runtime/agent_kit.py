@@ -1,0 +1,82 @@
+"""Where things sit in the agent kit: the agreement between foundry, which builds into the kit and checks it,
+and the runtime, which reads it in the sandbox. Every path inside the kit is spelled here, and only here.
+
+Two copies outside Python stay, since neither can import this: the git hooks' stubs, which must find the
+runtime before they can import anything, and the managed settings, which Claude Code reads. Their tests hold
+both to RUNTIME_PYZ.
+"""
+
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import ClassVar, Final
+
+RUNTIME_PYZ: Final = PurePosixPath(".build") / "agent_runtime.pyz"
+"""Where the built runtime sits, relative to the kit."""
+
+
+@dataclass(frozen=True)
+class RoleDir:
+    """A role's folder in the kit: its ROLE.md, gitconfig, and skills/, a link to each of its skills."""
+
+    dir: Path
+
+    REQUIRED: ClassVar[tuple[str, ...]] = ("ROLE.md", "gitconfig")
+    """What a role's folder must hold. Without gitconfig the agent has no identity; without ROLE.md it starts
+    with no role at all, since CLAUDE.md imports it and a missing import is skipped without a word. skills/ is
+    optional: a role without it has none."""
+
+    @property
+    def role_md(self) -> Path:
+        return self.dir / "ROLE.md"
+
+    @property
+    def gitconfig(self) -> Path:
+        return self.dir / "gitconfig"
+
+    @property
+    def skills(self) -> Path:
+        return self.dir / "skills"
+
+    def missing(self) -> list[str]:
+        """The required files the folder lacks, in REQUIRED's order; empty when it has them all."""
+        return [name for name in self.REQUIRED if not (self.dir / name).is_file()]
+
+
+@dataclass(frozen=True)
+class AgentKit:
+    """The agent kit in ``dir``, read-only inside a sandbox, mounted at the same path as on the host."""
+
+    dir: Path
+
+    @property
+    def runtime(self) -> Path:
+        """The built runtime, which every hook and the launch run."""
+        return self.dir / RUNTIME_PYZ
+
+    @property
+    def managed_settings(self) -> Path:
+        """Claude Code's managed settings, which root mode installs and verify compares with."""
+        return self.dir / "claude" / "managed-settings.json"
+
+    @property
+    def hooks(self) -> Path:
+        """The git hooks' folder, where core.hooksPath points."""
+        return self.dir / "hooks"
+
+    @property
+    def allowed_signers(self) -> Path:
+        """One line per signing role, for verifying commits."""
+        return self.dir / "git" / "allowed_signers"
+
+    @property
+    def agents_md(self) -> Path:
+        """The instructions every role shares."""
+        return self.dir / "AGENTS.md"
+
+    @property
+    def skills(self) -> Path:
+        """Every skill, each in its own folder."""
+        return self.dir / "skills"
+
+    def role(self, name: str) -> RoleDir:
+        return RoleDir(self.dir / "roles" / name)
