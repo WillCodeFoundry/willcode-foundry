@@ -102,6 +102,7 @@ def _read_environ(hook: str) -> contract.Environ:
 
 
 def _staged_paths() -> list[str]:
-    """Paths staged for the commit being made, as git spells them, whatever characters they hold."""
-    staged = Git().output("diff", "--cached", "--name-only", "--diff-filter=ACMRD", "-z")
+    """Paths staged for the commit being made, as git spells them, whatever characters they hold. A rename is
+    listed as both its paths: a move out of another task's folder deletes a file there."""
+    staged = Git().output("diff", "--cached", "--name-only", "--no-renames", "--diff-filter=ACMD", "-z")
     return [path for path in staged.split("\0") if path]

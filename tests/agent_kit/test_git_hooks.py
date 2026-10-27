@@ -193,6 +193,19 @@ def test_another_tasks_folder_is_refused(repo) -> None:
     assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
 
 
+def test_moving_another_tasks_file_into_own_folder_is_refused(repo) -> None:
+    """A rename stages a deletion in the other task's folder; git's rename detection would list only the
+    new path, inside this task's folder."""
+    _, notes = repo
+    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
+    change(notes, theirs)
+    # Another task's agent committed it, with its own hooks: these refuse the path, so they're skipped here.
+    git(notes, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", f"{OTHER_TASK.id}: progress")
+    git(notes, "mv", theirs, f"{TASK.notes_dir}/x.md")
+    result = commit(notes, f"{TASK.id}: progress")
+    assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
+
+
 # --- Stop hook ---------------------------------------------------------------
 
 
