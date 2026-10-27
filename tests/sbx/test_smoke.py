@@ -138,6 +138,8 @@ def smoke() -> Iterator[Smoke]:
         definition_dir = smoke.prepare().definition_dir
     except FoundryError as error:
         pytest.fail(f"a leftover session stops the smoke test before it can remove it: {error}", pytrace=False)
+    # Read while sbxenv.yaml exists: removing the sandbox deletes it, and the name is the same at every launch.
+    ssh_agent_socket = smoke.ssh_agent_socket
     remove_the_smoke_sandbox(definition_dir)
     try:
         yield smoke
@@ -147,7 +149,7 @@ def smoke() -> Iterator[Smoke]:
         finally:
             # Its socket was touched minutes ago, which prune spares as a launch in progress; without the
             # socket, prune kills the agent and the dev role's key with it, however far the launch got.
-            smoke.ssh_agent_socket.unlink(missing_ok=True)
+            ssh_agent_socket.unlink(missing_ok=True)
             agent_sandbox.prune()
 
 
@@ -191,11 +193,10 @@ def test_a_relaunch_only_verifies(smoke: Smoke) -> None:
 
 def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
     """dockerd recreates its socket when the sandbox starts again, in the group daemon.json names."""
-    usage = subprocess.run(["sbx", "env", "--help"], capture_output=True, text=True, check=False)
-    assert " stop" in usage.stdout, f"no stop command in `sbx env --help`; update this test:\n{usage.stdout}"
-    assert smoke.request is not None
+    assert smoke.started is not None
+    # sbx env has no stop; the top-level sbx stop takes the sandbox's name, not its definition folder.
     stopped = subprocess.run(
-        ["sbx", "env", "stop", str(smoke.request.definition_dir)], capture_output=True, text=True, check=False
+        ["sbx", "stop", smoke.started.definition.name], capture_output=True, text=True, check=False
     )
     assert stopped.returncode == 0, stopped.stderr
     assert sandbox_status(smoke) == "stopped"
