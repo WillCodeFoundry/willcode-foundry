@@ -31,10 +31,6 @@ AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 ME = harden.Owner(os.getuid(), os.getgid())
 SOMEONE_ELSE = harden.Owner(os.getuid() + 1, os.getgid())
 
-needs_non_root = pytest.mark.skipif(
-    os.geteuid() == 0, reason="root can write to anything, so write permissions can't be checked as root"
-)
-
 
 # --- helpers -------------------------------------------------------------------------
 
@@ -217,9 +213,7 @@ def test_root_mode_then_agent_mode_on_one_machine(
 
 
 def _two_groups() -> tuple[int, int] | None:
-    """Two groups this user may give a file to: any two as root, two of its own otherwise; None if it has one."""
-    if os.geteuid() == 0:
-        return (os.getgid() + 1, os.getgid())
+    """Two groups this user may give a file to, both its own; None if it has one."""
     groups = sorted(set(os.getgroups()) | {os.getgid()})
     return (groups[0], groups[1]) if len(groups) > 1 else None
 
@@ -408,9 +402,8 @@ def test_a_link_to_nothing_in_the_kit_is_refused(hardened, read_only_kit, tmp_pa
     )
 
 
-@needs_non_root
 def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, read_only_kit, capsys) -> None:
-    """Listing is real: root can list anything, so this runs as another user only."""
+    """Listing is real, not modelled: the test user can't list a folder it has taken every permission from."""
     hooks = read_only_kit / "hooks"
     hooks.chmod(0o000)
     try:
