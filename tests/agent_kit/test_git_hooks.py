@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit.conftest import HOOK_COMMANDS, hook_command, runtime_command
-from tests.conftest import TASK, git
+from tests.support import TASK, git
+from tests.support.kit import HOOK_COMMANDS, hook_command, runtime_command
 
 (STOP_COMMAND,) = HOOK_COMMANDS["Stop"]
 OTHER_TASK = Task("T2")

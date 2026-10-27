@@ -7,7 +7,7 @@ from pathlib import Path
 
 from agent_runtime import contract, harden
 from agent_runtime.__main__ import CLAUDE_HOOKS
-from tests.agent_kit.conftest import HOOK_COMMANDS, SETTINGS, hook_command
+from tests.support.kit import HOOK_COMMANDS, SETTINGS, hook_command
 
 
 def test_runs_unattended_without_attribution() -> None:

@@ -12,8 +12,8 @@ from collections.abc import Callable
 
 import pytest
 
-from tests.agent_kit.conftest import HOOK_COMMANDS
-from tests.sandbox_image.conftest import DOCKER_SOCKET, Container, last_line
+from tests.support.docker import DOCKER_SOCKET, Container, last_line
+from tests.support.kit import HOOK_COMMANDS
 
 pytestmark = pytest.mark.docker
 

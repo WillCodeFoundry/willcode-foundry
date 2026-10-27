@@ -7,7 +7,7 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import cli, skills
 from foundry.errors import FoundryError
-from tests.conftest import git
+from tests.support import git
 
 pytestmark = pytest.mark.usefixtures("git_identity")
 

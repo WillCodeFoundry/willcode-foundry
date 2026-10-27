@@ -13,8 +13,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from tests.agent_kit.conftest import runtime_command
-from tests.conftest import TASK
+from tests.support import TASK
+from tests.support.kit import runtime_command
 
 
 def launch(

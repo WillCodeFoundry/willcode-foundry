@@ -1,17 +1,18 @@
 import os
-import re
 import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from _pytest.mark.expression import Expression
 
 from foundry import session
 from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
 from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, Task
+from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -25,9 +26,9 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Leave out the sbx tier unless -m names it: it launches a real sandbox and removes it with
+    """Leave out the sbx tier unless -m asks for it: it launches a real sandbox and removes it with
     `sbx env rm --force` in this foundry, so a -m replacing the default deselection mustn't bring it back."""
-    if re.search(r"(?<!not )\bsbx\b", config.option.markexpr or ""):
+    if _asks_for_sbx(config.option.markexpr or ""):
         return
     sbx = [item for item in items if item.get_closest_marker("sbx")]
     if sbx:
@@ -35,9 +36,23 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         config.hook.pytest_deselected(items=sbx)
 
 
-SANDBOX_IMAGE = pytest.StashKey[str]()
-"""The template image a -m docker run tested, digest included: recorded by tests/sandbox_image's image fixture,
-printed below. pytest honours summary hooks only in this, the root conftest."""
+def _asks_for_sbx(markexpr: str) -> bool:
+    """Whether the marker expression selects a test only when it is marked sbx: true for an sbx test with no
+    other marker, false for a test with none."""
+    if not markexpr:
+        return False
+    expression = Expression.compile(markexpr)
+    return expression.evaluate(_MarkedOnly("sbx")) and not expression.evaluate(_MarkedOnly())
+
+
+class _MarkedOnly:
+    """A test with these markers and no other, as a marker expression sees it."""
+
+    def __init__(self, *markers: str) -> None:
+        self._markers = markers
+
+    def __call__(self, name: str, /, **kwargs: str | int | bool | None) -> bool:
+        return name in self._markers
 
 
 def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter, config: pytest.Config) -> None:
@@ -66,9 +81,6 @@ def session_variables(tmp_path: Path) -> Callable[[Task], SessionVariables]:
     return variables
 
 
-AGENT_KIT_SOURCE = Path(__file__).parents[1] / "agent-kit"
-
-
 @pytest.fixture(scope="session")
 def built_kit(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A copy of this repository's agent kit with the runtime built into it, made once per test run.
@@ -83,14 +95,6 @@ def built_kit(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 # --- a project's origin, for setting a sandbox up against ----------------------------------
-
-TASK = Task("T1")
-
-
-def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """``git *args`` in ``cwd``, its output captured as text; a failure raises unless ``check`` is False."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
-
 
 GIT_REPOSITORY_VARIABLES = tuple(
     subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, check=True).stdout.split()

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from agent_runtime.git import Git, GitError
-from tests.conftest import git
+from tests.support import git
 
 
 @pytest.fixture

@@ -4,26 +4,18 @@ Each case runs a part of the suite that writes global git config, in a pytest of
 exported as a developer's shell might, and checks the developer's own file is unchanged and the run passed.
 """
 
-import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-REPOSITORY = Path(__file__).parents[1]
+from tests.support import run_pytest
+
 DEVELOPERS_CONFIG = "[user]\n\tname = Real Dev\n\temail = real@example.com\n"
 
 
 def run_suite_part(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "tests/agent_runtime/test_git.py"],
-        cwd=REPOSITORY,
-        env={**os.environ, **env},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return run_pytest("tests/agent_runtime/test_git.py", env=env)
 
 
 @pytest.mark.parametrize("variable", ["XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL"])

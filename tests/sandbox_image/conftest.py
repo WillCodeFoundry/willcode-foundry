@@ -14,29 +14,27 @@ that group added by number, as sbx gives agent processes the docker group. Root 
 import dataclasses
 import shutil
 import stat
-import subprocess
-import time
 import uuid
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract
 from foundry.session import SessionVariables
 from foundry.task import Task
-from tests.conftest import SANDBOX_IMAGE, TASK
-
-IMAGE = "docker/sandbox-templates:claude-code-docker"
-"""Followed by tag, not pinned, as sbx follows it."""
-AGENT_HOME = "/home/agent"
-DOCKER_SOCKET = "/var/run/docker.sock"
-DOCKER_GROUP = 4242
-"""The gid the socket starts in: not a group the template's agent user is in, so only --group-add grants it."""
-
-
-def docker(*args: str, input: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["docker", *args], input=input, capture_output=True, text=True, check=False)
+from tests.support import SANDBOX_IMAGE, TASK
+from tests.support.docker import (
+    AGENT_HOME,
+    DOCKER_GROUP,
+    DOCKER_SOCKET,
+    IMAGE,
+    PULL_ATTEMPTS,
+    Container,
+    copy_origin,
+    docker,
+    pull,
+    repo_digest,
+)
 
 
 @pytest.fixture(scope="session")
@@ -56,27 +54,6 @@ def image(pytestconfig: pytest.Config) -> str:
     return IMAGE
 
 
-PULL_ATTEMPTS = 3
-
-
-def pull(image: str) -> subprocess.CompletedProcess[str]:
-    """`docker pull`, tried again after a pause when it fails: CI pulls from Docker Hub anonymously, where a rate
-    limit or a dropped connection would otherwise fail a required check for a reason unrelated to the change."""
-    for attempt in range(1, PULL_ATTEMPTS + 1):
-        pulled = docker("pull", "--quiet", image)
-        if pulled.returncode == 0 or attempt == PULL_ATTEMPTS:
-            return pulled
-        time.sleep(10 * attempt)
-    raise AssertionError("unreachable")
-
-
-def repo_digest(image: str) -> str:
-    """The digest of the image pulled at this tag: `docker image inspect` gives "<repository>@sha256:…"."""
-    inspected = docker("image", "inspect", "--format", "{{index .RepoDigests 0}}", image)
-    assert inspected.returncode == 0, inspected.stderr
-    return inspected.stdout.strip().partition("@")[2]
-
-
 @pytest.fixture(scope="session")
 def writable_kit(built_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A copy of the built kit with every file and folder in it writable by anyone, links aside."""
@@ -86,24 +63,6 @@ def writable_kit(built_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> P
         if not path.is_symlink():
             path.chmod(0o777 if path.is_dir() else stat.S_IMODE(path.stat().st_mode) | 0o666)
     return kit
-
-
-@dataclasses.dataclass(frozen=True)
-class Container:
-    name: str
-    agent_kit: Path
-
-    def run(self, user: str, *command: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        """``command`` in the container, as ``user``, with ``env`` added to the image's environment."""
-        options = [f"--env={name}={value}" for name, value in (env or {}).items()]
-        return docker("exec", f"--user={user}", *options, self.name, *command)
-
-    def shell(self, user: str, script: str) -> subprocess.CompletedProcess[str]:
-        return self.run(user, "sh", "-c", script)
-
-    def session_init(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-        """What the launcher runs, as the agent: the runtime's session-init from the mounted kit."""
-        return self.run("agent", *contract.command(self.agent_kit, "session-init"), env=env)
 
 
 @pytest.fixture
@@ -134,16 +93,6 @@ def start_container(image: str) -> Iterator[Callable[..., Container]]:
         docker("rm", "--force", name)
 
 
-def copy_origin(container: Container, origin: Path) -> str:
-    """Copy the origin in, owned by the agent, so git trusts it; returns its URL inside the container."""
-    inside = f"{AGENT_HOME}/origin.git"
-    copied = docker("cp", str(origin), f"{container.name}:{inside}")
-    assert copied.returncode == 0, copied.stderr
-    owned = container.run("root", "chown", "-R", "agent:agent", inside)
-    assert owned.returncode == 0, owned.stderr
-    return f"file://{inside}"
-
-
 @pytest.fixture
 def sandbox_env(session_variables: Callable[[Task], SessionVariables]) -> Callable[[Path, str], dict[str, str]]:
     """The session variables a sandbox for TASK gets, as foundry sets them, pointed at the mounted kit, the
@@ -172,8 +121,3 @@ def sandbox(
         return container, sandbox_env(writable_kit, copy_origin(container, created_task))
 
     return make
-
-
-def last_line(output: str) -> str:
-    lines: Sequence[str] = output.strip().splitlines()
-    return lines[-1] if lines else ""

@@ -10,7 +10,7 @@ import pytest
 
 from agent_runtime import contract
 from agent_runtime.agent_kit import RUNTIME_PYZ, AgentKit
-from tests.agent_kit.conftest import runtime_command
+from tests.support.kit import runtime_command
 
 RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
 

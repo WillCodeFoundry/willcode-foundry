@@ -13,68 +13,26 @@ the real machine: harden and verify are always given a temporary one, and SANDBO
 literal values.
 """
 
-import contextlib
 import dataclasses
-import functools
 import os
-import shutil
-import socket
 import stat
-import tempfile
-from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 from agent_runtime import contract, harden
 from agent_runtime.agent_kit import AgentKit
-
-AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
-ME = harden.Owner(os.getuid(), os.getgid())
-SOMEONE_ELSE = harden.Owner(os.getuid() + 1, os.getgid())
-SUDO_USER = harden.SANDBOX_USER
-
-
-# --- helpers -------------------------------------------------------------------------
-
-
-@pytest.fixture
-def socket_dir() -> Iterator[Path]:
-    """A short directory: a Unix socket's path is limited to about 100 characters."""
-    with tempfile.TemporaryDirectory(prefix="hs-") as directory:
-        yield Path(directory)
-
-
-def make_socket(socket_path: Path, mode: int) -> Path:
-    with socket.socket(socket.AF_UNIX) as server:
-        server.bind(str(socket_path))
-    socket_path.chmod(mode)
-    return socket_path
-
-
-def stand_in(tmp_path: Path, name: str, exit_code: int) -> str:
-    """A command that only exits with the code given, replacing any file of that name, as a new one."""
-    command = tmp_path / name
-    command.unlink(missing_ok=True)  # it may be the stand-in root mode left mode 0
-    command.write_text(f"#!/bin/sh\nexit {exit_code}\n")
-    command.chmod(0o755)
-    return str(command)
-
-
-@contextlib.contextmanager
-def read_only(kit: Path) -> Iterator[None]:
-    """The kit as its mount makes it, as far as file modes can: nothing in it writable by its owner."""
-    paths = [kit, *kit.rglob("*")]
-    for path in paths:
-        if not path.is_symlink():
-            path.chmod(0o555 if path.is_dir() else 0o444)
-    try:
-        yield
-    finally:
-        for path in paths:
-            if path.is_dir() and not path.is_symlink():
-                path.chmod(0o755)
-
+from tests.support.machine import (
+    AGENT_UID,
+    ME,
+    SOMEONE_ELSE,
+    SUDO_USER,
+    TemporaryMachine,
+    assert_refused,
+    make_socket,
+    stand_in,
+    writable,
+)
 
 # --- the real machine ----------------------------------------------------------------
 
@@ -104,99 +62,6 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
         assert sandbox.can_write(path) == os.access(path, os.W_OK), path
     for path in (writable, tmp_path):
         assert sandbox.owner_of(path) == path.stat().st_uid, path
-
-
-# --- a temporary machine: the second adapter behind harden.Machine ------------------------
-#
-# The agent is modelled as a user who is neither the owner nor in the group of what it touches: it can write
-# a path when the path's "other" bits say so (for a link, its target's). In a test the root owner and the agent
-# are the same user, so os.access would report every file root mode installs as writable. Ownership is
-# modelled too: every path is root's, the test user's here, unless a test puts another owner in the table.
-
-AGENT_UID = 4242
-"""The agent's uid in agent mode; root mode runs as 0. Only what harden reads through the machine sees them."""
-
-
-def other_can_write(path: Path) -> bool:
-    try:
-        return bool(path.stat().st_mode & stat.S_IWOTH)
-    except OSError:
-        return False
-
-
-def recording_stand_in(directory: Path, name: str) -> tuple[str, Path]:
-    """A command that records the arguments of each run, one line each, and exits 0."""
-    log = directory / f"{name}.log"
-    command = directory / name
-    command.write_text(f'#!/bin/sh\nprintf \'%s\\n\' "$*" >> "{log}"\n')
-    command.chmod(0o755)
-    return str(command), log
-
-
-@dataclasses.dataclass(frozen=True)
-class TemporaryMachine:
-    """What a test needs to hand harden a machine, and to look at it afterwards."""
-
-    root_mode: harden.Machine
-    """The machine as root mode sees it: effective uid 0."""
-    dir: Path
-    """Every file the machine holds, except its sockets."""
-    passwd_log: Path
-    owners: dict[Path, int]
-    """Who owns a path, where a test says someone else does; any other path is the test user's, root's here."""
-
-    @property
-    def agent_mode(self) -> harden.Machine:
-        """The same machine as the agent sees it."""
-        return dataclasses.replace(self.root_mode, euid=lambda: AGENT_UID)
-
-
-@pytest.fixture
-def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
-    """A sandbox before its first launch: sudo works, su doesn't, Docker's socket is the agent's group's."""
-    machine_dir = tmp_path / "machine"
-    bin_dir = machine_dir / "usr" / "bin"
-    bin_dir.mkdir(parents=True)
-    python = bin_dir / "python3.14"
-    python.write_text("")
-    python.chmod(0o755)
-    (bin_dir / "python3").symlink_to("python3.14")
-    passwd, passwd_log = recording_stand_in(machine_dir, "passwd")
-    docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
-    owners: dict[Path, int] = {}
-    return TemporaryMachine(
-        root_mode=harden.Machine(
-            managed_settings=machine_dir / "etc" / "claude-code" / "managed-settings.json",
-            docker_daemon_config=machine_dir / "etc" / "docker" / "daemon.json",
-            regrouped_socket=docker_socket,
-            checked_sockets=(docker_socket, socket_dir / "containerd.sock"),
-            python=str(bin_dir / "python3"),
-            sudo=stand_in(bin_dir, "sudo", 0),
-            su=stand_in(bin_dir, "su", 1),
-            passwd=passwd,
-            root_owner=ME,
-            euid=lambda: 0,
-            can_write=other_can_write,
-            owner_of=lambda path: owners.get(path, ME.uid),
-        ),
-        dir=machine_dir,
-        passwd_log=passwd_log,
-        owners=owners,
-    )
-
-
-@pytest.fixture
-def read_only_kit(tmp_path: Path, machine: TemporaryMachine) -> Iterator[Path]:
-    """A copy of the real agent kit, its role skills' links included, with nothing in it writable. Its managed
-    settings run the hooks through this machine's link, as the real ones do through the real machine's."""
-    kit = tmp_path / "agent-kit"
-    shutil.copytree(AGENT_KIT_PATH, kit, symlinks=True, ignore=shutil.ignore_patterns(".build"))
-    settings = AgentKit(kit).managed_settings
-    real_link, machine_link = str(harden.SANDBOX.hooks_runtime_link), str(machine.root_mode.hooks_runtime_link)
-    assert real_link in settings.read_text()
-    settings.write_text(settings.read_text().replace(real_link, machine_link))
-    with read_only(kit):
-        yield kit
 
 
 def test_root_mode_then_agent_mode_on_one_machine(machine: TemporaryMachine, read_only_kit: Path) -> None:
@@ -250,39 +115,6 @@ def test_root_mode_gives_the_docker_socket_to_root(machine: TemporaryMachine, re
 #
 # Each case starts from a machine root mode has just hardened, breaks one thing, and checks verify refuses,
 # naming it in today's words.
-
-
-@pytest.fixture
-def hardened(machine: TemporaryMachine, read_only_kit: Path) -> TemporaryMachine:
-    """The machine after root mode's first launch."""
-    harden.harden(read_only_kit, SUDO_USER, machine.root_mode)
-    return machine
-
-
-def assert_refused(kit: Path, machine: harden.Machine, *lines: str, startswith: str = "") -> None:
-    """verify finds something the agent can still do, and says each of ``lines``."""
-    failures = harden.verify(kit, machine)
-    assert failures
-    for line in lines:
-        assert line in failures, failures
-    if startswith:
-        assert any(failure.startswith(startswith) for failure in failures), failures
-
-
-@pytest.fixture
-def refused(read_only_kit: Path, hardened: TemporaryMachine) -> Callable[..., None]:
-    """assert_refused, on the hardened machine as the agent sees it."""
-    return functools.partial(assert_refused, read_only_kit, hardened.agent_mode)
-
-
-@contextlib.contextmanager
-def writable(directory: Path) -> Iterator[None]:
-    """Let the test, as the kit's owner, add something to a read-only folder of it."""
-    directory.chmod(0o755)
-    try:
-        yield
-    finally:
-        directory.chmod(0o555)
 
 
 def test_missing_settings_are_refused(hardened, refused, read_only_kit) -> None:
