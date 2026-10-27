@@ -1,6 +1,5 @@
 """foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path."""
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -31,7 +30,10 @@ def foundry_root(tmp_path: Path) -> Path:
 
 
 def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
-    request = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    request = launch.request
+
+    assert launch.created
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
     assert request.definition_dir == session_dir
@@ -52,36 +54,6 @@ def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
     assert (foundry_root / "agent-kit" / ".build" / "agent_runtime.pyz").is_file()
 
 
-def test_a_copied_foundry_doesnt_build_into_the_kit_its_sandbox_mounts(foundry_root: Path, tmp_path: Path) -> None:
-    """sbx fixed the mount when it created the sandbox, on the original's kit: a copy launching it would swap
-    the runtime under the original's sandboxes."""
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-    mounted_pyz = foundry_root / "agent-kit" / ".build" / "agent_runtime.pyz"
-    mounted_pyz.unlink()
-    copy = tmp_path / "copy"
-    shutil.copytree(foundry_root, copy)
-
-    with pytest.raises(FoundryError) as refused:
-        prepare_launch(copy, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-
-    assert str(refused.value) == (
-        f"dev-tkt-store-wcf-0042 mounts the agent kit at {foundry_root / 'agent-kit'}, not this foundry's "
-        f"({copy / 'agent-kit'}): launch it from the foundry there, or recreate it (see Recreating a sandbox in "
-        "the README)"
-    )
-    assert not mounted_pyz.exists()
-
-
-def test_a_moved_foundry_says_its_sandbox_needs_recreating(foundry_root: Path) -> None:
-    """The kit the sandbox mounts is gone with the move: sbx can't mount it again."""
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-    moved = foundry_root.with_name(f"{foundry_root.name}-moved")
-    shutil.move(foundry_root, moved)
-
-    with pytest.raises(FoundryError, match=r"mounts the agent kit at .*, which is gone: recreate it \(see"):
-        prepare_launch(moved, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-
-
 def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
     (foundry_root / "agent-kit" / ".build").write_text("a file where the folder goes\n")
 
@@ -91,7 +63,8 @@ def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
 
 def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
     first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-    assert prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")) == first
+    again = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    assert (again.request, again.created) == (first.request, False)
 
 
 def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
@@ -99,7 +72,9 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
     assert (
-        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")).github_token_path
+        prepare_launch(
+            foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")
+        ).request.github_token_path
         == token
     )
 

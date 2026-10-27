@@ -7,7 +7,8 @@ workspace. The definition carries the session variables, the AGENT_*
 variables the sandbox is created with (SessionVariables knows their names).
 ``open_or_create`` is the whole interface: it names the sandbox, creates its
 session the first time, and on every later launch reads the definition back
-and refuses one written for another role, task or repository.
+and refuses one written for another role, task, repository or agent kit.
+``recreate_hint`` says how to start a sandbox over.
 """
 
 import re
@@ -19,15 +20,13 @@ from typing import Final
 from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit
 from foundry import paths
-from foundry.agent_sandbox import SandboxDefinition
+from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, valid_sandbox_name
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
-# sbx accepts letters, digits, '.', '+', '-'. The name also names an
-# ssh-agent socket, whose path length is limited.
-MAX_SANDBOX_NAME_LENGTH: Final = 64
-_SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
+_UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
+"""What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
 
 SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
 """Inside the sandbox: where session-setup clones the project. Nothing on the host corresponds to it."""
@@ -97,7 +96,7 @@ class SessionVariables:
         return variables
 
     def is_same_sandbox(self, other: "SessionVariables") -> bool:
-        """Whether both are for the same role, task and repository; paths may differ, e.g. after the foundry moved."""
+        """Whether both are for the same role, task and repository: what a sandbox's name stands for."""
         return (self.role_name, self.task, self.repo_url) == (other.role_name, other.task, other.repo_url)
 
 
@@ -114,12 +113,7 @@ class Session:
 
     @property
     def init_command(self) -> tuple[str, ...]:
-        """The runtime's session-init, from the agent kit this sandbox was created with.
-
-        sbx fixes mounts when it creates a sandbox, so this is the kit recorded
-        in the definition, not the foundry's current one: a moved foundry still
-        finds the kit its existing sandboxes mount.
-        """
+        """The runtime's session-init, from the agent kit, which open_or_create checked is this foundry's."""
         return AgentKit(self.definition.agent_kit_dir).command("session-init")
 
 
@@ -129,7 +123,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     Raises FoundryError if the sandbox name would be too long, if the session
     directory exists without its definition but holds more than an empty
     workspace, or if the existing definition was written for another role,
-    task or repository.
+    task or repository, or mounts another foundry's agent kit.
     """
     sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
@@ -154,17 +148,18 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     definition = SandboxDefinition.read(session_dir)
     recorded = _recorded_variables(definition)
     _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
+    _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
     return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
 
 
 def _slug(text: str) -> str:
-    return _SBX_UNSAFE_CHARACTERS.sub("-", text).strip("-").lower()
+    return _UNSLUGGED.sub("-", text).strip("-").lower()
 
 
 def _sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
     """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
-    if len(name) > MAX_SANDBOX_NAME_LENGTH:
+    if not valid_sandbox_name(name):
         raise FoundryError(
             f"sandbox name {name!r} is over {MAX_SANDBOX_NAME_LENGTH} characters; shorten the project or task name"
         )
@@ -203,8 +198,7 @@ def _recorded_variables(definition: SandboxDefinition) -> SessionVariables:
     except FoundryError as error:
         raise FoundryError(
             f"sandbox {definition.name} was created with session variables this foundry doesn't set ({error}), "
-            "so its agent kit would use them; remove it with "
-            f"`sbx env rm --force sessions/{definition.name}`, delete sessions/{definition.name}/, and launch again"
+            f"so its agent kit would use them; {recreate_hint(definition.name)}"
         ) from None
 
 
@@ -220,6 +214,29 @@ def _require_same_sandbox(sandbox_name: str, *, recorded: SessionVariables, want
             f"sandbox {sandbox_name} already exists for a different role, task or repository "
             f"(role {recorded.role_name!r}, task {recorded.task.id!r}, repository {recorded.repo_url!r}); "
             "either its name collides with this one, so use a task id that gives a different name, "
-            "or the project's url has changed since, so remove the sandbox and "
-            f"sessions/{sandbox_name}/ to start over."
+            f"or the project's url has changed since, so {recreate_hint(sandbox_name)}"
         )
+
+
+def _require_own_kit(sandbox_name: str, *, recorded: Path, own: Path) -> None:
+    """Raise unless the sandbox mounts this foundry's agent kit. sbx fixed the mount when it created the sandbox:
+    a copied foundry would rebuild the original's runtime under the original's sandboxes, and a moved one's
+    recorded kit is gone."""
+    if recorded.resolve() == own.resolve():
+        return
+    if recorded.is_dir():
+        raise FoundryError(
+            f"{sandbox_name} mounts the agent kit at {recorded}, not this foundry's ({own}): "
+            f"launch it from the foundry there, or {recreate_hint(sandbox_name)}"
+        )
+    raise FoundryError(
+        f"{sandbox_name} mounts the agent kit at {recorded}, which is gone: {recreate_hint(sandbox_name)}"
+    )
+
+
+def recreate_hint(sandbox_name: str) -> str:
+    """How to start a sandbox over, for a message that ends by saying so."""
+    return (
+        f"recreate it: `sbx env rm --force sessions/{sandbox_name}`, delete sessions/{sandbox_name}/, and launch "
+        "again (see Recreating a sandbox in the README)"
+    )
