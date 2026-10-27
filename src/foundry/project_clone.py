@@ -61,6 +61,16 @@ class ProjectClone:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
         return (self._work_dir / path).exists()
 
+    def read(self, path: str) -> str | None:
+        """The text of ``path``, relative to the repository root, in the checked-out files; None if it isn't there."""
+        file_path = self._work_dir / path
+        return file_path.read_text() if file_path.is_file() else None
+
+    def dirs(self, path: str) -> list[str]:
+        """The names of the dirs directly in ``path``, sorted; empty if ``path`` isn't there."""
+        folder = self._work_dir / path
+        return sorted(child.name for child in folder.iterdir() if child.is_dir()) if folder.is_dir() else []
+
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
 

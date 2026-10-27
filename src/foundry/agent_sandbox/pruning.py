@@ -16,6 +16,11 @@ class Pruned:
     """Names of the sandboxes whose ssh-agents were killed."""
 
 
+def live_sandboxes() -> set[str]:
+    """Composition root: the names of this machine's sandboxes that aren't stopped, as sbx lists them."""
+    return list_live_sandboxes(SystemHost())
+
+
 def prune() -> Pruned:
     """Composition root: everything agent_sandbox can clean up on this machine.
 

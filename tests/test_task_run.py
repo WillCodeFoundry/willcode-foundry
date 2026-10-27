@@ -1,12 +1,15 @@
-"""foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path."""
+"""foundry task run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path, and
+whose_turn, which picks the role it launches."""
 
 from pathlib import Path
 
 import pytest
 
 from agent_runtime.agent_kit import AgentKit
+from agent_runtime.task.lifecycles import FEATURE
+from agent_runtime.task.state import TaskState
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch
+from foundry.commands.task import prepare_launch, whose_turn
 from foundry.errors import FoundryError
 from foundry.session import SessionVariables
 from foundry.task import Task
@@ -87,3 +90,34 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task("t1"))
+
+
+# --- whose turn ----------------------------------------------------------------
+
+
+def in_state(state: str, previous: str | None = None, note: str = "") -> TaskState:
+    return TaskState(lifecycle=FEATURE, state=state, previous=previous, note=note)
+
+
+@pytest.mark.parametrize(
+    ("state", "role"), [("plan", "planner"), ("implement", "dev"), ("review", "reviewer"), ("deliver", "dev")]
+)
+def test_the_role_launched_is_the_one_whose_turn_it_is(state: str, role: str) -> None:
+    assert whose_turn(in_state(state), project_name="store", task=Task("t1")) == role
+
+
+def test_a_task_waiting_for_you_is_refused_with_its_note_and_how_to_hand_it_back() -> None:
+    with pytest.raises(FoundryError) as refused:
+        whose_turn(in_state("blocked", "review", "Is R4 in scope?"), project_name="store", task=Task("t1"))
+
+    assert str(refused.value) == (
+        "task t1 is waiting for you, in blocked (from review): Is R4 in scope?\n"
+        "  once you've answered, hand it on: foundry task move store t1 review --note …"
+    )
+
+
+def test_a_done_task_is_refused_saying_how_to_reopen_it() -> None:
+    with pytest.raises(
+        FoundryError, match=r"^task t1 is done; to reopen it: foundry task move store t1 STATE --note …$"
+    ):
+        whose_turn(in_state("done", "deliver"), project_name="store", task=Task("t1"))

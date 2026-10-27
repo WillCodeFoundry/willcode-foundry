@@ -1,4 +1,5 @@
-"""Tasks on a project's repository: what a task's names are, and creating one from the task template.
+"""Tasks on a project's repository: what a task's names are, creating one from the task template, and reading
+its task state.
 
 Task is the one place a task's names are spelled out. They reach the agent kit as session
 variables (SessionVariables in session.py), so the kit derives none itself, and
@@ -6,11 +7,14 @@ tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 
 import re
+import textwrap
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from agent_runtime.task.lifecycles import FEATURE, Lifecycle
+from agent_runtime.task.state import STATE_FILE, TaskState
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 
@@ -62,6 +66,11 @@ class Task:
         """The task's TASK_FILE on NOTES_BRANCH, relative to the repository root."""
         return f"{self.task_notes_dir}/{TASK_FILE}"
 
+    @property
+    def state_file(self) -> str:
+        """The task's task state on NOTES_BRANCH, relative to the repository root."""
+        return f"{self.task_notes_dir}/{STATE_FILE}"
+
 
 def load_template(template_dir: Path) -> dict[str, str]:
     """Every file directly in ``template_dir``, by name: what a new task's notes dir starts with.
@@ -77,8 +86,9 @@ def load_template(template_dir: Path) -> dict[str, str]:
     return template
 
 
-def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None:
-    """Create the task's branch from the default branch, and copy ``template`` into its notes dir.
+def create(clone: ProjectClone, task: Task, template: Mapping[str, str], lifecycle: Lifecycle) -> None:
+    """Create the task's branch from the default branch, copy ``template`` into its notes dir, and start its task
+    state in ``lifecycle``'s initial state.
 
     Both branches are pushed at once, so either both change or neither does. Refuses if the task
     exists. NOTES_BRANCH is created for the first task, as an orphan branch: it shares no history
@@ -95,5 +105,34 @@ def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None
     if clone.exists(task.task_notes_dir):
         raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.task_notes_dir}/")
     clone.write({f"{task.task_notes_dir}/{name}": text for name, text in template.items()})
+    clone.write({task.state_file: TaskState.new(lifecycle).to_json()})
     clone.commit(f"Add task {task.id}")
     clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
+
+
+_EXAMPLE_STATE: Final = TaskState(
+    lifecycle=FEATURE, state="implement", previous=None, note="Started before task states: read PROGRESS.md."
+)
+"""What read_state suggests adding to a task created before task states."""
+
+
+def task_ids(clone: ProjectClone) -> list[str]:
+    """Every task's id on NOTES_BRANCH, sorted, from ``clone`` with it checked out."""
+    return clone.dirs(NOTES_ROOT)
+
+
+def read_state(clone: ProjectClone, task: Task) -> TaskState:
+    """The task's task state, from ``clone`` with NOTES_BRANCH checked out.
+
+    FoundryError if there is no such task, or it has no task state; TaskStateRefused if the file isn't one.
+    """
+    if not clone.exists(task.task_notes_dir):
+        raise FoundryError(f"there is no task {task.id}: {NOTES_BRANCH} has no {task.task_notes_dir}/")
+    text = clone.read(task.state_file)
+    if text is None:
+        raise FoundryError(
+            f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}: it was created before task states. "
+            f"Add it on {NOTES_BRANCH}, naming the lifecycle and the state it is in, for example:\n"
+            + textwrap.indent(_EXAMPLE_STATE.to_json(), "  ")
+        )
+    return TaskState.parse(text, f"{task.state_file} on {NOTES_BRANCH}")

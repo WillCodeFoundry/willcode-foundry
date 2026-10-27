@@ -11,7 +11,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         help="clean up what stopped or removed sandboxes leave behind",
         description=(
             "Kill the ssh-agents of sandboxes that are stopped or removed. "
-            "foundry run does the same before each launch; this does it without launching."
+            "foundry task run does the same before each launch; this does it without launching."
         ),
     )
     parser.set_defaults(func=main)

@@ -125,12 +125,12 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     workspace, or if the existing definition was written for another role,
     task or repository, or mounts another foundry's agent kit.
     """
-    sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
-    session_dir = paths.session_dir(foundry_root, sandbox_name)
+    name = sandbox_name(role_name=role.name, project_name=project.name, task=task)
+    session_dir = paths.session_dir(foundry_root, name)
     wanted = _wanted_variables(foundry_root, project, role, task)
     created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
     if created:
-        _create(session_dir, _definition(foundry_root, sandbox_name, wanted))
+        _create(session_dir, _definition(foundry_root, name, wanted))
     definition = SandboxDefinition.read(session_dir)
     recorded = _recorded_variables(definition)
     _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
@@ -162,8 +162,9 @@ def _slug(text: str) -> str:
     return _UNSLUGGED.sub("-", text).strip("-").lower()
 
 
-def _sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
-    """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
+def sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
+    """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042. `foundry task list`
+    uses it to find a turn's sandbox."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
     if not valid_sandbox_name(name):
         raise FoundryError(
