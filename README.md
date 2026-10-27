@@ -211,7 +211,7 @@ src/agent_runtime/        # runs inside a sandbox; the standard library only, ne
 └── git.py                # Git: the one way both packages run git (output, output_bytes, result, succeeds), and GitError; foundry imports it too
 ```
 
-`foundry` imports four of these modules, `contract`, `agent_kit`, `files` and `git`, and never the reverse. A git failure on the host is a `GitError`, which the CLI reports as it does a `FoundryError`.
+`foundry` imports four of these modules, `contract`, `agent_kit`, `files` and `git`, and never the reverse; `tests/test_runtime_boundary.py` checks it. A git failure on the host is a `GitError`, which the CLI reports as it does a `FoundryError`.
 
 | Command (`/usr/bin/python3 -IS agent_runtime.pyz …`) | Run by |
 |---|---|
