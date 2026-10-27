@@ -22,6 +22,7 @@ import pytest
 
 from agent_runtime import contract
 from foundry import agent_sandbox, config, paths
+from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.launcher import LaunchRequest, Started, start
 from foundry.commands.run import prepare_launch
 from foundry.errors import FoundryError
@@ -86,14 +87,22 @@ class Smoke:
 
 
 def remove_the_smoke_sandbox(session_dir: Path) -> None:
-    """As the README says to recreate a sandbox: sbx env rm --force, then delete its session directory."""
-    if session_dir.exists():
-        removed = subprocess.run(
-            ["sbx", "env", "rm", "--force", str(session_dir)], capture_output=True, text=True, check=False
+    """As the README says to recreate a sandbox: sbx env rm --force, then delete its session directory.
+
+    The folder goes only after sbx removed the sandbox, or when it holds no definition, so there was nothing to
+    remove. When sbx fails with a definition there, the run fails naming the command, and the folder stays:
+    the sandbox can still be removed by its path.
+    """
+    if not session_dir.exists():
+        return
+    command = ["sbx", "env", "rm", "--force", str(session_dir)]
+    removed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if removed.returncode != 0 and (session_dir / SandboxDefinition.FILE_NAME).is_file():
+        pytest.fail(
+            f"`{' '.join(command)}` failed, so {session_dir} is left for you to remove:\n{removed.stderr.strip()}",
+            pytrace=False,
         )
-        if removed.returncode != 0 and (session_dir / "sbxenv.yaml").is_file():
-            print(f"sbx env rm --force {session_dir}: {removed.stderr.strip()}")
-        shutil.rmtree(session_dir)
+    shutil.rmtree(session_dir)
 
 
 @pytest.fixture(scope="module")
