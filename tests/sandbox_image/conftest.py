@@ -91,7 +91,7 @@ def writable_kit(built_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> P
 @dataclasses.dataclass(frozen=True)
 class Container:
     name: str
-    kit: Path
+    agent_kit: Path
 
     def run(self, user: str, *command: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         """``command`` in the container, as ``user``, with ``env`` added to the image's environment."""
@@ -103,7 +103,7 @@ class Container:
 
     def session_init(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         """What the launcher runs, as the agent: the runtime's session-init from the mounted kit."""
-        return self.run("agent", *contract.command(self.kit, "session-init"), env=env)
+        return self.run("agent", *contract.command(self.agent_kit, "session-init"), env=env)
 
 
 @pytest.fixture

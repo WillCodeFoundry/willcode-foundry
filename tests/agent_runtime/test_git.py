@@ -32,7 +32,7 @@ def test_output_bytes_keeps_what_git_wrote(repo: Path) -> None:
 
 
 def test_result_lets_the_caller_read_the_exit_code(repo: Path) -> None:
-    result = Git(repo).result("config", "--get", "foundry.unset")
+    result = Git(repo).run_captured("config", "--get", "foundry.unset")
 
     assert (result.returncode, result.stdout) == (1, "")
 
@@ -45,7 +45,7 @@ def test_succeeds_answers_without_printing(repo: Path, capfd: pytest.CaptureFixt
 
 
 def test_succeeds_can_show_gits_own_output(repo: Path, capfd: pytest.CaptureFixture[str]) -> None:
-    assert Git(repo).succeeds("rev-parse", "--verify", "refs/heads/nope", show_output=True) is False
+    assert Git(repo).run_visibly("rev-parse", "--verify", "refs/heads/nope") is False
 
     assert "fatal:" in capfd.readouterr().err
 
@@ -56,7 +56,7 @@ def test_shown_output_comes_after_what_this_process_wrote(repo: Path) -> None:
     head = git(repo, "rev-parse", "HEAD").stdout.strip()
     script = (
         "import sys; from pathlib import Path; from agent_runtime.git import Git; "
-        "print('before'); Git(Path(sys.argv[1])).succeeds('rev-parse', 'HEAD', show_output=True); print('after')"
+        "print('before'); Git(Path(sys.argv[1])).run_visibly('rev-parse', 'HEAD'); print('after')"
     )
 
     env = {name: value for name, value in os.environ.items() if name != "PYTHONUNBUFFERED"}
@@ -69,30 +69,28 @@ def test_input_reaches_git(repo: Path) -> None:
     blob = git(repo, "hash-object", "crlf.txt").stdout.strip()
 
     assert Git(repo).output("hash-object", "--stdin", input="one\r\ntwo\r\n").strip() == blob
-    assert Git(repo).succeeds("hash-object", "--stdin", input=b"one\r\ntwo\r\n\xff") is True
+    assert Git(repo).run_visibly("hash-object", "--stdin", input=b"one\r\ntwo\r\n\xff") is True
 
 
 def test_output_bytes_raises_on_failure_with_gits_message(repo: Path) -> None:
-    with pytest.raises(GitError, match=r"^git show HEAD:absent failed: fatal: "):
+    with pytest.raises(GitError, match=r"^git -C \S+ show HEAD:absent failed: fatal: "):
         Git(repo).output_bytes("show", "HEAD:absent")
 
 
-def test_a_failure_names_the_command_as_given_and_gits_message(repo: Path) -> None:
+def test_a_failure_names_the_command_as_typed_and_gits_message(repo: Path) -> None:
     with pytest.raises(GitError) as raised:
         Git(repo).output("rev-parse", "--verify", "refs/heads/nope")
 
-    assert raised.value.command == ("rev-parse", "--verify", "refs/heads/nope")
-    assert str(raised.value) == f"git rev-parse --verify refs/heads/nope failed: {raised.value.stderr.strip()}"
-    assert raised.value.stderr.startswith("fatal:")
-    assert raised.value.found is True
-    assert "-C" not in str(raised.value)
+    assert (
+        str(raised.value) == f"git -C {repo} rev-parse --verify refs/heads/nope failed: fatal: Needed a single revision"
+    )
 
 
 def test_a_failure_quotes_an_argument_with_spaces(repo: Path) -> None:
     with pytest.raises(GitError) as raised:
         Git(repo).output("rev-parse", "--verify", "no such ref")
 
-    assert str(raised.value).startswith("git rev-parse --verify 'no such ref' failed: fatal:")
+    assert str(raised.value).startswith(f"git -C {repo} rev-parse --verify 'no such ref' failed: fatal:")
 
 
 def test_output_that_isnt_utf_8_is_text_all_the_same(repo: Path) -> None:
@@ -131,7 +129,7 @@ def test_the_environment_given_replaces_this_processs(
     for name, value in PROBE.items():
         monkeypatch.setenv(name, value)
 
-    assert Git(repo, env).result("config", "--get", "foundry.probe").returncode == 1
+    assert Git(repo, env).run_captured("config", "--get", "foundry.probe").returncode == 1
 
 
 @pytest.mark.parametrize(
@@ -139,12 +137,12 @@ def test_the_environment_given_replaces_this_processs(
     [
         lambda g: g.output("status"),
         lambda g: g.output_bytes("status"),
-        lambda g: g.result("status"),
+        lambda g: g.run_captured("status"),
         lambda g: g.succeeds("status"),
-        lambda g: g.succeeds("status", show_output=True),
+        lambda g: g.run_visibly("status"),
         lambda g: g.current_branch(),
     ],
-    ids=["output", "output_bytes", "result", "succeeds", "succeeds-shown", "current_branch"],
+    ids=["output", "output_bytes", "run_captured", "succeeds", "run_visibly", "current_branch"],
 )
 def test_a_missing_git_is_named_by_every_method(
     repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call: Callable[[Git], object]
@@ -153,15 +151,14 @@ def test_a_missing_git_is_named_by_every_method(
     empty.mkdir()
     monkeypatch.setenv("PATH", str(empty))
 
-    with pytest.raises(GitError, match=r"^git not found in PATH$") as raised:
+    with pytest.raises(GitError, match=r"^git not found in PATH$"):
         call(Git(repo))
-    assert raised.value.found is False
 
 
-def test_the_current_branch_or_detached(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_current_branch_or_none_when_detached(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(repo)
     assert Git().current_branch() == "main"
 
     git(repo, "switch", "-q", "--detach")
-    assert Git().current_branch() == "detached"
-    assert Git(repo).current_branch() == "detached"
+    assert Git().current_branch() is None
+    assert Git(repo).current_branch() is None

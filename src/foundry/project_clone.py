@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from agent_runtime.git import Git, GitError
-from foundry.errors import FoundryError
 
 _REMOTE_NAME = "origin"
 
@@ -19,7 +18,7 @@ class ProjectClone:
     commit deep. Every commit is signed with SSH, using the signing key in your git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
-    A git failure is the GitError itself, but for a commit's, which says how to sign.
+    A git failure is a GitError; a failed commit's adds how to sign.
     """
 
     def __init__(self, work_dir: Path, env: Mapping[str, str]) -> None:
@@ -81,8 +80,8 @@ class ProjectClone:
         try:
             self._git.output("commit", "--quiet", "--message", message)
         except GitError as error:
-            raise FoundryError(
-                f"git commit failed: {error.stderr.strip()}\n"
+            raise GitError(
+                f"{error}\n"
                 "  commits are signed with SSH: set user.signingkey in your global git config to your "
                 "public key, as in agent-kit/git/allowed_signers, and check your ssh-agent holds it (ssh-add -L)"
             ) from None
@@ -93,8 +92,7 @@ class ProjectClone:
         ``from_remote`` points each new branch on the remote at one of the remote's existing branches:
         {"task/t1": "main"}. ``from_local`` pushes each local branch to the same name on the remote.
         """
-        if not from_remote and not from_local:
-            raise ValueError("push_atomic needs at least one branch to push")
+        assert from_remote or from_local, "push_atomic needs at least one branch to push"  # a programming error
         for source in dict.fromkeys(from_remote.values()):
             self._fetch(source)
         refspecs = [

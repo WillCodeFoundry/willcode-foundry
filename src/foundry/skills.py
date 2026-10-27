@@ -173,9 +173,7 @@ def _apply_upstream_changes(git: Git, plan: _Plan) -> bool:
     path = plan.source.path
     pathspec = [path, f":(exclude){path}/agents"]
     diff = git.output_bytes("diff", "--binary", plan.source.commit, plan.new_sha, f"--relative={path}", "--", *pathspec)
-    return git.succeeds(
-        "apply", "--3way", "--allow-empty", f"--directory={plan.skill_dir_in_repo}", input=diff, show_output=True
-    )
+    return git.run_visibly("apply", "--3way", "--allow-empty", f"--directory={plan.skill_dir_in_repo}", input=diff)
 
 
 def _commit_line(old: str) -> re.Pattern[str]:

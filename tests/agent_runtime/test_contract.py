@@ -17,18 +17,18 @@ def test_the_variables_a_session_sets_are_read_back(session_variables: Callable[
 
     environ = contract.read_environ(variables.to_env())
 
-    assert environ.task == "t1"
-    assert environ.task_branch == variables.task.branch
-    assert environ.kit_dir == variables.agent_kit_dir
-    assert environ.notes_dir == Path(variables.notes_dir)
+    assert environ.agent_task == "t1"
+    assert environ.agent_task_branch == variables.task.branch
+    assert environ.agent_kit_dir == variables.agent_kit_dir
+    assert environ.agent_notes_dir == Path(variables.notes_dir)
 
 
 def test_every_missing_variable_is_named_at_once() -> None:
     with pytest.raises(contract.MissingVariables) as raised:
         contract.read_environ({contract.TASK: "t1", contract.ROLE: ""})
 
-    assert raised.value.names == [name for name in contract.NAMES if name != contract.TASK]
-    assert "AGENT_ROLE, AGENT_KIT_DIR" in str(raised.value)
+    missing = ", ".join(name for name in contract.NAMES if name != contract.TASK)
+    assert str(raised.value) == f"{missing} not set; this runs inside a foundry sandbox, which sets them"
 
 
 def test_a_command_runs_the_kits_runtime_isolated() -> None:

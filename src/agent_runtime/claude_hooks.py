@@ -74,18 +74,18 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
 
 
 def session_check(
-    stdin: TextIO | None = None, stdout: TextIO | None = None, env: contract.Environ | None = None
+    stdin: TextIO | None = None, stdout: TextIO | None = None, session: contract.Environ | None = None
 ) -> int:
     """Block the stop, with the reason as the agent's next instruction, while work is unsaved.
 
     The rule: a session cannot end with uncommitted or unpushed changes.
     """
-    environ = env or contract.read_environ()
+    session = session or contract.read_environ()
     if _stop_hook_active(stdin or sys.stdin):
         return 0  # already looping on this hook: let the stop through rather than spin
     problems = [
-        *_unsaved_work(environ.project_dir, environ.task_branch, "code checkout"),
-        *_unsaved_work(environ.notes_dir, environ.notes_branch, "notes checkout"),
+        *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
+        *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),
     ]
     if not problems:
         return 0
@@ -127,7 +127,7 @@ def _uncommitted(git: Git, label: str) -> list[str]:
 
 def _unpushed(git: Git, branch: str, label: str) -> list[str]:
     """Commits origin/``branch`` lacks: on the branch, and at HEAD, which a detached HEAD moves off it."""
-    git.result("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
+    git.run_captured("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
     for rev in (f"refs/heads/{branch}", "HEAD"):
         if int(_checked(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0:
             return [f"{label} has commits not pushed to origin/{branch}"]
@@ -136,7 +136,7 @@ def _unpushed(git: Git, branch: str, label: str) -> list[str]:
 
 def _checked(git: Git, *args: str) -> str:
     """The command's output; a failure raises _CantCheck naming it, with git's first line."""
-    result = git.result(*args)
+    result = git.run_captured(*args)
     if result.returncode != 0:
         first_line = result.stderr.strip().splitlines()[0] if result.stderr.strip() else "no message"
         raise _CantCheck(f"`{git.describe(*args)}` failed: {first_line}")

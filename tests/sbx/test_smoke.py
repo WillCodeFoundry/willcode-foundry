@@ -95,7 +95,7 @@ class Smoke:
         return self.started.sandbox.run(command)
 
     @property
-    def kit(self) -> Path:
+    def agent_kit(self) -> Path:
         assert self.started is not None, "the first launch didn't run"
         return self.started.definition.agent_kit_dir
 
@@ -143,10 +143,10 @@ def smoke() -> Iterator[Smoke]:
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
-    verified = smoke.run(*contract.command(smoke.kit, "harden", "--verify"))
+    verified = smoke.run(*contract.command(smoke.agent_kit, "verify"))
 
     assert verified.returncode == 0, verified.stdout + verified.stderr
-    assert "harden --verify: hardened" in verified.stdout
+    assert "verify: hardened" in verified.stdout
     # What only root mode prints: a relaunch of a sandbox left from an earlier run wouldn't.
     assert smoke.started is not None
     assert "harden: managed settings installed" in smoke.started.init_output
@@ -164,7 +164,7 @@ def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     ],
 )
 def test_the_agent_cant(smoke: Smoke, what: str, script: str) -> None:
-    assert smoke.run("sh", "-c", script.format(kit=smoke.kit)).returncode != 0, what
+    assert smoke.run("sh", "-c", script.format(kit=smoke.agent_kit)).returncode != 0, what
 
 
 def test_a_relaunch_only_verifies(smoke: Smoke) -> None:
@@ -174,7 +174,7 @@ def test_a_relaunch_only_verifies(smoke: Smoke) -> None:
     relaunched = smoke.run(*smoke.request.init_command)
 
     assert relaunched.returncode == 0, relaunched.stdout + relaunched.stderr
-    assert "harden --verify: hardened" in relaunched.stdout
+    assert "verify: hardened" in relaunched.stdout
     assert "harden: managed settings installed" not in relaunched.stdout
 
 

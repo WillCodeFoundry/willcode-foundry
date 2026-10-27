@@ -14,5 +14,11 @@ if not RUNTIME.is_file():
 sys.path.insert(0, str(RUNTIME))
 
 from agent_runtime import git_hooks  # noqa: E402
+from agent_runtime.git import GitError  # noqa: E402
 
-git_hooks.prepare_commit_msg()
+try:
+    git_hooks.prepare_commit_msg()
+except git_hooks.Refused as error:
+    sys.exit(str(error))  # printed, and git stops
+except GitError as error:
+    sys.exit(f"prepare-commit-msg: refusing: {error}")

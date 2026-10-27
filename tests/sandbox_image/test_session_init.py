@@ -56,10 +56,10 @@ def test_a_first_launch_hardens_the_sandbox(sandbox: Sandbox) -> None:
 
     assert launched.returncode == 0, launched.stdout + launched.stderr
     assert "harden: managed settings installed" in launched.stdout
-    assert last_line(launched.stdout) == "harden --verify: hardened"
+    assert last_line(launched.stdout) == "verify: hardened"
     installed = container.run("root", "stat", "-c", "%u:%g %a", SETTINGS)
     assert installed.stdout.strip() == "0:0 644"
-    kit_copy = container.run("root", "cat", str(container.kit / "claude" / "managed-settings.json")).stdout
+    kit_copy = container.run("root", "cat", str(container.agent_kit / "claude" / "managed-settings.json")).stdout
     assert container.run("root", "cat", SETTINGS).stdout == kit_copy
     assert container.run("root", "cat", "/etc/docker/daemon.json").stdout.strip() == '{"group": "root"}'
     assert roots_password_field(container).startswith("!")  # passwd -l root ran
@@ -100,7 +100,7 @@ def test_after_a_first_launch_the_read_only_mount_keeps_the_agent_out_of_the_kit
     """Every file in the kit is world-writable: only the mount stops the agent."""
     container, _ = first_launch(sandbox)
 
-    created = container.shell("agent", f"touch {container.kit}/created-by-the-agent")
+    created = container.shell("agent", f"touch {container.agent_kit}/created-by-the-agent")
 
     assert created.returncode != 0
     assert "Read-only file system" in created.stderr
@@ -112,7 +112,7 @@ def test_a_relaunch_only_verifies(sandbox: Sandbox) -> None:
     relaunched = container.session_init(env)
 
     assert relaunched.returncode == 0, relaunched.stdout + relaunched.stderr
-    assert last_line(relaunched.stdout) == "harden --verify: hardened"
+    assert last_line(relaunched.stdout) == "verify: hardened"
     assert "harden: managed settings installed" not in relaunched.stdout  # root mode didn't run
 
 
@@ -133,4 +133,4 @@ def test_the_mount_not_file_modes_protects_the_kit(sandbox: Sandbox) -> None:
     launched = container.session_init(env)
 
     assert launched.returncode != 0
-    assert f"change the agent kit: {container.kit} is writable" in launched.stderr
+    assert f"change the agent kit: {container.agent_kit} is writable" in launched.stderr

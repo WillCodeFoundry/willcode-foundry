@@ -53,7 +53,7 @@ def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, c
     assert "session-setup: checkouts ready" in result.stdout
     # This machine isn't a hardened sandbox, so verify refuses.
     assert result.returncode == 1
-    assert "harden --verify: " in result.stderr
+    assert "verify: " in result.stderr
     assert "harden: " not in result.stderr  # root mode never ran
 
 
@@ -84,7 +84,7 @@ def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
         f"--preserve-env=AGENT_KIT_DIR /usr/bin/python3 -IS {kit_dir / '.build' / 'agent_runtime.pyz'} harden"
     ]
     # This machine isn't a hardened sandbox, so verify refuses.
-    assert "harden --verify: " in result.stderr
+    assert "verify: " in result.stderr
     assert result.returncode == 1
 
 
@@ -93,4 +93,4 @@ def test_a_failing_root_mode_stops_the_launch_before_verify(tmp_path: Path, kit_
 
     assert len(record.read_text().splitlines()) == 1
     assert result.returncode == 3
-    assert "harden --verify: " not in result.stderr
+    assert "verify: " not in result.stderr

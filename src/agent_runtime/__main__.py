@@ -19,44 +19,52 @@ import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 
 from agent_runtime import claude_hooks, contract, session_init, session_setup  # noqa: E402
+from agent_runtime import harden as hardening  # noqa: E402
+from agent_runtime.git import GitError  # noqa: E402
 
+COMMANDS: dict[str, tuple[Callable[[], int], str]] = {
+    "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),
+    "session-setup": (lambda: _ran(session_setup.session_setup), "the agent user's part of session-init"),
+    "harden": (session_init.harden, "as root: harden the sandbox"),
+    "verify": (session_init.verify, "as the agent: check the sandbox is hardened"),
+}
 CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "guard-bash": claude_hooks.guard_bash,
     "session-check": claude_hooks.session_check,
 }
+_EXPECTED = (contract.MissingVariables, hardening.Refused, session_setup.SetupError, GitError)
+"""What a command raises to stop with a message, rather than a traceback."""
+
+
+def _ran(command: Callable[[], None]) -> int:
+    """Exit code 0 for a command that raises to fail."""
+    command()
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent_runtime", description="Runs inside a foundry sandbox.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    init = subparsers.add_parser("session-init", help="prepare the sandbox: what the launcher runs before the agent")
-    init.set_defaults(func=lambda args: session_init.session_init())
-    setup = subparsers.add_parser("session-setup", help="the agent user's part of session-init")
-    setup.set_defaults(func=lambda args: session_setup.session_setup())
-    hardening = subparsers.add_parser(
-        "harden", help="as root: harden the sandbox; with --verify, as the agent: check it is hardened"
-    )
-    hardening.add_argument("--verify", action="store_true")
-    hardening.set_defaults(func=lambda args: session_init.agent_mode() if args.verify else session_init.root_mode())
-
+    for name, (func, help_text) in COMMANDS.items():
+        subparsers.add_parser(name, help=help_text).set_defaults(func=func)
     hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
     hook.add_argument("name", choices=CLAUDE_HOOKS)
-    hook.set_defaults(func=lambda args: CLAUDE_HOOKS[args.name]())
-
     return parser
 
 
 def run(argv: Sequence[str] | None = None) -> int:
-    """Run one command; returns its exit code. A missing session variable is reported, not raised."""
+    """Run one command; returns its exit code. What it raises to stop is printed, not a traceback."""
     args = build_parser().parse_args(argv)
-    handler: Callable[[argparse.Namespace], int] = args.func
+    func: Callable[[], int] = CLAUDE_HOOKS[args.name] if args.command == "hook" else args.func
     try:
-        return handler(args)
-    except contract.MissingVariables as error:
-        # A hook says its own name, as the other commands do, not the `hook` command's.
-        command = args.name if args.command == "hook" else args.command
-        print(f"agent_runtime {command}: {error}", file=sys.stderr)
+        return func()
+    except _EXPECTED as error:
+        if isinstance(error, (contract.MissingVariables, GitError)):
+            # Messages that don't say which command they come from; a hook says its own name.
+            command = args.name if args.command == "hook" else args.command
+            print(f"agent_runtime {command}: {error}", file=sys.stderr)
+        else:
+            print(error, file=sys.stderr)
         return 1
 
 

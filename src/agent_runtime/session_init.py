@@ -1,56 +1,77 @@
 """Prepare a sandbox for an agent session: what the launcher runs inside the sandbox, as the agent user,
 before the agent starts. Idempotent: safe to run again on a re-attached sandbox.
 
-Owns both ends of the launch's handoff to root. As the agent, session_init probes sudo and, on the first
-launch, while it still works, runs root mode through it, passing AGENT_KIT_DIR alone. Root mode's entry,
-root_mode, is what that command reaches: it reads AGENT_KIT_DIR and SUDO_USER and hardens. Agent mode's entry,
-agent_mode, reads AGENT_KIT_DIR alone and verifies. What each mode does is agent_runtime.harden's.
+Owns both ends of the launch's handoff to root, and the two hardening entries: ``harden``, which the root
+command reaches through sudo, and ``verify``. What each mode does is agent_runtime.harden's, imported as hardening.
 """
 
 import os
 import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
 
-from agent_runtime import contract, harden, session_setup
+from agent_runtime import contract, session_setup
+from agent_runtime import harden as hardening
+
+RunAsRoot = Callable[[hardening.Machine, Path], int]
+"""Runs root mode for the kit at the Path, as root, and returns its exit code."""
 
 
-def session_init(env: contract.Environ | None = None) -> int:
-    """Set up as the agent; harden as root on the first launch; verify as the agent on every launch.
-
-    Hardening runs while sudo still exists, so nothing after it may need root. The verify runs as the agent
-    itself, with the groups sbx gives it: the launch stops unless the agent can't become root.
-    """
-    environ = env or contract.read_environ()
-    if (returncode := session_setup.session_setup(environ)) != 0:
-        return returncode
-    sudo = harden.SANDBOX.sudo
-    if harden.can_sudo(sudo):
-        hardened = subprocess.run(_root_command(sudo, environ.kit_dir), check=False)
-        if hardened.returncode != 0:
-            return hardened.returncode
-    return harden.verify(environ.kit_dir)
+def session_init(
+    session: contract.Environ | None = None,
+    machine: hardening.Machine = hardening.SANDBOX,
+    run_as_root: RunAsRoot | None = None,
+) -> int:
+    """Set up as the agent; harden as root on the first launch, while sudo still works; verify as the agent on
+    every launch, with the groups sbx gives it. The launch stops unless the agent can't become root."""
+    session = session or contract.read_environ()
+    session_setup.session_setup(session)
+    if hardening.can_sudo(machine.sudo):
+        if (returncode := (run_as_root or _through_sudo)(machine, session.agent_kit_dir)) != 0:
+            return returncode
+    return _verify(session.agent_kit_dir, machine)
 
 
-def root_mode() -> int:
+def harden() -> int:
     """`harden`: what the root command runs. sudo passes AGENT_KIT_DIR alone, and sets SUDO_USER."""
-    return harden.harden(_read_kit_dir(), os.environ.get("SUDO_USER", ""))
+    return _harden(_read_agent_kit_dir(), os.environ.get("SUDO_USER", ""), hardening.SANDBOX)
 
 
-def agent_mode() -> int:
-    """`harden --verify`: the check session_init runs after root mode, given AGENT_KIT_DIR alone."""
-    return harden.verify(_read_kit_dir())
+def verify() -> int:
+    """`verify`: the check session_init runs after root mode, given AGENT_KIT_DIR alone."""
+    return _verify(_read_agent_kit_dir(), hardening.SANDBOX)
 
 
-def _root_command(sudo: str, kit_dir: Path) -> list[str]:
+def _harden(agent_kit_dir: Path, sudo_user: str, machine: hardening.Machine) -> int:
+    hardening.harden(agent_kit_dir, sudo_user, machine)
+    print(
+        f"harden: managed settings installed, their hooks' runtime linked; sudo and su removed for {sudo_user}; "
+        "Docker socket made root-only"
+    )
+    return 0
+
+
+def _verify(agent_kit_dir: Path, machine: hardening.Machine) -> int:
+    if failures := hardening.verify(agent_kit_dir, machine):
+        lines = "".join(f"  {line}\n" for line in failures)
+        sys.stderr.write(f"verify: not starting the agent; it can still:\n{lines}This sandbox needs recreating.\n")
+        return 1
+    print("verify: hardened")
+    return 0
+
+
+def _through_sudo(machine: hardening.Machine, agent_kit_dir: Path) -> int:
     """Root mode through sudo, keeping AGENT_KIT_DIR alone of the environment, running the runtime from the
     read-only kit, isolated."""
-    return [sudo, f"--preserve-env={contract.KIT_DIR}", *contract.command(kit_dir, "harden")]
+    return subprocess.run(_root_command(machine.sudo, agent_kit_dir), check=False).returncode
 
 
-def _read_kit_dir() -> Path:
-    """AGENT_KIT_DIR, the one session variable root mode is given; MissingVariables, which __main__ reports,
-    when it isn't set."""
-    kit_dir = os.environ.get(contract.KIT_DIR)
-    if not kit_dir:
-        raise contract.MissingVariables([contract.KIT_DIR])
-    return Path(kit_dir)
+def _root_command(sudo: str, agent_kit_dir: Path) -> list[str]:
+    return [sudo, f"--preserve-env={contract.KIT_DIR}", *contract.command(agent_kit_dir, "harden")]
+
+
+def _read_agent_kit_dir() -> Path:
+    """AGENT_KIT_DIR, the one session variable the hardening entries are given."""
+    contract.require(os.environ, [contract.KIT_DIR])
+    return Path(os.environ[contract.KIT_DIR])

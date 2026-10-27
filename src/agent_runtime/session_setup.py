@@ -7,8 +7,6 @@ AGENT_PROJECT_DIR. Assumes `foundry task create` has already created the task: i
 folder, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
 """
 
-import shlex
-import sys
 from pathlib import Path
 
 from agent_runtime import contract
@@ -18,102 +16,110 @@ from agent_runtime.git import Git
 
 
 class SetupError(Exception):
-    """A precondition setup doesn't create is missing; the message says what to do."""
+    """A precondition setup doesn't create is missing; the message, the whole of it, says what to do."""
 
 
-def session_setup(env: contract.Environ | None = None) -> int:
-    """Set the sandbox up; on a missing precondition, say what to do and return 1."""
-    environ = env or contract.read_environ()
+def session_setup(session: contract.Environ | None = None, home: Path | None = None) -> None:
+    """Set the sandbox up, the agent's instructions under ``home`` (the user's by default). Raises SetupError
+    on a missing precondition."""
+    session = session or contract.read_environ()
     try:
-        _set_up(environ)
+        _set_up(session, home or Path.home())
     except SetupError as error:
-        print(f"session-setup: {error}", file=sys.stderr)
-        return 1
-    return 0
+        raise SetupError(f"session-setup: {error}") from None
 
 
-def _set_up(environ: contract.Environ) -> None:
-    kit = AgentKit(environ.kit_dir)
-    role = kit.role(environ.role)
+def _set_up(session: contract.Environ, home: Path) -> None:
+    agent_kit = AgentKit(session.agent_kit_dir)
+    role_dir = agent_kit.role(session.agent_role)
     # The rule foundry's config applies on the host, applied again here, before anything changes.
-    if missing := role.missing():
-        raise SetupError(f"role {environ.role!r}: {role.dir} has no {' or '.join(missing)}")
-    _set_identity(environ, kit, role)
-    _prepare_checkouts(environ, kit)
-    task_md_path = environ.notes_dir / environ.task_file
+    if missing := role_dir.missing():
+        raise SetupError(f"role {session.agent_role!r}: {role_dir.dir} has no {' or '.join(missing)}")
+    _set_identity(session, agent_kit, role_dir)
+    _prepare_checkouts(session, agent_kit)
+    task_md_path = session.agent_notes_dir / session.agent_task_file
     # Every task has a TASK.md: foundry task create refuses a template without one.
     if not task_md_path.is_file():
         raise SetupError(
-            f"{environ.notes_branch} has no {environ.task_file}; push the task's TASK.md there, then run again."
+            f"{session.agent_notes_branch} has no {session.agent_task_file}; push the task's TASK.md there, "
+            "then run again."
         )
-    _write_instructions(kit, role, task_md_path)
-    _link_skills(role)
+    _write_instructions(home, agent_kit, role_dir, task_md_path)
+    _link_skills(home, role_dir)
     print("session-setup: checkouts ready", flush=True)
-    for checkout in (environ.project_dir, environ.notes_dir):
-        print(Git(checkout).result("status", "-sb").stdout.partition("\n")[0], flush=True)
+    for checkout in (session.agent_project_dir, session.agent_notes_dir):
+        print(Git(checkout).run_captured("status", "-sb").stdout.partition("\n")[0], flush=True)
 
 
-def _set_identity(environ: contract.Environ, kit: AgentKit, role: RoleDir) -> None:
+def _set_identity(session: contract.Environ, agent_kit: AgentKit, role_dir: RoleDir) -> None:
     """Global, so both checkouts share it. Name, email, signing key and shared behaviour all come from the
     role's gitconfig and what it includes."""
-    _step(Git(), "config", "--global", "include.path", str(role.gitconfig))
+    _step(Git(), "config", "--global", "include.path", str(role_dir.gitconfig))
     # Lets agents verify commits signed by any role, or by you.
-    _step(Git(), "config", "--global", "gpg.ssh.allowedSignersFile", str(kit.allowed_signers))
+    _step(Git(), "config", "--global", "gpg.ssh.allowedSignersFile", str(agent_kit.allowed_signers))
     if _git_config("commit.gpgsign") == "true" and not _git_config("user.signingkey"):
-        raise SetupError(f"{environ.role} signs commits but {role.gitconfig} sets no user.signingkey")
+        raise SetupError(f"{session.agent_role} signs commits but {role_dir.gitconfig} sets no user.signingkey")
 
 
-def _prepare_checkouts(environ: contract.Environ, kit: AgentKit) -> None:
-    project = environ.project_dir
+def _prepare_checkouts(session: contract.Environ, agent_kit: AgentKit) -> None:
+    project = _clone_if_missing(session)
+    _step(project, "config", "core.hooksPath", str(agent_kit.hooks))  # read-only mount
+    _step(project, "fetch", "origin")
+    _require_task_on_origin(project, session)
+    _switch_to_task_branch(project, session)
+    _add_notes_worktree(project, session)
+
+
+def _clone_if_missing(session: contract.Environ) -> Git:
+    """The project's checkout. A blobless partial clone: full history of commits, file contents fetched on
+    demand, which keeps large repositories fast without the limits of --depth."""
+    project = session.agent_project_dir
     if not (project / ".git").is_dir():
         project.parent.mkdir(parents=True, exist_ok=True)
-        # Blobless partial clone: full history of commits, file contents fetched on demand. Keeps large
-        # repositories fast without the limits of --depth.
-        _step(Git(), "clone", "--filter=blob:none", environ.repo_url, str(project))
-    _step(Git(project), "config", "core.hooksPath", str(kit.hooks))  # read-only mount
-    _step(Git(project), "fetch", "origin")
+        _step(Git(), "clone", "--filter=blob:none", session.agent_repo_url, str(project))
+    return Git(project)
 
-    # The task must already exist on origin, created with its branch and a TASK.md on the notes branch
-    # before any agent runs. Say so plainly rather than let git fail.
+
+def _require_task_on_origin(project: Git, session: contract.Environ) -> None:
+    """The task must already exist on origin, created with its branch and a TASK.md on the notes branch before
+    any agent runs. Say so plainly rather than let git fail."""
     missing = [
         f"branch {branch}"
-        for branch in (environ.task_branch, environ.notes_branch)
-        if not _has_ref(project, f"refs/remotes/origin/{branch}")
+        for branch in (session.agent_task_branch, session.agent_notes_branch)
+        if not project.succeeds("show-ref", "-q", "--verify", f"refs/remotes/origin/{branch}")
     ]
     if missing:
         raise SetupError(
-            f"task {environ.task} has not been created on {environ.repo_url}: missing {' '.join(missing)}.\n"
-            f"  Create it with: foundry task create <project> {environ.task}, write its TASK.md, then run again."
+            f"task {session.agent_task} has not been created on {session.agent_repo_url}: missing "
+            f"{' '.join(missing)}.\n"
+            f"  Create it with: foundry task create <project> {session.agent_task}, write its TASK.md, then run again."
         )
 
-    if _has_ref(project, f"refs/heads/{environ.task_branch}"):
-        _step(Git(project), "switch", environ.task_branch)
+
+def _switch_to_task_branch(project: Git, session: contract.Environ) -> None:
+    branch = session.agent_task_branch
+    if project.succeeds("show-ref", "-q", "--verify", f"refs/heads/{branch}"):
+        _step(project, "switch", branch)
     else:
-        _step(Git(project), "switch", "-c", environ.task_branch, "--track", f"origin/{environ.task_branch}")
-
-    notes = environ.notes_dir
-    if not notes.is_dir():
-        if _has_ref(project, f"refs/heads/{environ.notes_branch}"):
-            _step(Git(project), "worktree", "add", str(notes), environ.notes_branch)
-        else:
-            _step(
-                Git(project),
-                "worktree",
-                "add",
-                "--track",
-                "-b",
-                environ.notes_branch,
-                str(notes),
-                f"origin/{environ.notes_branch}",
-            )
+        _step(project, "switch", "-c", branch, "--track", f"origin/{branch}")
 
 
-def _write_instructions(kit: AgentKit, role: RoleDir, task_md_path: Path) -> None:
+def _add_notes_worktree(project: Git, session: contract.Environ) -> None:
+    notes, branch = session.agent_notes_dir, session.agent_notes_branch
+    if notes.is_dir():
+        return
+    if project.succeeds("show-ref", "-q", "--verify", f"refs/heads/{branch}"):
+        _step(project, "worktree", "add", str(notes), branch)
+    else:
+        _step(project, "worktree", "add", "--track", "-b", branch, str(notes), f"origin/{branch}")
+
+
+def _write_instructions(home: Path, agent_kit: AgentKit, role_dir: RoleDir, task_md_path: Path) -> None:
     """Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @ imports without the approval
     dialog it shows for imports in a project file. Rewritten at every launch, so edits made inside the sandbox
     don't persist."""
-    claude_md = Path.home() / ".claude" / "CLAUDE.md"
-    imports = [kit.agents_md, role.role_md, task_md_path]
+    claude_md = home / ".claude" / "CLAUDE.md"
+    imports = [agent_kit.agents_md, role_dir.role_md, task_md_path]
     text = "<!-- Written by session-init at every launch; edits here are discarded. -->\n" + "".join(
         f"@{_escape_spaces(path)}\n" for path in imports
     )
@@ -129,29 +135,24 @@ def _escape_spaces(path: Path) -> str:
     return str(path).replace(" ", "\\ ")
 
 
-def _link_skills(role: RoleDir) -> None:
+def _link_skills(home: Path, role_dir: RoleDir) -> None:
     """The role's skills: roles/<role>/skills/ holds a link to each skill, and is linked as ~/.claude/skills,
     where Claude Code loads them. Remade at every launch, so a role's changed skills take effect; a role
     without the folder has none."""
-    skills_link = Path.home() / ".claude" / "skills"
+    skills_link = home / ".claude" / "skills"
     if skills_link.exists() and not skills_link.is_symlink():
         raise SetupError(f"{skills_link} is a folder, not the link to the role's skills; remove it, then run again.")
     skills_link.unlink(missing_ok=True)
-    if role.skills.is_dir():
-        skills_link.symlink_to(role.skills)
+    if role_dir.skills.is_dir():
+        skills_link.symlink_to(role_dir.skills)
 
 
 def _step(git: Git, *args: str) -> None:
     """Run a step of the setup, git's output going where this command's goes: what clone and switch print is
     the setup's progress. A failure stops setup, as git reported it."""
-    if not git.succeeds(*args, show_output=True):
-        folder = ["-C", str(git.folder)] if git.folder is not None else []
-        raise SetupError(f"`{shlex.join(['git', *folder, *args])}` failed; see git's message above")
+    if not git.run_visibly(*args):
+        raise SetupError(f"`{git.describe(*args)}` failed; see git's message above")
 
 
 def _git_config(key: str) -> str:
-    return Git().result("config", "--get", key).stdout.strip()
-
-
-def _has_ref(repository: Path, ref: str) -> bool:
-    return Git(repository).succeeds("show-ref", "-q", "--verify", ref)
+    return Git().run_captured("config", "--get", key).stdout.strip()

@@ -22,8 +22,8 @@ HOOK_COMMANDS = {
 
 def hook_command(command: str, kit_dir: Path) -> str:
     """A managed hook's command with the kit's runtime in place of the link root mode makes to it,
-    harden.SANDBOX.hooks_runtime: a host has no such link. The rest runs as written."""
-    link = str(harden.SANDBOX.hooks_runtime)
+    harden.SANDBOX.hooks_runtime_link: a host has no such link. The rest runs as written."""
+    link = str(harden.SANDBOX.hooks_runtime_link)
     assert command.count(link) == 1, command
     return command.replace(link, str(AgentKit(kit_dir).runtime))
 

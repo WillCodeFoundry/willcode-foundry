@@ -218,7 +218,7 @@ def test_upstream_without_a_licence_changes_nothing(foundry_root, upstream) -> N
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     commit_all(upstream, "second")
 
-    with pytest.raises(GitError, match=r"^git show .*:LICENSE failed"):
+    with pytest.raises(GitError, match=r"^git -C \S+ show \S+:LICENSE failed"):
         update(foundry_root, upstream)
 
     assert kit_status(foundry_root) == ""
@@ -322,7 +322,7 @@ def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, 
     reported: list[str] = []
     urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
 
-    with pytest.raises(GitError, match=r"^git fetch --quiet --no-tags .*missing"):
+    with pytest.raises(GitError, match=r"^git -C \S+ fetch --quiet --no-tags .*missing"):
         skills.update(foundry_root, url_for=urls.__getitem__, report=reported.append)
 
     assert reported == [f"tdd: updated to {second[:12]}"]

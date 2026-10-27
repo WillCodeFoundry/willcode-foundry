@@ -6,7 +6,7 @@ them back with ``read_environ``.
 """
 
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -53,60 +53,57 @@ only the standard library. One argument, as a shebang line passes; the git hooks
 settings spell it out, held to this by their tests."""
 
 
-def command(kit_dir: Path, *args: str) -> tuple[str, ...]:
-    """A call into the runtime in ``kit_dir``, isolated by PYTHON_FLAGS, so nothing the agent sets or installs
-    can shadow the package or run before it."""
-    return (PYTHON, PYTHON_FLAGS, str(AgentKit(kit_dir).runtime), *args)
+def command(agent_kit_dir: Path, *args: str) -> tuple[str, ...]:
+    """A call into the runtime in the kit at ``agent_kit_dir``, isolated by PYTHON_FLAGS, so nothing the agent
+    sets or installs can shadow the package or run before it."""
+    return (PYTHON, PYTHON_FLAGS, str(AgentKit(agent_kit_dir).runtime), *args)
 
 
 class MissingVariables(Exception):
     """Session variables a command needs are not set: it is running outside a foundry sandbox."""
-
-    def __init__(self, names: list[str]) -> None:
-        super().__init__(f"{', '.join(names)} not set; this runs inside a foundry sandbox, which sets them")
-        self.names = names
 
 
 @dataclass(frozen=True, kw_only=True)
 class Environ:
     """The session variables, read from the environment."""
 
-    role: str
-    task: str
-    kit_dir: Path
-    repo_url: str
-    project_dir: Path
-    notes_dir: Path
-    task_branch: str
-    notes_branch: str
-    notes_root: str
-    task_notes: str
-    task_file: str
+    agent_role: str
+    agent_task: str
+    agent_kit_dir: Path
+    agent_repo_url: str
+    agent_project_dir: Path
+    agent_notes_dir: Path
+    agent_task_branch: str
+    agent_notes_branch: str
+    agent_notes_root: str
+    agent_task_notes: str
+    agent_task_file: str
 
 
-def read_environ(environ: Mapping[str, str] | None = None) -> Environ:
-    """Every session variable, from ``environ`` (os.environ by default).
+def read_environ(variables: Mapping[str, str] | None = None) -> Environ:
+    """Every session variable, from ``variables`` (os.environ by default). Each field is its variable's name,
+    lowercased in full.
 
-    Raises MissingVariables naming every one that is unset or empty, not only the first.
+    Raises MissingVariables naming every one that is unset or empty.
     """
-    env = os.environ if environ is None else environ
-    _require(env, NAMES)
+    variables = os.environ if variables is None else variables
+    require(variables, NAMES)
     return Environ(
-        role=env[ROLE],
-        task=env[TASK],
-        kit_dir=Path(env[KIT_DIR]),
-        repo_url=env[REPO_URL],
-        project_dir=Path(env[PROJECT_DIR]),
-        notes_dir=Path(env[NOTES_DIR]),
-        task_branch=env[TASK_BRANCH],
-        notes_branch=env[NOTES_BRANCH],
-        notes_root=env[NOTES_ROOT],
-        task_notes=env[TASK_NOTES],
-        task_file=env[TASK_FILE],
+        agent_role=variables[ROLE],
+        agent_task=variables[TASK],
+        agent_kit_dir=Path(variables[KIT_DIR]),
+        agent_repo_url=variables[REPO_URL],
+        agent_project_dir=Path(variables[PROJECT_DIR]),
+        agent_notes_dir=Path(variables[NOTES_DIR]),
+        agent_task_branch=variables[TASK_BRANCH],
+        agent_notes_branch=variables[NOTES_BRANCH],
+        agent_notes_root=variables[NOTES_ROOT],
+        agent_task_notes=variables[TASK_NOTES],
+        agent_task_file=variables[TASK_FILE],
     )
 
 
-def _require(env: Mapping[str, str], names: tuple[str, ...]) -> None:
-    missing = [name for name in names if not env.get(name)]
-    if missing:
-        raise MissingVariables(missing)
+def require(variables: Mapping[str, str], names: Sequence[str]) -> None:
+    """Raise MissingVariables naming every one of ``names`` that is unset or empty, not only the first."""
+    if missing := [name for name in names if not variables.get(name)]:
+        raise MissingVariables(f"{', '.join(missing)} not set; this runs inside a foundry sandbox, which sets them")

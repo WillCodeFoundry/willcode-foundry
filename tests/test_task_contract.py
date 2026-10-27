@@ -64,12 +64,10 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     runtime_text = "\n".join(path.read_text() for path in AGENT_RUNTIME.glob("*.py") if path != CONTRACT)
 
     def is_read(name: str) -> bool:
-        field = name.removeprefix("AGENT_").lower()
+        field = name.lower()
         return bool(re.search(rf"\b{name}\b", kit_text) or re.search(rf"\.{field}\b", runtime_text))
 
-    assert {field.name for field in dataclasses.fields(contract.Environ)} == {
-        name.removeprefix("AGENT_").lower() for name in contract.NAMES
-    }
+    assert {field.name for field in dataclasses.fields(contract.Environ)} == {name.lower() for name in contract.NAMES}
     assert [name for name in session_variables(Task("t1")).to_env() if not is_read(name)] == []
 
 
