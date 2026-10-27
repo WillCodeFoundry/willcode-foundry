@@ -44,8 +44,9 @@ def launch(
 
 
 def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
-    """The path review finding R12 broke: the bare `sudo` looked up on PATH can't execute. It must count as
-    no sudo, so session-init skips root mode and verifies, rather than stopping with a traceback."""
+    """Every launch after the first: the bare `sudo` looked up on PATH can't execute, since root mode left it
+    mode 0. It must count as no sudo, so session-init skips root mode and verifies, rather than stopping with
+    a traceback."""
     result = launch(tmp_path, kit_env, created_task, sudo_script="#!/bin/sh\nexit 0\n", sudo_mode=0)
 
     assert "Traceback" not in result.stderr

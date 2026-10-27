@@ -12,12 +12,13 @@ different permissions than the agent has.
 
 Both modes act on a Machine: where the sandbox's managed settings, Docker configuration, sockets,
 interpreter and root-reaching commands are, who root is, the effective uid, what the agent can write, and
-who owns what.
-SANDBOX is the real one, and the callers use it. The tests pass a temporary machine of their own instead,
-so they run root mode and then agent mode on the same files, without root, rather than testing each step
-and check alone: that is how review finding R12 on PR #20 got through. Every step and check is private:
-the two modes are the interface. A check returns what the agent can still do, one line each; an empty list means
-it passed.
+who owns what. SANDBOX is the real one, and the callers use it. The tests pass a temporary machine of their
+own instead, so they run root mode and then agent mode on the same files, without root. Testing each step
+and check alone would miss how they are called in sequence, which is where a launch breaks.
+
+The interface is the two modes, harden and verify, and can_sudo, which session_init calls to decide whether
+this launch can run root mode; every step and check is private. A check returns what the agent can still do,
+one line each; an empty list means it passed.
 """
 
 import os

@@ -456,7 +456,7 @@ def test_an_interpreter_the_agent_can_write_is_refused(hardened, read_only_kit, 
 
 @pytest.mark.parametrize("sudo", ["missing", "failing", "unexecutable"])
 def test_a_sudo_that_cant_reach_root_passes(hardened, read_only_kit, tmp_path, capsys, sudo: str) -> None:
-    """Unexecutable is what root mode leaves, and what every later launch finds (review finding R12)."""
+    """Unexecutable is what root mode leaves, and what every later launch finds: it must count as no sudo."""
     agent_mode = hardened.agent_mode
     if sudo == "missing":
         agent_mode = dataclasses.replace(agent_mode, sudo=str(tmp_path / "absent"))
