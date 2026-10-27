@@ -30,6 +30,8 @@ from tests.support.docker import (
     IMAGE,
     PULL_ATTEMPTS,
     Container,
+    Sandbox,
+    StartContainer,
     copy_origin,
     docker,
     pull,
@@ -66,20 +68,20 @@ def writable_kit(built_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> P
 
 
 @pytest.fixture
-def start_container(image: str) -> Iterator[Callable[..., Container]]:
+def start_container(image: str) -> Iterator[StartContainer]:
     """Start containers from the image, each removed when the test ends."""
     started: list[str] = []
 
-    def start(kit: Path, *, read_only: bool = True) -> Container:
+    def start(agent_kit: Path, *, read_only: bool = True) -> Container:
         name = f"foundry-sandbox-image-{uuid.uuid4().hex[:12]}"
-        mount = f"{kit}:{kit}:ro" if read_only else f"{kit}:{kit}"
+        mount = f"{agent_kit}:{agent_kit}:ro" if read_only else f"{agent_kit}:{agent_kit}"
         started.append(name)
         run = docker(
             "run", "--detach", f"--name={name}", "--entrypoint=sleep",
             f"--group-add={DOCKER_GROUP}", f"--volume={mount}", image, "infinity",
         )  # fmt: skip
         assert run.returncode == 0, run.stderr
-        container = Container(name, kit)
+        container = Container(name, agent_kit)
         socket = container.shell(
             "root",
             f"python3 -c \"import socket; socket.socket(socket.AF_UNIX).bind('{DOCKER_SOCKET}')\""
@@ -109,11 +111,11 @@ def sandbox_env(session_variables: Callable[[Task], SessionVariables]) -> Callab
 
 @pytest.fixture
 def sandbox(
-    start_container: Callable[..., Container],
+    start_container: StartContainer,
     writable_kit: Path,
     created_task: Path,
     sandbox_env: Callable[[Path, str], dict[str, str]],
-) -> Callable[..., tuple[Container, dict[str, str]]]:
+) -> Sandbox:
     """A container ready for its first launch, and the session variables to launch it with."""
 
     def make(*, read_only: bool = True) -> tuple[Container, dict[str, str]]:

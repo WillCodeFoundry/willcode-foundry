@@ -5,6 +5,7 @@ import subprocess
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol
 
 from agent_runtime.agent_kit import AgentKit
 
@@ -73,3 +74,15 @@ def copy_origin(container: Container, origin: Path) -> str:
 def last_line(output: str) -> str:
     lines: Sequence[str] = output.strip().splitlines()
     return lines[-1] if lines else ""
+
+
+class StartContainer(Protocol):
+    """Starts a container from the image with ``agent_kit`` mounted at its own path, read-only unless asked."""
+
+    def __call__(self, agent_kit: Path, *, read_only: bool = True) -> Container: ...
+
+
+class Sandbox(Protocol):
+    """A container ready for its first launch, and the session variables to launch it with."""
+
+    def __call__(self, *, read_only: bool = True) -> tuple[Container, dict[str, str]]: ...

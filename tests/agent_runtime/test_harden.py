@@ -1,21 +1,14 @@
-"""agent_runtime.harden, through its two modes, on a temporary machine instead of the real one.
+"""agent_runtime.harden, through its two modes, on a temporary machine (tests/support/machine.py), never the
+real one: root mode then agent mode on the same files, as the first launch does; every way the agent could still
+reach root as a case verify must refuse; every refusal of root mode leaving the machine as it found it.
 
-Each test builds a harden.Machine of its own under tmp_path: managed settings, Docker configuration and
-sockets, an interpreter, and stand-in sudo, su and passwd. The round trip runs root mode, then agent mode,
-on the same files, as the first launch does. Every way the agent could still reach root is a case that
-breaks one thing on a hardened machine and expects verify to refuse it; every refusal of root mode must
-leave the machine as it found it.
-
-chmod of sudo and `passwd -l` run against stand-ins: their effect on a real sandbox is checked only by a real
-launch. The machine models the agent as a user who is neither owner nor in the group of what it touches, and
-who owns each path (see TemporaryMachine), since in a test root and the agent are one user. No test hardens
-the real machine: harden and verify are always given a temporary one, and SANDBOX is only checked against its
-literal values.
+chmod of sudo and `passwd -l` run against stand-ins here; tests/sandbox_image runs them for real.
 """
 
 import dataclasses
 import os
 import stat
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -111,10 +104,7 @@ def test_root_mode_gives_the_docker_socket_to_root(machine: TemporaryMachine, re
     assert socket_path.stat().st_gid == roots_group
 
 
-# --- agent mode: each way the agent could still reach root makes verify refuse --------------
-#
-# Each case starts from a machine root mode has just hardened, breaks one thing, and checks verify refuses,
-# naming it in today's words.
+# --- agent mode: each case breaks one thing on a hardened machine -----------------------
 
 
 def test_missing_settings_are_refused(hardened, refused, read_only_kit) -> None:
@@ -170,15 +160,22 @@ def test_a_missing_hooks_runtime_link_is_refused(hardened, refused, read_only_ki
     refused(f"run Claude's hooks without their runtime: {link} is missing")
 
 
-@pytest.mark.parametrize("replacement", ["link elsewhere", "file"])
-def test_a_hooks_runtime_that_isnt_the_kits_is_refused(hardened, refused, read_only_kit, tmp_path, replacement) -> None:
+def _a_file(link: Path, tmp_path: Path) -> None:
+    link.write_bytes(b"")
+
+
+def _a_link_elsewhere(link: Path, tmp_path: Path) -> None:
+    link.symlink_to(tmp_path / "agents-own.pyz")
+
+
+@pytest.mark.parametrize("replace_with", [_a_file, _a_link_elsewhere])
+def test_a_hooks_runtime_that_isnt_the_kits_is_refused(
+    hardened, refused, read_only_kit, tmp_path, replace_with: Callable[[Path, Path], None]
+) -> None:
     """The managed hooks run whatever this path holds."""
     link = hardened.root_mode.hooks_runtime_link
     link.unlink()
-    if replacement == "file":
-        link.write_bytes(b"")
-    else:
-        link.symlink_to(tmp_path / "agents-own.pyz")
+    replace_with(link, tmp_path)
 
     refused(
         f"run other code as Claude's hooks: {link} doesn't link to {AgentKit(read_only_kit).runtime}",
@@ -349,16 +346,25 @@ def test_an_interpreter_the_agent_can_write_is_refused(hardened, refused, read_o
     )
 
 
-@pytest.mark.parametrize("sudo", ["missing", "failing", "unexecutable"])
-def test_a_sudo_that_cant_reach_root_passes(hardened, read_only_kit, tmp_path, sudo: str) -> None:
-    """Unexecutable is what root mode leaves, and what every later launch finds: it must count as no sudo."""
-    agent_mode = hardened.agent_mode
-    if sudo == "missing":
-        agent_mode = dataclasses.replace(agent_mode, sudo=str(tmp_path / "absent"))
-    elif sudo == "failing":
-        stand_in(Path(agent_mode.sudo).parent, "sudo", 1)
+def _missing(machine: harden.Machine, tmp_path: Path) -> harden.Machine:
+    return dataclasses.replace(machine, sudo=str(tmp_path / "absent"))
 
-    assert harden.verify(read_only_kit, agent_mode) == []
+
+def _failing(machine: harden.Machine, tmp_path: Path) -> harden.Machine:
+    stand_in(Path(machine.sudo).parent, "sudo", 1)
+    return machine
+
+
+def _as_root_mode_leaves_it(machine: harden.Machine, tmp_path: Path) -> harden.Machine:
+    return machine  # mode 0: it can't execute
+
+
+@pytest.mark.parametrize("sudo", [_missing, _failing, _as_root_mode_leaves_it])
+def test_a_sudo_that_cant_reach_root_passes(
+    hardened, read_only_kit, tmp_path, sudo: Callable[[harden.Machine, Path], harden.Machine]
+) -> None:
+    """Unexecutable is what root mode leaves, and what every later launch finds: it must count as no sudo."""
+    assert harden.verify(read_only_kit, sudo(hardened.agent_mode, tmp_path)) == []
 
 
 def test_a_missing_su_passes(hardened, read_only_kit, tmp_path) -> None:
@@ -466,15 +472,22 @@ def test_a_templates_own_docker_configuration_is_refused_changing_nothing(
     assert snapshot(machine) == before
 
 
-@pytest.mark.parametrize("command", ["sudo", "passwd"])
+def _without_sudo(machine: harden.Machine, absent: str) -> harden.Machine:
+    return dataclasses.replace(machine, sudo=absent)
+
+
+def _without_passwd(machine: harden.Machine, absent: str) -> harden.Machine:
+    return dataclasses.replace(machine, passwd=absent)
+
+
+@pytest.mark.parametrize("without", [_without_sudo, _without_passwd])
 def test_a_command_root_mode_needs_that_cant_be_found_is_refused_changing_nothing(
-    machine: TemporaryMachine, read_only_kit: Path, tmp_path: Path, command: str
+    machine: TemporaryMachine,
+    read_only_kit: Path,
+    tmp_path: Path,
+    without: Callable[[harden.Machine, str], harden.Machine],
 ) -> None:
-    absent = str(tmp_path / "absent")
-    if command == "sudo":
-        root_mode = dataclasses.replace(machine.root_mode, sudo=absent)
-    else:
-        root_mode = dataclasses.replace(machine.root_mode, passwd=absent)
+    root_mode = without(machine.root_mode, str(tmp_path / "absent"))
     before = snapshot(machine)
 
     with pytest.raises(harden.Refused) as refused_by:
@@ -500,17 +513,16 @@ def test_a_failing_step_leaves_sudo_for_the_next_launch(machine: TemporaryMachin
     assert stat.S_IMODE(Path(root_mode.sudo).stat().st_mode) == 0o755
 
 
-@pytest.mark.parametrize("damage", ["not UTF-8", "unreadable"])
+@pytest.mark.parametrize("unreadable", [False, True], ids=["not UTF-8", "unreadable"])
 def test_a_daemon_config_that_cant_be_read_is_refused_changing_nothing(
-    machine: TemporaryMachine, read_only_kit: Path, damage: str
+    machine: TemporaryMachine, read_only_kit: Path, unreadable: bool
 ) -> None:
     daemon_config = machine.root_mode.docker_daemon_config
     daemon_config.parent.mkdir(parents=True)
     daemon_config.write_bytes(b"\xff\xfe")
     mode = stat.S_IMODE(daemon_config.stat().st_mode)
     before = snapshot(machine)
-    if damage == "unreadable":
-        daemon_config.chmod(0)
+    daemon_config.chmod(0 if unreadable else mode)
 
     try:
         with pytest.raises(harden.Refused) as refused_by:

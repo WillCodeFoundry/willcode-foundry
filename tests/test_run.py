@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from agent_runtime.agent_kit import AgentKit
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch
 from foundry.errors import FoundryError
@@ -41,7 +42,7 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
     assert request.init_command == (
         "/usr/bin/python3",
         "-IS",
-        str(foundry_root / "agent-kit" / ".build" / "agent_runtime.pyz"),
+        str(AgentKit(foundry_root / "agent-kit").runtime),
         "session-init",
     )
     assert request.ssh_key_path == foundry_root / "secrets" / "ssh" / "dev"
@@ -51,11 +52,11 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
     prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
 
-    assert (foundry_root / "agent-kit" / ".build" / "agent_runtime.pyz").is_file()
+    assert AgentKit(foundry_root / "agent-kit").runtime.is_file()
 
 
 def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
-    (foundry_root / "agent-kit" / ".build").write_text("a file where the folder goes\n")
+    AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
 
     with pytest.raises(FoundryError, match="can't build the agent runtime"):
         prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))

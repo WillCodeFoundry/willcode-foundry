@@ -8,17 +8,15 @@ locks out an agent given the docker group by number, and that /usr/bin/python3 i
 
 import json
 import shlex
-from collections.abc import Callable
 
 import pytest
 
-from tests.support.docker import DOCKER_SOCKET, Container, last_line
+from tests.support.docker import DOCKER_SOCKET, Container, Sandbox, last_line
 from tests.support.kit import HOOK_COMMANDS
 
 pytestmark = pytest.mark.docker
 
 SETTINGS = "/etc/claude-code/managed-settings.json"
-Sandbox = Callable[..., tuple[Container, dict[str, str]]]
 
 
 def first_launch(sandbox: Sandbox) -> tuple[Container, dict[str, str]]:
