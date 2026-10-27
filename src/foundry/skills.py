@@ -15,7 +15,7 @@ from typing import Literal
 import yaml
 
 from agent_runtime.agent_kit import AgentKit
-from agent_runtime.git import Git
+from agent_runtime.git import Git, GitError
 from foundry import paths
 from foundry.errors import FoundryError
 
@@ -50,8 +50,8 @@ def update(
     Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
     repository's ``ref`` is resolved once, so its skills all reach the same commit. A copied skill with
     uncommitted changes stops the run before anything changes. Each skill's outcome goes to ``report`` as soon
-    as it is known. A skill whose patch git rejects outright keeps its commit, and the run raises FoundryError
-    at the end, naming it and any conflicted skills.
+    as it is known. A skill that fails, its patch rejected outright, say, keeps its commit; every skill is still
+    tried, and the run then raises FoundryError naming the failed ones and any left conflicted.
     """
     git = Git(foundry_root)
     agent_kit = AgentKit(paths.agent_kit_dir(foundry_root))
@@ -64,34 +64,37 @@ def update(
         _refuse_uncommitted(git, skill_md.parent.relative_to(foundry_root))
     new_shas: dict[str, str] = {}
     conflicted: list[str] = []
-    rejected: list[str] = []
+    failed: list[str] = []
     for skill_md, source in copied:
         name, url = skill_md.parent.name, url_for(source.repo)
-        if source.repo not in new_shas:
-            new_shas[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
-        new_sha = new_shas[source.repo]
-        if new_sha == source.commit:
-            report(f"{name}: already at {source.commit[:12]}")
+        try:
+            if source.repo not in new_shas:
+                new_shas[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
+            new_sha = new_shas[source.repo]
+            if new_sha == source.commit:
+                report(f"{name}: already at {source.commit[:12]}")
+                continue
+            outcome = _apply(git, _plan(git, foundry_root, url, skill_md, source, new_sha))
+        except (FoundryError, GitError) as error:
+            failed.append(f"{name}: {error}")
+            report(f"{name}: failed, still at {source.commit[:12]}")
             continue
-        outcome = _apply(git, _plan(git, foundry_root, url, skill_md, source, new_sha))
         if outcome == "rejected":
-            rejected.append(name)
+            failed.append(
+                f"{name}: git apply rejected upstream's changes, so it stays at its commit; see git's message above"
+            )
             report(f"{name}: rejected, still at {source.commit[:12]}")
         elif outcome == "conflicted":
             conflicted.append(name)
             report(f"{name}: conflicted at {new_sha[:12]}")
         else:
             report(f"{name}: updated to {new_sha[:12]}")
-    if rejected:
+    if failed:
+        unmerged = f"\nNot merged cleanly: {' '.join(conflicted)}; resolve what git reported above, then commit"
         raise FoundryError(
-            f"git apply rejected upstream's changes to {' '.join(rejected)}, which "
-            f"{'stays at its commit' if len(rejected) == 1 else 'stay at their commits'}; "
-            "see git's message above."
-            + (
-                f" Not merged cleanly: {' '.join(conflicted)}; resolve what git reported above, then commit"
-                if conflicted
-                else ""
-            )
+            "skills update couldn't update every skill:\n"
+            + "\n".join(f"  {line}" for line in failed)
+            + (unmerged if conflicted else "")
         )
     return conflicted
 

@@ -5,7 +5,6 @@ from typing import NamedTuple
 
 import pytest
 
-from agent_runtime.git import GitError
 from foundry import cli, skills
 from foundry.errors import FoundryError
 from tests.support import git
@@ -181,7 +180,7 @@ def test_a_patch_git_rejects_is_an_error_and_the_commit_stays(foundry_root, upst
     extra.write_text("Extra, improved.\n")
     commit_all(upstream, "third")
 
-    with pytest.raises(FoundryError, match=r"^git apply rejected upstream's changes to tdd, which stays at its commit"):
+    with pytest.raises(FoundryError, match=r"^skills update couldn't update every skill:\n  tdd: git apply rejected"):
         update_from(foundry_root, upstream)
 
     assert kit_status(foundry_root) == ""
@@ -208,7 +207,8 @@ def test_a_rejected_skill_doesnt_hide_the_others_conflicts(foundry_root, upstrea
         skills.update(foundry_root, url_for=lambda repo: str(upstream), report=reported.append)
 
     assert str(raised.value) == (
-        "git apply rejected upstream's changes to zz, which stays at its commit; see git's message above. "
+        "skills update couldn't update every skill:\n"
+        "  zz: git apply rejected upstream's changes, so it stays at its commit; see git's message above\n"
         "Not merged cleanly: tdd; resolve what git reported above, then commit"
     )
     assert reported == [f"tdd: conflicted at {third[:12]}", f"zz: rejected, still at {second[:12]}"]
@@ -234,7 +234,7 @@ def test_upstream_without_a_licence_changes_nothing(foundry_root, upstream) -> N
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     commit_all(upstream, "second")
 
-    with pytest.raises(GitError, match=r"^git -C \S+ show \S+:LICENSE failed"):
+    with pytest.raises(FoundryError, match=r"\n  tdd: git -C \S+ show \S+:LICENSE failed"):
         update_from(foundry_root, upstream)
 
     assert kit_status(foundry_root) == ""
@@ -350,10 +350,29 @@ def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, 
     reported: list[str] = []
     urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
 
-    with pytest.raises(GitError, match=r"^git -C \S+ fetch --quiet --no-tags .*missing"):
+    with pytest.raises(FoundryError, match=r"\n  zz: git -C \S+ fetch --quiet --no-tags .*missing"):
         skills.update(foundry_root, url_for=urls.__getitem__, report=reported.append)
 
-    assert reported == [f"tdd: updated to {second[:12]}"]
+    assert reported == [f"tdd: updated to {second[:12]}", f"zz: failed, still at {NO_SUCH_COMMIT[:12]}"]
+
+
+def test_a_later_skills_failure_doesnt_hide_an_earlier_conflict(
+    foundry_root: Path, upstream: Path, tmp_path: Path
+) -> None:
+    skill_md = upstream_skill(upstream) / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))  # conflicts with the copy
+    commit_all(upstream, "second")
+    (foundry_root / "agent-kit" / "skills" / "zz").mkdir()
+    (foundry_root / "agent-kit" / "skills" / "zz" / "SKILL.md").write_text(
+        copied_skill_md(NO_SUCH_COMMIT, "\nOther.\n", name="zz", repo="other/skills")
+    )
+    commit_all(foundry_root, "copy zz")
+    urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
+
+    with pytest.raises(FoundryError) as raised:
+        skills.update(foundry_root, url_for=urls.__getitem__)
+
+    assert str(raised.value).endswith("\nNot merged cleanly: tdd; resolve what git reported above, then commit")
 
 
 def test_skills_update_without_git_says_so(
