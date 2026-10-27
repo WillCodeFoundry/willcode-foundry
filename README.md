@@ -241,6 +241,15 @@ These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.py
 
 `tests/sandbox_image/` runs `session-init` as the launcher does, as the agent, in containers from the template image sbx starts Claude Code sandboxes from (`docker/sandbox-templates:claude-code-docker`). Each container mounts a world-writable copy of the built kit read-only at its host path, as sbx does, and has a Docker socket the agent reaches only through a group added by number, as sbx gives it the docker group. The tests check the first launch hardens for real (settings root's, sudo and `su` gone, the socket closed, the kit unwritable), the relaunch only verifies, verify sees real permissions, and the mount, not file modes, protects the kit. They need Docker only through its command line.
 
+### Testing against real sbx
+
+`tests/sbx/` launches a real sbx sandbox, up to but not including attaching the agent, so Claude Code never starts. It shows what nothing else can: sbx accepts our sandbox definition, mounts the kit read-only at its host path, runs `session-init` as the agent with sudo the first time, and its private dockerd keeps the Docker socket root's after the sandbox restarts. It replaces launching a sandbox twice by hand.
+
+- **Prerequisites:** sbx installed, with KVM, and `sbx login`; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-smoke`. The suite checks these before any sbx call, and fails listing every one missing.
+- **The command:** `uv run pytest -m sbx`. No workflow runs it.
+- **When:** after upgrading sbx, and before merging changes to `agent-kit/`, `src/agent_runtime/` or `src/foundry/agent_sandbox/`.
+- **What it leaves:** nothing. It acts only on the sandbox `dev-foundry-test-sbx-smoke` and `sessions/dev-foundry-test-sbx-smoke/`, removing both before it starts and after it ends, whatever the outcome, then prunes ssh-agents as `foundry prune` does. Expect a few minutes, mostly creating the sandbox.
+
 ## Skills
 
 Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each records in its `SKILL.md`'s frontmatter (`metadata.source`) where it came from: the upstream repository, its path there, the upstream commit it's up to date with, the author and the licence, whose text is `agent-kit/skills/LICENSE-mattpocock`. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
