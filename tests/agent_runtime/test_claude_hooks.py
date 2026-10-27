@@ -36,11 +36,9 @@ ALLOWED = [
     "git rebase main",
     "git reset --hard HEAD~1",
     "git filter-repo --path x",
-    # What shlex can't parse is scanned rather than refused: heredoc bodies are data, and a comment's apostrophe
-    # isn't a quote.
+    # What shlex can't parse is scanned rather than refused: a heredoc of prose, a comment's apostrophe.
     "cat > f.md <<'EOF'\nWe don't stop\nEOF",
     "cat <<-EOF\n\tit's fine\n\tEOF",
-    'cat > notes.md <<"END"\nNever use --no-verify; it\'s against the rules.\nEND',
     "ls # it's here",
     "echo 'unbalanced",
 ]
@@ -55,10 +53,20 @@ REFUSED = [
     # Unparseable, so scanned: still refused.
     ("ls # it's here\ngit commit --no-verify -m x", "bypassed"),
     ("echo it's; git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
-    # A heredoc's body is dropped, not what follows it.
     ("cat <<EOF\nx\nEOF\ngit commit --no-verify -m x", "bypassed"),
     # A # inside a word isn't a comment.
     ("echo a#b; git commit --no-verify -m x", "bypassed"),
+    # A heredoc's body can run: fed to a shell, or expanded.
+    ("bash <<'EOF'\ngit commit --no-verify -m x\nEOF", "bypassed"),
+    ("sh <<EOF\ngit config core.hooksPath /dev/null\nEOF", "hook configuration"),
+    ("cat <<EOF\n$(git commit --no-verify)\nEOF", "bypassed"),
+    # A << in a comment or in quotes isn't a heredoc, and hides nothing.
+    ("ls # <<X\ngit commit --no-verify", "bypassed"),
+    ("echo '<<EOF'\ngit commit --no-verify\nEOF", "bypassed"),
+    # Quoting inside a word doesn't hide it.
+    ("echo it's; git commit --no-ver''ify", "bypassed"),
+    ("git commit --no-ver\\ify -m x", "bypassed"),
+    ("echo $(git commit --no-verify -m x)", "bypassed"),
 ]
 
 # Accepted misses, listed in refusal_reason's docstring: simple beats complete for a guardrail.
@@ -67,6 +75,9 @@ MISSED_ON_PURPOSE = [
     ("git commit --no-ver -m x", 0),
     ('sh -c "git commit --no-verify -m x"', 0),
     ("git config --get core.hooksPath", 2),  # only reads, but refused
+    # Unparseable text that mentions --no-verify, documentation say, is refused.
+    ('cat > notes.md <<"END"\nNever use --no-verify; it\'s against the rules.\nEND', 2),
+    ('git commit -m "(--no-verify)"', 2),  # a message that is exactly that, punctuation stripped
 ]
 
 

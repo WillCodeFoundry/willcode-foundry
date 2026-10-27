@@ -16,8 +16,9 @@ from typing import TextIO
 from agent_runtime import contract
 from agent_runtime.git import Git
 
-_HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)(\w+)\2")
 _NO_VERIFY = re.compile(r"(?<![\w-])--no-verify(?![\w-])")
+_QUOTING = re.compile(r"['\"\\]")
+_SHELL_PUNCTUATION = "()$`;&|<>{}"
 _BYPASS = "git hooks must not be bypassed (--no-verify)"
 _RECONFIGURE = "git hook configuration must not be changed"
 
@@ -25,18 +26,17 @@ _RECONFIGURE = "git hook configuration must not be changed"
 def refusal_reason(command: str) -> str | None:
     """Why ``command`` is refused, or None.
 
-    Refuses a word that is --no-verify, or that mentions core.hooksPath. A quoted word stays one word,
-    so a commit message that mentions --no-verify passes. Heredoc bodies are dropped first: they are data,
-    not commands. What shlex still can't parse, a comment's apostrophe say, is scanned instead of refused:
-    refused only if its text holds --no-verify as a whole word or core.hooksPath. Accepted misses, on
-    purpose, to keep this simple: ``git commit -n``, abbreviations such as --no-ver, --no-verify inside
-    ``sh -c "..."``, and ``git config --get core.hooksPath`` being refused although it only reads.
+    Refuses a word that is --no-verify once shell punctuation is stripped, so ``$(git commit --no-verify)``
+    counts, or that mentions core.hooksPath. A quoted word stays one word, so a commit message that mentions
+    --no-verify passes. Nothing is dropped: a heredoc's body can run. What shlex can't split, a comment's
+    apostrophe say, is scanned whole with its quoting removed. Accepted misses, on purpose, to keep this simple:
+    ``git commit -n``, abbreviations such as --no-ver, --no-verify inside ``sh -c "..."``, and
+    ``git config --get core.hooksPath`` being refused although it only reads.
     """
-    command = _without_heredoc_bodies(command)
     try:
-        words = shlex.split(command)
-    except ValueError:
-        return _scan(command)
+        words = [word.strip(_SHELL_PUNCTUATION) for word in shlex.split(command)]
+    except ValueError:  # unbalanced quotes, an apostrophe in prose say: scan the whole text, unquoted
+        return _scan(_QUOTING.sub("", command))
     if "--no-verify" in words:
         return _BYPASS
     if any("core.hookspath" in word.lower() for word in words):
@@ -44,25 +44,10 @@ def refusal_reason(command: str) -> str | None:
     return None
 
 
-def _without_heredoc_bodies(command: str) -> str:
-    """Each heredoc's opening line kept, its body and closing line dropped."""
-    kept: list[str] = []
-    lines = iter(command.split("\n"))
-    for line in lines:
-        kept.append(line)
-        for match in _HEREDOC.finditer(line):
-            strip_tabs, delimiter = match.group(1) == "-", match.group(3)
-            for body_line in lines:
-                if (body_line.lstrip("\t") if strip_tabs else body_line) == delimiter:
-                    break
-    return "\n".join(kept)
-
-
-def _scan(command: str) -> str | None:
-    """For a command shlex can't split: a guardrail's false refusal costs more than a rare miss."""
-    if _NO_VERIFY.search(command):
+def _scan(text: str) -> str | None:
+    if _NO_VERIFY.search(text):
         return _BYPASS
-    if "core.hookspath" in command.lower():
+    if "core.hookspath" in text.lower():
         return _RECONFIGURE
     return None
 
