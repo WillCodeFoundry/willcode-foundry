@@ -7,6 +7,7 @@ AGENT_PROJECT_DIR. Assumes `foundry task create` has already created the task: i
 folder, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
 """
 
+import shutil
 from pathlib import Path
 
 from agent_runtime import contract
@@ -138,13 +139,21 @@ def _escape_spaces(path: Path) -> str:
 def _link_skills(home: Path, role_dir: RoleDir) -> None:
     """The role's skills: roles/<role>/skills/ holds a link to each skill, and is linked as ~/.claude/skills,
     where Claude Code loads them. Remade at every launch, so a role's changed skills take effect; a role
-    without the folder has none."""
+    without the folder has none.
+
+    Whatever else is there is removed, so the agent sees only its role's skills: sbx's Claude template ships
+    the folder holding the skills synced from the account that built it (skills/synced/<org>_<account>/)."""
     skills_link = home / ".claude" / "skills"
-    if skills_link.exists() and not skills_link.is_symlink():
-        raise SetupError(f"{skills_link} is a folder, not the link to the role's skills; remove it, then run again.")
-    skills_link.unlink(missing_ok=True)
-    if role_dir.skills.is_dir():
-        skills_link.symlink_to(role_dir.skills)
+    try:
+        if skills_link.is_dir() and not skills_link.is_symlink():
+            shutil.rmtree(skills_link)
+        else:
+            skills_link.unlink(missing_ok=True)
+        if role_dir.skills.is_dir():
+            skills_link.parent.mkdir(parents=True, exist_ok=True)
+            skills_link.symlink_to(role_dir.skills)
+    except OSError as error:
+        raise SetupError(f"can't link the role's skills as {skills_link}: {error.strerror}") from None
 
 
 def _step(git: Git, *args: str) -> None:

@@ -158,13 +158,23 @@ def test_a_role_that_signs_without_a_key_is_refused(
         session_setup.session_setup(session_for(kit, created_task), home)
 
 
-def test_a_skills_folder_in_place_of_the_link_is_refused(
-    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path
+@pytest.mark.parametrize("make", ["folder", "file"])
+def test_whatever_is_in_the_skills_place_is_replaced_by_the_link(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, make: str
 ) -> None:
-    (home / ".claude" / "skills").mkdir(parents=True)
+    """sbx's Claude template ships ~/.claude/skills as a folder of the skills synced from an account."""
+    skills = home / ".claude" / "skills"
+    if make == "folder":
+        synced_skill = skills / "synced" / "org_account" / "docx"
+        synced_skill.mkdir(parents=True)
+        (synced_skill / "SKILL.md").write_text("---\nname: docx\n---\n")
+    else:
+        skills.parent.mkdir(parents=True)
+        skills.write_text("")
 
-    with pytest.raises(SetupError, match="is a folder, not the link to the role's skills"):
-        session_setup.session_setup(session_for(built_kit, created_task), home)
+    session_setup.session_setup(session_for(built_kit, created_task), home)
+
+    assert skills.readlink() == built_kit / "roles" / "dev" / "skills"
 
 
 @pytest.mark.parametrize("removed", [["ROLE.md"], ["gitconfig"], ["ROLE.md", "gitconfig"]])
