@@ -36,6 +36,13 @@ ALLOWED = [
     "git rebase main",
     "git reset --hard HEAD~1",
     "git filter-repo --path x",
+    # What shlex can't parse is scanned rather than refused: heredoc bodies are data, and a comment's apostrophe
+    # isn't a quote.
+    "cat > f.md <<'EOF'\nWe don't stop\nEOF",
+    "cat <<-EOF\n\tit's fine\n\tEOF",
+    'cat > notes.md <<"END"\nNever use --no-verify; it\'s against the rules.\nEND',
+    "ls # it's here",
+    "echo 'unbalanced",
 ]
 
 REFUSED = [
@@ -45,7 +52,13 @@ REFUSED = [
     ("git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
     ("git config core.HOOKSPATH /tmp/h", "hook configuration"),
     ("GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/tmp'\" git commit -m x", "hook configuration"),
-    ("echo 'unbalanced", "could not be parsed"),
+    # Unparseable, so scanned: still refused.
+    ("ls # it's here\ngit commit --no-verify -m x", "bypassed"),
+    ("echo it's; git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
+    # A heredoc's body is dropped, not what follows it.
+    ("cat <<EOF\nx\nEOF\ngit commit --no-verify -m x", "bypassed"),
+    # A # inside a word isn't a comment.
+    ("echo a#b; git commit --no-verify -m x", "bypassed"),
 ]
 
 # Accepted misses, listed in refusal_reason's docstring: simple beats complete for a guardrail.

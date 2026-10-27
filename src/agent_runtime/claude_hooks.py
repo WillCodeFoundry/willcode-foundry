@@ -7,6 +7,7 @@ Both are guardrails against mistakes, not boundaries: see "What protects what" i
 """
 
 import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -15,23 +16,54 @@ from typing import TextIO
 from agent_runtime import contract
 from agent_runtime.git import Git
 
+_HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)(\w+)\2")
+_NO_VERIFY = re.compile(r"(?<![\w-])--no-verify(?![\w-])")
+_BYPASS = "git hooks must not be bypassed (--no-verify)"
+_RECONFIGURE = "git hook configuration must not be changed"
+
 
 def refusal_reason(command: str) -> str | None:
     """Why ``command`` is refused, or None.
 
     Refuses a word that is --no-verify, or that mentions core.hooksPath. A quoted word stays one word,
-    so a commit message that mentions --no-verify passes. Accepted misses, on purpose, to keep this
-    simple: ``git commit -n``, abbreviations such as --no-ver, --no-verify inside ``sh -c "..."``, and
-    ``git config --get core.hooksPath`` being refused although it only reads.
+    so a commit message that mentions --no-verify passes. Heredoc bodies are dropped first: they are data,
+    not commands. What shlex still can't parse, a comment's apostrophe say, is scanned instead of refused:
+    refused only if its text holds --no-verify as a whole word or core.hooksPath. Accepted misses, on
+    purpose, to keep this simple: ``git commit -n``, abbreviations such as --no-ver, --no-verify inside
+    ``sh -c "..."``, and ``git config --get core.hooksPath`` being refused although it only reads.
     """
+    command = _without_heredoc_bodies(command)
     try:
         words = shlex.split(command)
-    except ValueError:  # unbalanced quotes: refuse rather than guess what runs
-        return "the command could not be parsed; quote it so each argument is clear"
+    except ValueError:
+        return _scan(command)
     if "--no-verify" in words:
-        return "git hooks must not be bypassed (--no-verify)"
+        return _BYPASS
     if any("core.hookspath" in word.lower() for word in words):
-        return "git hook configuration must not be changed"
+        return _RECONFIGURE
+    return None
+
+
+def _without_heredoc_bodies(command: str) -> str:
+    """Each heredoc's opening line kept, its body and closing line dropped."""
+    kept: list[str] = []
+    lines = iter(command.split("\n"))
+    for line in lines:
+        kept.append(line)
+        for match in _HEREDOC.finditer(line):
+            strip_tabs, delimiter = match.group(1) == "-", match.group(3)
+            for body_line in lines:
+                if (body_line.lstrip("\t") if strip_tabs else body_line) == delimiter:
+                    break
+    return "\n".join(kept)
+
+
+def _scan(command: str) -> str | None:
+    """For a command shlex can't split: a guardrail's false refusal costs more than a rare miss."""
+    if _NO_VERIFY.search(command):
+        return _BYPASS
+    if "core.hookspath" in command.lower():
+        return _RECONFIGURE
     return None
 
 
