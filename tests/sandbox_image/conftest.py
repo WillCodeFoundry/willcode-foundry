@@ -1,7 +1,8 @@
 """Containers from the sandbox's template image, for running session-init as the launcher does.
 
-The image is the one sbx starts Claude Code sandboxes from, pinned in this folder's Dockerfile: its one line
-is the only place the image is named, and Dependabot bumps its digest. Nothing is built from it.
+The image is the one sbx starts Claude Code sandboxes from, by its tag, pulled fresh for each run: as sbx
+does for each new sandbox, so the tests check what new sandboxes get. A template change can therefore turn a
+pull request red that didn't cause it; the failure says what changed in the image.
 
 Each container runs `sleep infinity` instead of the template's entrypoint, so nothing starts in it but what a
 test runs, and is removed afterwards, whatever the outcome. It mounts a copy of the agent kit at the same
@@ -25,17 +26,12 @@ from foundry.session import SessionVariables
 from foundry.task import Task
 from tests.conftest import TASK
 
-DOCKERFILE = Path(__file__).parent / "Dockerfile"
+IMAGE = "docker/sandbox-templates:claude-code-docker"
+"""Followed by tag, not pinned, as sbx follows it."""
 AGENT_HOME = "/home/agent"
 DOCKER_SOCKET = "/var/run/docker.sock"
 DOCKER_GROUP = 4242
 """The gid the socket starts in: not a group the template's agent user is in, so only --group-add grants it."""
-
-
-def image_reference() -> str:
-    """The image the Dockerfile's FROM line names, digest included."""
-    (line,) = (line for line in DOCKERFILE.read_text().splitlines() if line.startswith("FROM "))
-    return line.removeprefix("FROM ").strip()
 
 
 def docker(*args: str, input: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -44,18 +40,18 @@ def docker(*args: str, input: str | None = None) -> subprocess.CompletedProcess[
 
 @pytest.fixture(scope="session")
 def image() -> str:
-    """The pinned image, pulled. -m docker asked for it, so a missing Docker daemon fails rather than skips."""
+    """The template image, pulled at its tag's current version. -m docker asked for it, so a missing Docker
+    daemon fails rather than skips."""
     try:
         info = docker("info")
     except FileNotFoundError:
         pytest.fail("-m docker needs Docker: there is no `docker` command on PATH", pytrace=False)
     if info.returncode != 0:
         pytest.fail(f"-m docker needs a Docker daemon: `docker info` failed:\n{info.stderr.strip()}", pytrace=False)
-    reference = image_reference()
-    pulled = docker("pull", "--quiet", reference)
+    pulled = docker("pull", "--quiet", IMAGE)
     if pulled.returncode != 0:
-        pytest.fail(f"can't pull {reference}:\n{pulled.stderr.strip()}", pytrace=False)
-    return reference
+        pytest.fail(f"can't pull {IMAGE}:\n{pulled.stderr.strip()}", pytrace=False)
+    return IMAGE
 
 
 @pytest.fixture(scope="session")
