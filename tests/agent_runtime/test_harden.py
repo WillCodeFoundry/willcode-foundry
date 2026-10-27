@@ -457,6 +457,49 @@ def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, read_only_kit, ca
         hooks.chmod(0o555)
 
 
+def test_a_folder_above_the_kit_the_agent_can_write_is_refused(hardened, read_only_kit, capsys) -> None:
+    """Renaming a folder above the mount and putting another kit at its path would change what the hooks' link,
+    and every call into the runtime, reaches."""
+    above = read_only_kit.parent
+    above.chmod(0o757)
+    try:
+        assert_refused(
+            capsys, read_only_kit, hardened.agent_mode, f"replace the agent kit: {above}, above it, is writable"
+        )
+    finally:
+        above.chmod(0o755)
+
+
+def test_a_folder_above_the_kit_root_doesnt_own_is_refused(hardened, read_only_kit, capsys) -> None:
+    above = read_only_kit.parent.parent
+    hardened.owners[above] = SOMEONE_ELSE.uid
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"replace the agent kit: {above}, above it, isn't owned by uid {ME.uid}",
+    )
+
+
+def test_a_sticky_folder_above_the_kit_counts_only_for_what_the_agent_owns(hardened, read_only_kit, capsys) -> None:
+    """In a sticky folder anyone can write, as /tmp, only an entry's owner can rename it."""
+    sticky, child = read_only_kit.parent.parent, read_only_kit.parent
+    sticky.chmod(0o1777)
+    try:
+        assert harden.verify(read_only_kit, hardened.agent_mode) == 0
+        capsys.readouterr()
+        hardened.owners[child] = AGENT_UID
+        assert_refused(
+            capsys,
+            read_only_kit,
+            hardened.agent_mode,
+            f"replace the agent kit: {sticky}, above it, is writable",
+        )
+    finally:
+        sticky.chmod(0o755)
+
+
 def test_a_missing_kit_is_refused(hardened, tmp_path, capsys) -> None:
     """Without the kit's copy of the settings, the installed ones can't be compared: verify says so, rather
     than that they're older."""

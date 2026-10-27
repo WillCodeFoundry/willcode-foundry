@@ -261,6 +261,22 @@ def _check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool]) -> li
     return []
 
 
+def _check_folders_above_kit(kit_dir: Path, machine: Machine) -> list[str]:
+    """Every folder from / down to the kit belongs to root, and the agent can't rename what's in it: the mount
+    itself can't be renamed, but a folder above it could be, and another kit put at its path, which the hooks'
+    link and every call into the runtime would then reach. In a sticky folder, as /tmp, only an entry's owner can
+    rename it."""
+    kit = kit_dir.resolve()
+    if not kit.is_dir():
+        return []  # the kit's own check reports it
+    for folder, child in zip(reversed(kit.parents), [*reversed(kit.parents[:-1]), kit], strict=True):
+        if machine.owner_of(folder) != machine.root.uid:
+            return [f"replace the agent kit: {folder}, above it, isn't owned by uid {machine.root.uid}"]
+        if machine.can_write(folder) and not (_is_sticky(folder) and machine.owner_of(child) != machine.euid()):
+            return [f"replace the agent kit: {folder}, above it, is writable"]
+    return []
+
+
 def _check_python(python: str, machine: Machine) -> list[str]:
     """The interpreter every hook and the launch run resolves to a file root owns and the agent can't write."""
     resolved = Path(python).resolve()
@@ -323,6 +339,7 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
         *_check_su(machine.su),
         *_check_docker_sockets(machine.checked_sockets, machine.can_write),
         *_check_kit_read_only(kit_dir, machine.can_write),
+        *_check_folders_above_kit(kit_dir, machine),
         *_check_python(machine.python, machine),
     ]
     if found:
@@ -385,6 +402,10 @@ def _read_or_none(path: Path) -> bytes | None:
         return path.read_bytes()
     except OSError:
         return None
+
+
+def _is_sticky(path: Path) -> bool:
+    return bool(path.stat().st_mode & stat.S_ISVTX)
 
 
 def _is_socket(path: Path) -> bool:
