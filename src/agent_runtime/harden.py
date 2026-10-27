@@ -114,12 +114,21 @@ def _harden_managed_settings(kit_copy: Path, installed: Path, owner: Owner) -> N
 def _check_managed_settings(
     installed: Path, kit_copy: Path, owner: Owner, can_write: Callable[[Path], bool]
 ) -> list[str]:
-    """The installed settings exist, belong to the owner (root unless given), can't be written by the agent,
-    and are the kit's. Settings from an older kit mean older permissions and hooks, so they count as not
-    hardened."""
+    """The installed settings exist, belong to ``owner``, can't be written by the agent, sit in a folder that
+    belongs to ``owner`` and the agent can't write either, and are the kit's. Whoever can write the folder can
+    swap the settings in it. Settings from an older kit mean older permissions and hooks, so they count as not
+    hardened; without the kit's copy, they can't be checked."""
     if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner, can_write):
         return found
-    if installed.read_bytes() != _read_or_none(kit_copy):  # a kit copy that can't be read is no match
+    folder = installed.parent
+    if folder.stat().st_uid != owner.uid:
+        return [f"replace Claude's managed settings: {folder} isn't owned by uid {owner.uid}"]
+    if can_write(folder):
+        return [f"replace Claude's managed settings: {folder} is writable"]
+    kit_settings = _read_or_none(kit_copy)
+    if kit_settings is None:
+        return [f"run with managed settings that can't be checked: {kit_copy} can't be read"]
+    if installed.read_bytes() != kit_settings:
         return [f"run with older managed settings: {installed} differs from {kit_copy}"]
     return []
 

@@ -294,6 +294,54 @@ def test_settings_and_interpreter_root_doesnt_own_are_refused(hardened, read_onl
     )
 
 
+@pytest.fixture
+def settings_in_a_folder_root_doesnt_own(hardened: TemporaryMachine) -> Iterator[harden.Machine]:
+    """The hardened machine as the agent sees it, its settings unchanged but in a folder the machine's root
+    doesn't own. Root hands the folder to someone else. Another user can't, so it puts the settings in the
+    system's temporary folder, a folder root owns where anyone may add a file of their own."""
+    agent_mode = hardened.agent_mode
+    if os.geteuid() == 0:
+        os.chown(agent_mode.managed_settings.parent, SOMEONE_ELSE.uid, -1)
+        yield agent_mode
+        return
+    shared = Path(tempfile.gettempdir())
+    if shared.stat().st_uid == ME.uid:
+        pytest.skip(f"{shared} belongs to this user, so it can't stand for a folder root doesn't own")
+    descriptor, name = tempfile.mkstemp(dir=shared, suffix=".json")
+    os.close(descriptor)
+    moved = Path(name)
+    try:
+        moved.write_bytes(agent_mode.managed_settings.read_bytes())
+        moved.chmod(0o644)
+        yield dataclasses.replace(agent_mode, managed_settings=moved)
+    finally:
+        moved.unlink(missing_ok=True)
+
+
+def test_settings_in_a_folder_root_doesnt_own_are_refused(
+    settings_in_a_folder_root_doesnt_own, read_only_kit, capsys
+) -> None:
+    """Whoever owns the folder can swap the settings in it during a session, whoever owns the file."""
+    agent_mode = settings_in_a_folder_root_doesnt_own
+    folder = agent_mode.managed_settings.parent
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        agent_mode,
+        f"replace Claude's managed settings: {folder} isn't owned by uid {agent_mode.root.uid}",
+    )
+
+
+def test_settings_in_a_folder_the_agent_can_write_are_refused(hardened, read_only_kit, capsys) -> None:
+    folder = hardened.root_mode.managed_settings.parent
+    folder.chmod(0o757)
+
+    assert_refused(
+        capsys, read_only_kit, hardened.agent_mode, f"replace Claude's managed settings: {folder} is writable"
+    )
+
+
 def test_settings_the_agent_can_write_are_refused(hardened, read_only_kit, capsys) -> None:
     installed = hardened.root_mode.managed_settings
     installed.chmod(0o646)
@@ -386,9 +434,16 @@ def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, read_only_kit, ca
 
 
 def test_a_missing_kit_is_refused(hardened, tmp_path, capsys) -> None:
-    assert harden.verify(tmp_path / "absent", hardened.agent_mode) == 1
+    """Without the kit's copy of the settings, the installed ones can't be compared: verify says so, rather
+    than that they're older."""
+    kit = tmp_path / "absent"
+    kit_copy = kit / "claude" / "managed-settings.json"
+
+    assert harden.verify(kit, hardened.agent_mode) == 1
     err = capsys.readouterr().err
     assert "not starting the agent" in err and "can't be listed" in err
+    assert f"  run with managed settings that can't be checked: {kit_copy} can't be read\n" in err
+    assert "older managed settings" not in err
 
 
 def test_a_missing_interpreter_is_refused(hardened, read_only_kit, capsys) -> None:
@@ -493,6 +548,16 @@ def test_settings_from_an_older_kit_are_replaced(machine: TemporaryMachine, read
 
     assert installed.read_bytes() == (read_only_kit / "claude" / "managed-settings.json").read_bytes()
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
+
+
+def test_a_settings_folder_anyone_could_write_is_closed(machine: TemporaryMachine, read_only_kit: Path) -> None:
+    folder = machine.root_mode.managed_settings.parent
+    folder.mkdir(parents=True)
+    folder.chmod(0o777)
+
+    assert harden.harden(read_only_kit, "agent", machine.root_mode) == 0
+
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o755
 
 
 def test_dockers_configuration_from_an_earlier_launch_is_kept(machine: TemporaryMachine, read_only_kit: Path) -> None:
