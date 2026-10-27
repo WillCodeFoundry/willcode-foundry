@@ -1,9 +1,11 @@
 """agent_runtime.agent_kit: where things sit in the agent kit, spelled out once more here as literals, and
-the rule for what a role's folder must hold."""
+the rule for what a role's folder must hold, and how the runtime in it is called."""
 
+import subprocess
+import sys
 from pathlib import Path, PurePosixPath
 
-from agent_runtime.agent_kit import RUNTIME_PYZ, AgentKit
+from agent_runtime.agent_kit import PYTHON_FLAGS, RUNTIME_PYZ, AgentKit
 from foundry import yaml_io
 
 REPO_ROOT = Path(__file__).parents[2]
@@ -70,3 +72,26 @@ def test_every_configured_role_lacks_nothing() -> None:
 
     assert roles
     assert {name: SOURCE_KIT.role(name).missing() for name in roles} == {name: [] for name in roles}
+
+
+def test_a_command_runs_the_kits_runtime_isolated() -> None:
+    assert AgentKit(Path("/kit")).command("hook", "guard-bash") == (
+        "/usr/bin/python3",
+        "-IS",
+        "/kit/.build/agent_runtime.pyz",
+        "hook",
+        "guard-bash",
+    )
+
+
+def test_the_flags_isolate_the_runtime_and_skip_site() -> None:
+    """-I ignores PYTHON* variables and user site-packages, and -S skips site, so no .pth file in any
+    site-packages runs. One argument, as a shebang line passes."""
+    flags = subprocess.run(
+        [sys.executable, PYTHON_FLAGS, "-c", "import sys; print(sys.flags.isolated, sys.flags.no_site)"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert flags.stdout == "1 1\n"

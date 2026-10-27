@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Final
 
 from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 from foundry import paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
@@ -28,9 +29,8 @@ from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 MAX_SANDBOX_NAME_LENGTH: Final = 64
 _SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
 
-# Inside the sandbox: where session-setup clones the project. Nothing on the
-# host corresponds to this path; it assumes the template's `agent` user.
-SANDBOX_WORK_DIR: Final = "/home/agent/work"
+SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
+"""Inside the sandbox: where session-setup clones the project. Nothing on the host corresponds to it."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -120,7 +120,7 @@ class Session:
         in the definition, not the foundry's current one: a moved foundry still
         finds the kit its existing sandboxes mount.
         """
-        return contract.command(self.definition.agent_kit_dir, "session-init")
+        return AgentKit(self.definition.agent_kit_dir).command("session-init")
 
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:

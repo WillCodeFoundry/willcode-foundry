@@ -13,6 +13,13 @@ from typing import ClassVar, Final
 RUNTIME_PYZ: Final = PurePosixPath(".build") / "agent_runtime.pyz"
 """Where the built runtime sits, relative to the kit."""
 
+PYTHON: Final = "/usr/bin/python3"
+"""The interpreter every call into the runtime uses: the template's own, root-owned, never ``env python3``."""
+
+PYTHON_FLAGS: Final = "-IS"
+"""-I ignores PYTHON* variables and user site-packages; -S skips site, so no .pth file runs before the runtime.
+One argument, as a shebang line passes."""
+
 
 @dataclass(frozen=True)
 class RoleDir:
@@ -52,6 +59,10 @@ class AgentKit:
     def runtime(self) -> Path:
         """The built runtime, which every hook and the launch run."""
         return self.dir / RUNTIME_PYZ
+
+    def command(self, *args: str) -> tuple[str, ...]:
+        """A call into the runtime, isolated, so nothing the agent sets or installs can shadow it or run first."""
+        return (PYTHON, PYTHON_FLAGS, str(self.runtime), *args)
 
     @property
     def managed_settings(self) -> Path:

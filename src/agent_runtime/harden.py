@@ -24,11 +24,11 @@ from pathlib import Path
 from typing import NamedTuple
 
 from agent_runtime import contract
-from agent_runtime.agent_kit import RUNTIME_PYZ, AgentKit
+from agent_runtime.agent_kit import PYTHON, RUNTIME_PYZ, AgentKit
 from agent_runtime.files import atomic_symlink, atomic_write
 
 _DOCKER_CONFIG = '{"group": "root"}'
-SANDBOX_USER = "agent"
+SANDBOX_USER = contract.SANDBOX_USER
 
 
 class Owner(NamedTuple):
@@ -91,7 +91,7 @@ SANDBOX = Machine(
     docker_daemon_config=Path("/etc/docker/daemon.json"),
     regrouped_socket=Path("/var/run/docker.sock"),
     checked_sockets=(Path("/var/run/docker.sock"), Path("/var/run/docker/containerd/containerd.sock")),
-    python=contract.PYTHON,
+    python=PYTHON,
     sudo="sudo",
     su="su",
     passwd="passwd",

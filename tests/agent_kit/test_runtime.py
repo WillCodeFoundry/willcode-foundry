@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 
 from agent_runtime import contract
-from agent_runtime.agent_kit import RUNTIME_PYZ, AgentKit
+from agent_runtime.agent_kit import PYTHON_FLAGS, RUNTIME_PYZ, AgentKit
 from tests.support.kit import runtime_command
 
 RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
 
 
 def run_python(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, contract.PYTHON_FLAGS, *args], capture_output=True, text=True, check=False)
+    return subprocess.run([sys.executable, PYTHON_FLAGS, *args], capture_output=True, text=True, check=False)
 
 
 def test_the_runtime_imports_only_the_standard_library(built_kit: Path) -> None:
@@ -94,7 +94,7 @@ def test_root_mode_without_the_kit_names_it(built_kit: Path) -> None:
 
 # --- every command a sandbox runs, outside one --------------------------------------
 
-RUNTIME = ("<python>", contract.PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
+RUNTIME = ("<python>", PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
 
 
 @pytest.mark.parametrize(

@@ -200,8 +200,8 @@ src/foundry/
 ```
 src/agent_runtime/        # runs inside a sandbox; the standard library only, never foundry or yaml (a test checks)
 ├── __main__.py           # checks the Python version first, then the commands below
-├── contract.py           # the AGENT_* names, which foundry.session also uses; reading them back; how the runtime is called
-├── agent_kit.py          # where everything sits in the agent kit, and what a role's folder must hold; foundry imports it too
+├── contract.py           # the AGENT_* names, which foundry.session also uses, and reading them back; the sandbox's user
+├── agent_kit.py          # where everything sits in the agent kit, what a role's folder must hold, and how its runtime is called; foundry imports it too
 ├── session_init.py       # what the launcher runs: setup, hardening on the first launch, then the verify on every launch. Owns the handoff to root: the sudo probe, the root command, and the `harden` and `verify` entries
 ├── session_setup.py      # the agent user's part: refuses a role folder without ROLE.md or gitconfig, then clones the project, sets up checkouts, hooks, identity, instructions
 ├── harden.py             # what each mode does, on a Machine: as root, installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; as the agent, checks it all

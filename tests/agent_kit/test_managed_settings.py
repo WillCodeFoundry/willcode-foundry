@@ -5,8 +5,9 @@ import os
 import subprocess
 from pathlib import Path
 
-from agent_runtime import contract, harden
+from agent_runtime import harden
 from agent_runtime.__main__ import CLAUDE_HOOKS
+from agent_runtime.agent_kit import PYTHON, PYTHON_FLAGS
 from tests.support.kit import HOOK_COMMANDS, SETTINGS, hook_command
 
 
@@ -22,10 +23,10 @@ def test_only_managed_hooks_and_rules_apply() -> None:
 
 
 def test_every_hook_runs_the_kits_runtime_isolated() -> None:
-    """The template's own interpreter, with contract.PYTHON_FLAGS, on the runtime through the link root mode makes
+    """The template's own interpreter, with PYTHON_FLAGS, on the runtime through the link root mode makes
     to the kit's: a fixed path in a root-owned folder. No variable: a settings file the agent writes can set Claude
     Code's."""
-    runtime = f"{contract.PYTHON} {contract.PYTHON_FLAGS} {harden.SANDBOX.hooks_runtime_link} hook "
+    runtime = f"{PYTHON} {PYTHON_FLAGS} {harden.SANDBOX.hooks_runtime_link} hook "
     assert HOOK_COMMANDS == {
         "PreToolUse": [runtime + "guard-bash"],
         "Stop": [runtime + "session-check"],

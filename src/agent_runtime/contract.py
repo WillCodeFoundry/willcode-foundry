@@ -1,4 +1,4 @@
-"""What the launcher and the runtime agree on: the session variables' names, and how the runtime is run.
+"""What the launcher and the runtime agree on: the session variables' names, and the sandbox's user.
 
 The session variables are the AGENT_* variables a sandbox is created with. Their names are spelled out
 here, once: foundry.session.SessionVariables keys its values with these constants, and the runtime reads
@@ -10,8 +10,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
-
-from agent_runtime.agent_kit import AgentKit
 
 ROLE: Final = "AGENT_ROLE"
 TASK: Final = "AGENT_TASK"
@@ -42,21 +40,9 @@ NAMES: Final = (
 )
 """Every session variable, in the order the sandbox definition lists them."""
 
-PYTHON: Final = "/usr/bin/python3"
-"""The interpreter every call into the runtime uses: the template's own, root-owned, never ``env python3``."""
-
-
-PYTHON_FLAGS: Final = "-IS"
-"""How every call into the runtime runs PYTHON: ``-I`` ignores PYTHONPATH, PYTHON* variables and user
-site-packages, and ``-S`` skips site, so no .pth file in a site-packages folder runs either: the runtime needs
-only the standard library. One argument, as a shebang line passes; the git hooks' stubs and the managed
-settings spell it out, held to this by their tests."""
-
-
-def command(agent_kit_dir: Path, *args: str) -> tuple[str, ...]:
-    """A call into the runtime in the kit at ``agent_kit_dir``, isolated by PYTHON_FLAGS, so nothing the agent
-    sets or installs can shadow the package or run before it."""
-    return (PYTHON, PYTHON_FLAGS, str(AgentKit(agent_kit_dir).runtime), *args)
+SANDBOX_USER: Final = "agent"
+"""The sandbox template's user, whom the agent runs as: root mode runs only through sudo from it, and the
+checkouts sit in its home."""
 
 
 class MissingVariables(Exception):

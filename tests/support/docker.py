@@ -6,7 +6,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 
 IMAGE = "docker/sandbox-templates:claude-code-docker"
 """Followed by tag, not pinned, as sbx follows it."""
@@ -57,7 +57,7 @@ class Container:
 
     def session_init(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         """What the launcher runs, as the agent: the runtime's session-init from the mounted kit."""
-        return self.run("agent", *contract.command(self.agent_kit, "session-init"), env=env)
+        return self.run("agent", *AgentKit(self.agent_kit).command("session-init"), env=env)
 
 
 def copy_origin(container: Container, origin: Path) -> str:

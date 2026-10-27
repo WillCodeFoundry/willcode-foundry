@@ -13,6 +13,7 @@ from pathlib import Path
 
 from agent_runtime import contract, session_setup
 from agent_runtime import harden as hardening
+from agent_runtime.agent_kit import AgentKit
 
 RunAsRoot = Callable[[hardening.Machine, Path], int]
 """Runs root mode for the kit at the Path, as root, and returns its exit code."""
@@ -68,7 +69,7 @@ def _through_sudo(machine: hardening.Machine, agent_kit_dir: Path) -> int:
 
 
 def _root_command(sudo: str, agent_kit_dir: Path) -> list[str]:
-    return [sudo, f"--preserve-env={contract.KIT_DIR}", *contract.command(agent_kit_dir, "harden")]
+    return [sudo, f"--preserve-env={contract.KIT_DIR}", *AgentKit(agent_kit_dir).command("harden")]
 
 
 def _read_agent_kit_dir() -> Path:

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 from foundry import agent_sandbox, config, paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.launcher import LaunchRequest, PreparedSandbox, start
@@ -143,7 +143,7 @@ def smoke() -> Iterator[Smoke]:
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
-    verified = smoke.run(*contract.command(smoke.agent_kit, "verify"))
+    verified = smoke.run(*AgentKit(smoke.agent_kit).command("verify"))
 
     assert verified.returncode == 0, verified.stdout + verified.stderr
     assert "verify: hardened" in verified.stdout

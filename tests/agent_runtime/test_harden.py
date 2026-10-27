@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract, harden
-from agent_runtime.agent_kit import AgentKit
+from agent_runtime import harden
+from agent_runtime.agent_kit import PYTHON, AgentKit
 from tests.support.machine import (
     AGENT_UID,
     ME,
@@ -50,7 +50,7 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
         Path("/var/run/docker.sock"),
         Path("/var/run/docker/containerd/containerd.sock"),
     )
-    assert sandbox.python == "/usr/bin/python3" == contract.PYTHON
+    assert sandbox.python == "/usr/bin/python3" == PYTHON
     assert (sandbox.sudo, sandbox.su, sandbox.passwd) == ("sudo", "su", "passwd")
     assert sandbox.root_owner == harden.Owner(0, 0)
     assert sandbox.euid is os.geteuid

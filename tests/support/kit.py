@@ -4,8 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-from agent_runtime import contract, harden
-from agent_runtime.agent_kit import AgentKit
+from agent_runtime import harden
+from agent_runtime.agent_kit import PYTHON, AgentKit
 from tests.support import AGENT_KIT_SOURCE
 
 SETTINGS = json.loads(AgentKit(AGENT_KIT_SOURCE).managed_settings.read_text())
@@ -32,6 +32,6 @@ def runtime_command(agent_kit_dir: Path, *args: str) -> tuple[str, ...]:
     The tests that run a command exactly as written (managed settings, the git hooks' stubs) use the
     template's interpreter, /usr/bin/python3, as the sandbox does.
     """
-    python, *rest = contract.command(agent_kit_dir, *args)
-    assert python == contract.PYTHON
+    python, *rest = AgentKit(agent_kit_dir).command(*args)
+    assert python == PYTHON
     return (sys.executable, *rest)

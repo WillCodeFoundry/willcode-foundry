@@ -1,7 +1,5 @@
 """agent_runtime.contract: the session variables, read back as the sandbox definition set them."""
 
-import subprocess
-import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -29,26 +27,3 @@ def test_every_missing_variable_is_named_at_once() -> None:
 
     missing = ", ".join(name for name in contract.NAMES if name != contract.TASK)
     assert str(raised.value) == f"{missing} not set; this runs inside a foundry sandbox, which sets them"
-
-
-def test_a_command_runs_the_kits_runtime_isolated() -> None:
-    assert contract.command(Path("/kit"), "hook", "guard-bash") == (
-        "/usr/bin/python3",
-        "-IS",
-        "/kit/.build/agent_runtime.pyz",
-        "hook",
-        "guard-bash",
-    )
-
-
-def test_the_flags_isolate_the_runtime_and_skip_site() -> None:
-    """-I ignores PYTHON* variables and user site-packages, and -S skips site, so no .pth file in any
-    site-packages runs. One argument, as a shebang line passes."""
-    flags = subprocess.run(
-        [sys.executable, contract.PYTHON_FLAGS, "-c", "import sys; print(sys.flags.isolated, sys.flags.no_site)"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    assert flags.stdout == "1 1\n"
