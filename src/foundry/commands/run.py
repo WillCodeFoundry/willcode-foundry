@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths, session
+from foundry.errors import FoundryError
 from foundry.runtime_build import build_runtime
 from foundry.task import Task
 
@@ -34,8 +35,9 @@ def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, tas
     """Everything up to the hand-over: the session, created the first time, the agent runtime built into the
     kit its sandbox mounts, and the request to launch it.
 
-    The kit is the one the sandbox definition records, not this foundry's: sbx fixes mounts when it creates a
-    sandbox, so a moved foundry still updates the kit its existing sandboxes see. A failed build aborts.
+    sbx fixes mounts when it creates a sandbox, so the kit the definition records must be this foundry's: a
+    copied foundry would swap the runtime under the original's sandboxes, and a moved one's sandbox mounts a
+    kit that is gone. Either is refused, saying what to do. A failed build aborts.
     """
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(project_name)
@@ -43,6 +45,7 @@ def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, tas
     opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
     if opened.created:
         print(f"==> session:   {opened.dir} (new)", file=sys.stderr)
+    _require_own_kit(opened.definition.name, opened.definition.agent_kit_dir, paths.agent_kit_dir(foundry_root))
     build_runtime(opened.definition.agent_kit_dir)
 
     return agent_sandbox.LaunchRequest(
@@ -51,3 +54,15 @@ def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, tas
         init_command=opened.init_command,
         github_token_path=role.github_token_path,
     )
+
+
+def _require_own_kit(sandbox_name: str, recorded: Path, own: Path) -> None:
+    if recorded.resolve() == own.resolve():
+        return
+    see = "(see Recreating a sandbox in the README)"
+    if recorded.is_dir():
+        raise FoundryError(
+            f"{sandbox_name} mounts the agent kit at {recorded}, not this foundry's ({own}): "
+            f"launch it from the foundry there, or recreate it {see}"
+        )
+    raise FoundryError(f"{sandbox_name} mounts the agent kit at {recorded}, which is gone: recreate it {see}")
