@@ -1,5 +1,6 @@
 # Weekly pull requests for newer GitHub Actions (the SHAs pinned in
-# workflows) and newer locked dependencies (uv.lock). Each goes through ci-gate
+# workflows), newer locked dependencies (uv.lock) and a newer sandbox template
+# image (the digest pinned in tests/sandbox_image/Dockerfile). Each goes through ci-gate
 # and needs a review like any other change to main.
 version: 2
 updates:
@@ -10,5 +11,10 @@ updates:
 
   - package-ecosystem: uv
     directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /tests/sandbox_image
     schedule:
       interval: weekly

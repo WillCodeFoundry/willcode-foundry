@@ -69,10 +69,24 @@ jobs:
       - run: uv sync --locked --group dev
       - run: uv run pytest
 
+  # session-init in the sandbox's template image, as root inside containers only: tests/sandbox_image/.
+  sandbox-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - run: uv run pytest -m docker
+
   # Required by config/repo-policy/rulesets.yaml: passes only if every job above did.
   ci-gate:
     if: always()
-    needs: [lint, mypy, test]
+    needs: [lint, mypy, test, sandbox-image]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
