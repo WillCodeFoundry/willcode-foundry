@@ -10,7 +10,7 @@ Read the design rules in [ARCHITECTURE.md](ARCHITECTURE.md#design-rules), and fo
 
 Run the host tier, ruff and mypy before every commit, as an ordinary user, never as root. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too.
 
-The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything else that runs in a sandbox is the runtime, in Python.
+The only shell scripts are the stubs: the git hooks' in `agent-kit/hooks/`, and `agent-kit/bin/task`. Everything else that runs in a sandbox is the runtime, in Python.
 
 ## Docs
 

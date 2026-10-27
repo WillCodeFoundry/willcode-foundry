@@ -45,7 +45,7 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md` and `REVIEW.md`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` and `STATE.json`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Code checkout** and **notes checkout**:
@@ -53,6 +53,38 @@ The two working copies of a project inside a sandbox: one on the task branch, on
 
 **Task template**:
 `config/task-template/`, the files every new task's notes dir starts from.
+
+### Task states
+
+**Lifecycle**:
+The state machine one kind of task follows, such as `feature` or `bugfix`. Defined in `src/agent_runtime/task/lifecycles.py`.
+_Avoid_: workflow, pipeline
+
+**State**:
+One named step of a lifecycle, such as `review`, with its assignee, its goal and its events.
+_Avoid_: stage, status
+
+**Task state**:
+A task's `STATE.json`: its lifecycle, the state it is in, the state it came from, and the hand-off note. "The task is in `review`."
+_Avoid_: ticket
+
+**Assignee**:
+The role a state belongs to, or `human`. A final state, such as `done`, has none.
+_Avoid_: owner
+
+**Turn**:
+The time a task is in a state assigned to a role. Only that role is launched on the task. A turn can span several agent runs.
+_Avoid_: session (that is the foundry's record of a sandbox)
+
+**Event**:
+What an agent sends to end its turn: `submit`, `approve`, `reject` or `block`. The lifecycle decides which state it leads to.
+_Avoid_: action, command
+
+**Transition**:
+An event applied to a task state, or a move by hand with `foundry task move`.
+
+**Hand-off note**:
+The note a transition leaves for the next assignee, who reads it first.
 
 ### Sandboxes and sessions
 
@@ -70,7 +102,7 @@ _Avoid_: session (for one run of Claude Code; that is an agent run)
 The `AGENT_*` environment variables a sandbox is created with, which tell the agent kit everything about its role, project and task. They never change for the life of the sandbox.
 
 **Launch**:
-One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
+One `foundry task run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
 
 **Agent run**:
 One run of Claude Code inside a sandbox, from start until the agent stops.
@@ -138,6 +170,8 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 ## Relationships
 
 - A **project** has many **tasks**; a **task** has one **task branch** and one **task notes dir** on the project's **notes branch**.
+- A **task** has one **task state**, which names one **lifecycle** and one of its **states**.
+- A **turn** spans one or more **agent runs** of its state's **assignee**.
 - A **sandbox** runs one **role** on one **task** of one **project**, and has one **session**.
 - A **sandbox** sees one **agent kit**, read-only; the **runtime** in it does the **hardening** and runs the **hooks**.
 - A **sandbox** has many **launches** and **agent runs** over its life; its **session variables** stay the same for all of them.
@@ -148,3 +182,4 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 - "notes dir" meant both a task's dir on the notes branch and the notes checkout. Resolved: **task notes dir** and **notes checkout**.
 - "launcher" meant both the whole foundry and `agent_sandbox/launcher.py`. Resolved: **foundry** for the whole.
 - "template" meant both the task template and the template image. Resolved: always say which.
+- "state" could mean a lifecycle's step or the record of which step a task is in. Resolved: **state** is the step, **task state** is the record. "Status" is for neither: it is a sandbox's (`running`).
