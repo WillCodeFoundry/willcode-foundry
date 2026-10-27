@@ -1,9 +1,11 @@
-"""The runtime's session-init, as the launcher runs it on a relaunch, from the built kit against a local origin.
+"""The runtime's session-init, as the launcher runs it, from the built kit against a local origin: on a first
+launch, while sudo still works, and on a relaunch, after hardening has left it unable to run.
 
 Everything runs for real except sudo, the system boundary: git against a temporary origin, files under a
-throwaway HOME, and verify's read-only checks. sudo is a stand-in, left mode 0 as the first launch's hardening
-leaves the real one. PATH holds only it and git: the exec search skips an entry it can't execute and tries the
-next, so with the machine's own PATH after it, the real sudo would run.
+throwaway HOME, and verify's read-only checks. sudo is a stand-in. On a first launch it answers the probe,
+and records any other call without running it; on a relaunch it is mode 0, as the first launch's hardening
+leaves the real one. PATH holds only it and git: the exec search skips an entry it can't execute and tries
+the next, so with the machine's own PATH after it, the real sudo would run.
 """
 
 import os
