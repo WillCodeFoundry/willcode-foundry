@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from agent_runtime import contract, git
+from agent_runtime import contract
+from agent_runtime.git import Git
 
 
 def refusal_reason(command: str) -> str | None:
@@ -88,9 +89,9 @@ def _stop_hook_active(stdin: TextIO) -> bool:
 
 def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
     problems = []
-    if git.run("-C", str(checkout), "status", "--porcelain").stdout.strip():
+    if Git(checkout).result("status", "--porcelain").stdout.strip():
         problems.append(f"{label} has uncommitted changes")
-    git.run("-C", str(checkout), "fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
-    if git.run("-C", str(checkout), "log", "--oneline", f"origin/{branch}..HEAD").stdout.strip():
+    Git(checkout).result("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
+    if Git(checkout).result("log", "--oneline", f"origin/{branch}..HEAD").stdout.strip():
         problems.append(f"{label} has commits not pushed to origin/{branch}")
     return problems

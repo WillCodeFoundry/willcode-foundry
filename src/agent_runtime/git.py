@@ -87,13 +87,3 @@ class Git:
 
     def _env(self) -> dict[str, str] | None:
         return dict(self.env) if self.env is not None else None
-
-
-def run(*args: str, input: str | None = None, check: bool = False) -> subprocess.CompletedProcess[str]:
-    """``git *args``, its output captured. Being replaced by Git."""
-    return subprocess.run(["git", *args], input=input, capture_output=True, text=True, check=check)
-
-
-def current_branch() -> str:
-    """The branch checked out in the current directory's repository, or "detached". Being replaced by Git."""
-    return Git().current_branch()

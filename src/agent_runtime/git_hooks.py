@@ -13,7 +13,8 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import NoReturn
 
-from agent_runtime import contract, git
+from agent_runtime import contract
+from agent_runtime.git import Git
 
 
 def pre_commit(env: contract.Environ | None = None) -> None:
@@ -25,7 +26,7 @@ def pre_commit(env: contract.Environ | None = None) -> None:
     Commits on any other branch are left alone: they can't be pushed.
     """
     environ = env or _read_environ("pre-commit")
-    branch = git.current_branch()
+    branch = Git().current_branch()
     if branch == environ.task_branch:
         root = environ.notes_root
         refused = [path for path in _staged_paths() if path.startswith(f"{root}/") or f"/{root}/" in path]
@@ -50,18 +51,16 @@ def prepare_commit_msg(args: Sequence[str] | None = None, env: contract.Environ 
     file first."""
     environ = env or _read_environ("prepare-commit-msg")
     arguments = sys.argv[1:] if args is None else args
-    if git.current_branch() != environ.task_branch:
+    if Git().current_branch() != environ.task_branch:
         return
     if not arguments:
         sys.exit("prepare-commit-msg needs the message file")
     message_file = arguments[0]
     # An empty message aborts the commit; a trailer would make it go through.
-    if not git.run("stripspace", "--strip-comments", input=Path(message_file).read_text(), check=True).stdout:
+    if not Git().output("stripspace", "--strip-comments", input=Path(message_file).read_text()):
         return
     trailer = f"Task: {environ.task}"
-    git.run(
-        "interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file, check=True
-    )
+    Git().output("interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file)
 
 
 def pre_push(refs: Iterable[str] | None = None, env: contract.Environ | None = None) -> None:
@@ -104,5 +103,5 @@ def _read_environ(hook: str) -> contract.Environ:
 
 def _staged_paths() -> list[str]:
     """Paths staged for the commit being made, as git spells them, whatever characters they hold."""
-    result = git.run("diff", "--cached", "--name-only", "--diff-filter=ACMRD", "-z", check=True)
-    return [path for path in result.stdout.split("\0") if path]
+    staged = Git().output("diff", "--cached", "--name-only", "--diff-filter=ACMRD", "-z")
+    return [path for path in staged.split("\0") if path]
