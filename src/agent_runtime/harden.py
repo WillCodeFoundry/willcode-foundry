@@ -25,7 +25,7 @@ from typing import NamedTuple
 
 from agent_runtime import contract
 from agent_runtime.agent_kit import PYTHON, RUNTIME_PYZ, AgentKit
-from agent_runtime.files import atomic_symlink, atomic_write
+from agent_runtime.atomic_files import atomic_symlink, atomic_write
 
 _DOCKER_CONFIG = '{"group": "root"}'
 _ROOTS_FOLDER = 0o755

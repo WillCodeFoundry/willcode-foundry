@@ -5,7 +5,7 @@ import ast
 from pathlib import Path
 
 FOUNDRY_DIR = Path(__file__).parents[1] / "src" / "foundry"
-SHARED = {"agent_runtime.contract", "agent_runtime.agent_kit", "agent_runtime.files", "agent_runtime.git"}
+SHARED = {"agent_runtime.contract", "agent_runtime.agent_kit", "agent_runtime.atomic_files", "agent_runtime.git"}
 """What both packages use: the session variables, the kit's layout, replacing files, and running git."""
 
 

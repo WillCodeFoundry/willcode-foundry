@@ -12,7 +12,7 @@ from pathlib import Path
 
 import agent_runtime
 from agent_runtime.agent_kit import AgentKit
-from agent_runtime.files import atomic_write
+from agent_runtime.atomic_files import atomic_write
 from foundry.errors import FoundryError
 
 _SOURCE_DIR = Path(agent_runtime.__file__).parent

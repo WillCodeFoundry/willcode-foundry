@@ -1,4 +1,4 @@
-"""agent_runtime.files: writing beside a file and renaming over it."""
+"""agent_runtime.atomic_files: writing beside a file and renaming over it."""
 
 import os
 import stat
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.files import atomic_symlink, atomic_write
+from agent_runtime.atomic_files import atomic_symlink, atomic_write
 
 
 def test_a_file_is_written_whole_with_its_mode(tmp_path: Path) -> None:

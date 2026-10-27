@@ -12,7 +12,7 @@ from pathlib import Path
 
 from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit, RoleDir
-from agent_runtime.files import atomic_write
+from agent_runtime.atomic_files import atomic_write
 from agent_runtime.git import Git
 
 

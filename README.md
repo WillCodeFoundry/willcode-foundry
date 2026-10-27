@@ -208,7 +208,7 @@ src/agent_runtime/        # runs inside a sandbox; the standard library only, ne
 ├── harden.py             # what each mode does, on a Machine: as root, installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; as the agent, checks it all
 ├── claude_hooks.py       # guard_bash (PreToolUse), session_check (Stop)
 ├── git_hooks.py          # pre_commit, prepare_commit_msg, pre_push, which agent-kit/hooks/ run through git-hook, and their refusals
-├── files.py              # atomic_write and atomic_symlink: a file or link replaced in one step; foundry imports it too
+├── atomic_files.py       # atomic_write and atomic_symlink: a file or link replaced in one step; foundry imports it too
 └── git.py                # Git: the one way both packages run git (output, output_bytes, result, succeeds), and GitError; foundry imports it too
 ```
 
