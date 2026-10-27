@@ -24,7 +24,12 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+# The docker and sbx tiers run only when asked for, with -m docker or -m sbx: a later -m replaces this one.
+addopts = "-q --strict-markers -m 'not docker and not sbx'"
+markers = [
+    "docker: runs session-init in the sandbox's template image; needs a Docker daemon",
+    "sbx: runs a real sbx sandbox; by hand only, see README",
+]
 xfail_strict = true
 filterwarnings = ["error"]
 
