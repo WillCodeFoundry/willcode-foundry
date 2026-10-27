@@ -206,6 +206,19 @@ def test_moving_another_tasks_file_into_own_folder_is_refused(repo) -> None:
     assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
 
 
+def test_replacing_another_tasks_file_with_a_link_is_refused(repo) -> None:
+    """A type change: the file in the other task's folder becomes a link, its content gone."""
+    _, notes = repo
+    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
+    change(notes, theirs)
+    git(notes, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", f"{OTHER_TASK.id}: progress")
+    (notes / theirs).unlink()
+    (notes / theirs).symlink_to("elsewhere")
+    git(notes, "add", theirs)
+    result = commit(notes, f"{TASK.id}: progress")
+    assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
+
+
 # --- Stop hook ---------------------------------------------------------------
 
 
