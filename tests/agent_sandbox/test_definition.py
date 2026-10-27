@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry.agent_sandbox import SandboxDefinition
+from foundry.agent_sandbox import SandboxDefinition, valid_sandbox_name
 from foundry.agent_sandbox.errors import SandboxError
 
 DEFINITION = SandboxDefinition(
@@ -52,3 +52,19 @@ def test_anything_foundry_did_not_write_fails_in_one_line(tmp_path: Path, conten
 def test_a_missing_definition_says_so(tmp_path: Path) -> None:
     with pytest.raises(SandboxError, match=r"sbxenv.yaml is missing"):
         SandboxDefinition.read(tmp_path)
+
+
+@pytest.mark.parametrize("name", ["dev-p-t1", "a.b+c", "x" * 64])
+def test_names_sbx_accepts(name: str) -> None:
+    assert valid_sandbox_name(name)
+
+
+@pytest.mark.parametrize("name", ["", "dev p", "dev/p", "x" * 65])
+def test_names_sbx_or_the_ssh_agent_socket_refuse(name: str) -> None:
+    """The name also names the sandbox's ssh-agent socket, whose path is limited."""
+    assert not valid_sandbox_name(name)
+
+
+def test_a_definition_refuses_a_name_sbx_wouldnt_accept() -> None:
+    with pytest.raises(SandboxError, match="isn't a sandbox name sbx accepts"):
+        SandboxDefinition(name="dev p", workspace_dir=Path("/w"), agent_kit_dir=Path("/k"), variables={})

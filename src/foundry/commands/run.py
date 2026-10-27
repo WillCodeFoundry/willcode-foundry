@@ -2,10 +2,12 @@
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths, session
+from foundry.runtime_build import build_runtime
 from foundry.task import Task
 
 
@@ -22,25 +24,35 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def main(args: argparse.Namespace) -> NoReturn:
-    """Composition root: prepare the launch from this foundry, then hand over to the sandbox."""
-    task = Task(args.task_id)
-    agent_sandbox.launch(
-        prepare_launch(paths.find_foundry_root(), project_name=args.project_name, role_name=args.role_name, task=task)
+    """Composition root: prepare the launch from this foundry, say what it created, then hand over."""
+    launch = prepare_launch(
+        paths.find_foundry_root(), project_name=args.project_name, role_name=args.role_name, task=Task(args.task_id)
     )
+    if launch.created:
+        print(f"==> session:   {launch.request.definition_dir} (new)", file=sys.stderr)
+    agent_sandbox.launch(launch.request)
 
 
-def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> agent_sandbox.LaunchRequest:
-    """Everything up to the hand-over: the session, created the first time, and the request to launch it."""
+@dataclass(frozen=True)
+class Launch:
+    """A launch ready to hand over: the request, and whether this launch created the session."""
+
+    request: agent_sandbox.LaunchRequest
+    created: bool
+
+
+def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> Launch:
+    """Everything up to the hand-over: the session, created the first time, the agent runtime built into its
+    kit, and the request to launch it. A failed build aborts."""
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(project_name)
     role = foundry_config.role(role_name)
     opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
-    if opened.created:
-        print(f"==> session:   {opened.dir} (new)", file=sys.stderr)
-
-    return agent_sandbox.LaunchRequest(
+    build_runtime(paths.agent_kit_dir(foundry_root))
+    request = agent_sandbox.LaunchRequest(
         definition_dir=opened.dir,
         ssh_key_path=role.ssh_key_path,
         init_command=opened.init_command,
         github_token_path=role.github_token_path,
     )
+    return Launch(request, opened.created)

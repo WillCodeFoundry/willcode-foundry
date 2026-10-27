@@ -7,7 +7,8 @@ workspace. The definition carries the session variables, the AGENT_*
 variables the sandbox is created with (SessionVariables knows their names).
 ``open_or_create`` is the whole interface: it names the sandbox, creates its
 session the first time, and on every later launch reads the definition back
-and refuses one written for another role, task or repository.
+and refuses one written for another role, task, repository or agent kit.
+``recreate_hint`` says how to start a sandbox over.
 """
 
 import re
@@ -16,29 +17,28 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 from foundry import paths
-from foundry.agent_sandbox import SandboxDefinition
+from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, valid_sandbox_name
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
-# sbx accepts letters, digits, '.', '+', '-'. The name also names an
-# ssh-agent socket, whose path length is limited.
-MAX_SANDBOX_NAME_LENGTH: Final = 64
-_SBX_UNSAFE_CHARACTERS = re.compile(r"[^A-Za-z0-9.+-]+")
+_UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
+"""What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
 
-# Inside the sandbox: where session-setup clones the project. Nothing on the
-# host corresponds to this path; it assumes the template's `agent` user.
-SANDBOX_WORK_DIR: Final = "/home/agent/work"
+SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
+"""Inside the sandbox: where session-setup clones the project. Nothing on the host corresponds to it."""
 
 
 @dataclass(frozen=True, kw_only=True)
 class SessionVariables:
     """What a session's sandbox is told: the AGENT_* variables, as one value.
 
-    The only place their names are spelled out. The agent kit's scripts and AGENTS.md read
-    them by name, and tests/test_task_contract.py holds both to this class. They are fixed
-    when the sandbox is created: sbx never rewrites its definition.
+    Their names come from agent_runtime.contract, which the runtime reads them back with;
+    AGENTS.md lists them, and tests/test_task_contract.py holds it and the kit to the contract.
+    They are fixed when the sandbox is created: sbx never rewrites its definition.
     """
 
     role_name: str
@@ -57,19 +57,17 @@ class SessionVariables:
     def to_env(self) -> dict[str, str]:
         """The variables, by name, as the sandbox definition carries them."""
         return {
-            "AGENT_ROLE": self.role_name,
-            "AGENT_TASK": self.task.id,
-            "AGENT_KIT_DIR": str(self.agent_kit_dir),
-            "AGENT_REPO_URL": self.repo_url,
-            "AGENT_PROJECT_DIR": self.project_dir,
-            "AGENT_NOTES_DIR": self.notes_dir,
-            # A task's names, so the kit and the agent's instructions spell none out.
-            # The notes paths are relative to a checkout's root, as git reports paths.
-            "AGENT_TASK_BRANCH": self.task.branch,
-            "AGENT_NOTES_BRANCH": NOTES_BRANCH,
-            "AGENT_NOTES_ROOT": NOTES_ROOT,
-            "AGENT_TASK_NOTES": self.task.notes_dir,
-            "AGENT_TASK_FILE": self.task.task_file,
+            contract.ROLE: self.role_name,
+            contract.TASK: self.task.id,
+            contract.KIT_DIR: str(self.agent_kit_dir),
+            contract.REPO_URL: self.repo_url,
+            contract.PROJECT_DIR: self.project_dir,
+            contract.NOTES_DIR: self.notes_dir,
+            contract.TASK_BRANCH: self.task.branch,
+            contract.NOTES_BRANCH: NOTES_BRANCH,
+            contract.NOTES_ROOT: NOTES_ROOT,
+            contract.TASK_NOTES: self.task.notes_dir,
+            contract.TASK_FILE: self.task.task_file,
         }
 
     @classmethod
@@ -80,15 +78,15 @@ class SessionVariables:
         this foundry would set for the same role, task and paths: a sandbox created before a name
         changed keeps the old one, and its kit would use it.
         """
-        missing = [name for name in cls._names() if name not in env]
+        missing = [name for name in contract.NAMES if name not in env]
         if missing:
             raise FoundryError(f"missing {', '.join(missing)}")
         variables = cls(
-            role_name=env["AGENT_ROLE"],
-            task=Task(env["AGENT_TASK"]),
-            repo_url=env["AGENT_REPO_URL"],
-            agent_kit_dir=Path(env["AGENT_KIT_DIR"]),
-            project_dir=env["AGENT_PROJECT_DIR"],
+            role_name=env[contract.ROLE],
+            task=Task(env[contract.TASK]),
+            repo_url=env[contract.REPO_URL],
+            agent_kit_dir=Path(env[contract.KIT_DIR]),
+            project_dir=env[contract.PROJECT_DIR],
         )
         differing = [
             f"{name}={env[name]!r}, now {value!r}" for name, value in variables.to_env().items() if env[name] != value
@@ -98,14 +96,8 @@ class SessionVariables:
         return variables
 
     def is_same_sandbox(self, other: "SessionVariables") -> bool:
-        """Whether both are for the same role, task and repository; paths may differ, e.g. after the foundry moved."""
+        """Whether both are for the same role, task and repository: what a sandbox's name stands for."""
         return (self.role_name, self.task, self.repo_url) == (other.role_name, other.task, other.repo_url)
-
-    @classmethod
-    def _names(cls) -> list[str]:
-        """Every variable's name, taken from to_env, so the full list is spelled out once."""
-        placeholder = cls(role_name="", task=Task("t"), repo_url="", agent_kit_dir=Path(), project_dir="")
-        return list(placeholder.to_env())
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -121,13 +113,8 @@ class Session:
 
     @property
     def init_command(self) -> tuple[str, ...]:
-        """session-init, from the agent kit this sandbox was created with.
-
-        sbx fixes mounts when it creates a sandbox, so this is the kit recorded
-        in the definition, not the foundry's current one: a moved foundry still
-        finds the kit its existing sandboxes mount.
-        """
-        return (str(self.definition.agent_kit_dir / paths.SESSION_INIT_RELATIVE_PATH),)
+        """The runtime's session-init, from the agent kit, which open_or_create checked is this foundry's."""
+        return AgentKit(self.definition.agent_kit_dir).command("session-init")
 
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:
@@ -136,42 +123,49 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     Raises FoundryError if the sandbox name would be too long, if the session
     directory exists without its definition but holds more than an empty
     workspace, or if the existing definition was written for another role,
-    task or repository.
+    task or repository, or mounts another foundry's agent kit.
     """
     sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
-    wanted = SessionVariables(
+    wanted = _wanted_variables(foundry_root, project, role, task)
+    created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
+    if created:
+        _create(session_dir, _definition(foundry_root, sandbox_name, wanted))
+    definition = SandboxDefinition.read(session_dir)
+    recorded = _recorded_variables(definition)
+    _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
+    _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
+    return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
+
+
+def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Task) -> SessionVariables:
+    """What this foundry would tell a new sandbox for this role on this task."""
+    return SessionVariables(
         role_name=role.name,
         task=task,
         repo_url=project.url,
         agent_kit_dir=paths.agent_kit_dir(foundry_root),
         project_dir=f"{SANDBOX_WORK_DIR}/{_slug(project.name)}",
     )
-    created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
-    if created:
-        _create(
-            session_dir,
-            SandboxDefinition(
-                name=sandbox_name,
-                workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
-                agent_kit_dir=wanted.agent_kit_dir,
-                variables=wanted.to_env(),
-            ),
-        )
-    definition = SandboxDefinition.read(session_dir)
-    recorded = _recorded_variables(definition)
-    _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
-    return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
+
+
+def _definition(foundry_root: Path, sandbox_name: str, variables: SessionVariables) -> SandboxDefinition:
+    return SandboxDefinition(
+        name=sandbox_name,
+        workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
+        agent_kit_dir=variables.agent_kit_dir,
+        variables=variables.to_env(),
+    )
 
 
 def _slug(text: str) -> str:
-    return _SBX_UNSAFE_CHARACTERS.sub("-", text).strip("-").lower()
+    return _UNSLUGGED.sub("-", text).strip("-").lower()
 
 
 def _sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
     """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
-    if len(name) > MAX_SANDBOX_NAME_LENGTH:
+    if not valid_sandbox_name(name):
         raise FoundryError(
             f"sandbox name {name!r} is over {MAX_SANDBOX_NAME_LENGTH} characters; shorten the project or task name"
         )
@@ -210,8 +204,7 @@ def _recorded_variables(definition: SandboxDefinition) -> SessionVariables:
     except FoundryError as error:
         raise FoundryError(
             f"sandbox {definition.name} was created with session variables this foundry doesn't set ({error}), "
-            "so its agent kit would use them; remove it with "
-            f"`sbx env rm --force sessions/{definition.name}`, delete sessions/{definition.name}/, and launch again"
+            f"so its agent kit would use them; {recreate_hint(definition.name)}"
         ) from None
 
 
@@ -227,6 +220,29 @@ def _require_same_sandbox(sandbox_name: str, *, recorded: SessionVariables, want
             f"sandbox {sandbox_name} already exists for a different role, task or repository "
             f"(role {recorded.role_name!r}, task {recorded.task.id!r}, repository {recorded.repo_url!r}); "
             "either its name collides with this one, so use a task id that gives a different name, "
-            "or the project's url has changed since, so remove the sandbox and "
-            f"sessions/{sandbox_name}/ to start over."
+            f"or the project's url has changed since, so {recreate_hint(sandbox_name)}"
         )
+
+
+def _require_own_kit(sandbox_name: str, *, recorded: Path, own: Path) -> None:
+    """Raise unless the sandbox mounts this foundry's agent kit. sbx fixed the mount when it created the sandbox:
+    a copied foundry would rebuild the original's runtime under the original's sandboxes, and a moved one's
+    recorded kit is gone."""
+    if recorded.resolve() == own.resolve():
+        return
+    if recorded.is_dir():
+        raise FoundryError(
+            f"{sandbox_name} mounts the agent kit at {recorded}, not this foundry's ({own}): "
+            f"launch it from the foundry there, or {recreate_hint(sandbox_name)}"
+        )
+    raise FoundryError(
+        f"{sandbox_name} mounts the agent kit at {recorded}, which is gone: {recreate_hint(sandbox_name)}"
+    )
+
+
+def recreate_hint(sandbox_name: str) -> str:
+    """How to start a sandbox over, for a message that ends by saying so."""
+    return (
+        f"recreate it: `sbx env rm --force sessions/{sandbox_name}`, delete sessions/{sandbox_name}/, and launch "
+        "again (see Recreating a sandbox in the README)"
+    )

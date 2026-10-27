@@ -8,7 +8,7 @@ definition.
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -33,11 +33,30 @@ class LaunchRequest:
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
 
 
+@dataclass(frozen=True)
+class PreparedSandbox:
+    """A sandbox start() prepared, ready for the agent: what launch prints, and the sandbox to attach to."""
+
+    definition: SandboxDefinition
+    ssh_agent_socket_path: Path
+    sandbox: SbxCli
+    init_output: str = ""
+    """What the init command printed."""
+
+
 def launch(request: LaunchRequest) -> NoReturn:
     """Prepare the sandbox and replace this process with the agent's session in it.
 
     Composition root. Raises SandboxError if anything before the hand-over fails.
     """
+    prepared = start(request, report=lambda line: print(line, file=sys.stderr))
+    print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
+    prepared.sandbox.attach()
+
+
+def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: None) -> PreparedSandbox:
+    """Everything launch does before handing over: prune, then prepare the sandbox, up to but not including
+    attaching the agent. Raises SandboxError if any of it fails."""
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
     ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
@@ -48,17 +67,15 @@ def launch(request: LaunchRequest) -> NoReturn:
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
-        print(
-            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
-        )
-    prepare(request, definition, ssh_agent, sandbox)
-    print(launch_summary(request, definition, ssh_agent.socket_path), file=sys.stderr)
-    sandbox.attach()
+    if pruned := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
+        # Reported now, not returned: the preparation below can fail, and what was pruned stays pruned.
+        report(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned)}")
+    init_output = prepare(request, definition, ssh_agent, sandbox)
+    return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output)
 
 
-def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> None:
-    """Everything up to, but not including, attaching the agent."""
+def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> str:
+    """Everything up to, but not including, attaching the agent. Returns what the init command printed."""
     _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
@@ -66,8 +83,7 @@ def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: Ss
     sandbox.give_github_ssh_access()
     sandbox.set_github_token_file(request.github_token_path)
     _require_forwarded_keys(ssh_agent, sandbox)
-    if request.init_command:
-        _run_init(sandbox, request.init_command)
+    return _run_init(sandbox, request.init_command) if request.init_command else ""
 
 
 def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
@@ -123,7 +139,8 @@ def _require_forwarded_keys(ssh_agent: SshAgent, sandbox: Sandbox) -> None:
         )
 
 
-def _run_init(sandbox: Sandbox, init_command: Sequence[str]) -> None:
+def _run_init(sandbox: Sandbox, init_command: Sequence[str]) -> str:
     result = sandbox.run(init_command)
     if result.returncode != 0:
         raise SandboxError(f"init failed ({' '.join(init_command)}):\n{result.stdout}{result.stderr}".rstrip())
+    return result.stdout

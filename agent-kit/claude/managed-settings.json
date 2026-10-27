@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$AGENT_KIT_DIR/claude/hooks/guard-bash\"",
+            "command": "/usr/bin/python3 -IS /etc/claude-code/agent_runtime.pyz claude-hook guard-bash",
             "timeout": 10
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$AGENT_KIT_DIR/claude/hooks/session-check\"",
+            "command": "/usr/bin/python3 -IS /etc/claude-code/agent_runtime.pyz claude-hook session-check",
             "timeout": 30
           }
         ]

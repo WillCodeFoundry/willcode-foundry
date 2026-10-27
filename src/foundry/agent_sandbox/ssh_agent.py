@@ -61,7 +61,7 @@ class SshAgentRegistry:
         return sorted(pruned)
 
     def _socket_path(self, sandbox_name: str) -> Path:
-        return self._sockets_dir / f"{sandbox_name}.sock"
+        return ssh_agent_socket_path(sandbox_name, self._sockets_dir)
 
     def _recently_touched(self, sandbox_name: str) -> bool:
         """Whether the sandbox's socket was touched in the last 10 minutes, as a launch in progress's is."""
@@ -96,6 +96,11 @@ class SshAgentRegistry:
         command = " ".join(_start_command(self._socket_path(_NAME_PLACEHOLDER)))
         prefix, suffix = command.split(_NAME_PLACEHOLDER)  # name must appear exactly once
         return re.compile(re.escape(prefix) + r"(?P<sandbox>[^/\s]+)" + re.escape(suffix))
+
+
+def ssh_agent_socket_path(sandbox_name: str, sockets_dir: Path = SSH_AGENT_SOCKETS_DIR) -> Path:
+    """Where a sandbox's ssh-agent listens, known before it starts."""
+    return sockets_dir / f"{sandbox_name}.sock"
 
 
 def _start_command(socket_path: Path) -> tuple[str, ...]:

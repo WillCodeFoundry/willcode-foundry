@@ -13,6 +13,9 @@ secrets/github/*
 # Per-session records written by the foundry
 sessions/
 
+# The agent runtime, built into the kit at every launch (foundry.runtime_build)
+agent-kit/.build/
+
 # Local overrides of instance config
 config/*.local.yaml
 

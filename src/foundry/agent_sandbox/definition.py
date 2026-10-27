@@ -5,14 +5,25 @@ when a sandbox is first created, and read back on every launch: sbx fixes a
 sandbox's mounts at creation, so the file must not change afterwards.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Final
 
 import yaml
 
 from foundry.agent_sandbox.errors import SandboxError
+
+MAX_SANDBOX_NAME_LENGTH: Final = 64
+"""The name also names the sandbox's ssh-agent socket, whose path length is limited."""
+_SANDBOX_NAME = re.compile(r"[A-Za-z0-9.+-]+")
+"""The characters sbx accepts in a name."""
+
+
+def valid_sandbox_name(name: str) -> bool:
+    """Whether sbx, and the ssh-agent socket it names, accept ``name``."""
+    return 0 < len(name) <= MAX_SANDBOX_NAME_LENGTH and _SANDBOX_NAME.fullmatch(name) is not None
 
 
 @dataclass(frozen=True)
@@ -27,6 +38,13 @@ class SandboxDefinition:
     """Mounted read-only, as the sandbox's one additional workspace."""
     variables: Mapping[str, str]
     """Environment variables set inside the sandbox."""
+
+    def __post_init__(self) -> None:
+        if not valid_sandbox_name(self.name):
+            raise SandboxError(
+                f"{self.name!r} isn't a sandbox name sbx accepts: letters, digits, '.', '+' and '-', at most "
+                f"{MAX_SANDBOX_NAME_LENGTH} characters"
+            )
 
     @classmethod
     def read(cls, definition_dir: Path) -> "SandboxDefinition":

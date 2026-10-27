@@ -9,7 +9,7 @@ $ uv sync
 $ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
 $ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
 $ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
-$ scripts/update-skills                                    # merge upstream's changes into the agent kit's copied skills
+$ uv run foundry skills update                            # merge upstream's changes into the agent kit's copied skills
 ```
 
 `uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`, and every role listed must have its folder in `agent-kit/roles/<role>/`, holding its `ROLE.md` and `gitconfig`: foundry refuses to run any command otherwise; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
@@ -20,7 +20,7 @@ $ scripts/update-skills                                    # merge upstream's ch
 .
 ├── pyproject.toml                # the `foundry` package and command
 ├── src/foundry/                  # launcher code (see below)
-├── scripts/update-skills         # merges upstream's changes into the kit's copied skills; run on your machine
+├── src/agent_runtime/            # the code that runs inside a sandbox, around the agent (see below)
 ├── tests/
 ├── config/
 │   ├── foundry.yaml              # instance name, projects (clone URLs), roles
@@ -34,29 +34,24 @@ $ scripts/update-skills                                    # merge upstream's ch
 │       └── LEARNINGS.md
 ├── agent-kit/                    # everything an agent is given (read-only mount)
 │   ├── AGENTS.md                 # instructions shared by every role
-│   ├── bin/
-│   │   ├── session-init          # what the launcher runs: session-setup, hardening on the first launch, then the verify on every launch
-│   │   ├── session-setup         # the agent user's part: clones the project, sets up checkouts, hooks, identity, instructions
-│   │   ├── session-harden        # as root: installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; --verify, as the agent: checks it all
+│   ├── .build/
+│   │   └── agent_runtime.pyz     # src/agent_runtime/, built here at every launch; untracked
 │   ├── claude/
-│   │   ├── managed-settings.json # Claude Code policy: only these hooks and permissions apply
-│   │   └── hooks/                # guard-bash (PreToolUse), session-check (Stop)
+│   │   └── managed-settings.json # Claude Code policy: only these hooks and permissions apply; they run the runtime
 │   ├── git/
 │   │   ├── gitconfig             # behaviour shared by every role (pull.rebase, push.default, ...)
 │   │   └── allowed_signers       # one line per signing role, for verifying commits
-│   ├── hooks/                    # git hooks; core.hooksPath points here
+│   ├── hooks/                    # git hooks; core.hooksPath points here. Two-line sh stubs, each exec'ing the runtime's git-hook command
 │   │   ├── pre-commit            # no task notes on the task branch; only this task's folder on agent-notes
 │   │   ├── prepare-commit-msg    # adds the Task: trailer on the task branch
 │   │   └── pre-push              # only this task's branch and agent-notes
-│   ├── lib/
-│   │   └── hooks.sh              # helpers the git hooks share: refusals, the current branch
 │   ├── roles/<role>/
 │   │   ├── ROLE.md               # identity, method, definition of done, boundaries
 │   │   ├── gitconfig             # name, email, key::signing key; includes ../../git/gitconfig
 │   │   ├── memory/               # curated knowledge, one file per topic
 │   │   └── skills/<name>         # a link to each of the role's skills (../../../skills/<name>)
 │   └── skills/
-│       ├── LICENSE-mattpocock    # copied from the source repository at that commit
+│       ├── LICENSE-mattpocock-skills  # copied from the source repository at that commit
 │       ├── git-conventions/      # the foundry's own skill: commit messages and pull request titles
 │       └── tdd/, codebase-design/, …  # copied from upstream, edited in place for the foundry
 ├── secrets/                      # untracked except .gitkeep
@@ -71,7 +66,7 @@ $ scripts/update-skills                                    # merge upstream's ch
 | Folder | Written by | Tracked |
 |---|---|---|
 | `src/`, `tests/`, `config/` | You | Yes |
-| `agent-kit/` | You, plus the harvest step for `memory/` | Yes |
+| `agent-kit/` | You, plus the harvest step for `memory/` | Yes, except `.build/`, which the launcher writes |
 | `secrets/` | You | No |
 | `sessions/` | The launcher | No |
 
@@ -95,21 +90,28 @@ The words used here, and in the code:
 | **deviation** | One way a repository differs from the repo policy, with its diff |
 | **ruleset change** | One ruleset `foundry repo check --fix` created or updated |
 | **GitHub**, **GhCli** | The interface foundry needs from GitHub (read rulesets and files, create and update rulesets), and that implemented through the `gh` command line, signed in as you |
-| **GitClone** | A shallow clone of a project's repository in a folder you give it, made with git and your own access: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
+| **ProjectClone** | A throwaway, shallow clone of a project's repository that `foundry task create` uses to start a task's branches, made with git and your own access in a folder you give it: lists the remote's branches, checks one out (starting it empty if it doesn't exist), writes and commits files, signing each with SSH and your `user.signingkey`, and pushes branches together |
 
-1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. A session a stopped launch left without its definition is finished if it holds only an empty `workspace/`, and refused otherwise. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name, and so is a sandbox whose session variables this foundry would no longer set: one created before a variable was added or renamed, whose kit would use the old names. The launcher never removes a sandbox: to start one over, remove it yourself with `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only, and its session variables are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`, and the task's names from `Task`: `AGENT_TASK_BRANCH`, `AGENT_NOTES_BRANCH`, `AGENT_NOTES_ROOT`, `AGENT_TASK_NOTES`, `AGENT_TASK_FILE`, so the kit and its instructions spell none of them out.
+1. `foundry run PROJECT ROLE TASK` looks the project and role up in `config/foundry.yaml` and names the sandbox `<role>-<project>-<task>`. The first time, it creates the session: the sandbox definition, `sessions/<sandbox>/sbxenv.yaml`, and the empty `sessions/<sandbox>/workspace/` that sbx requires as the primary workspace, though nothing is put in it. A session a stopped launch left without its definition is finished if it holds only an empty `workspace/`, and refused otherwise. Later launches reuse the definition and re-attach, since sbx fixes a sandbox's mounts when it is created. A launch whose role, task or repository differs from the existing definition's is refused, since two of them can slug to one sandbox name, and so is a sandbox whose session variables this foundry would no longer set: one created before a variable was added or renamed, whose kit would use the old names. The launcher never removes a sandbox: to start one over, [recreate it](#recreating-a-sandbox) yourself; its ssh-agent is stopped by the next launch (step 2). The only real mount is `agent-kit/`, read-only. At every launch, the launcher builds `src/agent_runtime/` into that kit's `.build/agent_runtime.pyz`. The kit the sandbox definition records must be this foundry's: a copied foundry launching the original's sandbox is refused, since it would swap the runtime under the original's sandboxes, and so is a moved foundry's, whose kit is gone; both say to recreate the sandbox. The archive is renamed over the old one, so a process that has it open keeps reading the old one whole, and is left alone when nothing changed; a failed build aborts the launch. The session variables, named once in `agent_runtime.contract`, are `AGENT_ROLE`, `AGENT_TASK`, `AGENT_KIT_DIR`, `AGENT_REPO_URL`, `AGENT_PROJECT_DIR`, `AGENT_NOTES_DIR`, and the task's names from `Task`: `AGENT_TASK_BRANCH`, `AGENT_NOTES_BRANCH`, `AGENT_NOTES_ROOT`, `AGENT_TASK_NOTES`, `AGENT_TASK_FILE`, so the kit and its instructions spell none of them out.
 2. `foundry.agent_sandbox` first kills the ssh-agents of sandboxes that are stopped or removed, as `foundry prune` does: it compares the agents it started (found by their command line, `ssh-agent -a /tmp/sbx-agents/<sandbox>.sock -s`) with `sbx ls --json`, and kills each whose sandbox is missing or `stopped`; one a launch prepared in the last 10 minutes is spared. An idle agent only holds a private key, and launching its sandbox again starts a new one; sbx lists every sandbox its user has, so another foundry instance's running sandboxes keep their agents. It then starts a private `ssh-agent` for the sandbox holding only `secrets/ssh/<role>`, creates the sandbox from its definition if it doesn't exist (`sbx env create`), allows `github.com:22`, seeds GitHub's host keys, and checks from inside that the sandbox sees exactly that one key. If `secrets/github/<role>.token` exists, sbx is told to read the token from it on the host (`sbx secret set --command`), so the launcher never handles the token itself; otherwise the `github` secret is cleared.
-3. It runs `agent-kit/bin/session-init` inside the sandbox (`sbx env exec`), which first runs `session-setup` as the agent user: it clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `task/$AGENT_TASK`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, links the role's `skills/` folder as `~/.claude/skills` (see [Skills](#skills)). On the first launch, `session-init` then runs `session-harden` as root: it installs Claude's managed settings and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too), On every launch, `session-init` then runs `session-harden --verify` as the agent, with the groups sbx gives it: it checks that the agent can't run sudo, can't `su` to root, can't write to the Docker socket, and that the managed settings are root-owned, read-only and the same as `agent-kit/claude/managed-settings.json`. A sandbox that fails any check doesn't start the agent; one hardened by an older kit needs recreating. The launch aborts if any step fails.
+3. It runs the runtime's `session-init` inside the sandbox (`sbx env exec`, as `/usr/bin/python3 -IS agent-kit/.build/agent_runtime.pyz session-init`), which first runs `session-setup` as the agent user: it stops at once if the role's folder lacks `ROLE.md` or `gitconfig`, as `foundry` refuses on the host, then clones `$AGENT_REPO_URL` into `$AGENT_PROJECT_DIR`, checks out `$AGENT_TASK_BRANCH`, adds the `agent-notes` worktree, points `core.hooksPath` at the kit, includes the role's `gitconfig`, writes the agent's `~/.claude/CLAUDE.md` importing `AGENTS.md`, the role's `ROLE.md` and the task's `TASK.md` so the agent starts briefed, links the role's `skills/` folder as `~/.claude/skills` (see [Skills](#skills)). On the first launch, `session-init` then runs `harden` as root, through sudo, given only `AGENT_KIT_DIR`: it installs Claude's managed settings, links `/etc/claude-code/agent_runtime.pyz`, which their hooks and the git hooks run, to the kit's runtime, and removes the agent's ways to root: sudo, `su` (root's password is locked) and Docker, whose daemon mounts the sandbox's own filesystem. sbx gives agent processes the `docker` group whatever `/etc/group` says, so the Docker socket is made root-only instead (`/etc/docker/daemon.json` sets its group to `root`, and the current socket is changed too). On every launch, `session-init` then runs `check-hardening` as the agent, with the groups sbx gives it: it checks that the agent can't run sudo, can't `su` to root, can't write to the Docker socket, that the managed settings are root-owned, read-only and the same as `agent-kit/claude/managed-settings.json`, that the hooks' link points to the kit's runtime, in a folder root owns, that it can't write anywhere in the agent kit, which proves the mount is read-only, that every folder from `/` down to the kit belongs to root and lets it rename nothing on the way, since another kit put at the path would be what the hooks' link reaches, and that `/usr/bin/python3` resolves to a root-owned file it can't write, since every hook runs it. A sandbox that fails any check doesn't start the agent, naming every check it failed; one hardened by an older kit needs [recreating](#recreating-a-sandbox). The launch aborts if any step fails.
 4. `sbx env run` attaches the agent, with permission prompts off (see [What protects what](#what-protects-what)). It works per `AGENTS.md` and its `ROLE.md`, committing code to `task/<task>` and notes to `agent-notes`, pushing both.
 5. The launcher replaces itself with `sbx`, so it never learns how the session ended, or even whether the agent started. Harvest (not yet built) will record the outcome. It reads `LEARNINGS.md` from `agent-notes` and files cross-project lessons into the role's `memory/`.
 
-Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.check_project` and `fix_project`), which is what the tests call, with fakes for GitHub, the sandbox and the host's processes (`FakeGitHub` in `tests/test_repo_policy.py`, its only user, and fixtures in `tests/agent_sandbox/conftest.py`) and no patching.
-
-**Sandboxes created with other session variables**, before one was added or renamed, are refused with the variables that differ. Recreate one as below: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`, and launch again.
-
-**Sessions created before the workspace moved into the session** point their definition at a temporary directory under `/tmp`. Once the OS clears it, launching one fails with `workspace '…' is not a directory`. Remove such a session and launch again: `sbx env rm --force sessions/<sandbox>`, then delete `sessions/<sandbox>/`.
+Each command has a composition root that builds the real dependencies (`run.main`, `task.create_main`, `repo.check_main`, `skills.update_main`, `prune.main`) and a function that takes them as parameters (`run.prepare_launch`, `task.create`, `repo_policy.check_project` and `fix_project`, `skills.update`; `prune.main` reports what `agent_sandbox.prune` removed), which is what the tests call, with fakes for GitHub, the sandbox and the host's processes (`FakeGitHub` in `tests/test_repo_policy.py`, its only user, and fixtures in `tests/agent_sandbox/conftest.py`) and no patching.
 
 Preconditions the launcher does not create: the task, which `foundry task create PROJECT TASK` creates in the project's repository, with git and your own access to it: the branch `task/<task>` from the default branch, and `.agent/<task>/` on `agent-notes`, a copy of `config/task-template/` (`TASK.md`, `PROGRESS.md`, `LEARNINGS.md`; a template without a `TASK.md` is refused). Task ids are lowercased, by `foundry task create` and `foundry run` alike: `WCF-0042` is task `wcf-0042`. Then write the task in its `TASK.md` yourself, or run the planner, which drafts it with you and writes it once you approve. The first task creates `agent-notes` as an orphan branch, sharing no history with the code. It refuses a task that already exists. Both branches are pushed together (`git push --atomic`), so a failure leaves neither.
+
+### Recreating a sandbox
+
+sbx fixes a sandbox's definition and mounts when it creates it, so some sandboxes can't be launched again and must be recreated:
+
+- **one created before the agent runtime,** when the kit's code was bash scripts: its managed settings run hooks that no longer exist, and `check-hardening` refuses it. Recreate every sandbox after updating to this version;
+- **one hardened while the Claude hooks' command was `hook`,** before it became `claude-hook`: its installed managed settings differ from the kit's, and `check-hardening` refuses it;
+- **one created with other session variables,** before one was added or renamed: the launch is refused, naming the variables that differ;
+- **one whose workspace was under `/tmp`,** from before the workspace moved into the session: once the OS clears it, launching fails with `workspace '…' is not a directory`.
+
+To recreate one: `sbx env rm --force sessions/<sandbox>`, delete `sessions/<sandbox>/`, and launch again.
 
 ## What protects what
 
@@ -118,12 +120,13 @@ Two kinds of control, and only the first is a boundary:
 | Control | Enforced by | Holds against |
 |---|---|---|
 | Sandbox isolation, network policy, read-only `agent-kit/` mount | sbx / Docker | anything in the sandbox |
-| Managed settings: permission mode, which hooks run, no attribution | root-owned file; `session-harden` removes sudo and `su`, and makes the Docker socket root-only; `session-harden --verify` checks all of it, as the agent, on every launch | anything in the sandbox |
+| Managed settings: permission mode, which hooks run, no attribution | root-owned file in a root-owned folder the agent can't write; `harden` removes sudo and `su`, and makes the Docker socket root-only; `check-hardening` checks all of it, as the agent, on every launch | anything in the sandbox |
+| What the hooks and the launch run: `agent-kit/.build/agent_runtime.pyz`, on `/usr/bin/python3 -IS`; the managed hooks through a root-owned link to it | the read-only mount, the root-owned link, and the root-owned interpreter; `check-hardening` checks all three | anything in the sandbox |
 | One SSH key and token per role | the credentials' own scope on GitHub | anything in the sandbox |
 | Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets | anything with the role's credentials |
 | Git hooks (`agent-kit/hooks/`) | git, via `core.hooksPath` | mistakes only |
 | `guard-bash` (PreToolUse) | Claude Code, on Bash commands | mistakes only |
-| `session-check` (Stop) | Claude Code, at end of turn | forgetting to commit or push |
+| `session-check` (Stop) | Claude Code, at end of turn; it trusts the environment Claude Code gives it, which a settings file the agent writes can change | forgetting to commit or push |
 
 The git hooks and `guard-bash` run inside the sandbox, so an agent that set out to skip them could: through a script, an alias, another language, or by editing `.git/config`. They only keep rules nothing else enforces, and explain the rule in the refusal:
 
@@ -133,6 +136,8 @@ The git hooks and `guard-bash` run inside the sandbox, so an agent that set out 
 - `guard-bash`: refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the hooks above.
 
 Force-pushes, deletions, history rewrites and pushes elsewhere are left to the rulesets, which refuse them on the server. What must hold whatever the agent does belongs in the rows above the hooks.
+
+The rows above rest on one rule: **code that managed settings reference, or that the launcher runs, lives in the agent kit**, and runs from its read-only mount. Managed settings fix which hook runs; a writable copy of its code would let the agent change what that hook does. So the runtime is never copied into the sandbox, and every call into it is `/usr/bin/python3 -IS <kit>/.build/agent_runtime.pyz <command>`: the template's own interpreter, never `env python3`, which follows the agent's `PATH`, and `-IS`: `-I` ignores `PYTHONPATH`, `PYTHON*` variables and user site-packages, so the agent can't shadow the package, and `-S` skips `site`, so a `.pth` file in a site-packages folder can't run before it; the runtime needs only the standard library. Neither finds the runtime through `$AGENT_KIT_DIR`. Managed settings name `/etc/claude-code/agent_runtime.pyz`, a link root mode makes to the kit's runtime, beside the settings in their root-owned folder: a settings file the agent writes can set Claude Code's environment, so a hook command reading a variable would run whatever the agent pointed it at. The git hooks run it through the same link: each is a two-line `sh` stub, `exec /usr/bin/python3 -IS /etc/claude-code/agent_runtime.pyz git-hook <hook> "$@"`, since the agent sets the environment of its own `git` commands too. A non-interactive `sh` reads no startup file, and the stub names every path, so neither `PATH` nor `ENV` changes what it runs. Without the link, before hardening or after it was removed, Python can't open the runtime, and git refuses the commit rather than skip the rule.
 
 ### Checking repositories against the repo policy
 
@@ -167,17 +172,20 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
+├── commands/skills.py  # foundry skills update
+├── runtime_build.py    # builds src/agent_runtime/ into a kit's .build/agent_runtime.pyz, atomically
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
+├── skills.py           # the kit's copied skills: read their source, merge upstream's changes in (plan, then apply)
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
-├── git_clone.py        # GitClone: a shallow clone of a project's repository, through git: check out, write, commit, push
-├── paths.py            # the only module that knows the instance layout; functions taking root
+├── project_clone.py    # ProjectClone: a throwaway, shallow clone of a project's repository, through agent_runtime.git: check out, write, commit, push
+├── paths.py            # the only module that knows the instance layout, functions taking root; what is inside the agent kit is agent_runtime.agent_kit's
 ├── config.py           # loads and validates config/foundry.yaml; Role: a role's SSH key and optional token
 ├── session.py          # open_or_create: names the sandbox, creates its session once, refuses a collision; SessionVariables
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
-    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port
+    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port; start() runs it up to attaching the agent and returns a PreparedSandbox, for launch and the sbx smoke tests
     ├── pruning.py      # prune(): what stopped or removed sandboxes leave behind (their ssh-agents)
     ├── definition.py   # the sandbox definition: sbxenv.yaml, the only place that knows sbx's format
     ├── sandbox.py      # the Sandbox port, and SbxCli: it through sbx (env create/exec/run, policy, known hosts, secrets)
@@ -188,27 +196,81 @@ src/foundry/
 
 `agent_sandbox` is the code lifted from the standalone `agent-sandbox` repo, minus the parts the foundry now owns (git identity, `--clone`). It could be moved back out unchanged.
 
+## The agent runtime
+
+```
+src/agent_runtime/        # runs inside a sandbox; the standard library only, never foundry or yaml (a test checks)
+├── __main__.py           # checks the Python version first, then the commands below
+├── contract.py           # the AGENT_* names, which foundry.session also uses, and reading them back; the sandbox's user
+├── agent_kit.py          # where everything sits in the agent kit, what a role's folder must hold, and how its runtime is called; foundry imports it too
+├── session_init.py       # what the launcher runs: setup, hardening on the first launch, then the check on every launch. Owns the handoff to root: the sudo probe, the root command, and the `harden` and `check-hardening` entries
+├── session_setup.py      # the agent user's part: refuses a role folder without ROLE.md or gitconfig, then clones the project, sets up checkouts, hooks, identity, instructions
+├── hardening.py             # what each mode does, on a Machine: as root, installs Claude's managed settings, removes sudo and su, makes the Docker socket root-only; as the agent, checks it all
+├── claude_hooks.py       # guard_bash (PreToolUse), session_check (Stop)
+├── git_hooks.py          # pre_commit, prepare_commit_msg, pre_push, which agent-kit/hooks/ run through git-hook, and their refusals
+├── atomic_files.py       # atomic_write and atomic_symlink: a file or link replaced in one step; foundry imports it too
+└── git.py                # Git: the one way both packages run git (output, output_bytes, result, succeeds), and GitError; foundry imports it too
+```
+
+`foundry` imports four of these modules, `contract`, `agent_kit`, `files` and `git`, and never the reverse; `tests/test_runtime_boundary.py` checks it. A git failure on the host is a `GitError`, which the CLI reports as it does a `FoundryError`.
+
+| Command (`/usr/bin/python3 -IS agent_runtime.pyz …`) | Run by |
+|---|---|
+| `session-init` | the launcher, as the agent, before the agent starts |
+| `session-setup` | `session-init`; never needs root |
+| `harden` | `session-init`, as root through sudo on the first launch, given `AGENT_KIT_DIR` alone: `session_init.harden` |
+| `check-hardening` | `session-init`, as the agent on every launch: `session_init.check_hardening` |
+| `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from managed settings |
+| `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
+
+It targets the repository's Python floor, 3.11, like `foundry`, and the sandbox template ships a newer one, so the tests on CI's Python versions cover it. `__main__` still checks the version before importing anything else, so a template that someday ships an older `python3` fails at `session-init` with what it needs.
+
 Development:
 
 ```console
 $ uv sync --group dev
-$ uv run pytest
-$ uv run ruff check . agent-kit/claude/hooks/guard-bash && uv run ruff format --check . agent-kit/claude/hooks/guard-bash
+$ uv run pytest                  # the host tier: everything below but the two that follow; about 20 seconds
+$ uv run pytest -m docker        # session-init in the sandbox's template image; needs a Docker daemon
+$ uv run pytest -m sbx           # a real sbx sandbox, by hand: see Testing against real sbx
+$ uv run ruff check . && uv run ruff format --check .
 $ uv run mypy
-$ shellcheck --severity=warning --external-sources agent-kit/bin/* agent-kit/hooks/pre-* agent-kit/hooks/prepare-commit-msg agent-kit/claude/hooks/session-check agent-kit/lib/hooks.sh scripts/update-skills
 ```
 
-These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the tests on the newest. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. Run ShellCheck from the repository root: the kit's `source` directives are relative to it.
+The sbx tier runs only when `-m` names it: a hook in `tests/conftest.py` leaves it out of any other run, so a `-m` that replaces the default, such as `-m "not docker"`, can't launch a real sandbox. `-m docker` and `-m sbx` fail, rather than skip, when what they need is missing, since you asked for them, and `-m sbx` lists everything missing at once. A `-m docker` run ends with a line naming the image it tested, digest included (`sandbox image: docker/sandbox-templates:claude-code-docker@sha256:…`), since the tier follows the template's tag. Tests run as an ordinary user, never as root: a run started as root stops before collecting anything, and root runs only inside the `docker` tier's containers.
 
-`tests/agent_kit/` tests the agent kit's scripts directly: `guard-bash` against commands it must allow and refuse, and the git hooks and Stop hook against a throwaway repository with a local origin. They need `git` and `bash`. `tests/test_task.py` likewise creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that every `AGENT_*` variable the agent kit uses is one the sandbox definition sets, and that `config/repo-policy/rulesets.yaml` names a task's branches as `task.py` does. The kit's tests take their variables from a real sandbox definition, through the `kit_env` fixture in `tests/agent_kit/conftest.py`.
+| Folder | Covers | Runs |
+|---|---|---|
+| `tests/` (top level) | `foundry`: config, sessions, tasks, the runtime build, `foundry skills update`, repo policy | host tier |
+| `tests/agent_sandbox/` | the launcher's sbx calls, against fakes of the host and sbx | host tier |
+| `tests/agent_runtime/` | every rule and sequence in the runtime, in-process: hardening, the launch's order, `session-setup`, the git hooks and Claude hooks | host tier |
+| `tests/agent_kit/` | only what the kit as delivered shows: the built pyz, the git-hook command and the stubs' text, the managed settings' commands, the root command handed to sudo | host tier |
+| `tests/sandbox_image/` | `session-init` in containers from the sandbox's template image, as root inside them | `-m docker`; CI's `sandbox-image` job |
+| `tests/sbx/` | a real sbx sandbox: launch, relaunch, restart | `-m sbx`, by hand |
+
+These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the host tier on the newest, and the `docker` tier as its `sandbox-image` job, on every pull request. The image isn't pinned: the tests pull its tag, as sbx does for each new sandbox, so they check what new sandboxes get. The pull is tried three times; with repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a read-only access token), the job logs in first, so Docker Hub's anonymous rate limit can't fail it. A change to the template can turn an unrelated pull request red, with a failure that says what changed. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. The foundry's only shell scripts are the git hooks' two-line stubs, which the `docker` tier runs as written; the rest of the sandbox's code is `agent_runtime`, so ruff, mypy and pytest cover it too.
+
+Each behaviour is tested once, at the cheapest tier that can catch its bug; a higher tier tests only what the lower ones can't, and says so in its docstring. A test that would repeat a lower tier's rule is deleted instead.
+
+`tests/agent_runtime/` calls the runtime in-process, through its seams: `guard_bash` against commands it must allow and refuse; hardening through its two modes on a temporary machine (`hardening.Machine`, built by `tests/support/machine.py`: its own settings, Docker files and sockets, interpreter, and stand-in `sudo`, `su` and `passwd`), root mode then agent mode on the same files, every way the agent could still reach root as a case `check-hardening` must refuse, and root mode's refusals leaving the machine unchanged; `session_init` on that machine, root mode reached through its `run_as_root` seam (first launch, relaunch, a failing root mode or setup); `session_setup` given a `home`; and the git hooks' rules and session-check against real checkouts that `session_setup` made from a local origin, each hook given the repository as a `Git`. The machine models the agent as neither owner nor in the group of what it touches, and who owns each path, since in a test root and the agent are one user. `tests/agent_kit/` tests the kit as delivered, with the runtime built into a copy of it once per run (the `built_kit` fixture in `tests/conftest.py`, so no test writes into `agent-kit/.build/`): the exact command `session-init` hands to `sudo` (a stand-in alone on `PATH` with `git`, recording it without running it), `session-setup` through the pyz, the `git-hook` command (a refusal stops git, git's arguments reach the hook) and the stubs' text (each execs the runtime through the hardened link under its own name), the Stop hook against real checkouts, the managed settings' commands as written, and that the pyz imports nothing outside the standard library. They need `git`, and `/usr/bin/python3`, which the managed settings name. Shared helpers are in `tests/support/`; the conftests hold only fixtures and pytest hooks. `tests/test_task.py` creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that every `AGENT_*` variable the agent kit and runtime use is one the sandbox definition sets and one of them reads, and that `config/repo-policy/rulesets.yaml` names a task's branches as `task.py` does. `tests/test_git_isolation.py` checks the suite's git leaves your own configuration alone, whatever `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` or a hook's `GIT_DIR` say.
+
+`tests/sandbox_image/` runs `session-init` as the launcher does, as the agent, in containers from the template image sbx starts Claude Code sandboxes from (`docker/sandbox-templates:claude-code-docker`). Each container mounts a world-writable copy of the built kit read-only at its host path, as sbx does, and has a Docker socket the agent reaches only through a group added by number, as sbx gives it the docker group. The tests check the first launch hardens for real (settings root's, root's password locked, sudo gone, the socket closed, the kit unwritable, the hooks' link in place and run as written whatever `AGENT_KIT_DIR` says), the git hooks as written by real commits and pushes as the agent (the trailer, even with `--no-verify`; notes refused on the task branch; only the task's branch and `agent-notes` pushed; nothing the agent sets in its environment changing a rule; git stopping without the link), the relaunch only checks, the check sees real permissions, and the mount, not file modes, protects the kit. They need Docker only through its command line.
+
+### Testing against real sbx
+
+`tests/sbx/` launches a real sbx sandbox, up to but not including attaching the agent, so Claude Code never starts. It shows what nothing else can: sbx accepts our sandbox definition, mounts the kit read-only at its host path, runs `session-init` as the agent with sudo the first time, and its private dockerd keeps the Docker socket root's after the sandbox restarts. It replaces launching a sandbox twice by hand.
+
+- **Prerequisites:** sbx installed, with KVM, and `sbx login`; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-smoke`. The suite checks these before any sbx call, and fails listing every one missing.
+- **The command:** `uv run pytest -m sbx`. No workflow runs it.
+- **When:** after upgrading sbx, and before merging changes to `agent-kit/`, `src/agent_runtime/` or `src/foundry/agent_sandbox/`.
+- **What it leaves:** nothing. It acts only on the sandbox `dev-foundry-test-sbx-smoke` and `sessions/dev-foundry-test-sbx-smoke/`, removing both before it starts and after it ends, whatever the outcome, then prunes ssh-agents as `foundry prune` does. Expect a few minutes, mostly creating the sandbox.
 
 ## Skills
 
-Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each records in its `SKILL.md`'s frontmatter (`metadata.source`) where it came from: the upstream repository, its path there, the upstream commit it's up to date with, the author and the licence, whose text is `agent-kit/skills/LICENSE-mattpocock`. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
+Six of the agent kit's skills come from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. Each records in its `SKILL.md`'s frontmatter (`metadata.source`) where it came from: the upstream repository, its path there, the upstream commit it's up to date with, the author and the licence, whose text is `agent-kit/skills/LICENSE-mattpocock-skills`, named after the repository. `pr` also keeps its own credit to Dex Horthy (Humanlayer) and its `CREDITS.md`. `git-conventions` is the foundry's own.
 
 Each role's skills are links in `agent-kit/roles/<role>/skills/`, one per skill (`ls` it to see them); `session-setup` links that folder as the agent's `~/.claude/skills` at every launch, so Claude Code loads them as skills. To give a role a skill, `ln -s ../../../skills/<name> agent-kit/roles/<role>/skills/`; a test checks every link points at a skill, and that a role has every skill its skills call. They are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and review in rounds through `REVIEW.md`. The adaptations are edits to the copies themselves, so change a skill as you would any file in the kit.
 
-- **To update,** by hand: `scripts/update-skills`, or `scripts/update-skills COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit.
+- **To update,** by hand: `foundry skills update`, or `foundry skills update COMMIT` for a given upstream commit. For each skill with a `metadata.source`, it applies upstream's changes since the recorded commit, leaving out `agents/` (Codex-only metadata), with git's three-way merge, and records the new commit. Each repository's commit is resolved once, into a ref of the foundry's own (`refs/foundry/skills/<owner>/<repo>`), so its skills all reach the same one. Where upstream changed a line the foundry also changed, the file is left with conflict markers, as in any merge. Review with `git diff HEAD`, resolve, and commit. A copied skill with uncommitted changes stops the update before anything changes, since git's three-way merge works against the index; a patch git rejects outright stops it too, leaving that skill's recorded commit where it was, so the next run tries again.
 - **To see everything the foundry changed in a skill:** after an update has fetched upstream's commit, `git diff <commit>:skills/engineering/tdd HEAD:agent-kit/skills/tdd`.
 - **To copy another skill:** copy its folder from upstream without `agents/`, add a `metadata.source` block like the others', then edit it.
 

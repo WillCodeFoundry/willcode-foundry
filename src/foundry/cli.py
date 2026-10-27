@@ -4,11 +4,12 @@ import argparse
 import sys
 from collections.abc import Callable, Sequence
 
+from agent_runtime.git import GitError
 from foundry.agent_sandbox import SandboxError
-from foundry.commands import prune, repo, run, task
+from foundry.commands import prune, repo, run, skills, task
 from foundry.errors import FoundryError
 
-COMMANDS = (run, task, repo, prune)
+COMMANDS = (run, task, repo, prune, skills)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     handler: Callable[[argparse.Namespace], int] = args.func
     try:
         return handler(args)
-    except (FoundryError, SandboxError) as error:
+    except (FoundryError, SandboxError, GitError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

@@ -5,27 +5,34 @@ rulesets in config/repo-policy/rulesets.yaml, which must spell them out for GitH
 The variables are held in both directions: the kit uses none the session doesn't set, the
 session sets none the kit doesn't read, and AGENTS.md lists exactly the ones it sets."""
 
+import dataclasses
 import re
 from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from agent_runtime import contract
 from foundry import yaml_io
 from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 AGENT_KIT = REPO_ROOT / "agent-kit"
+AGENT_RUNTIME = REPO_ROOT / "src" / "agent_runtime"
+CONTRACT = AGENT_RUNTIME / "contract.py"
 AGENTS_MD = AGENT_KIT / "AGENTS.md"
 RULESETS = REPO_ROOT / "config" / "repo-policy" / "rulesets.yaml"
 
 
 def agent_kit_files() -> list[Path]:
-    """Every text file in the agent kit: its scripts, and the instructions the agent reads."""
+    """Every text file in the agent kit and the runtime it runs: their code, and the instructions the agent reads.
+
+    Not the runtime built into the kit (.build/), which is the runtime's source again.
+    """
     files = []
-    for path in sorted(AGENT_KIT.rglob("*")):
-        if path.is_file():
+    for path in sorted([*AGENT_KIT.rglob("*"), *AGENT_RUNTIME.rglob("*.py")]):
+        if path.is_file() and ".build" not in path.relative_to(REPO_ROOT).parts:
             try:
                 path.read_text()
             except UnicodeDecodeError:
@@ -50,10 +57,24 @@ def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
 def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    """Outside AGENTS.md, which documents them all: a variable only it names is read by nothing."""
-    kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path != AGENTS_MD)
+    """Read by name in the kit, outside AGENTS.md, which documents them all; or, in the runtime, as the field
+    contract.read_environ gives it (AGENT_TASK_BRANCH as ``.task_branch``) anywhere but the contract itself.
+    A variable read nowhere else is read by nothing."""
+    kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path.suffix != ".py" and path != AGENTS_MD)
+    runtime_text = "\n".join(path.read_text() for path in AGENT_RUNTIME.glob("*.py") if path != CONTRACT)
 
-    assert [name for name in session_variables(Task("t1")).to_env() if not re.search(rf"\b{name}\b", kit_text)] == []
+    def is_read(name: str) -> bool:
+        field = name.lower()
+        return bool(re.search(rf"\b{name}\b", kit_text) or re.search(rf"\.{field}\b", runtime_text))
+
+    assert {field.name for field in dataclasses.fields(contract.Environ)} == {name.lower() for name in contract.NAMES}
+    assert [name for name in session_variables(Task("t1")).to_env() if not is_read(name)] == []
+
+
+def test_the_sandbox_definition_lists_the_variables_in_the_contracts_order(
+    session_variables: Callable[[Task], SessionVariables],
+) -> None:
+    assert list(session_variables(Task("t1")).to_env()) == list(contract.NAMES)
 
 
 def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(

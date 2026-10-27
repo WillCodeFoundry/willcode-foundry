@@ -117,7 +117,8 @@ class FakeSandbox:
     def run(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
         self.commands_run.append(command)
-        return subprocess.CompletedProcess(command, self._exit_codes_by_command.get(command, 0), stdout="", stderr="")
+        code = self._exit_codes_by_command.get(command, 0)
+        return subprocess.CompletedProcess(command, code, stdout=f"ran {' '.join(command)}\n", stderr="")
 
     def attach(self) -> NoReturn:
         raise Attached()

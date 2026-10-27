@@ -1,10 +1,12 @@
 """Sessions, through open_or_create against a foundry root under tmp_path; and SessionVariables."""
 
 import dataclasses
+import shutil
 from pathlib import Path
 
 import pytest
 
+from agent_runtime.agent_kit import AgentKit
 from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
@@ -92,14 +94,48 @@ def test_a_sandbox_for_another_role_task_or_repository_is_refused(
         session.open_or_create(tmp_path, project=project, role=role, task=task)
 
 
-def test_the_init_command_runs_the_agent_kit_the_sandbox_was_created_with(tmp_path: Path) -> None:
+def test_the_init_command_runs_the_foundrys_agent_kit(tmp_path: Path) -> None:
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task("t1"))
+
+    assert opened.init_command == AgentKit(tmp_path / "agent-kit").command("session-init")
+
+
+def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> None:
+    """sbx fixed the mount when it created the sandbox, on the original's kit: a copy launching it would rebuild
+    the runtime under the original's sandboxes."""
+    original, copy = tmp_path / "original", tmp_path / "copy"
+    session.open_or_create(original, project=TKT_STORE, role=DEV, task=Task("t1"))
+    shutil.copytree(original, copy)
+    (original / "agent-kit").mkdir()
+
+    with pytest.raises(FoundryError) as refused:
+        session.open_or_create(copy, project=TKT_STORE, role=DEV, task=Task("t1"))
+
+    assert str(refused.value) == (
+        f"dev-tkt-store-t1 mounts the agent kit at {original / 'agent-kit'}, not this foundry's "
+        f"({copy / 'agent-kit'}): launch it from the foundry there, or {session.recreate_hint('dev-tkt-store-t1')}"
+    )
+
+
+def test_a_moved_foundrys_sandbox_needs_recreating(tmp_path: Path) -> None:
+    """The kit the sandbox mounts is gone with the move: sbx can't mount it again."""
     session.open_or_create(tmp_path / "before", project=TKT_STORE, role=DEV, task=Task("t1"))
-    (tmp_path / "before").rename(tmp_path / "after")  # the foundry is moved
+    (tmp_path / "before").rename(tmp_path / "after")
 
-    opened = session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task("t1"))
+    with pytest.raises(FoundryError) as refused:
+        session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task("t1"))
 
-    assert opened.init_command == (str(tmp_path / "before" / "agent-kit" / "bin" / "session-init"),)
-    assert opened.variables.agent_kit_dir == tmp_path / "before" / "agent-kit"  # what the sandbox was told
+    assert str(refused.value) == (
+        f"dev-tkt-store-t1 mounts the agent kit at {tmp_path / 'before' / 'agent-kit'}, which is gone: "
+        f"{session.recreate_hint('dev-tkt-store-t1')}"
+    )
+
+
+def test_the_recreate_hint_points_at_the_readme() -> None:
+    assert session.recreate_hint("s") == (
+        "recreate it: `sbx env rm --force sessions/s`, delete sessions/s/, and launch again "
+        "(see Recreating a sandbox in the README)"
+    )
 
 
 def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> None:

@@ -11,8 +11,6 @@ from pathlib import Path
 from foundry.errors import FoundryError
 
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
-SESSION_INIT_RELATIVE_PATH = Path("bin") / "session-init"
-"""Inside an agent kit: what a sandbox runs before its agent starts."""
 
 
 def find_foundry_root(start_dir: Path | None = None) -> Path:
@@ -29,11 +27,6 @@ def config_path(foundry_root: Path) -> Path:
 
 def agent_kit_dir(foundry_root: Path) -> Path:
     return foundry_root / "agent-kit"
-
-
-def role_dir(foundry_root: Path, role_name: str) -> Path:
-    """A role's folder in the agent kit: its ROLE.md, gitconfig, memory and skills."""
-    return agent_kit_dir(foundry_root) / "roles" / role_name
 
 
 def ssh_key_path(foundry_root: Path, role_name: str) -> Path:
