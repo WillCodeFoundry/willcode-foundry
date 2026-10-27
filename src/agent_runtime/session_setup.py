@@ -68,8 +68,8 @@ def _prepare_checkouts(environ: contract.Environ, kit: AgentKit) -> None:
         # Blobless partial clone: full history of commits, file contents fetched on demand. Keeps large
         # repositories fast without the limits of --depth.
         _git("clone", "--filter=blob:none", environ.repo_url, str(project))
-    _git("config", "core.hooksPath", str(kit.hooks), cwd=project)  # read-only mount
-    _git("fetch", "origin", cwd=project)
+    _git("-C", str(project), "config", "core.hooksPath", str(kit.hooks))  # read-only mount
+    _git("-C", str(project), "fetch", "origin")
 
     # The task must already exist on origin, created with its branch and a TASK.md on the notes branch
     # before any agent runs. Say so plainly rather than let git fail.
@@ -85,16 +85,18 @@ def _prepare_checkouts(environ: contract.Environ, kit: AgentKit) -> None:
         )
 
     if _has_ref(project, f"refs/heads/{environ.task_branch}"):
-        _git("switch", environ.task_branch, cwd=project)
+        _git("-C", str(project), "switch", environ.task_branch)
     else:
-        _git("switch", "-c", environ.task_branch, "--track", f"origin/{environ.task_branch}", cwd=project)
+        _git("-C", str(project), "switch", "-c", environ.task_branch, "--track", f"origin/{environ.task_branch}")
 
     notes = environ.notes_dir
     if not notes.is_dir():
         if _has_ref(project, f"refs/heads/{environ.notes_branch}"):
-            _git("worktree", "add", str(notes), environ.notes_branch, cwd=project)
+            _git("-C", str(project), "worktree", "add", str(notes), environ.notes_branch)
         else:
             _git(
+                "-C",
+                str(project),
                 "worktree",
                 "add",
                 "--track",
@@ -102,7 +104,6 @@ def _prepare_checkouts(environ: contract.Environ, kit: AgentKit) -> None:
                 environ.notes_branch,
                 str(notes),
                 f"origin/{environ.notes_branch}",
-                cwd=project,
             )
 
 
@@ -136,11 +137,11 @@ def _link_skills(role: RoleDir) -> None:
         skills_link.symlink_to(role.skills)
 
 
-def _git(*args: str, cwd: Path | None = None) -> None:
+def _git(*args: str) -> None:
     """Run git, its output going where this command's goes, unlike git.run: what clone and switch print is
     the setup's progress. A failure stops setup, as git reported it."""
     sys.stdout.flush()
-    if subprocess.run(["git", *args], cwd=cwd, check=False).returncode != 0:
+    if subprocess.run(["git", *args], check=False).returncode != 0:
         raise SetupError(f"`git {' '.join(args)}` failed; see git's message above")
 
 
