@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import agent_runtime
 from agent_runtime.agent_kit import AgentKit
 from foundry.errors import FoundryError
 from foundry.runtime_build import build_runtime
@@ -17,6 +18,11 @@ def kit_dir(tmp_path: Path) -> Path:
     kit = tmp_path / "agent-kit"
     kit.mkdir()
     return kit
+
+
+def files_in(archive: Path) -> list[str]:
+    """The archive's files, without the entries zipapp adds for folders."""
+    return [name for name in zipfile.ZipFile(archive).namelist() if not name.endswith("/")]
 
 
 def test_the_runtime_is_built_into_the_kit_with_its_entry_point(kit_dir: Path) -> None:
@@ -42,14 +48,54 @@ def test_building_again_succeeds_and_leaves_nothing_behind(kit_dir: Path) -> Non
     assert sorted(path.name for path in second.parent.iterdir()) == ["agent_runtime.pyz"]
 
 
-def test_a_rebuild_replaces_the_file_whole(kit_dir: Path) -> None:
+def test_a_rebuild_of_changed_source_replaces_the_file_whole(kit_dir: Path, tmp_path: Path) -> None:
     """A reader holding the old file keeps reading all of it: the new one is renamed over it, not rewritten."""
-    built = build_runtime(kit_dir)
+    source = tmp_path / "source"
+    (source).mkdir()
+    (source / "__main__.py").write_text("def main() -> None: ...\n")
+    built = build_runtime(kit_dir, source=source)
+    (source / "added.py").write_text("")
     with built.open("rb") as old:
         old_inode = os.fstat(old.fileno()).st_ino
-        build_runtime(kit_dir)
+        build_runtime(kit_dir, source=source)
         assert built.stat().st_ino != old_inode
         assert zipfile.ZipFile(old).testzip() is None
+
+
+def test_a_rebuild_of_unchanged_source_leaves_the_file_alone(kit_dir: Path) -> None:
+    """A launch rebuilds every time: when nothing changed, a sandbox starting meanwhile keeps the same file."""
+    inode = build_runtime(kit_dir).stat().st_ino
+
+    assert build_runtime(kit_dir).stat().st_ino == inode
+
+
+def test_every_python_file_of_the_package_is_built_in_its_folders_too(kit_dir: Path, tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "sub" / "__pycache__").mkdir(parents=True)
+    for name in (
+        "__main__.py",
+        "sub/__init__.py",
+        "sub/module.py",
+        "sub/__pycache__/module.cpython-311.pyc",
+        "notes.txt",
+    ):
+        (source / name).write_text("")
+
+    built = build_runtime(kit_dir, source=source)
+
+    assert sorted(files_in(built)) == [
+        "__main__.py",
+        "agent_runtime/__main__.py",
+        "agent_runtime/sub/__init__.py",
+        "agent_runtime/sub/module.py",
+    ]
+
+
+def test_the_real_package_is_built_whole(kit_dir: Path) -> None:
+    source = Path(agent_runtime.__file__).parent
+    expected = {f"agent_runtime/{path.relative_to(source)}" for path in source.rglob("*.py")}
+
+    assert set(files_in(build_runtime(kit_dir))) - {"__main__.py"} == expected
 
 
 def test_a_missing_kit_is_reported(tmp_path: Path) -> None:
