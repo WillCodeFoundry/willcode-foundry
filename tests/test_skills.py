@@ -329,11 +329,11 @@ def test_a_source_without_its_commit_is_reported(tmp_path: Path) -> None:
 
 
 def test_the_kits_copied_skills_all_have_a_source() -> None:
-    """Every skill this repository copied records where from; its own skill doesn't."""
+    """Every skill this repository copied records where from; its own skills don't."""
     skills_dir = Path(__file__).parents[1] / "agent-kit" / "skills"
     sources = {path.parent.name: skills.read_source(path) for path in skills_dir.glob("*/SKILL.md")}
 
-    assert sorted(name for name, source in sources.items() if source is None) == ["git-conventions"]
+    assert sorted(name for name, source in sources.items() if source is None) == ["address-review", "git-conventions"]
     assert {source.repo for source in sources.values() if source is not None} == {"mattpocock/skills"}
 
 

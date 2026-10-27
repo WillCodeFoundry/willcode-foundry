@@ -46,7 +46,8 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/ROLE.md` | your role's identity, method, definition of done and boundaries |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
 | `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills/`) are loaded as Claude Code skills; `git-conventions` is read by its path |
-| `$AGENT_KIT_DIR/.build/` | the runtime the hooks run; not for you to call |
+| `$AGENT_KIT_DIR/bin/task` | your task command: where the task stands, and ending your turn (see "Taking turns") |
+| `$AGENT_KIT_DIR/.build/` | the runtime the hooks and `bin/task` run; not for you to call |
 
 You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
 not available to you. If the task needs them, record it under "Blockers" and
@@ -72,6 +73,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
+| `STATE.json` | `bin/task` | The task state: whose turn it is, and the hand-off note from the last turn. **Never edit it.** `bin/task` changes it; the hooks refuse any other change that isn't a legal transition. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -113,17 +115,39 @@ entries as you go, not at the end.
 
 ## 3. Workflow
 
+### Taking turns
+
+A task passes from role to role. Each turn is one role's, or the human's, and
+you were started because it is yours. `bin/task show` says what your turn is
+for: your goal, and the events that end the turn, each with when to send it.
+
+```bash
+"$AGENT_KIT_DIR/bin/task" show                       # where the task stands: your goal and your events
+"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"  # end your turn
+```
+
+- Run `task show` first, and read its hand-off note: the last turn left it for you.
+- Push your code and notes, then end your turn with the event that says what
+  happened. It refuses while either checkout has uncommitted or unpushed work.
+- When you are stuck, end your turn with `block`, the question as its note
+  (see "When to stop and ask").
+- Once your turn has passed, push nothing more, and stop.
+
+The hand-off note is the first thing the next role reads. Say what you did,
+where to look, and anything left open, in a few sentences.
+
 ### Start
 
-1. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
+1. Run `"$AGENT_KIT_DIR/bin/task" show`. If it isn't your turn, stop.
+2. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
    what "done" means: **stop and ask**. Do not guess at scope.
-2. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
+3. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
    continue from "In progress" / "Next" rather than starting over.
-3. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
+4. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
    role's `memory/` that relate to the task. If the project has them, read its
    `ARCHITECTURE.md` and the decisions in `docs/adr/` too: they say how its
    code is built and why.
-4. If starting fresh, write a short plan into `PROGRESS.md` → "Next", commit
+5. If starting fresh, write a short plan into `PROGRESS.md` → "Next", commit
    and push it before writing code.
 
 ### Work in small steps
@@ -152,19 +176,17 @@ after every meaningful step, and always before anything risky or long.
 
 ### Finish
 
-The task is done when every acceptance criterion in `TASK.md` is met. Then:
+Your turn's work is done when its goal is met. Then:
 
 1. Run all project checks one last time.
 2. Make sure the diff against the default branch contains only what the task
    needs: `git diff --stat origin/HEAD...HEAD`
-3. Update `PROGRESS.md`: everything under "Done", with a final line
-   `Status: ready for review`. Tick the criteria you met in your summary, not in
-   `TASK.md`.
+3. Update `PROGRESS.md`: everything under "Done". Tick the criteria you met
+   in your summary, not in `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
-6. Your `ROLE.md` says what happens next (review, the pull request);
-   otherwise tell the human the task is ready, summarising what changed and
-   anything they should check.
+6. End your turn with the event `task show` lists for what happened, and a
+   hand-off note: `"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"`.
 
 If you run out of turns or time, push whatever state you have and make sure
 `PROGRESS.md` → "In progress" says exactly where you stopped.
@@ -229,8 +251,9 @@ uncommitted or unpushed changes.
 
 ## 6. When to stop and ask
 
-Stop, record the question in `PROGRESS.md` → "Blockers", commit, push, and ask
-the human when:
+Stop, record the question in `PROGRESS.md` → "Blockers", commit, push, then
+end your turn with `"$AGENT_KIT_DIR/bin/task" block "<the question>"` and ask
+it in the conversation, when:
 
 - `TASK.md` is missing, unclear, or contradicts the code or itself;
 - the work needs something outside the task's scope, new dependencies, or
@@ -262,3 +285,4 @@ Asking early is always better than guessing.
 - [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
 - [ ] Notes committed and pushed on `$AGENT_NOTES_BRANCH`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation
+- [ ] Your turn ended with `bin/task <event>`, unless you stopped part-way
