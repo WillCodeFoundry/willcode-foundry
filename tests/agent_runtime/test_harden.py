@@ -7,9 +7,10 @@ breaks one thing on a hardened machine and expects verify to refuse it; every re
 leave the machine as it found it.
 
 chmod of sudo and `passwd -l` run against stand-ins: their effect on a real sandbox is checked only by a real
-launch. The machine models the agent as a user who is neither owner nor in the group of what it touches (see
-TemporaryMachine), since in a test root and the agent are one user. No test hardens the real machine: harden
-and verify are always given a temporary one, and SANDBOX is only checked against its literal values.
+launch. The machine models the agent as a user who is neither owner nor in the group of what it touches, and
+who owns each path (see TemporaryMachine), since in a test root and the agent are one user. No test hardens
+the real machine: harden and verify are always given a temporary one, and SANDBOX is only checked against its
+literal values.
 """
 
 import contextlib
@@ -101,13 +102,16 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
     read_only.chmod(0o444)
     for path in (writable, read_only, tmp_path / "absent"):
         assert sandbox.can_write(path) == os.access(path, os.W_OK), path
+    for path in (writable, tmp_path):
+        assert sandbox.owner_of(path) == path.stat().st_uid, path
 
 
 # --- a temporary machine: the second adapter behind harden.Machine ------------------------
 #
 # The agent is modelled as a user who is neither the owner nor in the group of what it touches: it can write
 # a path when the path's "other" bits say so (for a link, its target's). In a test the root owner and the agent
-# are the same user, so os.access would report every file root mode installs as writable.
+# are the same user, so os.access would report every file root mode installs as writable. Ownership is
+# modelled too: every path is root's, the test user's here, unless a test puts another owner in the table.
 
 AGENT_UID = 4242
 """The agent's uid in agent mode; root mode runs as 0. Only what harden reads through the machine sees them."""
@@ -138,6 +142,8 @@ class TemporaryMachine:
     dir: Path
     """Every file the machine holds, except its sockets."""
     passwd_log: Path
+    owners: dict[Path, int]
+    """Who owns a path, where a test says someone else does; any other path is the test user's, root's here."""
 
     @property
     def agent_mode(self) -> harden.Machine:
@@ -157,6 +163,7 @@ def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
     (bin_dir / "python3").symlink_to("python3.14")
     passwd, passwd_log = recording_stand_in(machine_dir, "passwd")
     docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
+    owners: dict[Path, int] = {}
     return TemporaryMachine(
         root_mode=harden.Machine(
             managed_settings=machine_dir / "etc" / "claude-code" / "managed-settings.json",
@@ -170,9 +177,11 @@ def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
             root=ME,
             euid=lambda: 0,
             can_write=other_can_write,
+            owner_of=lambda path: owners.get(path, ME.uid),
         ),
         dir=machine_dir,
         passwd_log=passwd_log,
+        owners=owners,
     )
 
 
@@ -278,58 +287,40 @@ def test_missing_settings_are_refused(hardened, read_only_kit, capsys) -> None:
     )
 
 
-def test_settings_and_interpreter_root_doesnt_own_are_refused(hardened, read_only_kit, capsys) -> None:
-    """A non-root test can't give a file away, so the machine's root becomes someone else instead."""
-    agent_mode = dataclasses.replace(hardened.agent_mode, root=SOMEONE_ELSE)
-    installed = agent_mode.managed_settings
-    python = Path(agent_mode.python)
+def test_settings_root_doesnt_own_are_refused(hardened, read_only_kit, capsys) -> None:
+    installed = hardened.root_mode.managed_settings
+    hardened.owners[installed] = SOMEONE_ELSE.uid
 
     assert_refused(
         capsys,
         read_only_kit,
-        agent_mode,
-        f"replace Claude's managed settings: {installed} isn't owned by uid {SOMEONE_ELSE.uid}",
-        f"replace the hooks' interpreter: {python} (resolving to {python.resolve()})"
-        f" isn't owned by uid {SOMEONE_ELSE.uid}",
+        hardened.agent_mode,
+        f"replace Claude's managed settings: {installed} isn't owned by uid {ME.uid}",
     )
 
 
-@pytest.fixture
-def settings_in_a_folder_root_doesnt_own(hardened: TemporaryMachine) -> Iterator[harden.Machine]:
-    """The hardened machine as the agent sees it, its settings unchanged but in a folder the machine's root
-    doesn't own. Root hands the folder to someone else. Another user can't, so it puts the settings in the
-    system's temporary folder, a folder root owns where anyone may add a file of their own."""
-    agent_mode = hardened.agent_mode
-    if os.geteuid() == 0:
-        os.chown(agent_mode.managed_settings.parent, SOMEONE_ELSE.uid, -1)
-        yield agent_mode
-        return
-    shared = Path(tempfile.gettempdir())
-    if shared.stat().st_uid == ME.uid:
-        pytest.skip(f"{shared} belongs to this user, so it can't stand for a folder root doesn't own")
-    descriptor, name = tempfile.mkstemp(dir=shared, suffix=".json")
-    os.close(descriptor)
-    moved = Path(name)
-    try:
-        moved.write_bytes(agent_mode.managed_settings.read_bytes())
-        moved.chmod(0o644)
-        yield dataclasses.replace(agent_mode, managed_settings=moved)
-    finally:
-        moved.unlink(missing_ok=True)
-
-
-def test_settings_in_a_folder_root_doesnt_own_are_refused(
-    settings_in_a_folder_root_doesnt_own, read_only_kit, capsys
-) -> None:
-    """Whoever owns the folder can swap the settings in it during a session, whoever owns the file."""
-    agent_mode = settings_in_a_folder_root_doesnt_own
-    folder = agent_mode.managed_settings.parent
+def test_an_interpreter_root_doesnt_own_is_refused(hardened, read_only_kit, capsys) -> None:
+    python = Path(hardened.root_mode.python)
+    hardened.owners[python.resolve()] = SOMEONE_ELSE.uid
 
     assert_refused(
         capsys,
         read_only_kit,
-        agent_mode,
-        f"replace Claude's managed settings: {folder} isn't owned by uid {agent_mode.root.uid}",
+        hardened.agent_mode,
+        f"replace the hooks' interpreter: {python} (resolving to {python.resolve()}) isn't owned by uid {ME.uid}",
+    )
+
+
+def test_settings_in_a_folder_root_doesnt_own_are_refused(hardened, read_only_kit, capsys) -> None:
+    """Whoever owns the folder can swap the settings in it during a session, whoever owns the file."""
+    folder = hardened.root_mode.managed_settings.parent
+    hardened.owners[folder] = SOMEONE_ELSE.uid
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"replace Claude's managed settings: {folder} isn't owned by uid {ME.uid}",
     )
 
 

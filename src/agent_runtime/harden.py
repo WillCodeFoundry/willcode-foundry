@@ -11,7 +11,8 @@ agent processes the docker group by number, whatever /etc/group says: root, or a
 different permissions than the agent has.
 
 Both modes act on a Machine: where the sandbox's managed settings, Docker configuration, sockets,
-interpreter and root-reaching commands are, who root is, the effective uid, and what the agent can write.
+interpreter and root-reaching commands are, who root is, the effective uid, what the agent can write, and
+who owns what.
 SANDBOX is the real one, and the callers use it. The tests pass a temporary machine of their own instead,
 so they run root mode and then agent mode on the same files, without root, rather than testing each step
 and check alone: that is how review finding R12 on PR #20 got through. Every step and check is private:
@@ -70,10 +71,16 @@ class Machine:
     """The effective uid this process runs as: 0 in root mode, the agent's in agent mode."""
     can_write: Callable[[Path], bool]
     """Whether the agent can write ``path`` (for a link, its target)."""
+    owner_of: Callable[[Path], int]
+    """The uid that owns ``path``, which decides who can replace it."""
 
 
 def _agent_can_write(path: Path) -> bool:
     return os.access(path, os.W_OK)
+
+
+def _owner_of(path: Path) -> int:
+    return path.stat().st_uid
 
 
 SANDBOX = Machine(
@@ -88,6 +95,7 @@ SANDBOX = Machine(
     root=_ROOT,
     euid=os.geteuid,
     can_write=_agent_can_write,
+    owner_of=_owner_of,
 )
 
 
@@ -111,19 +119,17 @@ def _harden_managed_settings(kit_copy: Path, installed: Path, owner: Owner) -> N
     _install_file(installed, kit_copy.read_bytes(), owner)
 
 
-def _check_managed_settings(
-    installed: Path, kit_copy: Path, owner: Owner, can_write: Callable[[Path], bool]
-) -> list[str]:
-    """The installed settings exist, belong to ``owner``, can't be written by the agent, sit in a folder that
-    belongs to ``owner`` and the agent can't write either, and are the kit's. Whoever can write the folder can
+def _check_managed_settings(installed: Path, kit_copy: Path, machine: Machine) -> list[str]:
+    """The installed settings exist, belong to the machine's root, can't be written by the agent, sit in a folder
+    that belongs to root and the agent can't write either, and are the kit's. Whoever can write the folder can
     swap the settings in it. Settings from an older kit mean older permissions and hooks, so they count as not
     hardened; without the kit's copy, they can't be checked."""
-    if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), owner, can_write):
+    if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), machine):
         return found
     folder = installed.parent
-    if folder.stat().st_uid != owner.uid:
-        return [f"replace Claude's managed settings: {folder} isn't owned by uid {owner.uid}"]
-    if can_write(folder):
+    if machine.owner_of(folder) != machine.root.uid:
+        return [f"replace Claude's managed settings: {folder} isn't owned by uid {machine.root.uid}"]
+    if machine.can_write(folder):
         return [f"replace Claude's managed settings: {folder} is writable"]
     kit_settings = _read_or_none(kit_copy)
     if kit_settings is None:
@@ -224,11 +230,11 @@ def _check_kit_read_only(kit_dir: Path, can_write: Callable[[Path], bool]) -> li
     return []
 
 
-def _check_python(python: str, owner: Owner, can_write: Callable[[Path], bool]) -> list[str]:
+def _check_python(python: str, machine: Machine) -> list[str]:
     """The interpreter every hook and the launch run resolves to a file root owns and the agent can't write."""
     resolved = Path(python).resolve()
     shown = f"{python} (resolving to {resolved})"
-    return _check_owned_read_only(resolved, "the hooks' interpreter", shown, owner, can_write)
+    return _check_owned_read_only(resolved, "the hooks' interpreter", shown, machine)
 
 
 # --- the two modes -------------------------------------------------------------------
@@ -265,12 +271,12 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
         )
         return 1
     found = [
-        *_check_managed_settings(machine.managed_settings, _kit_settings(kit_dir), machine.root, machine.can_write),
+        *_check_managed_settings(machine.managed_settings, _kit_settings(kit_dir), machine),
         *_check_sudo(machine.sudo),
         *_check_su(machine.su),
         *_check_docker_sockets(machine.checked_sockets, machine.can_write),
         *_check_kit_read_only(kit_dir, machine.can_write),
-        *_check_python(machine.python, machine.root, machine.can_write),
+        *_check_python(machine.python, machine),
     ]
     if found:
         lines = "".join(f"  {line}\n" for line in found)
@@ -287,16 +293,14 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
 # --- helpers -------------------------------------------------------------------------
 
 
-def _check_owned_read_only(
-    path: Path, what: str, shown: str, owner: Owner, can_write: Callable[[Path], bool]
-) -> list[str]:
-    """``path`` exists, belongs to ``owner`` and can't be written by the agent; ``shown`` names it in the
-    failure, ``what`` says what it is."""
+def _check_owned_read_only(path: Path, what: str, shown: str, machine: Machine) -> list[str]:
+    """``path`` exists, belongs to the machine's root and can't be written by the agent; ``shown`` names it in
+    the failure, ``what`` says what it is."""
     if not path.is_file():
         return [f"run without {what}: {shown} is missing"]
-    if path.stat().st_uid != owner.uid:
-        return [f"replace {what}: {shown} isn't owned by uid {owner.uid}"]
-    if can_write(path):
+    if machine.owner_of(path) != machine.root.uid:
+        return [f"replace {what}: {shown} isn't owned by uid {machine.root.uid}"]
+    if machine.can_write(path):
         return [f"change {what}: {shown} is writable"]
     return []
 
