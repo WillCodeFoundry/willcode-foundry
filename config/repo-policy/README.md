@@ -10,7 +10,7 @@ $ uv run foundry repo check tkt-store     # one project
 $ uv run foundry repo check --fix         # first create or update the rulesets to match, then check
 ```
 
-Anything different from the policy is a deviation, shown as a diff, even when harmless. When a project really needs to differ, change the policy. A project GitHub refuses prints its error, and the rest are still checked.
+Anything different from the policy is a deviation, shown as a diff, even when harmless. When a project really needs to differ, change the policy. A project GitHub refuses, or whose URL isn't GitHub's, prints its error, and the rest are still checked. With `--fix`, the rulesets changed before an error are listed above it.
 
 `check` uses `gh` signed in as you, with admin rights on the repositories, never the agents' credentials. Rulesets on private repositories need GitHub Pro or Team.
 
@@ -30,7 +30,7 @@ Repository admins (you) bypass them; the agents' users, with write access only, 
 |---|---|
 | `foundry-default-branch` | The default branch changes only through a reviewed pull request, with code-owner review and a passing `ci-gate`; no force-push or deletion. |
 | `foundry-agent-branches` | `task/**` and `agent-notes` take signed commits only, and are never force-pushed or deleted. |
-| `foundry-other-branches` | No other branch can be created, pushed or deleted, except by an admin, and by Dependabot under `dependabot/**`. |
+| `foundry-other-branches` | No other branch can be created, pushed or deleted, except by an admin. `dependabot/**` is left out so Dependabot can work, so anyone with write access, agents included, can push there. |
 | `foundry-tags` | Only admins create, move or delete tags. |
 
 `ci-gate` ends each project's CI and fails if any other job did, so each project keeps its own jobs while the rulesets require one check. Its `needs` must name every other job; the template says `<all other jobs>`.
@@ -41,4 +41,4 @@ Code-owner review makes every change yours to approve. The agents' users, the re
 
 Rulesets are matched by name, and fields GitHub adds are ignored. Extra items in a list, such as another bypass actor, still show. Rulesets the policy doesn't name are left alone: rulesets add up, so an extra one can't weaken these.
 
-This repository is one of its own projects, and a test checks it conforms to this policy.
+This repository is one of its own projects, and a test checks its own `CODEOWNERS` and `ci.yml` match this policy.

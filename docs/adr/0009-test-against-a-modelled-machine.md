@@ -4,6 +4,6 @@ Hardening needs root and a real sandbox, which most test runs don't have. So it 
 
 ## Considered options
 
-- **Testing each step and check on its own.** Every part passed alone, while the sequence crashed on every relaunch.
+- **Testing each step and check on its own.** Every part passed alone, while every relaunch crashed: the first launch leaves sudo unusable, and the relaunch's sudo probe didn't expect that.
 
 Source: #20.

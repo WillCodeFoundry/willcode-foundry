@@ -70,7 +70,7 @@ _Avoid_: session (for one run of Claude Code; that is an agent run)
 The `AGENT_*` environment variables a sandbox is created with, which tell the agent kit everything about its role, project and task. They never change for the life of the sandbox.
 
 **Launch**:
-One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** only checks it.
+One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
 
 **Agent run**:
 One run of Claude Code inside a sandbox, from start until the agent stops.
@@ -125,7 +125,7 @@ _Avoid_: boundary, security (for a guardrail)
 `pre-commit`, `prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
 
 **Claude hooks**:
-`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs when the agent stops.
+`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.
 
 **Refusal**:
 What a hook or a hardening mode says when it stops something: what was wrong, and what to do instead.
@@ -140,7 +140,7 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 - A **project** has many **tasks**; a **task** has one **task branch** and one **task notes dir** on the project's **notes branch**.
 - A **sandbox** runs one **role** on one **task** of one **project**, and has one **session**.
 - A **sandbox** sees one **agent kit**, read-only; the **runtime** in it does the **hardening** and runs the **hooks**.
-- A **launch** may start many **agent runs** over a sandbox's life; the **session variables** stay the same for all of them.
+- A **sandbox** has many **launches** and **agent runs** over its life; its **session variables** stay the same for all of them.
 
 ## Flagged ambiguities
 

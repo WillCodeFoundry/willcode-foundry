@@ -16,7 +16,7 @@ The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything 
 
 - **Record a decision as an ADR** when it is hard to reverse, surprising without context, and the result of a real trade-off. Use the next number in `docs/adr/`.
 - **Add a term to the glossary** when you introduce one, or when you find one word used for two things.
-- **Keep the README's "Recreating a sandbox" heading.** Error messages send users there. `tests/test_docs.py` checks this, and that every link and every `src/` or `tests/` path named in the docs exists.
+- **Keep the README's "Recreating a sandbox" heading.** Error messages send users there. `tests/test_docs.py` checks this. It also checks that every link resolves, that every repository path the docs name exists, and that the command tables match the commands the code defines.
 
 ## Writing
 

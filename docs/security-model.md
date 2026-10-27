@@ -10,10 +10,10 @@ Some controls hold whatever the agent does; the rest only stop mistakes. Why it 
 | Managed settings: permission mode, which hooks run, no attribution | a root-owned file in a root-owned dir; hardening, checked as the agent on every launch | anything in the sandbox |
 | The code the hooks and the launch run | the read-only mount, the root-owned link `/etc/claude-code/agent_runtime.pyz`, the root-owned `/usr/bin/python3` | anything in the sandbox |
 | One SSH key and token per role | the credentials' own scope on GitHub | anything in the sandbox |
-| Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets ([repo policy](../config/repo-policy/README.md)) | anything with the role's credentials |
+| Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets ([repo policy](../config/repo-policy/README.md)), except under `dependabot/**` | anything with the role's credentials |
 | Git hooks | git, through `core.hooksPath` | mistakes only |
 | `guard-bash` | Claude Code, before each shell command | mistakes only |
-| `session-check` | Claude Code, when the agent stops | forgetting to commit or push |
+| `session-check` | Claude Code, at the end of each of the agent's turns | forgetting to commit or push |
 
 The agent runs with permission prompts off. What it may do is set by the rows above, not by asking you.
 
@@ -25,7 +25,7 @@ The git hooks and `guard-bash` run inside the sandbox, so an agent set on gettin
 - **`pre-commit`:** nothing under `.agent/` on the task branch; on `agent-notes`, only this task's dir.
 - **`prepare-commit-msg`:** adds the `Task: <task>` trailer to commits on the task branch, even with `--no-verify`.
 - **`guard-bash`:** refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the git hooks.
-- **`session-check`:** blocks the stop while either checkout has work not committed or not pushed. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
+- **`session-check`:** blocks the end of a turn while either checkout has work not committed or not pushed. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
 
 Force-pushes, deletions, history rewrites and pushes elsewhere are left to the rulesets, which refuse them on the server.
 
@@ -47,14 +47,14 @@ On every launch, agent mode checks as the agent that it can't use any of them, a
 - every dir from `/` down to the kit belongs to root, so no other kit can be swapped in at its path;
 - `/usr/bin/python3` belongs to root and isn't writable.
 
-A sandbox that fails any check doesn't start the agent, and needs [recreating](../README.md#recreating-a-sandbox).
+A sandbox that fails any check doesn't start the agent, and needs [recreating](../README.md#recreating-a-sandbox). Other ways to root an image might add, such as setuid binaries, aren't checked yet.
 
 ## The rule behind the rows
 
-Code that the managed settings name, or that a launch runs, lives in the agent kit and runs from its read-only mount ([ADR 0010](adr/0010-runtime-from-the-read-only-kit.md)). Nothing finds it through an environment variable or `PATH`, because the agent sets both for Claude Code and for its own git.
+Code that the managed settings name, or that a launch runs, lives in the agent kit and runs from its read-only mount ([ADR 0010](adr/0010-runtime-from-the-read-only-kit.md)). Nothing finds the runtime through an environment variable or `PATH`, because the agent sets both for Claude Code and for its own git.
 
 ## On your machine
 
 - No secret and no sandbox definition may sit inside the kit, since the kit is mounted into every sandbox.
-- foundry never reads a role's GitHub token: sbx reads it from the file, on your machine.
-- Each sandbox's ssh-agent holds only its role's key, and the sandbox must see exactly that key ([ADR 0005](adr/0005-credentials-per-role.md)).
+- foundry never reads a role's GitHub token: sbx reads it from the file on your machine, with `cat`.
+- Each sandbox's ssh-agent holds only its role's key, and the sandbox must see exactly that key ([ADR 0005](adr/0005-credentials-per-role.md)). A stopped sandbox's agent is stopped by the next launch or `foundry prune`, unless it started in the last 10 minutes.

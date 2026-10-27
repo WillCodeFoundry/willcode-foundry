@@ -26,7 +26,7 @@ $ uv run foundry skills update COMMIT     # to a given commit
 $ git diff HEAD                           # review, resolve any conflicts, then commit
 ```
 
-For each copied skill, the update applies upstream's changes since the recorded commit with git's three-way merge, then records the new commit. It leaves out `agents/`, which holds Codex-only metadata. Where upstream and the foundry changed the same line, the file is left with conflict markers, as in any merge.
+Run it in your git checkout of the foundry, which it fetches upstream into. For each copied skill, the update applies upstream's changes since the recorded commit with git's three-way merge, then records the new commit and copies upstream's licence. It leaves out `agents/`, which holds Codex-only metadata. Where upstream and the foundry changed the same line, the file is left with conflict markers, as in any merge.
 
 The update stops before changing anything if a copied skill has uncommitted changes. A patch git rejects outright leaves that skill's recorded commit where it was, so the next run tries again.
 

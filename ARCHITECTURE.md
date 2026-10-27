@@ -23,8 +23,8 @@ A launch, end to end:
 
 | Module | What it does |
 |---|---|
-| `cli.py` | The `foundry` command; the only place foundry's errors are printed. |
-| `commands/` | One module per subcommand: `run`, `task`, `repo`, `prune`, `skills`. Each has a composition root that builds the real dependencies and a function that takes them, which the tests call. |
+| `cli.py` | The `foundry` command; it prints the errors foundry's code raises. |
+| `commands/` | One module per subcommand: `run`, `task`, `repo`, `prune`, `skills`. Each builds its real dependencies in a composition root and passes them to the code that uses them, so the tests can pass fakes instead. |
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches (`SessionVariables`). |
 | `task.py` | `Task`: the one place a task's names are spelled, and creating a task. |
 | `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task create` commits and pushes from. |
@@ -38,7 +38,7 @@ A launch, end to end:
 
 | Module | What it does |
 |---|---|
-| `__main__.py` | The runtime's commands, and the only place its errors are printed. |
+| `__main__.py` | The runtime's commands; it prints the errors the runtime's code raises. |
 | `session_init.py` | `session-init`: setup, root mode through sudo on the first launch, then agent mode. |
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
@@ -50,9 +50,9 @@ The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <com
 | Command | Run by |
 |---|---|
 | `session-init` | foundry, as the agent, before the agent starts |
-| `session-setup` | `session-init`, as the agent |
+| `session-setup` | `session-init` runs it in-process; the command is for running setup alone, by hand or in tests |
 | `harden` | `session-init`, as root through sudo, on the first launch |
-| `check-hardening` | `session-init`, as the agent, on every launch |
+| `check-hardening` | `session-init` runs agent mode in-process on every launch; the command runs it alone |
 | `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from the managed settings |
 | `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
 
@@ -71,9 +71,9 @@ The runtime targets Python 3.11, like foundry. `__main__.py` checks the version 
 
 Follow these when changing the code. Each names what holds it today.
 
-1. **One spelling per shared name.** A name or path used on both sides of a boundary is spelled in one module, and tests hold every other copy to it: the kit's layout in `agent_runtime/agent_kit.py`, the session variables in `agent_runtime/contract.py`, a task's names in `foundry/task.py`, which the rulesets must agree with. *Held by `tests/agent_runtime/test_agent_kit.py` and `tests/test_task_contract.py`.*
-2. **Programs meet only at named seams.** foundry imports four runtime modules and no others; the runtime imports only the standard library; `agent_sandbox` imports nothing else from foundry. *Held by `tests/test_runtime_boundary.py`, `tests/agent_kit/test_runtime.py` and `tests/agent_sandbox/test_boundary.py`.*
-3. **One door to the outside world.** All git goes through `agent_runtime.git.Git`, `agent_sandbox`'s commands through `Host`, and sbx through `agent_sandbox`. Tests replace that one door with a fake, and never patch. *Held by review.*
-4. **Nothing the agent can change decides what protects against the agent.** Code that guards the agent runs from where the agent can't write or redirect it: the read-only kit, the root-owned link, `/usr/bin/python3 -IS`, never an environment variable or `PATH`. It is checked as the agent on every launch. See ADRs [0008](docs/adr/0008-the-agent-cant-become-root.md) and [0010](docs/adr/0010-runtime-from-the-read-only-kit.md). *Held by agent mode, `tests/agent_kit/` and the docker tier.*
-5. **Never change what you can't recreate; refuse and explain.** foundry creates a sandbox but never migrates or removes it. A mismatch is refused, saying how to recreate the sandbox. See [ADR 0004](docs/adr/0004-sandboxes-are-immutable.md). *Held by `tests/test_session.py` and `tests/agent_sandbox/test_launcher.py`.*
-6. **Fail fast, with a message; don't program defensively.** When something isn't as expected, stop and say what is wrong and how to fix it: don't retry, fall back to a default, or work around it. Handle only the failures that have happened or that the design expects. An exception's text is the message the user reads, and only entry points print it. The exception is anything the agent controls or that guards against it: check it thoroughly, and fail closed ([ADR 0001](docs/adr/0001-github-enforces-hooks-only-guard.md)). *Held by review; the printed messages by the tests.*
+1. **One spelling per shared name.** A name or path used on both sides of a boundary is spelled in one module, and tests hold every other copy to it: the kit's layout in `agent_runtime/agent_kit.py`, the session variables in `agent_runtime/contract.py`, a task's names in `foundry/task.py`, which the rulesets must agree with. The hook stubs and the managed settings can't import anything, so they spell the runtime's link, held to it by tests. *Held by `tests/agent_runtime/test_agent_kit.py`, `tests/test_task_contract.py`, `tests/agent_kit/test_git_hook_command.py` and `tests/agent_kit/test_managed_settings.py`.*
+2. **Programs meet only at named seams.** foundry imports four runtime modules and no others, plus the package itself to build it; the runtime imports only the standard library; `agent_sandbox` imports nothing else from foundry. *Held by `tests/test_runtime_boundary.py`, `tests/agent_kit/test_runtime.py` and `tests/agent_sandbox/test_boundary.py`.*
+3. **One door to each outside system.** All git goes through `agent_runtime.git.Git`, GitHub through the `GitHub` protocol, `agent_sandbox`'s commands through `Host`, and sbx through `agent_sandbox`. Tests never patch: they fake `GitHub` and `Host`, run real git in temporary repositories, and put stand-ins for `sudo`, `su` and `passwd` on `PATH`. *Held by review.*
+4. **Nothing the agent can change decides which code protects against it.** The runtime runs from the read-only kit, on `/usr/bin/python3 -IS`, and hooks find it only through the root-owned link, never an environment variable or `PATH`. Agent mode checks all of this as the agent on every launch. Guardrails may trust the agent's environment, since they only stop mistakes. See ADRs [0008](docs/adr/0008-the-agent-cant-become-root.md) and [0010](docs/adr/0010-runtime-from-the-read-only-kit.md). *Held by agent mode, `tests/agent_kit/` and the docker tier.*
+5. **Never change what you can't recreate; refuse and explain.** foundry writes a sandbox's definition once and hardens it once, and never rewrites, re-hardens or removes it. Each launch refreshes only what is meant to change: the runtime, the agent's instructions and the token. A mismatch is refused, saying how to recreate the sandbox. See [ADR 0004](docs/adr/0004-sandboxes-are-immutable.md). *Held by `tests/test_session.py` and `tests/agent_sandbox/test_launcher.py`.*
+6. **Fail fast, with a message; don't program defensively.** When something isn't as expected, stop and say what is wrong and how to fix it: don't retry, fall back to a default, or work around it. Handle only the failures that have happened or that the design expects. An exception's text is the message the user reads, and only entry points print it. Where the design expects failure, it says which way to fail: a hook that enforces a rule blocks when it can't check it, and a guardrail prefers a rare miss to a false refusal ([ADR 0001](docs/adr/0001-github-enforces-hooks-only-guard.md)). *Held by review; the printed messages by the tests.*

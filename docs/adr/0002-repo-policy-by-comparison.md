@@ -10,4 +10,4 @@ The ruleset requires one check, `ci-gate`, instead of each project's own job nam
 - **Listing each project's job names in the ruleset.** The list would go stale.
 - **Code owners for `.github/` only.** An agent could still approve a change that left `.github/` alone.
 
-Source: #18, #9, #15.
+Source: #2, #18.

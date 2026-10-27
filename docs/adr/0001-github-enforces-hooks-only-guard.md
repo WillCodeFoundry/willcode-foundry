@@ -7,6 +7,6 @@ A hook that enforces a rule blocks when it can't check it: `session-check` treat
 ## Considered options
 
 - **Hooks as the boundary.** `guard-bash` once parsed shell and git options in about 250 lines and still couldn't close every path. It was cut to about 25.
-- **Refusing a commit without its `Task:` trailer.** Replaced by adding the trailer, since GitHub's commit-message rules need Enterprise.
+- **Refusing a commit without its `Task:` trailer.** Replaced by adding the trailer, so the agent never has to retry, and `--no-verify` doesn't skip it. It stays a hook because GitHub's commit-message rules need Enterprise.
 
 Source: #18, #20.

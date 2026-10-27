@@ -28,15 +28,15 @@ Each behaviour is tested once, at the cheapest tier that can catch its bug. A hi
 | docker | `tests/sandbox_image/` | `session-init` and the git hooks in the template image: real hardening, permissions and read-only mount | `-m docker`; CI's `sandbox-image` job |
 | sbx | `tests/sbx/` | a real sandbox: launch, relaunch, restart | `-m sbx`, by hand |
 
-Shared helpers live in `tests/support/`; the conftests hold only fixtures and pytest hooks. Tests replace the outside world through its one door, never by patching (design rule 3).
+Shared helpers live in `tests/support/`; the conftests hold only fixtures and pytest hooks. Tests never patch: they fake GitHub and the host, run real git in temporary repositories, and put stand-in executables on `PATH` (design rule 3).
 
 `-m docker` and `-m sbx` fail rather than skip when what they need is missing, since you asked for them. The sbx tier runs only when `-m` names it, so a `-m "not docker"` can't launch a real sandbox.
 
 ## CI
 
-`.github/workflows/ci.yml` runs lint, mypy and the host tier on the oldest and newest Python, and the docker tier as `sandbox-image`, on every pull request. Its last job, `ci-gate`, passes only if every other job did, and is the check the rulesets require before merging. Add a new job to `ci-gate`'s `needs`, or it won't block anything.
+`.github/workflows/ci.yml` runs on every pull request and every push to main. It runs lint and mypy, the host tier on the oldest and newest Python the foundry supports, and the docker tier as `sandbox-image`. Its last job, `ci-gate`, passes only if every other job did, and is the check the rulesets require before merging. Add a new job to `ci-gate`'s `needs`, or it won't block anything.
 
-The docker tier pulls the template image by its tag, as sbx does, so a change to the template can turn an unrelated pull request red. Its run ends by naming the image's digest. With the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` set, the job logs in first, so Docker Hub's rate limit can't fail it.
+The docker tier pulls the template image by its tag, as sbx does, so a change to the template can turn an unrelated pull request red. Its run ends by naming the image's digest. With the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` set, a read-only token, the job logs in first, so Docker Hub's anonymous rate limit can't fail it.
 
 ## Testing against real sbx
 
