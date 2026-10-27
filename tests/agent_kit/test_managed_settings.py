@@ -5,10 +5,9 @@ import os
 import subprocess
 from pathlib import Path
 
-from agent_runtime import contract
+from agent_runtime import contract, harden
 from agent_runtime.__main__ import CLAUDE_HOOKS
-from agent_runtime.agent_kit import RUNTIME_PYZ
-from tests.agent_kit.conftest import HOOK_COMMANDS, SETTINGS
+from tests.agent_kit.conftest import HOOK_COMMANDS, SETTINGS, hook_command
 
 
 def test_runs_unattended_without_attribution() -> None:
@@ -23,8 +22,9 @@ def test_only_managed_hooks_and_rules_apply() -> None:
 
 
 def test_every_hook_runs_the_kits_runtime_isolated() -> None:
-    """The template's own interpreter, with -I, on the zipapp in the read-only kit: nothing the agent can change."""
-    runtime = f'{contract.PYTHON} -I "$AGENT_KIT_DIR/{RUNTIME_PYZ}" hook '
+    """The template's own interpreter, with -I, on the runtime through the link root mode makes to the kit's: a
+    fixed path in a root-owned folder. No variable: a settings file the agent writes can set Claude Code's."""
+    runtime = f"{contract.PYTHON} -I {harden.SANDBOX.hooks_runtime} hook "
     assert HOOK_COMMANDS == {
         "PreToolUse": [runtime + "guard-bash"],
         "Stop": [runtime + "session-check"],
@@ -35,13 +35,13 @@ def test_every_hook_runs_the_kits_runtime_isolated() -> None:
 
 
 def test_the_guard_runs_as_written(built_kit: Path) -> None:
-    """Claude Code runs a hook's command through a shell, with AGENT_KIT_DIR from the sandbox."""
+    """Claude Code runs a hook's command through a shell; the link's target stands in for the link."""
     call = {"tool_name": "Bash", "tool_input": {"command": "git commit --no-verify -m x"}}
 
     result = subprocess.run(
-        HOOK_COMMANDS["PreToolUse"][0],
+        hook_command(HOOK_COMMANDS["PreToolUse"][0], built_kit),
         shell=True,
-        env={"PATH": os.environ["PATH"], "AGENT_KIT_DIR": str(built_kit)},
+        env={"PATH": os.environ["PATH"]},
         input=json.dumps(call),
         capture_output=True,
         text=True,

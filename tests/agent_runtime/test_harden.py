@@ -82,6 +82,7 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
     sandbox = harden.SANDBOX
 
     assert sandbox.managed_settings == Path("/etc/claude-code/managed-settings.json")
+    assert sandbox.hooks_runtime == Path("/etc/claude-code/agent_runtime.pyz")
     assert sandbox.docker_daemon_config == Path("/etc/docker/daemon.json")
     assert sandbox.regrouped_socket == Path("/var/run/docker.sock")
     assert sandbox.checked_sockets == (
@@ -163,6 +164,7 @@ def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
     return TemporaryMachine(
         root_mode=harden.Machine(
             managed_settings=machine_dir / "etc" / "claude-code" / "managed-settings.json",
+            hooks_runtime=machine_dir / "etc" / "claude-code" / "agent_runtime.pyz",
             docker_daemon_config=machine_dir / "etc" / "docker" / "daemon.json",
             regrouped_socket=docker_socket,
             checked_sockets=(docker_socket, socket_dir / "containerd.sock"),
@@ -204,7 +206,9 @@ def test_root_mode_then_agent_mode_on_one_machine(
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
     assert (installed.stat().st_uid, installed.stat().st_gid) == root_mode.root
     assert stat.S_IMODE(installed.parent.stat().st_mode) == 0o755
-    assert [path.name for path in installed.parent.iterdir()] == [installed.name]  # no partial file left
+    # The settings and the link to the hooks' runtime, and no partial file left.
+    assert sorted(path.name for path in installed.parent.iterdir()) == ["agent_runtime.pyz", installed.name]
+    assert os.readlink(root_mode.hooks_runtime) == str(read_only_kit / ".build" / "agent_runtime.pyz")
     assert root_mode.docker_daemon_config.read_text() == '{"group": "root"}\n'
     assert stat.S_IMODE(root_mode.docker_daemon_config.stat().st_mode) == 0o644
     assert root_mode.regrouped_socket.stat().st_gid == root_mode.root.gid
@@ -323,7 +327,39 @@ def test_settings_in_a_folder_the_agent_can_write_are_refused(hardened, read_onl
     folder.chmod(0o757)
 
     assert_refused(
-        capsys, read_only_kit, hardened.agent_mode, f"replace Claude's managed settings: {folder} is writable"
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"replace Claude's managed settings: {folder} is writable",
+        f"replace the hooks' runtime: {folder} is writable",
+    )
+
+
+def test_a_missing_hooks_runtime_link_is_refused(hardened, read_only_kit, capsys) -> None:
+    """A sandbox hardened before the hooks found their runtime through the link."""
+    link = hardened.root_mode.hooks_runtime
+    link.unlink()
+
+    assert_refused(
+        capsys, read_only_kit, hardened.agent_mode, f"run Claude's hooks without their runtime: {link} is missing"
+    )
+
+
+@pytest.mark.parametrize("replacement", ["link elsewhere", "file"])
+def test_a_hooks_runtime_that_isnt_the_kits_is_refused(hardened, read_only_kit, tmp_path, capsys, replacement) -> None:
+    """The managed hooks run whatever this path holds."""
+    link = hardened.root_mode.hooks_runtime
+    link.unlink()
+    if replacement == "file":
+        link.write_bytes(b"")
+    else:
+        link.symlink_to(tmp_path / "agents-own.pyz")
+
+    assert_refused(
+        capsys,
+        read_only_kit,
+        hardened.agent_mode,
+        f"run other code as Claude's hooks: {link} doesn't link to {read_only_kit / '.build' / 'agent_runtime.pyz'}",
     )
 
 

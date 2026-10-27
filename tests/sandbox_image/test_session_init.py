@@ -6,10 +6,13 @@ agent can write, that a read-only mount stops writes to world-writable files, th
 locks out an agent given the docker group by number, and that /usr/bin/python3 is root's.
 """
 
+import json
+import shlex
 from collections.abc import Callable
 
 import pytest
 
+from tests.agent_kit.conftest import HOOK_COMMANDS
 from tests.sandbox_image.conftest import DOCKER_SOCKET, Container, last_line
 
 pytestmark = pytest.mark.docker
@@ -48,12 +51,28 @@ def test_a_first_launch_hardens_the_sandbox(sandbox: Sandbox) -> None:
     assert container.run("root", "cat", "/etc/docker/daemon.json").stdout.strip() == '{"group": "root"}'
 
 
+def test_after_a_first_launch_the_guard_runs_as_written_whatever_agent_kit_dir_says(sandbox: Sandbox) -> None:
+    """The managed hook's command, as Claude Code runs it, through the link root mode made; an AGENT_KIT_DIR the
+    agent set, as a settings file's env could, changes nothing."""
+    container, _ = first_launch(sandbox)
+    call = json.dumps({"tool_name": "Bash", "tool_input": {"command": "git commit --no-verify -m x"}})
+
+    guarded = container.shell(
+        "agent",
+        f"export AGENT_KIT_DIR=/tmp/elsewhere; printf %s {shlex.quote(call)} | {HOOK_COMMANDS['PreToolUse'][0]}",
+    )
+
+    assert guarded.returncode == 2, guarded.stdout + guarded.stderr
+    assert "guard-bash: refusing" in guarded.stderr
+
+
 @pytest.mark.parametrize(
     ("what", "script"),
     [
         ("run sudo", "sudo -n true"),
         ("su to root", "su root -c true </dev/null"),
         ("write Claude's managed settings", f"echo '{{}}' >> {SETTINGS}"),
+        ("replace the hooks' runtime", "ln -sfn /tmp/agents-own.pyz /etc/claude-code/agent_runtime.pyz"),
         ("use the Docker socket", f"test -w {DOCKER_SOCKET}"),
     ],
 )

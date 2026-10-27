@@ -138,6 +138,7 @@ def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
         ("su to root", "su root -c true </dev/null"),
         ("write in the kit", "touch {kit}/created-by-the-agent"),
         ("write Claude's managed settings", f"echo '{{}}' >> {SETTINGS}"),
+        ("replace the hooks' runtime", "ln -sfn /tmp/agents-own.pyz /etc/claude-code/agent_runtime.pyz"),
         ("use the Docker socket", f"test -w {DOCKER_SOCKET}"),
     ],
 )

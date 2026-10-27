@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract
+from agent_runtime import contract, harden
 from agent_runtime.agent_kit import AgentKit
 from foundry.session import SessionVariables
 from foundry.task import Task
@@ -18,6 +18,14 @@ HOOK_COMMANDS = {
     for event, entries in SETTINGS["hooks"].items()
 }
 """Each hook event's commands, as written in the managed settings."""
+
+
+def hook_command(command: str, kit_dir: Path) -> str:
+    """A managed hook's command with the kit's runtime in place of the link root mode makes to it,
+    harden.SANDBOX.hooks_runtime: a host has no such link. The rest runs as written."""
+    link = str(harden.SANDBOX.hooks_runtime)
+    assert command.count(link) == 1, command
+    return command.replace(link, str(AgentKit(kit_dir).runtime))
 
 
 @pytest.fixture

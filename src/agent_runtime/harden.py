@@ -3,7 +3,7 @@ managed settings, and can't change the code those settings and the launch run. T
 session-init:
 
     harden            as root, via sudo, on the first launch, while sudo still exists: installs the managed
-                      settings and takes away sudo, su and Docker.
+                      settings, links the runtime their hooks run, and takes away sudo, su and Docker.
     harden --verify   as the agent, on every launch, before the agent starts: checks all of it.
 
 Each step below sits beside the check that proves it. The checks run as the agent itself because sbx gives
@@ -56,6 +56,9 @@ class Machine:
 
     managed_settings: Path
     """Where Claude Code reads its managed settings."""
+    hooks_runtime: Path
+    """The path the managed hooks run the runtime from: a link root mode makes to the kit's. The hooks can't find
+    it through AGENT_KIT_DIR, which a settings file the agent writes could change for Claude Code."""
     docker_daemon_config: Path
     """dockerd's configuration, where root mode gives its socket to root."""
     regrouped_socket: Path
@@ -87,6 +90,7 @@ def _owner_of(path: Path) -> int:
 
 SANDBOX = Machine(
     managed_settings=Path("/etc/claude-code/managed-settings.json"),
+    hooks_runtime=Path("/etc/claude-code/agent_runtime.pyz"),
     docker_daemon_config=Path("/etc/docker/daemon.json"),
     regrouped_socket=Path("/var/run/docker.sock"),
     checked_sockets=(Path("/var/run/docker.sock"), Path("/var/run/docker/containerd/containerd.sock")),
@@ -123,17 +127,38 @@ def _check_managed_settings(installed: Path, kit_copy: Path, machine: Machine) -
     hardened; without the kit's copy, they can't be checked."""
     if found := _check_owned_read_only(installed, "Claude's managed settings", str(installed), machine):
         return found
-    folder = installed.parent
-    if machine.owner_of(folder) != machine.root.uid:
-        return [f"replace Claude's managed settings: {folder} isn't owned by uid {machine.root.uid}"]
-    if machine.can_write(folder):
-        return [f"replace Claude's managed settings: {folder} is writable"]
+    if found := _check_root_folder(installed.parent, "Claude's managed settings", machine):
+        return found
     kit_settings = _read_or_none(kit_copy)
     if kit_settings is None:
         return [f"run with managed settings that can't be checked: {kit_copy} can't be read"]
     if installed.read_bytes() != kit_settings:
         return [f"run with older managed settings: {installed} differs from {kit_copy}"]
     return []
+
+
+# --- the runtime the managed hooks run ----------------------------------------------
+
+
+def _harden_hooks_runtime(link: Path, kit_runtime: Path, owner: Owner) -> None:
+    """Link the fixed path the managed hooks name to the kit's runtime, in a folder only root can write. A link,
+    not a copy, so the runtime a later launch builds into the kit is the one the hooks run."""
+    _install_dir(link.parent, owner)
+    partial = link.with_name(f".{link.name}.partial")
+    partial.unlink(missing_ok=True)
+    partial.symlink_to(kit_runtime)
+    os.lchown(partial, *owner)
+    os.replace(partial, link)
+
+
+def _check_hooks_runtime(link: Path, kit_runtime: Path, machine: Machine) -> list[str]:
+    """The fixed path is a link to the kit's runtime, which the kit's read-only mount keeps, in a folder root owns
+    and the agent can't write."""
+    if not link.is_symlink() and not link.exists():
+        return [f"run Claude's hooks without their runtime: {link} is missing"]
+    if not link.is_symlink() or link.resolve() != kit_runtime.resolve():
+        return [f"run other code as Claude's hooks: {link} doesn't link to {kit_runtime}"]
+    return _check_root_folder(link.parent, "the hooks' runtime", machine)
 
 
 # --- sudo and su ---------------------------------------------------------------------
@@ -249,13 +274,17 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         return 1
     try:
         _harden_managed_settings(AgentKit(kit_dir).managed_settings, machine.managed_settings, machine.root)
+        _harden_hooks_runtime(machine.hooks_runtime, AgentKit(kit_dir).runtime, machine.root)
         _harden_sudo_and_su(machine.sudo, machine.passwd)
         _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
     except _HardenError as error:
         print(f"harden: refusing: {error}", file=sys.stderr)
         return 1
     # Checked by `harden --verify`, which session-init runs next, as the agent.
-    print(f"harden: managed settings installed; sudo and su removed for {sudo_user}; Docker socket made root-only")
+    print(
+        f"harden: managed settings installed, their hooks' runtime linked; sudo and su removed for {sudo_user}; "
+        "Docker socket made root-only"
+    )
     return 0
 
 
@@ -269,6 +298,7 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
         return 1
     found = [
         *_check_managed_settings(machine.managed_settings, AgentKit(kit_dir).managed_settings, machine),
+        *_check_hooks_runtime(machine.hooks_runtime, AgentKit(kit_dir).runtime, machine),
         *_check_sudo(machine.sudo),
         *_check_su(machine.su),
         *_check_docker_sockets(machine.checked_sockets, machine.can_write),
@@ -299,6 +329,15 @@ def _check_owned_read_only(path: Path, what: str, shown: str, machine: Machine) 
         return [f"replace {what}: {shown} isn't owned by uid {machine.root.uid}"]
     if machine.can_write(path):
         return [f"change {what}: {shown} is writable"]
+    return []
+
+
+def _check_root_folder(folder: Path, what: str, machine: Machine) -> list[str]:
+    """``folder`` belongs to the machine's root and the agent can't write it: whoever can could swap ``what``."""
+    if machine.owner_of(folder) != machine.root.uid:
+        return [f"replace {what}: {folder} isn't owned by uid {machine.root.uid}"]
+    if machine.can_write(folder):
+        return [f"replace {what}: {folder} is writable"]
     return []
 
 

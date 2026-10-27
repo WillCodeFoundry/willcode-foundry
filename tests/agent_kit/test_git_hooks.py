@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
-from tests.agent_kit.conftest import HOOK_COMMANDS, runtime_command
+from tests.agent_kit.conftest import HOOK_COMMANDS, hook_command, runtime_command
 from tests.conftest import TASK, git
 
 (STOP_COMMAND,) = HOOK_COMMANDS["Stop"]
@@ -212,7 +212,7 @@ def test_moving_another_tasks_file_into_own_folder_is_refused(repo) -> None:
 def stop(active: bool = False, *, raw_input: str | None = None) -> subprocess.CompletedProcess[str]:
     """The Stop hook, run as Claude Code runs it: its command from managed settings, through a shell."""
     return subprocess.run(
-        STOP_COMMAND,
+        hook_command(STOP_COMMAND, Path(os.environ["AGENT_KIT_DIR"])),
         shell=True,
         input=json.dumps({"stop_hook_active": active}) if raw_input is None else raw_input,
         capture_output=True,
