@@ -3,7 +3,7 @@
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
 ``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
 or can't be checked.
-Both are guardrails against mistakes, not boundaries: see "What protects what" in the README. Both trust the
+Both are guardrails against mistakes, not boundaries: see docs/security-model.md. Both trust the
 environment Claude Code gives them, which a settings file the agent writes can change: session-check reads the
 checkouts' paths from the session variables, and runs the git on PATH.
 """

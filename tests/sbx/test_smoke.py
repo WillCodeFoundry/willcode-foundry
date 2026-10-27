@@ -3,7 +3,7 @@
 It shows what no fake can: that sbx accepts our definition, mounts the kit read-only at its host path, runs
 session-init as the agent with sudo the first time, and that the sandbox's private dockerd keeps its socket
 root's after a restart. Run it after upgrading sbx, and before merging changes to agent-kit/, src/agent_runtime/
-or src/foundry/agent_sandbox/: see "Testing against real sbx" in the README.
+or src/foundry/agent_sandbox/: see "Testing against real sbx" in CONTRIBUTING.md.
 
 It uses this foundry's project foundry-test, role dev and task sbx-smoke, and touches only that sandbox and its
 session directory: removed before it starts and after it ends, whatever the outcome. The tests run in order,

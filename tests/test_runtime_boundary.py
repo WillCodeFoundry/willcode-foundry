@@ -1,4 +1,4 @@
-"""foundry imports four runtime modules and no others: the sandbox's code stays the sandbox's, and the README's
+"""foundry imports four runtime modules and no others: the sandbox's code stays the sandbox's, and ARCHITECTURE.md's
 rule is checked rather than only stated."""
 
 import ast
@@ -34,4 +34,4 @@ def test_foundry_imports_only_the_shared_runtime_modules() -> None:
     }
 
     assert outside == set()
-    assert {line.split(": ")[1] for line in imported} >= SHARED  # each is still used: the README's list is current
+    assert {line.split(": ")[1] for line in imported} >= SHARED  # each is still used: ARCHITECTURE.md's list is current
