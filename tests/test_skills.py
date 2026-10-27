@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from agent_runtime.git import GitError
+from foundry import cli
 from foundry.commands import skills
 from foundry.errors import FoundryError
 from tests.conftest import git
@@ -84,6 +86,21 @@ def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(fo
     assert (foundry_root / "agent-kit" / "skills" / "LICENSE-mattpocock").read_bytes() == "MIT, second, ©\r\n".encode()
 
 
+def test_files_that_arent_utf_8_arrive_byte_for_byte(foundry_root, upstream) -> None:
+    """Upstream's diff goes to git apply as bytes. A binary file's patch is ASCII anyway; a text file in another
+    encoding puts its own bytes in the diff, which a diff read as text would mangle."""
+    files = {"picture.bin": bytes(range(256)) + b"\x00\r\n\xff", "latin-1.md": "Café, à côté.\n".encode("latin-1")}
+    for name, content in files.items():
+        (upstream / "skills" / "engineering" / "tdd" / name).write_bytes(content)
+    second = commit_all(upstream, "second")
+
+    reported, conflicted = update(foundry_root, upstream)
+
+    assert (reported, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
+    for name, content in files.items():
+        assert (foundry_root / "agent-kit" / "skills" / "tdd" / name).read_bytes() == content, name
+
+
 def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream) -> None:
     before = git(foundry_root, "status", "--porcelain").stdout.strip()
 
@@ -145,7 +162,20 @@ def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, 
     reported: list[str] = []
     urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
 
-    with pytest.raises(FoundryError, match="git fetch"):
+    with pytest.raises(GitError, match=r"^git fetch --quiet --no-tags .*missing"):
         skills.update(foundry_root, url_for=urls.__getitem__, report=reported.append)
 
     assert reported == [f"tdd: updated to {second[:12]}"]
+
+
+def test_skills_update_without_git_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, in this repository, with no git on PATH: an error line, not a traceback."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(Path(__file__).parents[1])
+    monkeypatch.setenv("PATH", str(empty))
+
+    assert cli.main(["skills", "update"]) == 1
+    assert capsys.readouterr().err == "error: git not found in PATH\n"

@@ -8,13 +8,13 @@ left as a merge conflict. Then review (git diff HEAD), resolve, and commit.
 
 import argparse
 import re
-import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from agent_runtime.agent_kit import AgentKit
+from agent_runtime.git import Git
 from foundry import paths
 from foundry.errors import FoundryError
 
@@ -72,10 +72,10 @@ def update(
 
     Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
     skill's line, already up to date or updated to which commit, goes to ``report`` as soon as it is done, so
-    a FoundryError from a later skill doesn't hide what earlier ones changed on disk.
+    a failure from a later skill, a GitError or a FoundryError, doesn't hide what earlier ones changed on disk.
     """
     conflicted: list[str] = []
-
+    git = Git(foundry_root)
     skills_dir = AgentKit(paths.agent_kit_dir(foundry_root)).skills
     for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
         source = read_source(skill_md)
@@ -83,17 +83,17 @@ def update(
             continue  # one of the foundry's own skills
         skill_dir = skill_md.parent
         url = url_for(source.repo)
-        _git(foundry_root, "fetch", "--quiet", "--no-tags", url, commit)
-        new = _git(foundry_root, "rev-parse", "FETCH_HEAD").strip()
+        git.output("fetch", "--quiet", "--no-tags", url, commit)
+        new = git.output("rev-parse", "FETCH_HEAD").strip()
         if new == source.commit:
             report(f"{skill_dir.name}: already at {source.commit[:12]}")
             continue
-        _git(foundry_root, "fetch", "--quiet", "--no-tags", url, source.commit)
-        if not _apply_upstream_changes(foundry_root, source, new, skill_dir):
+        git.output("fetch", "--quiet", "--no-tags", url, source.commit)
+        if not _apply_upstream_changes(git, source, new, skill_dir.relative_to(foundry_root)):
             conflicted.append(skill_dir.name)
         skill_md.write_text(_with_commit(skill_md.read_text(), source.commit, new))
         # Byte for byte: whatever line endings and encoding upstream's licence has.
-        license_bytes = _git_bytes(foundry_root, "show", f"{new}:LICENSE")
+        license_bytes = git.output_bytes("show", f"{new}:LICENSE")
         (skills_dir / f"LICENSE-{source.repo.partition('/')[0]}").write_bytes(license_bytes)
         report(f"{skill_dir.name}: updated to {new[:12]}")
     return conflicted
@@ -122,41 +122,13 @@ def read_source(skill_md: Path) -> Source | None:
         raise FoundryError(f"{skill_md}: metadata.source has no {missing.args[0]}") from None
 
 
-def _apply_upstream_changes(foundry_root: Path, source: Source, new: str, skill_dir: Path) -> bool:
-    """Apply upstream's diff of the skill's folder, without agents/ (Codex-only), with a three-way merge.
-
-    False if git left conflicts, which it reports on stderr.
-    """
+def _apply_upstream_changes(git: Git, source: Source, new: str, skill_dir: Path) -> bool:
+    """Apply upstream's diff of the skill's folder, without agents/ (Codex-only), with a three-way merge, into
+    ``skill_dir``, relative to the repository. False if git left conflicts, which it reports as it goes."""
     pathspec = [source.path, f":(exclude){source.path}/agents"]
-    diff = subprocess.run(
-        ["git", "diff", "--binary", source.commit, new, f"--relative={source.path}", "--", *pathspec],
-        cwd=foundry_root,
-        capture_output=True,
-        check=False,
-    )
-    if diff.returncode != 0:
-        sys.stderr.write(diff.stderr.decode(errors="replace"))
-        return False
-    applied = subprocess.run(
-        ["git", "apply", "--3way", "--allow-empty", f"--directory={skill_dir.relative_to(foundry_root)}"],
-        cwd=foundry_root,
-        input=diff.stdout,
-        check=False,
-    )
-    return applied.returncode == 0
+    diff = git.output_bytes("diff", "--binary", source.commit, new, f"--relative={source.path}", "--", *pathspec)
+    return git.succeeds("apply", "--3way", "--allow-empty", f"--directory={skill_dir}", input=diff, show_output=True)
 
 
 def _with_commit(skill_md_text: str, old: str, new: str) -> str:
     return re.sub(rf"^(    commit: ){re.escape(old)}$", rf"\g<1>{new}", skill_md_text, flags=re.MULTILINE)
-
-
-def _git(cwd: Path, *args: str) -> str:
-    return _git_bytes(cwd, *args).decode()
-
-
-def _git_bytes(cwd: Path, *args: str) -> bytes:
-    """git's output exactly as it wrote it; a failure is a FoundryError naming the command."""
-    result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=False)
-    if result.returncode != 0:
-        raise FoundryError(f"git {' '.join(args)} failed: {result.stderr.decode(errors='replace').strip()}")
-    return result.stdout
