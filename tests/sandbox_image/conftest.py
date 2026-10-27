@@ -15,6 +15,7 @@ import dataclasses
 import shutil
 import stat
 import subprocess
+import time
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
@@ -48,11 +49,25 @@ def image(pytestconfig: pytest.Config) -> str:
         pytest.fail("-m docker needs Docker: there is no `docker` command on PATH", pytrace=False)
     if info.returncode != 0:
         pytest.fail(f"-m docker needs a Docker daemon: `docker info` failed:\n{info.stderr.strip()}", pytrace=False)
-    pulled = docker("pull", "--quiet", IMAGE)
+    pulled = pull(IMAGE)
     if pulled.returncode != 0:
-        pytest.fail(f"can't pull {IMAGE}:\n{pulled.stderr.strip()}", pytrace=False)
+        pytest.fail(f"can't pull {IMAGE}, after {PULL_ATTEMPTS} tries:\n{pulled.stderr.strip()}", pytrace=False)
     pytestconfig.stash[SANDBOX_IMAGE] = f"{IMAGE}@{repo_digest(IMAGE)}"
     return IMAGE
+
+
+PULL_ATTEMPTS = 3
+
+
+def pull(image: str) -> subprocess.CompletedProcess[str]:
+    """`docker pull`, tried again after a pause when it fails: CI pulls from Docker Hub anonymously, where a rate
+    limit or a dropped connection would otherwise fail a required check for a reason unrelated to the change."""
+    for attempt in range(1, PULL_ATTEMPTS + 1):
+        pulled = docker("pull", "--quiet", image)
+        if pulled.returncode == 0 or attempt == PULL_ATTEMPTS:
+            return pulled
+        time.sleep(10 * attempt)
+    raise AssertionError("unreachable")
 
 
 def repo_digest(image: str) -> str:

@@ -36,6 +36,19 @@ def test_the_numeric_docker_group_reaches_the_socket_before_the_first_launch(san
     assert container.shell("agent", f"test -w {DOCKER_SOCKET}").returncode == 0
 
 
+def roots_password_field(container: Container) -> str:
+    """Root's password field in /etc/shadow: `passwd -l` puts a ! in front of whatever is there."""
+    return container.run("root", "getent", "shadow", "root").stdout.split(":")[1]
+
+
+def test_roots_password_isnt_locked_before_the_first_launch(sandbox: Sandbox) -> None:
+    """What makes the check below mean something: locking root is root mode's doing, not the template's. If a
+    template ever ships it locked, this fails, and that check can no longer tell."""
+    container, _ = sandbox()
+
+    assert not roots_password_field(container).startswith("!")
+
+
 def test_a_first_launch_hardens_the_sandbox(sandbox: Sandbox) -> None:
     container, env = sandbox()
 
@@ -49,6 +62,7 @@ def test_a_first_launch_hardens_the_sandbox(sandbox: Sandbox) -> None:
     kit_copy = container.run("root", "cat", str(container.kit / "claude" / "managed-settings.json")).stdout
     assert container.run("root", "cat", SETTINGS).stdout == kit_copy
     assert container.run("root", "cat", "/etc/docker/daemon.json").stdout.strip() == '{"group": "root"}'
+    assert roots_password_field(container).startswith("!")  # passwd -l root ran
 
 
 def test_after_a_first_launch_the_guard_runs_as_written_whatever_agent_kit_dir_says(sandbox: Sandbox) -> None:
