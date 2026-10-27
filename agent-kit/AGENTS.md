@@ -153,8 +153,8 @@ after every meaningful step, and always before anything risky or long.
 The task is done when every acceptance criterion in `TASK.md` is met. Then:
 
 1. Run all project checks one last time.
-2. Make sure the diff against `main` contains only what the task needs:
-   `git diff --stat origin/main...HEAD`
+2. Make sure the diff against the default branch contains only what the task
+   needs: `git diff --stat origin/HEAD...HEAD`
 3. Update `PROGRESS.md`: everything under "Done", with a final line
    `Status: ready for review`. Tick the criteria you met in your summary, not in
    `TASK.md`.

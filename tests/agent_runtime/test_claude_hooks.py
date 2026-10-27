@@ -1,7 +1,7 @@
 """agent_runtime.claude_hooks, in-process: guard-bash against the commands it must allow and refuse, and
 session-check against real checkouts that session_setup made.
 
-tests/agent_kit/test_managed_settings.py and test_git_hooks.py run each hook once as the managed settings say.
+tests/agent_kit/test_managed_settings.py and test_stop_hook.py run each hook once as the managed settings say.
 """
 
 import io

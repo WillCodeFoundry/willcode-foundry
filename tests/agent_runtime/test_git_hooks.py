@@ -1,7 +1,7 @@
 """agent_runtime.git_hooks, in-process: pre_push on the lines git passes it, and pre_commit and prepare_commit_msg
 against real checkouts that session_setup made, each given the repository as a Git.
 
-tests/agent_kit/test_git_hooks.py runs each hook once through its stub, by a real git commit or push.
+tests/sandbox_image/test_git_hooks.py runs each hook through its stub, by real commits and pushes.
 """
 
 from collections.abc import Callable
