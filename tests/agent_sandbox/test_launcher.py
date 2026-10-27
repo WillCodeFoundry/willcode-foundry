@@ -51,12 +51,12 @@ def ssh_agent(host, layout: Layout) -> SshAgent:
     return SshAgent(host, layout.ssh_agent_socket_path, os.getuid())
 
 
-def run_prepare(layout: Layout, ssh_agent: SshAgent, sandbox: Sandbox, **request) -> None:
+def run_prepare(layout: Layout, ssh_agent: SshAgent, sandbox: Sandbox, **request) -> str:
     """prepare() for a launch request pointing at the layout's definition and key."""
     launch_request = LaunchRequest(
         **{"definition_dir": layout.definition_dir, "ssh_key_path": layout.ssh_key_path, **request}
     )
-    prepare(launch_request, SandboxDefinition.read(layout.definition_dir), ssh_agent, sandbox)
+    return prepare(launch_request, SandboxDefinition.read(layout.definition_dir), ssh_agent, sandbox)
 
 
 @pytest.fixture
@@ -103,9 +103,10 @@ def test_the_sandbox_gets_the_token_file_and_a_launch_without_one_takes_it_away(
 def test_init_runs_once_the_sandbox_sees_the_key(layout, ssh_agent, make_reachable_sandbox) -> None:
     sandbox = make_reachable_sandbox()
 
-    run_prepare(layout, ssh_agent, sandbox, init_command=("/k/bin/session-init",))
+    init_output = run_prepare(layout, ssh_agent, sandbox, init_command=("/k/bin/session-init",))
 
     assert sandbox.commands_run == [("/k/bin/session-init",)]
+    assert init_output == "ran /k/bin/session-init\n"  # returned, for the caller to show or check
 
 
 @pytest.mark.parametrize(

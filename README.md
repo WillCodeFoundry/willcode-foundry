@@ -183,7 +183,7 @@ src/foundry/
 ├── yaml_io.py          # YAML load with user-facing errors
 ├── errors.py
 └── agent_sandbox/      # runs one sandbox safely; imports nothing from foundry (a test checks)
-    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port; start() runs it up to attaching the agent and returns Started, for launch and the sbx smoke tests
+    ├── launcher.py     # LaunchRequest, launch() and prepare(): the sequence in steps 2–3 above, against the Sandbox port; start() runs it up to attaching the agent and returns a PreparedSandbox, for launch and the sbx smoke tests
     ├── pruning.py      # prune(): what stopped or removed sandboxes leave behind (their ssh-agents)
     ├── definition.py   # the sandbox definition: sbxenv.yaml, the only place that knows sbx's format
     ├── sandbox.py      # the Sandbox port, and SbxCli: it through sbx (env create/exec/run, policy, known hosts, secrets)

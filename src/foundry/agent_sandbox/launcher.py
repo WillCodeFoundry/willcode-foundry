@@ -34,12 +34,16 @@ class LaunchRequest:
 
 
 @dataclass(frozen=True)
-class Started:
+class PreparedSandbox:
     """A sandbox start() prepared, ready for the agent: what launch prints, and the sandbox to attach to."""
 
     definition: SandboxDefinition
     ssh_agent_socket_path: Path
     sandbox: SbxCli
+    init_output: str = ""
+    """What the init command printed."""
+    pruned: tuple[str, ...] = ()
+    """The sandboxes whose ssh-agents this start killed, as stopped or removed."""
 
 
 def launch(request: LaunchRequest) -> NoReturn:
@@ -47,12 +51,16 @@ def launch(request: LaunchRequest) -> NoReturn:
 
     Composition root. Raises SandboxError if anything before the hand-over fails.
     """
-    started = start(request)
-    print(launch_summary(request, started.definition, started.ssh_agent_socket_path), file=sys.stderr)
-    started.sandbox.attach()
+    prepared = start(request)
+    if prepared.pruned:
+        print(
+            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(prepared.pruned)}", file=sys.stderr
+        )
+    print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
+    prepared.sandbox.attach()
 
 
-def start(request: LaunchRequest) -> Started:
+def start(request: LaunchRequest) -> PreparedSandbox:
     """Everything launch does before handing over: prune, then prepare the sandbox, up to but not including
     attaching the agent. Raises SandboxError if any of it fails."""
     definition = SandboxDefinition.read(request.definition_dir)
@@ -65,16 +73,13 @@ def start(request: LaunchRequest) -> Started:
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    if pruned_sandboxes := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
-        print(
-            f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
-        )
-    prepare(request, definition, ssh_agent, sandbox)
-    return Started(definition, ssh_agent.socket_path, sandbox)
+    pruned = ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host))
+    init_output = prepare(request, definition, ssh_agent, sandbox)
+    return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output, tuple(pruned))
 
 
-def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> None:
-    """Everything up to, but not including, attaching the agent."""
+def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> str:
+    """Everything up to, but not including, attaching the agent. Returns what the init command printed."""
     _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
@@ -82,8 +87,7 @@ def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: Ss
     sandbox.give_github_ssh_access()
     sandbox.set_github_token_file(request.github_token_path)
     _require_forwarded_keys(ssh_agent, sandbox)
-    if request.init_command:
-        _run_init(sandbox, request.init_command)
+    return _run_init(sandbox, request.init_command) if request.init_command else ""
 
 
 def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
@@ -139,7 +143,8 @@ def _require_forwarded_keys(ssh_agent: SshAgent, sandbox: Sandbox) -> None:
         )
 
 
-def _run_init(sandbox: Sandbox, init_command: Sequence[str]) -> None:
+def _run_init(sandbox: Sandbox, init_command: Sequence[str]) -> str:
     result = sandbox.run(init_command)
     if result.returncode != 0:
         raise SandboxError(f"init failed ({' '.join(init_command)}):\n{result.stdout}{result.stderr}".rstrip())
+    return result.stdout
