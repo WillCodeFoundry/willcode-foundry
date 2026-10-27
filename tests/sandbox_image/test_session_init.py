@@ -104,7 +104,7 @@ def test_after_a_first_launch_the_read_only_mount_keeps_the_agent_out_of_the_kit
     assert "Read-only file system" in created.stderr
 
 
-def test_a_relaunch_only_verifies(sandbox: Sandbox) -> None:
+def test_a_relaunch_only_checks(sandbox: Sandbox) -> None:
     container, env = first_launch(sandbox)
 
     relaunched = container.session_init(env)

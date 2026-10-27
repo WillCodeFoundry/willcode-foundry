@@ -45,7 +45,13 @@ GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
     "pre-push": lambda _args: git_hooks.pre_push(),
 }
 """What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
-_EXPECTED = (contract.MissingVariables, hardening.Refused, session_setup.SetupError, git_hooks.Refused, GitError)
+_EXPECTED = (
+    contract.MissingVariables,
+    hardening.HardeningRefused,
+    session_setup.SetupError,
+    git_hooks.GitHookRefused,
+    GitError,
+)
 """What a command raises to stop with a message, rather than a traceback."""
 
 

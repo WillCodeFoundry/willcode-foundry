@@ -24,7 +24,7 @@ Use this template for writing the PR body:
 ## Task
 
 - **Task:** `<$AGENT_TASK_FILE>` on `<$AGENT_NOTES_BRANCH>`
-- **Review:** `<$AGENT_TASK_NOTES>/REVIEW.md` on `<$AGENT_NOTES_BRANCH>`
+- **Review:** `<$AGENT_TASK_NOTES_DIR>/REVIEW.md` on `<$AGENT_NOTES_BRANCH>`
 
 - [x] <acceptance criterion, as TASK.md words it>: <how it's met>
 

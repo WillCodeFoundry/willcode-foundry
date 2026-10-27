@@ -29,14 +29,14 @@ paths.
 | `AGENT_TASK_BRANCH` | your task's branch, where the code goes |
 | `AGENT_NOTES_BRANCH` | the branch holding every task's notes |
 | `AGENT_NOTES_ROOT` | the folder on that branch where every task's notes sit; never on the task branch |
-| `AGENT_TASK_NOTES` | your task's notes folder, relative to the notes checkout |
+| `AGENT_TASK_NOTES_DIR` | your task's notes dir, relative to the notes checkout |
 | `AGENT_TASK_FILE` | your task's `TASK.md`, relative to the notes checkout |
 
 | What | Where | Branch |
 |---|---|---|
 | Code checkout | `$AGENT_PROJECT_DIR` | `$AGENT_TASK_BRANCH` |
 | Notes checkout | `$AGENT_NOTES_DIR` | `$AGENT_NOTES_BRANCH` |
-| Your task's notes | `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES/` | `$AGENT_NOTES_BRANCH` |
+| Your task's notes | `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/` | `$AGENT_NOTES_BRANCH` |
 
 The `agent-kit` directory contains:
 
@@ -193,15 +193,15 @@ git push -u origin "$AGENT_TASK_BRANCH"
 
 ```bash
 cd "$AGENT_NOTES_DIR"
-git add "$AGENT_TASK_NOTES/" && git commit -m "$AGENT_TASK: progress"
+git add "$AGENT_TASK_NOTES_DIR/" && git commit -m "$AGENT_TASK: progress"
 git pull --rebase origin "$AGENT_NOTES_BRANCH"
 git push origin "$AGENT_NOTES_BRANCH"
 ```
 
-- Only change files inside `$AGENT_TASK_NOTES/`. Other agents use this branch
+- Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
   for their own tasks at the same time; hooks refuse changes to anything else.
 - Always `pull --rebase` before pushing. Because every agent touches only its
-  own folder, this never conflicts.
+  own dir, this never conflicts.
 
 ### Hooks
 

@@ -149,9 +149,9 @@ def created_task(tmp_path: Path, origin: Path) -> Path:
     seed = tmp_path / "seed"
     git(seed, "push", "-q", "origin", f"HEAD:refs/heads/{TASK.branch}")
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    (seed / TASK.notes_dir).mkdir(parents=True)
+    (seed / TASK.task_notes_dir).mkdir(parents=True)
     (seed / TASK.task_file).write_text("# Task\n")
-    git(seed, "add", TASK.notes_dir)
+    git(seed, "add", TASK.task_notes_dir)
     git(seed, "commit", "-qm", f"Add task {TASK.id}")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
     return origin

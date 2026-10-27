@@ -14,9 +14,9 @@ from typing import Final
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 
-# The branch holding every task's notes, each in its own folder (Task.notes_dir).
+# The branch holding every task's notes, each in its own dir (Task.task_notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
-# Where every task's notes folder sits, on NOTES_BRANCH.
+# Where every task's notes dir sits, on NOTES_BRANCH.
 NOTES_ROOT: Final = ".agent"
 # The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
@@ -53,18 +53,18 @@ class Task:
         return f"task/{self.id}"
 
     @property
-    def notes_dir(self) -> str:
-        """The task's notes folder on NOTES_BRANCH, relative to the repository root. Holds its TASK_FILE."""
+    def task_notes_dir(self) -> str:
+        """The task's notes dir on NOTES_BRANCH, relative to the repository root. Holds its TASK_FILE."""
         return f"{NOTES_ROOT}/{self.id}"
 
     @property
     def task_file(self) -> str:
         """The task's TASK_FILE on NOTES_BRANCH, relative to the repository root."""
-        return f"{self.notes_dir}/{TASK_FILE}"
+        return f"{self.task_notes_dir}/{TASK_FILE}"
 
 
 def load_template(template_dir: Path) -> dict[str, str]:
-    """Every file directly in ``template_dir``, by name: what a new task's notes folder starts with.
+    """Every file directly in ``template_dir``, by name: what a new task's notes dir starts with.
 
     Refuses a template without a TASK_FILE, since every task needs one.
     """
@@ -78,7 +78,7 @@ def load_template(template_dir: Path) -> dict[str, str]:
 
 
 def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None:
-    """Create the task's branch from the default branch, and copy ``template`` into its notes folder.
+    """Create the task's branch from the default branch, and copy ``template`` into its notes dir.
 
     Both branches are pushed at once, so either both change or neither does. Refuses if the task
     exists. NOTES_BRANCH is created for the first task, as an orphan branch: it shares no history
@@ -92,8 +92,8 @@ def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None
         raise FoundryError(f"the repository has no commits to branch {task.branch} from")
 
     clone.check_out(NOTES_BRANCH)  # started with no history if it doesn't exist: the first task creates it
-    if clone.exists(task.notes_dir):
-        raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.notes_dir}/")
-    clone.write({f"{task.notes_dir}/{name}": text for name, text in template.items()})
+    if clone.exists(task.task_notes_dir):
+        raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.task_notes_dir}/")
+    clone.write({f"{task.task_notes_dir}/{name}": text for name, text in template.items()})
     clone.commit(f"Add task {task.id}")
     clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])

@@ -144,7 +144,7 @@ def test_a_stop_goes_through_when_both_checkouts_are_clean_and_pushed(checkouts:
 def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts) -> None:
     session, code, notes = checkouts
     (code / "wip.txt").write_text("x\n")
-    commit(notes, f"{TASK.notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
+    commit(notes, f"{TASK.task_notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
 
     reason = block_reason(session)
 

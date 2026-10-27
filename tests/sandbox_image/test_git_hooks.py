@@ -58,7 +58,7 @@ def test_a_commit_on_the_task_branch_gets_the_task_trailer_even_with_no_verify(c
 
 
 def test_notes_on_the_task_branch_are_refused(checkouts: Checkouts) -> None:
-    checkouts.change(checkouts.code, f"{TASK.notes_dir}/PROGRESS.md")
+    checkouts.change(checkouts.code, f"{TASK.task_notes_dir}/PROGRESS.md")
     before = checkouts.commits(checkouts.code)
 
     refused = checkouts.git(checkouts.code, "commit", "-q", "-m", "notes")
@@ -71,7 +71,7 @@ def test_notes_on_the_task_branch_are_refused(checkouts: Checkouts) -> None:
 def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts: Checkouts) -> None:
     checkouts.change(checkouts.code, "hello.sh")
     assert checkouts.git(checkouts.code, "commit", "-q", "-m", "feat: hello").returncode == 0
-    checkouts.change(checkouts.notes, f"{TASK.notes_dir}/PROGRESS.md")
+    checkouts.change(checkouts.notes, f"{TASK.task_notes_dir}/PROGRESS.md")
     assert checkouts.git(checkouts.notes, "commit", "-q", "-m", f"{TASK.id}: progress").returncode == 0
 
     assert checkouts.git(checkouts.code, "push", "-q", "origin", TASK.branch).returncode == 0
@@ -93,7 +93,7 @@ def test_what_the_agent_sets_in_its_environment_changes_no_rule(checkouts: Check
         f" && for module in sitecustomize pathlib; do echo '{approve}' > {agents_own}/$module.py; done",
     )
     assert planted.returncode == 0, planted.stderr
-    checkouts.change(checkouts.code, f"{TASK.notes_dir}/PROGRESS.md")
+    checkouts.change(checkouts.code, f"{TASK.task_notes_dir}/PROGRESS.md")
 
     refused = checkouts.git(
         checkouts.code,

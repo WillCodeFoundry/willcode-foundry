@@ -379,7 +379,7 @@ def test_a_missing_su_passes(hardened, read_only_kit, tmp_path) -> None:
 
 def test_the_check_refuses_to_run_as_root(hardened, read_only_kit) -> None:
     """It checks what the agent can do; root can do anything."""
-    with pytest.raises(hardening.Refused, match="runs as the agent"):
+    with pytest.raises(hardening.HardeningRefused, match="runs as the agent"):
         hardening.check(read_only_kit, hardened.root_mode)
 
 
@@ -408,7 +408,7 @@ def test_root_mode_refuses_outside_a_sandbox_changing_nothing(
     """Removing sudo would lock a real machine's owner out: only sudo from the sandbox's agent may run it."""
     before = snapshot(machine)
 
-    with pytest.raises(hardening.Refused) as refused_by:
+    with pytest.raises(hardening.HardeningRefused) as refused_by:
         hardening.harden(read_only_kit, sudo_user, machine.root_mode)
 
     err = str(refused_by.value)
@@ -419,7 +419,7 @@ def test_root_mode_refuses_outside_a_sandbox_changing_nothing(
 def test_root_mode_refuses_without_root_changing_nothing(machine: TemporaryMachine, read_only_kit: Path) -> None:
     before = snapshot(machine)
 
-    with pytest.raises(hardening.Refused) as refused_by:
+    with pytest.raises(hardening.HardeningRefused) as refused_by:
         hardening.harden(read_only_kit, SUDO_USER, machine.agent_mode)
 
     err = str(refused_by.value)
@@ -468,7 +468,7 @@ def test_a_templates_own_docker_configuration_is_refused_changing_nothing(
     daemon_config.write_text('{"debug": true}\n')
     before = snapshot(machine)
 
-    with pytest.raises(hardening.Refused) as refused_by:
+    with pytest.raises(hardening.HardeningRefused) as refused_by:
         hardening.harden(read_only_kit, SUDO_USER, machine.root_mode)
 
     err = str(refused_by.value)
@@ -494,7 +494,7 @@ def test_a_command_root_mode_needs_that_cant_be_found_is_refused_changing_nothin
     root_mode = without(machine.root_mode, str(tmp_path / "absent"))
     before = snapshot(machine)
 
-    with pytest.raises(hardening.Refused) as refused_by:
+    with pytest.raises(hardening.HardeningRefused) as refused_by:
         hardening.harden(read_only_kit, SUDO_USER, root_mode)
 
     assert f"harden: refusing: can't find {tmp_path / 'absent'}" in str(refused_by.value)
@@ -507,7 +507,7 @@ def test_a_failing_step_leaves_sudo_for_the_next_launch(machine: TemporaryMachin
     failing_passwd = stand_in(machine.dir, "failing-passwd", 1)
     root_mode = dataclasses.replace(machine.root_mode, passwd=failing_passwd)
 
-    with pytest.raises(hardening.Refused) as refused_by:
+    with pytest.raises(hardening.HardeningRefused) as refused_by:
         hardening.harden(read_only_kit, SUDO_USER, root_mode)
 
     err = str(refused_by.value)
@@ -529,7 +529,7 @@ def test_a_daemon_config_that_cant_be_read_is_refused_changing_nothing(
     daemon_config.chmod(0 if unreadable else mode)
 
     try:
-        with pytest.raises(hardening.Refused) as refused_by:
+        with pytest.raises(hardening.HardeningRefused) as refused_by:
             hardening.harden(read_only_kit, SUDO_USER, machine.root_mode)
     finally:
         daemon_config.chmod(mode)

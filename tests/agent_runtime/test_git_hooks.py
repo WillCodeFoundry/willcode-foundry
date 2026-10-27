@@ -24,7 +24,7 @@ ENVIRON = contract.Environ(
     agent_task_branch="task/t1",
     agent_notes_branch="notes",
     agent_notes_root=".notes",
-    agent_task_notes=".notes/t1",
+    agent_task_notes_dir=".notes/t1",
     agent_task_file=".notes/t1/TASK.md",
 )
 ZERO = "0" * 40
@@ -51,7 +51,7 @@ def test_pushing_the_task_and_notes_branches_is_accepted(local_sha: str, remote_
 def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
     refs = [f"refs/heads/task/t1 {OLD} refs/heads/task/t1 {NEW}\n", f"HEAD {OLD} {remote_ref} {NEW}\n"]
 
-    with pytest.raises(git_hooks.Refused) as refused:
+    with pytest.raises(git_hooks.GitHookRefused) as refused:
         git_hooks.pre_push(refs, ENVIRON)
 
     assert str(refused.value) == (  # what was wrong, then what to do instead
@@ -81,12 +81,12 @@ def commit_unchecked(cwd: Path, message: str) -> None:
 
 
 def refusal_of(call: Callable[[], None]) -> str:
-    with pytest.raises(git_hooks.Refused) as refused:
+    with pytest.raises(git_hooks.GitHookRefused) as refused:
         call()
     return str(refused.value)
 
 
-@pytest.mark.parametrize("path", [f"{TASK.notes_dir}/PROGRESS.md", f"src/{TASK.notes_dir}/PROGRESS.md"])
+@pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md"])
 def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts, path: str) -> None:
     session, code, _ = checkouts
     stage(code, path)
@@ -105,7 +105,7 @@ def test_code_files_are_accepted_on_the_task_branch(checkouts: Checkouts, path: 
     git_hooks.pre_commit(session, Git(code))
 
 
-@pytest.mark.parametrize("path", [f"{TASK.notes_dir}/PROGRESS.md", TASK.task_file])
+@pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", TASK.task_file])
 def test_this_tasks_notes_are_accepted_on_the_notes_branch(checkouts: Checkouts, path: str) -> None:
     session, _, notes = checkouts
     stage(notes, path)
@@ -115,19 +115,21 @@ def test_this_tasks_notes_are_accepted_on_the_notes_branch(checkouts: Checkouts,
 
 def test_another_tasks_folder_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    stage(notes, f"{OTHER_TASK.notes_dir}/PROGRESS.md")
+    stage(notes, f"{OTHER_TASK.task_notes_dir}/PROGRESS.md")
 
-    assert f"only change files in {TASK.notes_dir}/" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert f"only change files in {TASK.task_notes_dir}/" in refusal_of(
+        lambda: git_hooks.pre_commit(session, Git(notes))
+    )
 
 
 def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
     """A rename stages a deletion in the other task's folder; git's rename detection would list only the new
     path, inside this task's folder."""
     session, _, notes = checkouts
-    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
+    theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
     stage(notes, theirs)
     commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
-    git(notes, "mv", theirs, f"{TASK.notes_dir}/x.md")
+    git(notes, "mv", theirs, f"{TASK.task_notes_dir}/x.md")
 
     assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
 
@@ -135,7 +137,7 @@ def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkou
 def test_replacing_another_tasks_file_with_a_link_is_refused(checkouts: Checkouts) -> None:
     """A type change: the file in the other task's folder becomes a link, its content gone."""
     session, _, notes = checkouts
-    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
+    theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
     stage(notes, theirs)
     commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
     (notes / theirs).unlink()
@@ -149,7 +151,7 @@ def test_a_commit_on_another_branch_is_left_alone(checkouts: Checkouts) -> None:
     """It can't be pushed: pre-push refuses it."""
     session, code, _ = checkouts
     git(code, "switch", "-q", "-c", "scratch")
-    stage(code, f"{TASK.notes_dir}/PROGRESS.md")
+    stage(code, f"{TASK.task_notes_dir}/PROGRESS.md")
 
     git_hooks.pre_commit(session, Git(code))
 

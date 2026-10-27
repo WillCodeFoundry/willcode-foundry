@@ -5,7 +5,7 @@
 - ``pre_push``: pushes only to this task's branch and the notes branch.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
-current directory's, and raises Refused, whose message says what was wrong and what to do instead.
+current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
 """
 
 import sys
@@ -16,7 +16,7 @@ from agent_runtime import contract
 from agent_runtime.git import Git
 
 
-class Refused(Exception):
+class GitHookRefused(Exception):
     """A hook refuses: the message is the whole refusal, as the agent will read it."""
 
 
@@ -25,7 +25,7 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
 
     task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
                  subfolder are caught too;
-    notes branch: only this task's notes folder.
+    notes branch: only this task's notes dir.
     Commits on any other branch are left alone: they can't be pushed.
     """
     session = session or _read_session("pre-commit")
@@ -34,12 +34,12 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
     if branch == session.agent_task_branch:
         refused = [path for path in _staged_paths(git) if _is_under(session.agent_notes_root, path)]
         rule = (
-            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes}/, "
+            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
             f"not on {session.agent_task_branch}:"
         )
     elif branch == session.agent_notes_branch:
-        refused = [path for path in _staged_paths(git) if not path.startswith(f"{session.agent_task_notes}/")]
-        rule = f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes}/:"
+        refused = [path for path in _staged_paths(git) if not path.startswith(f"{session.agent_task_notes_dir}/")]
+        rule = f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:"
     else:
         return
     if refused:
@@ -60,7 +60,7 @@ def prepare_commit_msg(
     if git.current_branch() != session.agent_task_branch:
         return
     if not arguments:
-        raise Refused("prepare-commit-msg: refusing: git passed no message file")
+        raise GitHookRefused("prepare-commit-msg: refusing: git passed no message file")
     message_file = arguments[0]
     # An empty message aborts the commit; a trailer would make it go through.
     if not git.output("stripspace", "--strip-comments", input=Path(message_file).read_text()):
@@ -95,10 +95,10 @@ def pre_push(refs: Iterable[str] | None = None, session: contract.Environ | None
             )
 
 
-def _refusal(hook: str, *lines: str) -> Refused:
+def _refusal(hook: str, *lines: str) -> GitHookRefused:
     """Every refusal's shape: the hook, what was wrong, then what to do instead."""
     body = "".join(f"  {line}\n" for line in lines)
-    return Refused(f"{hook}: refusing\n\n{body}")
+    return GitHookRefused(f"{hook}: refusing\n\n{body}")
 
 
 def _read_session(hook: str) -> contract.Environ:
@@ -106,7 +106,7 @@ def _read_session(hook: str) -> contract.Environ:
     try:
         return contract.read_environ()
     except contract.MissingVariables as error:
-        raise Refused(f"{hook}: {error}") from None
+        raise GitHookRefused(f"{hook}: {error}") from None
 
 
 def _is_under(root: str, path: str) -> bool:
