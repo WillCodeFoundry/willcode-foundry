@@ -239,6 +239,29 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
 
 
+def test_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(repo) -> None:
+    """The branch is compared with origin, not HEAD: a detached HEAD at origin's commit hides nothing."""
+    code, _ = repo
+    change(code, "work.txt")
+    commit(code, "feat: work")
+    git(code, "switch", "-q", "--detach", f"origin/{TASK.branch}")
+
+    decision = json.loads(stop().stdout)
+
+    assert f"code checkout has commits not pushed to origin/{TASK.branch}" in decision["reason"]
+
+
+def test_stop_is_blocked_when_a_checkout_cant_be_checked(repo) -> None:
+    """git failing is no evidence that nothing is unsaved."""
+    code, _ = repo
+    shutil.rmtree(code)
+
+    decision = json.loads(stop().stdout)
+
+    assert decision["decision"] == "block"
+    assert "code checkout can't be checked: `git status --porcelain` failed: " in decision["reason"]
+
+
 def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:
     code, _ = repo
     (code / "wip.txt").write_text("x\n")

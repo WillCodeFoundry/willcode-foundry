@@ -1,7 +1,8 @@
 """Claude Code's hooks, as managed settings run them: the tool call or event as JSON on stdin.
 
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
-``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work.
+``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
+or can't be checked.
 Both are guardrails against mistakes, not boundaries: see "What protects what" in the README.
 """
 
@@ -88,10 +89,24 @@ def _stop_hook_active(stdin: TextIO) -> bool:
 
 
 def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
-    problems = []
-    if Git(checkout).result("status", "--porcelain").stdout.strip():
-        problems.append(f"{label} has uncommitted changes")
-    Git(checkout).result("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
-    if Git(checkout).result("log", "--oneline", f"origin/{branch}..HEAD").stdout.strip():
-        problems.append(f"{label} has commits not pushed to origin/{branch}")
+    """What in ``checkout`` isn't saved on origin: uncommitted changes, and commits on ``branch``, or at HEAD if
+    that is elsewhere, that origin/``branch`` lacks. A git command failing is a problem too, not a pass."""
+    git = Git(checkout)
+    status = git.result("status", "--porcelain")
+    if status.returncode != 0:
+        return [_cant_check(label, ("status", "--porcelain"), status.stderr)]
+    problems = [f"{label} has uncommitted changes"] if status.stdout.strip() else []
+    git.result("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
+    for rev in (f"refs/heads/{branch}", "HEAD"):
+        args = ("rev-list", "--count", f"origin/{branch}..{rev}")
+        ahead = git.result(*args)
+        if ahead.returncode != 0:
+            return [*problems, _cant_check(label, args, ahead.stderr)]
+        if int(ahead.stdout) > 0:
+            return [*problems, f"{label} has commits not pushed to origin/{branch}"]
     return problems
+
+
+def _cant_check(label: str, args: tuple[str, ...], stderr: str) -> str:
+    message = stderr.strip().splitlines()[0] if stderr.strip() else "no message"
+    return f"{label} can't be checked: `git {' '.join(args)}` failed: {message}"
