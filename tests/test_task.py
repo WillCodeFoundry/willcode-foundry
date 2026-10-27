@@ -10,7 +10,7 @@ import pytest
 from foundry import cli, task
 from foundry.commands.task import report
 from foundry.errors import FoundryError
-from foundry.git_clone import GitClone
+from foundry.project_clone import ProjectClone
 from foundry.task import Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -70,7 +70,7 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> None:
     scratch_dir = origin_dir.parent / f"scratch-{task_id}"
     scratch_dir.mkdir()
-    clone = GitClone.init(str(origin_dir), scratch_dir, git_env)
+    clone = ProjectClone.init(str(origin_dir), scratch_dir, git_env)
     task.create(clone, Task(task_id), TEMPLATE)
 
 
@@ -223,12 +223,12 @@ def test_create_takes_a_project_and_a_task() -> None:
     assert (args.project_name, args.task_id) == ("store", "T1")
 
 
-# --- GitClone: what task.create can't reach ---------------------------------------
+# --- ProjectClone: what task.create can't reach ---------------------------------------
 
 
 def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
-    clone_dir = tmp_path / "clone"  # GitClone.init needs an empty folder; tmp_path holds git_env's home/
+    clone_dir = tmp_path / "clone"  # ProjectClone.init needs an empty folder; tmp_path holds git_env's home/
     clone_dir.mkdir()
-    clone = GitClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
+    clone = ProjectClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
     with pytest.raises(ValueError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])

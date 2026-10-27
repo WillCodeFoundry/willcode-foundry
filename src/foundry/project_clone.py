@@ -1,4 +1,4 @@
-"""GitClone: a shallow clone of a project's repository, in a folder you give it, made and pushed with git and
+"""ProjectClone: a shallow clone of a project's repository, in a folder you give it, made and pushed with git and
 your own access. It speaks in branches and files; the git details (fetching one commit deep, the remote's
 name, refspecs) stay inside it."""
 
@@ -11,7 +11,7 @@ from foundry.errors import FoundryError
 _REMOTE_NAME = "origin"
 
 
-class GitClone:
+class ProjectClone:
     """A clone of the repository at a URL, in a folder you give it, holding nothing until a branch is checked out.
 
     Lists the remote's branches, checks one out (starting it empty if the remote doesn't have it), checks and
@@ -26,7 +26,7 @@ class GitClone:
         self._env = dict(env)
 
     @classmethod
-    def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "GitClone":
+    def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "ProjectClone":
         """Create an empty repository in ``work_dir``, an existing empty folder, with ``url`` as its remote.
 
         It signs every commit, with SSH (not GPG, which allowed_signers can't verify) and your user.signingkey.

@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from foundry import config, paths, task
-from foundry.git_clone import GitClone
+from foundry.project_clone import ProjectClone
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -30,7 +30,7 @@ def create_main(args: argparse.Namespace) -> int:
     new_task = task.Task(args.task_id)
     template = task.load_template(paths.task_template_dir(foundry_root))
     with tempfile.TemporaryDirectory(prefix="foundry-task-") as scratch_dir:
-        task.create(GitClone.init(project.url, Path(scratch_dir), os.environ), new_task, template)
+        task.create(ProjectClone.init(project.url, Path(scratch_dir), os.environ), new_task, template)
     print("\n".join(report(project.name, new_task)))
     return 0
 

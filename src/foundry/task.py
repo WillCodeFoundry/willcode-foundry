@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Final
 
 from foundry.errors import FoundryError
-from foundry.git_clone import GitClone
+from foundry.project_clone import ProjectClone
 
 # The branch holding every task's notes, each in its own folder (Task.notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
@@ -77,7 +77,7 @@ def load_template(template_dir: Path) -> dict[str, str]:
     return template
 
 
-def create(clone: GitClone, task: Task, template: Mapping[str, str]) -> None:
+def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None:
     """Create the task's branch from the default branch, and copy ``template`` into its notes folder.
 
     Both branches are pushed at once, so either both change or neither does. Refuses if the task
