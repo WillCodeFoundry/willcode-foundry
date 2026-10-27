@@ -1,6 +1,8 @@
 """agent_runtime.git.Git, against a temporary repository: each of its four ways to run git, and its errors."""
 
 import os
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -48,6 +50,33 @@ def test_succeeds_can_show_gits_own_output(repo: Path, capfd: pytest.CaptureFixt
     assert "fatal:" in capfd.readouterr().err
 
 
+def test_shown_output_comes_after_what_this_process_wrote(repo: Path) -> None:
+    """As session-setup's progress reads, with its output a pipe, so block-buffered: its own lines and git's, in
+    the order they happened. Run in a process of its own, since pytest's capture buffers differently."""
+    head = git(repo, "rev-parse", "HEAD").stdout.strip()
+    script = (
+        "import sys; from pathlib import Path; from agent_runtime.git import Git; "
+        "print('before'); Git(Path(sys.argv[1])).succeeds('rev-parse', 'HEAD', show_output=True); print('after')"
+    )
+
+    env = {name: value for name, value in os.environ.items() if name != "PYTHONUNBUFFERED"}
+    run = subprocess.run([sys.executable, "-c", script, str(repo)], capture_output=True, text=True, env=env, check=True)
+
+    assert run.stdout.splitlines() == ["before", head, "after"]
+
+
+def test_input_reaches_git(repo: Path) -> None:
+    blob = git(repo, "hash-object", "crlf.txt").stdout.strip()
+
+    assert Git(repo).output("hash-object", "--stdin", input="one\r\ntwo\r\n").strip() == blob
+    assert Git(repo).succeeds("hash-object", "--stdin", input=b"one\r\ntwo\r\n\xff") is True
+
+
+def test_output_bytes_raises_on_failure_with_gits_message(repo: Path) -> None:
+    with pytest.raises(GitError, match=r"^git show HEAD:absent failed: fatal: "):
+        Git(repo).output_bytes("show", "HEAD:absent")
+
+
 def test_a_failure_names_the_command_as_given_and_gits_message(repo: Path) -> None:
     with pytest.raises(GitError) as raised:
         Git(repo).output("rev-parse", "--verify", "refs/heads/nope")
@@ -86,10 +115,23 @@ def test_a_folder_is_acted_on_wherever_this_runs(repo: Path, tmp_path: Path, mon
     assert Path(Git(repo).output("rev-parse", "--show-toplevel").strip()) == repo
 
 
-def test_the_environment_given_is_the_one_git_runs_in(repo: Path) -> None:
-    env = {**os.environ, "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "foundry.probe", "GIT_CONFIG_VALUE_0": "yes"}
+PROBE = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "foundry.probe", "GIT_CONFIG_VALUE_0": "yes"}
+"""Environment variables that set foundry.probe for git."""
 
-    assert Git(repo, env).output("config", "--get", "foundry.probe") == "yes\n"
+
+def test_the_environment_given_is_the_one_git_runs_in(repo: Path) -> None:
+    assert Git(repo, {**os.environ, **PROBE}).output("config", "--get", "foundry.probe") == "yes\n"
+
+
+@pytest.mark.parametrize("env", [{}, {"PATH": "/usr/bin:/bin"}], ids=["empty", "PATH only"])
+def test_the_environment_given_replaces_this_processs(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, env: dict[str, str]
+) -> None:
+    """Nothing of this process's environment reaches git beside it, even with an empty one."""
+    for name, value in PROBE.items():
+        monkeypatch.setenv(name, value)
+
+    assert Git(repo, env).result("config", "--get", "foundry.probe").returncode == 1
 
 
 @pytest.mark.parametrize(
