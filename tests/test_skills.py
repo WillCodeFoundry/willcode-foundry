@@ -5,8 +5,7 @@ from pathlib import Path
 import pytest
 
 from agent_runtime.git import GitError
-from foundry import cli
-from foundry.commands import skills
+from foundry import cli, skills
 from foundry.errors import FoundryError
 from tests.conftest import git
 
@@ -166,10 +165,37 @@ def test_a_patch_git_rejects_is_an_error_and_the_commit_stays(foundry_root, upst
     extra.write_text("Extra, improved.\n")
     commit_all(upstream, "third")
 
-    with pytest.raises(FoundryError, match=r"^tdd: git apply rejected upstream's changes"):
+    with pytest.raises(FoundryError, match=r"^git apply rejected upstream's changes to tdd, which stays at its commit"):
         update(foundry_root, upstream)
 
     assert kit_status(foundry_root) == ""
+
+
+def test_a_rejected_skill_doesnt_hide_the_others_conflicts(foundry_root, upstream) -> None:
+    """Every skill is tried; the error at the end names the rejected one and the conflicted one."""
+    extra = upstream / "skills" / "engineering" / "zz" / "EXTRA.md"
+    extra.parent.mkdir()
+    extra.write_text("Extra.\n")
+    (extra.parent / "SKILL.md").write_text("---\nname: zz\n---\n")
+    second = commit_all(upstream, "second")
+    kit_zz = foundry_root / "agent-kit" / "skills" / "zz"
+    kit_zz.mkdir()
+    (kit_zz / "SKILL.md").write_text(copied_skill_md(second, "\n").replace("engineering/tdd", "engineering/zz"))
+    commit_all(foundry_root, "copy zz without EXTRA.md")
+    extra.write_text("Extra, improved.\n")  # rejected: the copy has no EXTRA.md
+    skill_md = upstream / "skills" / "engineering" / "tdd" / "SKILL.md"
+    skill_md.write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))  # conflicts with the copy
+    third = commit_all(upstream, "third")
+    reported: list[str] = []
+
+    with pytest.raises(FoundryError) as raised:
+        skills.update(foundry_root, url_for=lambda repo: str(upstream), report=reported.append)
+
+    assert str(raised.value) == (
+        "git apply rejected upstream's changes to zz, which stays at its commit; see git's message above. "
+        "Not merged cleanly: tdd; resolve what git reported above, then commit"
+    )
+    assert reported == [f"tdd: conflicted at {third[:12]}", f"zz: rejected, still at {second[:12]}"]
 
 
 def test_spaces_after_the_recorded_commit_dont_stop_it_moving(foundry_root, upstream) -> None:
@@ -237,6 +263,33 @@ def test_each_copied_skill_names_its_repositorys_licence() -> None:
             licence = f"LICENSE-{source.repo.replace('/', '-')}"
             assert f"(see ../{licence})" in skill_md.read_text(), skill_md
             assert (skills_dir / licence).is_file()
+
+
+@pytest.mark.parametrize(
+    "front_matter",
+    ["---\nname: own\n---\n", "No front matter.\n", "---\nmetadata:\n  adapted: yes\n---\n"],
+    ids=["no metadata", "no front matter", "no source"],
+)
+def test_a_skill_without_a_source_is_the_foundrys_own(tmp_path: Path, front_matter: str) -> None:
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text(front_matter)
+
+    assert skills.read_source(skill_md) is None
+
+
+def test_a_source_with_an_empty_repo_is_reported_not_skipped(tmp_path: Path) -> None:
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("---\nmetadata:\n  source:\n    repo:\n    path: p\n    commit: 0000\n---\n")
+
+    with pytest.raises(FoundryError, match=r"metadata\.source has no repo$"):
+        skills.read_source(skill_md)
+
+
+def test_a_commit_of_digits_stays_a_string(tmp_path: Path) -> None:
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text("---\nmetadata:\n  source: {repo: o/r, path: p, commit: 0000000000}\n---\n")
+
+    assert skills.read_source(skill_md) == skills.Source(repo="o/r", path="p", commit="0000000000")
 
 
 def test_a_source_without_its_commit_is_reported(tmp_path: Path) -> None:

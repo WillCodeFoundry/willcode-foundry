@@ -171,9 +171,10 @@ src/foundry/
 ├── commands/task.py    # foundry task create
 ├── commands/repo.py    # foundry repo check [--fix]
 ├── commands/prune.py   # foundry prune
-├── commands/skills.py  # foundry skills update: merges upstream's changes into the kit's copied skills
+├── commands/skills.py  # foundry skills update
 ├── runtime_build.py    # builds src/agent_runtime/ into a kit's .build/agent_runtime.pyz, atomically
 ├── repo_policy.py      # the repo policy: loads it, lists a repository's deviations, applies its rulesets
+├── skills.py           # the kit's copied skills: read their source, merge upstream's changes in (plan, then apply)
 ├── task.py             # Task: a task's id, branch and notes folder; creating one, its notes from the template (agent-notes, an orphan, is created by the first)
 ├── github.py           # the GitHub interface foundry needs, and GhCli: it through `gh api`, signed in as you
 ├── project_clone.py    # ProjectClone: a throwaway, shallow clone of a project's repository, through agent_runtime.git: check out, write, commit, push
