@@ -120,7 +120,9 @@ entries as you go, not at the end.
 2. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
    continue from "In progress" / "Next" rather than starting over.
 3. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
-   role's `memory/` that relate to the task.
+   role's `memory/` that relate to the task. If the project has them, read its
+   `ARCHITECTURE.md` and the decisions in `docs/adr/` too: they say how its
+   code is built and why.
 4. If starting fresh, write a short plan into `PROGRESS.md` → "Next", commit
    and push it before writing code.
 
