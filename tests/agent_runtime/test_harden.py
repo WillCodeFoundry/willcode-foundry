@@ -193,7 +193,8 @@ def test_settings_whose_hooks_skip_the_link_are_refused(hardened, read_only_kit)
     """The settings match the kit, but a hook names the runtime some other way: the link proves nothing then."""
     link = str(hardened.root_mode.hooks_runtime_link)
     kit_settings = AgentKit(read_only_kit).managed_settings
-    elsewhere = kit_settings.read_text().replace(f"{link} hook guard-bash", "$AGENT_KIT_DIR/x.pyz hook guard-bash")
+    guard = "claude-hook guard-bash"
+    elsewhere = kit_settings.read_text().replace(f"{link} {guard}", f"$AGENT_KIT_DIR/x.pyz {guard}")
     with writable(kit_settings.parent):
         kit_settings.chmod(0o644)
         kit_settings.write_text(elsewhere)
@@ -203,7 +204,7 @@ def test_settings_whose_hooks_skip_the_link_are_refused(hardened, read_only_kit)
     assert_refused(
         read_only_kit,
         hardened.agent_mode,
-        f"run a hook that skips the runtime's link, {link}: /usr/bin/python3 -IS $AGENT_KIT_DIR/x.pyz hook guard-bash",
+        f"run a hook that skips the runtime's link, {link}: /usr/bin/python3 -IS $AGENT_KIT_DIR/x.pyz {guard}",
     )
 
 

@@ -107,6 +107,7 @@ Preconditions the launcher does not create: the task, which `foundry task create
 sbx fixes a sandbox's definition and mounts when it creates it, so some sandboxes can't be launched again and must be recreated:
 
 - **one created before the agent runtime,** when the kit's code was bash scripts: its managed settings run hooks that no longer exist, and `check-hardening` refuses it. Recreate every sandbox after updating to this version;
+- **one hardened while the Claude hooks' command was `hook`,** before it became `claude-hook`: its installed managed settings differ from the kit's, and `check-hardening` refuses it;
 - **one created with other session variables,** before one was added or renamed: the launch is refused, naming the variables that differ;
 - **one whose workspace was under `/tmp`,** from before the workspace moved into the session: once the OS clears it, launching fails with `workspace '…' is not a directory`.
 
@@ -219,7 +220,8 @@ src/agent_runtime/        # runs inside a sandbox; the standard library only, ne
 | `session-setup` | `session-init`; never needs root |
 | `harden` | `session-init`, as root through sudo on the first launch, given `AGENT_KIT_DIR` alone: `session_init.harden` |
 | `check-hardening` | `session-init`, as the agent on every launch: `session_init.check_hardening` |
-| `hook guard-bash`, `hook session-check` | Claude Code, from managed settings |
+| `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from managed settings |
+| `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
 
 It targets the repository's Python floor, 3.11, like `foundry`, and the sandbox template ships a newer one, so the tests on CI's Python versions cover it. `__main__` still checks the version before importing anything else, so a template that someday ships an older `python3` fails at `session-init` with what it needs.
 

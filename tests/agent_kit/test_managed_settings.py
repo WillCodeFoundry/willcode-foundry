@@ -26,7 +26,7 @@ def test_every_hook_runs_the_kits_runtime_isolated() -> None:
     """The template's own interpreter, with PYTHON_FLAGS, on the runtime through the link root mode makes
     to the kit's: a fixed path in a root-owned folder. No variable: a settings file the agent writes can set Claude
     Code's."""
-    runtime = f"{PYTHON} {PYTHON_FLAGS} {harden.SANDBOX.hooks_runtime_link} hook "
+    runtime = f"{PYTHON} {PYTHON_FLAGS} {harden.SANDBOX.hooks_runtime_link} claude-hook "
     assert HOOK_COMMANDS == {
         "PreToolUse": [runtime + "guard-bash"],
         "Stop": [runtime + "session-check"],

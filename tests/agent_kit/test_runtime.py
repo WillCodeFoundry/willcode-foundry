@@ -103,7 +103,7 @@ RUNTIME = ("<python>", PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
         (*RUNTIME, "git-hook", "pre-commit"),
         (*RUNTIME, "git-hook", "pre-push"),
         (*RUNTIME, "git-hook", "prepare-commit-msg", "<kit>/message"),
-        (*RUNTIME, "hook", "session-check"),
+        (*RUNTIME, "claude-hook", "session-check"),
         (*RUNTIME, "session-init"),
         (*RUNTIME, "session-setup"),
     ],
@@ -118,9 +118,9 @@ def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, 
 
 
 def test_a_hook_without_the_session_variables_names_itself(built_kit: Path) -> None:
-    """As every other command does: the hook's own name, not the `hook` command's."""
+    """As every other command does: the hook's own name, not the `claude-hook` command's."""
     result = subprocess.run(
-        runtime_command(built_kit, "hook", "session-check"),
+        runtime_command(built_kit, "claude-hook", "session-check"),
         env={"PATH": os.environ["PATH"]},
         input="",
         capture_output=True,

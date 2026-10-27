@@ -75,11 +75,11 @@ def test_every_configured_role_lacks_nothing() -> None:
 
 
 def test_a_command_runs_the_kits_runtime_isolated() -> None:
-    assert AgentKit(Path("/kit")).command("hook", "guard-bash") == (
+    assert AgentKit(Path("/kit")).command("claude-hook", "guard-bash") == (
         "/usr/bin/python3",
         "-IS",
         "/kit/.build/agent_runtime.pyz",
-        "hook",
+        "claude-hook",
         "guard-bash",
     )
 

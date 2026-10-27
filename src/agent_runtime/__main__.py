@@ -54,8 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name, (func, help_text) in COMMANDS.items():
         subparsers.add_parser(name, help=help_text).set_defaults(func=func)
-    hook = subparsers.add_parser("hook", help="a Claude Code hook, as managed settings run it")
-    hook.add_argument("name", choices=CLAUDE_HOOKS)
+    claude_hook = subparsers.add_parser("claude-hook", help="a Claude Code hook, as managed settings run it")
+    claude_hook.add_argument("name", choices=CLAUDE_HOOKS)
     git_hook = subparsers.add_parser("git-hook", help="a git hook, as agent-kit/hooks/ runs it")
     git_hook.add_argument("name", choices=GIT_HOOKS)
     git_hook.add_argument("args", nargs=argparse.REMAINDER, help="what git passed the hook")
@@ -66,7 +66,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     """Run one command; returns its exit code. What it raises to stop is printed, not a traceback."""
     args = build_parser().parse_args(argv)
     func: Callable[[], int]
-    if args.command == "hook":
+    if args.command == "claude-hook":
         func = CLAUDE_HOOKS[args.name]
     elif args.command == "git-hook":
         func = partial(_ran, partial(GIT_HOOKS[args.name], args.args))
@@ -77,7 +77,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     except _EXPECTED as error:
         if isinstance(error, (contract.MissingVariables, GitError)):
             # Messages that don't say which command they come from; a hook says its own name.
-            command = args.name if args.command in ("hook", "git-hook") else args.command
+            command = args.name if args.command in ("claude-hook", "git-hook") else args.command
             print(f"agent_runtime {command}: {error}", file=sys.stderr)
         else:
             print(error, file=sys.stderr)
