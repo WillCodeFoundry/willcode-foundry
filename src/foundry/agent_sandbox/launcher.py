@@ -33,11 +33,28 @@ class LaunchRequest:
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
 
 
+@dataclass(frozen=True)
+class Started:
+    """A sandbox start() prepared, ready for the agent: what launch prints, and the sandbox to attach to."""
+
+    definition: SandboxDefinition
+    ssh_agent_socket_path: Path
+    sandbox: SbxCli
+
+
 def launch(request: LaunchRequest) -> NoReturn:
     """Prepare the sandbox and replace this process with the agent's session in it.
 
     Composition root. Raises SandboxError if anything before the hand-over fails.
     """
+    started = start(request)
+    print(launch_summary(request, started.definition, started.ssh_agent_socket_path), file=sys.stderr)
+    started.sandbox.attach()
+
+
+def start(request: LaunchRequest) -> Started:
+    """Everything launch does before handing over: prune, then prepare the sandbox, up to but not including
+    attaching the agent. Raises SandboxError if any of it fails."""
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
     ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
@@ -53,8 +70,7 @@ def launch(request: LaunchRequest) -> NoReturn:
             f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned_sandboxes)}", file=sys.stderr
         )
     prepare(request, definition, ssh_agent, sandbox)
-    print(launch_summary(request, definition, ssh_agent.socket_path), file=sys.stderr)
-    sandbox.attach()
+    return Started(definition, ssh_agent.socket_path, sandbox)
 
 
 def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> None:
