@@ -145,3 +145,16 @@ def test_a_role_folder_missing_a_required_file_is_refused_before_git(
     included = subprocess.run(["git", "config", "--global", "--get", "include.path"], capture_output=True, check=False)
     assert included.returncode == 1  # the role's identity wasn't written
     assert not Path(env["AGENT_PROJECT_DIR"]).exists()  # nothing cloned
+
+
+def test_a_failed_step_names_the_checkout_it_ran_in(tmp_path, kit_env, created_task) -> None:
+    """session-setup works in two checkouts: the message says which one to look at."""
+    env = kit_env(TASK)
+    assert session_setup(env, created_task).returncode == 0
+    shutil.rmtree(created_task)  # origin is gone: the next fetch fails
+
+    result = session_setup(env, created_task)
+
+    assert result.returncode == 1
+    project = env["AGENT_PROJECT_DIR"]
+    assert f"session-setup: `git -C {project} fetch origin` failed; see git's message above" in result.stderr

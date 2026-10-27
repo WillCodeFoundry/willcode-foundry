@@ -10,9 +10,11 @@ need of it:
     result         the CompletedProcess, captured as text; the caller reads the exit code
     succeeds       whether it exited 0; git's own output is discarded, or shown, as progress
 
-A missing git executable raises GitError from every one.
+Text is decoded with replacement characters, so output that isn't UTF-8 never raises. A missing git executable
+raises GitError from every one.
 """
 
+import shlex
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -27,7 +29,10 @@ class GitError(Exception):
         self.command = tuple(command)
         """The arguments as the caller passed them, without the -C Git adds."""
         self.stderr = stderr
-        super().__init__(f"git {' '.join(command)} failed: {stderr.strip()}" if found else "git not found in PATH")
+        self.found = found
+        """False when there was no git to run."""
+        message = f"{shlex.join(['git', *command])} failed: {stderr.strip()}"
+        super().__init__(message if found else "git not found in PATH")
 
 
 @dataclass(frozen=True)
@@ -49,18 +54,23 @@ class Git:
             raise GitError(args, result.stderr.decode(errors="replace"))
         return result.stdout
 
-    def result(self, *args: str, input: str | None = None) -> subprocess.CompletedProcess[str]:
-        return self._text(args, input, capture=True)
+    def result(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return self._text(args, None, capture=True)
 
-    def succeeds(self, *args: str, input: str | bytes | None = None, show_output: bool = False) -> bool:
+    def succeeds(self, *args: str, input: bytes | None = None, show_output: bool = False) -> bool:
         """Whether the command exits 0. With ``show_output``, git writes straight to this process's stdout and
         stderr, after what this process has already written there; otherwise its output is discarded."""
         if show_output:
             sys.stdout.flush()
             sys.stderr.flush()
-        if isinstance(input, bytes):
-            return self._bytes(args, input, capture=not show_output).returncode == 0
-        return self._text(args, input, capture=not show_output).returncode == 0
+        output = None if show_output else subprocess.DEVNULL
+        try:
+            run = subprocess.run(
+                self._argv(args), input=input, stdout=output, stderr=output, env=self._env(), check=False
+            )
+        except FileNotFoundError:
+            raise GitError(args, "", found=False) from None
+        return run.returncode == 0
 
     def current_branch(self) -> str:
         """The branch checked out, or "detached"."""
@@ -70,7 +80,13 @@ class Git:
     def _text(self, args: Sequence[str], input: str | None, *, capture: bool) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
-                self._argv(args), input=input, capture_output=capture, text=True, env=self._env(), check=False
+                self._argv(args),
+                input=input,
+                capture_output=capture,
+                text=True,
+                errors="replace",
+                env=self._env(),
+                check=False,
             )
         except FileNotFoundError:
             raise GitError(args, "", found=False) from None

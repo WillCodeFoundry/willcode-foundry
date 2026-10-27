@@ -55,7 +55,27 @@ def test_a_failure_names_the_command_as_given_and_gits_message(repo: Path) -> No
     assert raised.value.command == ("rev-parse", "--verify", "refs/heads/nope")
     assert str(raised.value) == f"git rev-parse --verify refs/heads/nope failed: {raised.value.stderr.strip()}"
     assert raised.value.stderr.startswith("fatal:")
+    assert raised.value.found is True
     assert "-C" not in str(raised.value)
+
+
+def test_a_failure_quotes_an_argument_with_spaces(repo: Path) -> None:
+    with pytest.raises(GitError) as raised:
+        Git(repo).output("rev-parse", "--verify", "no such ref")
+
+    assert str(raised.value).startswith("git rev-parse --verify 'no such ref' failed: fatal:")
+
+
+def test_output_that_isnt_utf_8_is_text_all_the_same(repo: Path) -> None:
+    """Text is decoded with replacement characters: output that isn't UTF-8, on success or in git's message,
+    never raises UnicodeDecodeError."""
+    (repo / "latin-1.txt").write_bytes("café\n".encode("latin-1"))
+    git(repo, "add", "latin-1.txt")
+    git(repo, "commit", "-qm", "latin-1")
+
+    assert Git(repo).output("show", "HEAD:latin-1.txt") == "caf\ufffd\n"
+    with pytest.raises(GitError, match="\ufffd"):
+        Git(repo).output("show", "HEAD:caf\udce9")  # a path holding the byte 0xe9, which git's message repeats
 
 
 def test_a_folder_is_acted_on_wherever_this_runs(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,8 +111,9 @@ def test_a_missing_git_is_named_by_every_method(
     empty.mkdir()
     monkeypatch.setenv("PATH", str(empty))
 
-    with pytest.raises(GitError, match=r"^git not found in PATH$"):
+    with pytest.raises(GitError, match=r"^git not found in PATH$") as raised:
         call(Git(repo))
+    assert raised.value.found is False
 
 
 def test_the_current_branch_or_detached(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:

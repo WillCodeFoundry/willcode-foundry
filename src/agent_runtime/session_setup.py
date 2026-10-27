@@ -7,6 +7,7 @@ AGENT_PROJECT_DIR. Assumes `foundry task create` has already created the task: i
 folder, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
 """
 
+import shlex
 import sys
 from pathlib import Path
 
@@ -140,7 +141,8 @@ def _step(git: Git, *args: str) -> None:
     """Run a step of the setup, git's output going where this command's goes: what clone and switch print is
     the setup's progress. A failure stops setup, as git reported it."""
     if not git.succeeds(*args, show_output=True):
-        raise SetupError(f"`git {' '.join(args)}` failed; see git's message above")
+        folder = ["-C", str(git.folder)] if git.folder is not None else []
+        raise SetupError(f"`{shlex.join(['git', *folder, *args])}` failed; see git's message above")
 
 
 def _git_config(key: str) -> str:
