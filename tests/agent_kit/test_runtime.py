@@ -115,3 +115,21 @@ def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, 
     )
     assert result.returncode != 0
     assert "AGENT_" in result.stderr and "not set" in result.stderr
+
+
+def test_a_hook_without_the_session_variables_names_itself(built_kit: Path) -> None:
+    """As every other command does: the hook's own name, not the `hook` command's."""
+    result = subprocess.run(
+        runtime_command(built_kit, "hook", "session-check"),
+        env={"PATH": os.environ["PATH"]},
+        input="",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == (
+        f"agent_runtime session-check: {', '.join(contract.NAMES)} not set; "
+        "this runs inside a foundry sandbox, which sets them\n"
+    )

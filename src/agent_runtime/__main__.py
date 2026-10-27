@@ -54,7 +54,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     try:
         return handler(args)
     except contract.MissingVariables as error:
-        print(f"agent_runtime {args.command}: {error}", file=sys.stderr)
+        # A hook says its own name, as the other commands do, not the `hook` command's.
+        command = args.name if args.command == "hook" else args.command
+        print(f"agent_runtime {command}: {error}", file=sys.stderr)
         return 1
 
 
