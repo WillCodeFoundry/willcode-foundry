@@ -1,60 +1,88 @@
 # willcode-foundry
 
-One instance of a willcode foundry: the configuration, role definitions, memory and launcher for a set of coding agents working on a group of projects. It holds no project code. Each agent runs in a Docker Sandbox, clones its project from GitHub, and hands work back by pushing branches.
+The foundry runs coding agents on your projects. Each agent works in its own Docker Sandbox, with one role and one task, and hands its work back by pushing branches to the project's GitHub repository. This repository holds the configuration, the roles and the code that launches them; it holds no project code.
+
+## Requirements
+
+- **sbx**, the Docker Sandboxes CLI, signed in, with SSH agent forwarding on and not pinned to a socket:
+
+  ```console
+  $ sbx settings set ssh.agentForwardingEnabled true
+  $ sbx settings unset ssh.agentSocketPath
+  $ sbx daemon restart
+  ```
+
+- **uv**, to run foundry.
+- **git**, with an SSH signing key named in your global config, to create tasks. See [Where agent output lives](#where-agent-output-lives).
+- **gh**, signed in with admin rights on the projects, for `foundry repo check`.
+
+## Set up
+
+1. List your projects and roles in `config/foundry.yaml`. Each role needs its dir in `agent-kit/roles/<role>/`, holding its `ROLE.md` and `gitconfig`.
+2. Put each role's SSH key in `secrets/ssh/<role>`. If a role should use `gh`, put its GitHub token in `secrets/github/<role>.token`. The dev opens pull requests, so it needs one that can.
+3. Make each project's repository match the repo policy: see [config/repo-policy/](config/repo-policy/README.md).
 
 ## Use
 
 ```console
 $ uv sync
-$ uv run foundry task create tkt-store wcf-0042            # create the task: its branch, and its notes from config/task-template/
-$ uv run foundry run tkt-store dev wcf-0042                # start the dev role on task wcf-0042, or re-attach
-$ uv run foundry prune                                     # kill the ssh-agents of stopped or removed sandboxes
-$ uv run foundry skills update                            # merge upstream's changes into the agent kit's copied skills
+$ uv run foundry task create tkt-store wcf-0042   # create the task: its branch, and its notes from config/task-template/
+$ uv run foundry run tkt-store dev wcf-0042       # start the dev role on the task, or re-attach to it
 ```
 
-`uv tool install --editable .` puts `foundry` on your PATH so `uv run` can be dropped. Projects and roles must be listed in `config/foundry.yaml`, and every role listed must have its folder in `agent-kit/roles/<role>/`, holding its `ROLE.md` and `gitconfig`: foundry refuses to run any command otherwise; the SSH key for a role is `secrets/ssh/<role>`, and a GitHub token, if the role should have `gh`, is `secrets/github/<role>.token`. The dev opens pull requests with `gh`, so `secrets/github/dev.token` must exist and allow creating pull requests on each project.
+Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
-## Recreating a sandbox
+| Command | What it does |
+|---|---|
+| `foundry run PROJECT ROLE TASK` | Starts the sandbox for a role on a task, or re-attaches to it. |
+| `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes on `agent-notes`. |
+| `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
+| `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed. `foundry run` does this too. |
+| `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
 
-sbx fixes a sandbox's definition and mounts when it creates it, so some sandboxes can't be launched again and must be recreated:
-
-- **one created before the agent runtime,** when the kit's code was bash scripts: its managed settings run hooks that no longer exist, and `check-hardening` refuses it. Recreate every sandbox after updating to this version;
-- **one hardened while the Claude hooks' command was `hook`,** before it became `claude-hook`: its installed managed settings differ from the kit's, and `check-hardening` refuses it;
-- **one created with other session variables,** before one was added or renamed: the launch is refused, naming the variables that differ;
-- **one whose workspace was under `/tmp`,** from before the workspace moved into the session: once the OS clears it, launching fails with `workspace '…' is not a directory`.
-
-To recreate one: `sbx env rm --force sessions/<sandbox>`, delete `sessions/<sandbox>/`, and launch again.
-
-## sbx requirements
-
-SSH agent forwarding must be on and not pinned to a fixed socket:
-
-```console
-$ sbx settings set ssh.agentForwardingEnabled true
-$ sbx settings unset ssh.agentSocketPath
-$ sbx daemon restart
-```
-
-The launcher passes `--auto-approve` to `sbx env create` and `run`, approving each sandbox plan on your behalf; the plans mount only `agent-kit/` read-only and an empty directory, with no host commands. `sbx env` is marked experimental by Docker; its file format is isolated in `agent_sandbox/definition.py` so a change there is one edit.
+foundry approves each sandbox's plan for you (`--auto-approve`). The plan mounts only `agent-kit/`, read-only, and an empty dir, and runs no commands on your machine.
 
 ## Where agent output lives
 
-Agents write nothing to this repository. Their work goes to the project repository on two branches:
+Agents write nothing to this repository. Their work goes to the project's repository, on two branches:
 
 | Branch | Holds | Written by |
 |---|---|---|
-| `task/<task-id>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task-id>/TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | all roles, each only in its own task folder |
+| `task/<task>` | Code and project documentation | dev, qa |
+| `agent-notes` | `.agent/<task>/`: `TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | every role, each only in its own task's dir |
 
-`TASK.md` is yours. The planner, the one interactive role, drafts it with you and writes it once you approve. Other roles must not change it; nothing stops them, so the reviewer checks its history and reports any change they made. Your commits on `agent-notes` are signed with SSH, as `agent-kit/git/allowed_signers` expects: admins bypass the rulesets, so nothing requires it, but the reviewer reports any unsigned change to `TASK.md` other than the one that created the task. `foundry task create` always signs the commit that creates the task, with SSH and your `user.signingkey`, and refuses to create the task if it can't. Name your key in your global git config; that alone turns signing on nowhere:
+`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create` always signs the commit that creates the task, with your key:
 
 ```console
-$ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in allowed_signers; its private half in your ssh-agent
+$ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in agent-kit/git/allowed_signers
 ```
 
-Then, in your own clone of the project's repository, where you commit to `agent-notes`, turn SSH signing on for that clone only:
+In your own clone of the project, turn on signing for that clone only:
 
 ```console
 $ git config gpg.format ssh
-$ git config commit.gpgsign true   # or sign one commit with git commit -S
+$ git config commit.gpgsign true
 ```
+
+## Recreating a sandbox
+
+foundry never migrates or removes a sandbox ([ADR 0004](docs/adr/0004-sandboxes-are-immutable.md)). A sandbox it would now create differently is refused at launch, and has to be recreated:
+
+```console
+$ sbx env rm --force sessions/<sandbox>
+$ rm -r sessions/<sandbox>/
+$ uv run foundry run PROJECT ROLE TASK
+```
+
+This applies to any sandbox created before a change to the session variables or to Claude Code's managed settings. Push the agent's work first, since removing the sandbox deletes anything left in it.
+
+## More
+
+| Read | For |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the foundry is put together, and the design rules its code follows. |
+| [GLOSSARY.md](GLOSSARY.md) | The words the code and docs use. |
+| [docs/adr/](docs/adr/README.md) | Why it works this way: one record per decision. |
+| [docs/security-model.md](docs/security-model.md) | What protects what, and what is only a guardrail. |
+| [docs/skills.md](docs/skills.md) | The agents' skills, and updating them from upstream. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Developing the foundry: the test tiers and CI. |

@@ -1,40 +1,47 @@
 # Contributing
 
+How to develop and test the foundry. Read [ARCHITECTURE.md](ARCHITECTURE.md) first: its design rules apply to every change.
+
 ## Development
 
 ```console
 $ uv sync --group dev
-$ uv run pytest                  # the host tier: everything below but the two that follow; about 20 seconds
-$ uv run pytest -m docker        # session-init in the sandbox's template image; needs a Docker daemon
-$ uv run pytest -m sbx           # a real sbx sandbox, by hand: see Testing against real sbx
+$ uv run pytest                  # the host tier; about 20 seconds
+$ uv run pytest -m docker        # the docker tier; needs a Docker daemon
+$ uv run pytest -m sbx           # the sbx tier, by hand: see below
 $ uv run ruff check . && uv run ruff format --check .
 $ uv run mypy
 ```
 
-The sbx tier runs only when `-m` names it: a hook in `tests/conftest.py` leaves it out of any other run, so a `-m` that replaces the default, such as `-m "not docker"`, can't launch a real sandbox. `-m docker` and `-m sbx` fail, rather than skip, when what they need is missing, since you asked for them, and `-m sbx` lists everything missing at once. A `-m docker` run ends with a line naming the image it tested, digest included (`sandbox image: docker/sandbox-templates:claude-code-docker@sha256:…`), since the tier follows the template's tag. Tests run as an ordinary user, never as root: a run started as root stops before collecting anything, and root runs only inside the `docker` tier's containers.
+Run the tests as an ordinary user. A run started as root stops before collecting anything, since root can write anything and the permission checks would mean nothing.
 
-| Folder | Covers | Runs |
-|---|---|---|
-| `tests/` (top level) | `foundry`: config, sessions, tasks, the runtime build, `foundry skills update`, repo policy | host tier |
-| `tests/agent_sandbox/` | the launcher's sbx calls, against fakes of the host and sbx | host tier |
-| `tests/agent_runtime/` | every rule and sequence in the runtime, in-process: hardening, the launch's order, `session-setup`, the git hooks and Claude hooks | host tier |
-| `tests/agent_kit/` | only what the kit as delivered shows: the built pyz, the git-hook command and the stubs' text, the managed settings' commands, the root command handed to sudo | host tier |
-| `tests/sandbox_image/` | `session-init` in containers from the sandbox's template image, as root inside them | `-m docker`; CI's `sandbox-image` job |
-| `tests/sbx/` | a real sbx sandbox: launch, relaunch, restart | `-m sbx`, by hand |
+## Test tiers
 
-These are the checks CI runs (`.github/workflows/ci.yml`), on the Python in `.python-version`, the oldest `requires-python` allows; CI also runs the host tier on the newest, and the `docker` tier as its `sandbox-image` job, on every pull request. The image isn't pinned: the tests pull its tag, as sbx does for each new sandbox, so they check what new sandboxes get. The pull is tried three times; with repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a read-only access token), the job logs in first, so Docker Hub's anonymous rate limit can't fail it. A change to the template can turn an unrelated pull request red, with a failure that says what changed. Its last job, `ci-gate`, passes only if every other job did, and is the check `config/repo-policy/rulesets.yaml` requires before a pull request can merge into main. Add a new job to `ci-gate`'s `needs`, or it won't block anything, and `foundry repo check` will show the deviation. The foundry's only shell scripts are the git hooks' two-line stubs, which the `docker` tier runs as written; the rest of the sandbox's code is `agent_runtime`, so ruff, mypy and pytest cover it too.
+Each behaviour is tested once, at the cheapest tier that can catch its bug. A higher tier tests only what the lower ones can't, and says so in its docstring.
 
-Each behaviour is tested once, at the cheapest tier that can catch its bug; a higher tier tests only what the lower ones can't, and says so in its docstring. A test that would repeat a lower tier's rule is deleted instead.
+| Tier | Folder | Covers | Runs |
+|---|---|---|---|
+| host | `tests/` (top level) | foundry: config, sessions, tasks, the runtime build, skills, the repo policy, and the docs | every `uv run pytest`; CI |
+| host | `tests/agent_sandbox/` | the sbx calls, against fakes of the host and sbx | every `uv run pytest`; CI |
+| host | `tests/agent_runtime/` | every rule in the runtime, in-process; hardening runs against a modelled machine ([ADR 0009](docs/adr/0009-test-against-a-modelled-machine.md)) | every `uv run pytest`; CI |
+| host | `tests/agent_kit/` | only what the kit as delivered shows: the built runtime, the stubs, the managed settings' commands | every `uv run pytest`; CI |
+| docker | `tests/sandbox_image/` | `session-init` and the git hooks in the template image: real hardening, permissions and read-only mount | `-m docker`; CI's `sandbox-image` job |
+| sbx | `tests/sbx/` | a real sandbox: launch, relaunch, restart | `-m sbx`, by hand |
 
-`tests/agent_runtime/` calls the runtime in-process, through its seams: `guard_bash` against commands it must allow and refuse; hardening through its two modes on a temporary machine (`hardening.Machine`, built by `tests/support/machine.py`: its own settings, Docker files and sockets, interpreter, and stand-in `sudo`, `su` and `passwd`), root mode then agent mode on the same files, every way the agent could still reach root as a case `check-hardening` must refuse, and root mode's refusals leaving the machine unchanged; `session_init` on that machine, root mode reached through its `run_as_root` seam (first launch, relaunch, a failing root mode or setup); `session_setup` given a `home`; and the git hooks' rules and session-check against real checkouts that `session_setup` made from a local origin, each hook given the repository as a `Git`. The machine models the agent as neither owner nor in the group of what it touches, and who owns each path, since in a test root and the agent are one user. `tests/agent_kit/` tests the kit as delivered, with the runtime built into a copy of it once per run (the `built_kit` fixture in `tests/conftest.py`, so no test writes into `agent-kit/.build/`): the exact command `session-init` hands to `sudo` (a stand-in alone on `PATH` with `git`, recording it without running it), `session-setup` through the pyz, the `git-hook` command (a refusal stops git, git's arguments reach the hook) and the stubs' text (each execs the runtime through the hardened link under its own name), the Stop hook against real checkouts, the managed settings' commands as written, and that the pyz imports nothing outside the standard library. They need `git`, and `/usr/bin/python3`, which the managed settings name. Shared helpers are in `tests/support/`; the conftests hold only fixtures and pytest hooks. `tests/test_task.py` creates tasks in a throwaway bare repository, with `git`. `tests/test_task_contract.py` checks that every `AGENT_*` variable the agent kit and runtime use is one the sandbox definition sets and one of them reads, and that `config/repo-policy/rulesets.yaml` names a task's branches as `task.py` does. `tests/test_git_isolation.py` checks the suite's git leaves your own configuration alone, whatever `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` or a hook's `GIT_DIR` say.
+Shared helpers live in `tests/support/`; the conftests hold only fixtures and pytest hooks. Tests replace the outside world through its one door, never by patching (design rule 3).
 
-`tests/sandbox_image/` runs `session-init` as the launcher does, as the agent, in containers from the template image sbx starts Claude Code sandboxes from (`docker/sandbox-templates:claude-code-docker`). Each container mounts a world-writable copy of the built kit read-only at its host path, as sbx does, and has a Docker socket the agent reaches only through a group added by number, as sbx gives it the docker group. The tests check the first launch hardens for real (settings root's, root's password locked, sudo gone, the socket closed, the kit unwritable, the hooks' link in place and run as written whatever `AGENT_KIT_DIR` says), the git hooks as written by real commits and pushes as the agent (the trailer, even with `--no-verify`; notes refused on the task branch; only the task's branch and `agent-notes` pushed; nothing the agent sets in its environment changing a rule; git stopping without the link), the relaunch only checks, the check sees real permissions, and the mount, not file modes, protects the kit. They need Docker only through its command line.
+`-m docker` and `-m sbx` fail rather than skip when what they need is missing, since you asked for them. The sbx tier runs only when `-m` names it, so a `-m "not docker"` can't launch a real sandbox.
+
+## CI
+
+`.github/workflows/ci.yml` runs lint, mypy and the host tier on the oldest and newest Python, and the docker tier as `sandbox-image`, on every pull request. Its last job, `ci-gate`, passes only if every other job did, and is the check the rulesets require before merging. Add a new job to `ci-gate`'s `needs`, or it won't block anything.
+
+The docker tier pulls the template image by its tag, as sbx does, so a change to the template can turn an unrelated pull request red. Its run ends by naming the image's digest. With the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` set, the job logs in first, so Docker Hub's rate limit can't fail it.
 
 ## Testing against real sbx
 
-`tests/sbx/` launches a real sbx sandbox, up to but not including attaching the agent, so Claude Code never starts. It shows what nothing else can: sbx accepts our sandbox definition, mounts the kit read-only at its host path, runs `session-init` as the agent with sudo the first time, and its private dockerd keeps the Docker socket root's after the sandbox restarts. It replaces launching a sandbox twice by hand.
+`tests/sbx/` launches a real sandbox up to, but not including, attaching the agent. It shows what nothing else can: that sbx accepts the sandbox definition, mounts the kit read-only, runs `session-init` with sudo the first time, and keeps the Docker socket root's after a restart.
 
-- **Prerequisites:** sbx installed, with KVM, and `sbx login`; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-smoke`. The suite checks these before any sbx call, and fails listing every one missing.
-- **The command:** `uv run pytest -m sbx`. No workflow runs it.
 - **When:** after upgrading sbx, and before merging changes to `agent-kit/`, `src/agent_runtime/` or `src/foundry/agent_sandbox/`.
-- **What it leaves:** nothing. It acts only on the sandbox `dev-foundry-test-sbx-smoke` and `sessions/dev-foundry-test-sbx-smoke/`, removing both before it starts and after it ends, whatever the outcome, then prunes ssh-agents as `foundry prune` does. Expect a few minutes, mostly creating the sandbox.
+- **Prerequisites:** sbx with KVM, signed in; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-smoke`. The run lists every missing one before any sbx call.
+- **What it leaves:** nothing. It removes the sandbox `dev-foundry-test-sbx-smoke` and its session before and after, whatever the outcome. Expect a few minutes.
