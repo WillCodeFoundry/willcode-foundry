@@ -131,7 +131,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     workspace, or if the existing definition was written for another role,
     task or repository.
     """
-    sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
+    sandbox_name = sandbox_name_for(role_name=role.name, project_name=project.name, task=task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
     wanted = SessionVariables(
         role_name=role.name,
@@ -161,7 +161,7 @@ def _slug(text: str) -> str:
     return _SBX_UNSAFE_CHARACTERS.sub("-", text).strip("-").lower()
 
 
-def _sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
+def sandbox_name_for(*, role_name: str, project_name: str, task: Task) -> str:
     """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
     if len(name) > MAX_SANDBOX_NAME_LENGTH:

@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from agent_runtime import contract
-from foundry import agent_sandbox, config, paths
+from foundry import agent_sandbox, config, paths, session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.launcher import LaunchRequest, Started, start
 from foundry.commands.run import prepare_launch
@@ -113,13 +113,23 @@ def smoke() -> Iterator[Smoke]:
     foundry_root = paths.find_foundry_root()
     if missing := missing_prerequisites(foundry_root):
         pytest.fail("-m sbx needs:\n" + "\n".join(f"  - {line}" for line in missing), pytrace=False)
-    session_dir = paths.session_dir(foundry_root, f"{ROLE}-{PROJECT}-{TASK.id}")
-    remove_the_smoke_sandbox(session_dir)
+    # Named as the session names it, so a leftover from an earlier run is found and removed.
+    name = session.sandbox_name_for(role_name=ROLE, project_name=PROJECT, task=TASK)
+    remove_the_smoke_sandbox(paths.session_dir(foundry_root, name))
+    smoke = Smoke(foundry_root)
     try:
-        yield Smoke(foundry_root)
+        yield smoke
     finally:
-        remove_the_smoke_sandbox(session_dir)
-        agent_sandbox.prune()
+        try:
+            remove_the_smoke_sandbox(
+                smoke.request.definition_dir if smoke.request else paths.session_dir(foundry_root, name)
+            )
+        finally:
+            # Its socket was touched minutes ago, which prune spares as a launch in progress; without the
+            # socket, prune kills the agent and the dev role's key with it.
+            if smoke.started is not None:
+                smoke.started.ssh_agent_socket_path.unlink(missing_ok=True)
+            agent_sandbox.prune()
 
 
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
@@ -129,6 +139,8 @@ def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
 
     assert verified.returncode == 0, verified.stdout + verified.stderr
     assert "harden --verify: hardened" in verified.stdout
+    # Only root mode leaves sudo mode 0: a relaunch of a sandbox left from an earlier run wouldn't pass this.
+    assert smoke.run("sh", "-c", 'stat -L -c %a "$(command -v sudo)"').stdout.strip() == "0"
 
 
 @pytest.mark.parametrize(

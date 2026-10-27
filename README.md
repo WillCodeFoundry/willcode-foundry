@@ -231,7 +231,7 @@ $ uv run ruff check . && uv run ruff format --check .
 $ uv run mypy
 ```
 
-`-m docker` and `-m sbx` fail, rather than skip, when what they need is missing, since you asked for them, and `-m sbx` lists everything missing at once. A `-m docker` run ends with a line naming the image it tested, digest included (`sandbox image: docker/sandbox-templates:claude-code-docker@sha256:…`), since the tier follows the template's tag. Tests run as an ordinary user, never as root: a run started as root stops before collecting anything, and root runs only inside the `docker` tier's containers.
+The sbx tier runs only when `-m` names it: a hook in `tests/conftest.py` leaves it out of any other run, so a `-m` that replaces the default, such as `-m "not docker"`, can't launch a real sandbox. `-m docker` and `-m sbx` fail, rather than skip, when what they need is missing, since you asked for them, and `-m sbx` lists everything missing at once. A `-m docker` run ends with a line naming the image it tested, digest included (`sandbox image: docker/sandbox-templates:claude-code-docker@sha256:…`), since the tier follows the template's tag. Tests run as an ordinary user, never as root: a run started as root stops before collecting anything, and root runs only inside the `docker` tier's containers.
 
 | Folder | Covers | Runs |
 |---|---|---|

@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -21,6 +22,17 @@ def pytest_configure(config: pytest.Config) -> None:
             "the tests run as an ordinary user, never as root: "
             "root can write anything, so the write checks would mean nothing"
         )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Leave out the sbx tier unless -m names it: it launches a real sandbox and removes it with
+    `sbx env rm --force` in this foundry, so a -m replacing the default deselection mustn't bring it back."""
+    if re.search(r"(?<!not )\bsbx\b", config.option.markexpr or ""):
+        return
+    sbx = [item for item in items if item.get_closest_marker("sbx")]
+    if sbx:
+        items[:] = [item for item in items if not item.get_closest_marker("sbx")]
+        config.hook.pytest_deselected(items=sbx)
 
 
 SANDBOX_IMAGE = pytest.StashKey[str]()
