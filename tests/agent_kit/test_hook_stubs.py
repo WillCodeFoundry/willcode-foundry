@@ -1,7 +1,7 @@
 """agent-kit/hooks/: one stub per git hook, each finding the runtime from its own path.
 
 The stubs must find the pyz before they can import anything, so each spells out its path; these tests hold
-that path to contract.RUNTIME_PYZ, and the stubs to one another.
+that path to agent_kit.RUNTIME_PYZ, and the stubs to one another.
 """
 
 import re
@@ -9,7 +9,8 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from agent_runtime import contract, git_hooks
+from agent_runtime import git_hooks
+from agent_runtime.agent_kit import RUNTIME_PYZ
 
 HOOKS_DIR = Path(__file__).parents[2] / "agent-kit" / "hooks"
 STUBS = sorted(HOOKS_DIR.iterdir())
@@ -29,7 +30,7 @@ def test_a_stub_finds_the_runtime_where_the_build_puts_it(stub: Path) -> None:
     )
 
     assert match is not None
-    assert PurePosixPath(*re.findall(r'"([^"]+)"', match.group(1))) == contract.RUNTIME_PYZ
+    assert PurePosixPath(*re.findall(r'"([^"]+)"', match.group(1))) == RUNTIME_PYZ
 
 
 def test_the_stubs_differ_only_in_their_hook() -> None:

@@ -11,7 +11,7 @@ import zipapp
 from pathlib import Path
 
 import agent_runtime
-from foundry import paths
+from agent_runtime.agent_kit import AgentKit
 from foundry.errors import FoundryError
 
 _SOURCE_DIR = Path(agent_runtime.__file__).parent
@@ -24,7 +24,7 @@ def build_runtime(kit_dir: Path) -> Path:
     while it is built sees the old file or the new one, never part of one. Raises FoundryError if the kit
     is missing or can't be written.
     """
-    target = paths.runtime_pyz(kit_dir)
+    target = AgentKit(kit_dir).runtime
     if not kit_dir.is_dir():
         raise FoundryError(f"can't build the agent runtime: the agent kit {kit_dir} is missing")
     try:

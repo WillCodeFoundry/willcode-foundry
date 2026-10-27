@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 
 _DOCKER_CONFIG = '{"group": "root"}'
 SANDBOX_USER = "agent"
@@ -101,11 +102,6 @@ SANDBOX = Machine(
 
 class _HardenError(Exception):
     """A step can't go ahead; the message says why and what to change."""
-
-
-def _kit_settings(kit_dir: Path) -> Path:
-    """The managed settings the kit holds, which the installed ones must be."""
-    return kit_dir / "claude" / "managed-settings.json"
 
 
 # --- Claude's managed settings -------------------------------------------------------
@@ -251,7 +247,7 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         )
         return 1
     try:
-        _harden_managed_settings(_kit_settings(kit_dir), machine.managed_settings, machine.root)
+        _harden_managed_settings(AgentKit(kit_dir).managed_settings, machine.managed_settings, machine.root)
         _harden_sudo_and_su(machine.sudo, machine.passwd)
         _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
     except _HardenError as error:
@@ -271,7 +267,7 @@ def verify(kit_dir: Path, machine: Machine = SANDBOX) -> int:
         )
         return 1
     found = [
-        *_check_managed_settings(machine.managed_settings, _kit_settings(kit_dir), machine),
+        *_check_managed_settings(machine.managed_settings, AgentKit(kit_dir).managed_settings, machine),
         *_check_sudo(machine.sudo),
         *_check_su(machine.su),
         *_check_docker_sockets(machine.checked_sockets, machine.can_write),

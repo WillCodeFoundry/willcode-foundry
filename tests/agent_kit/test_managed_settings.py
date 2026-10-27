@@ -7,6 +7,7 @@ from pathlib import Path
 
 from agent_runtime import contract
 from agent_runtime.__main__ import CLAUDE_HOOKS
+from agent_runtime.agent_kit import RUNTIME_PYZ
 
 AGENT_KIT_PATH = Path(__file__).parents[2] / "agent-kit"
 SETTINGS = json.loads((AGENT_KIT_PATH / "claude" / "managed-settings.json").read_text())
@@ -29,7 +30,7 @@ def test_only_managed_hooks_and_rules_apply() -> None:
 
 def test_every_hook_runs_the_kits_runtime_isolated() -> None:
     """The template's own interpreter, with -I, on the zipapp in the read-only kit: nothing the agent can change."""
-    runtime = f'{contract.PYTHON} -I "$AGENT_KIT_DIR/{contract.RUNTIME_PYZ}" hook '
+    runtime = f'{contract.PYTHON} -I "$AGENT_KIT_DIR/{RUNTIME_PYZ}" hook '
     assert COMMANDS == {
         "PreToolUse": [runtime + "guard-bash"],
         "Stop": [runtime + "session-check"],

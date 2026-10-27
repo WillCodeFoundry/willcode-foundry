@@ -8,7 +8,7 @@ the way git finds .git.
 
 from pathlib import Path
 
-from agent_runtime import contract
+from agent_runtime.agent_kit import AgentKit
 from foundry.errors import FoundryError
 
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
@@ -32,7 +32,7 @@ def agent_kit_dir(foundry_root: Path) -> Path:
 
 def runtime_pyz(kit_dir: Path) -> Path:
     """The built agent runtime inside an agent kit; takes the kit, since a sandbox's may be another foundry's."""
-    return kit_dir / contract.RUNTIME_PYZ
+    return AgentKit(kit_dir).runtime
 
 
 def role_dir(foundry_root: Path, role_name: str) -> Path:

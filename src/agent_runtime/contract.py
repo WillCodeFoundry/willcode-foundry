@@ -8,8 +8,10 @@ them back with ``read_environ``.
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final
+
+from agent_runtime.agent_kit import AgentKit
 
 ROLE: Final = "AGENT_ROLE"
 TASK: Final = "AGENT_TASK"
@@ -43,14 +45,11 @@ NAMES: Final = (
 PYTHON: Final = "/usr/bin/python3"
 """The interpreter every call into the runtime uses: the template's own, root-owned, never ``env python3``."""
 
-RUNTIME_PYZ: Final = PurePosixPath(".build") / "agent_runtime.pyz"
-"""Where the built runtime sits, relative to the agent kit."""
-
 
 def command(kit_dir: Path, *args: str) -> tuple[str, ...]:
     """A call into the runtime in ``kit_dir``. ``-I`` ignores PYTHONPATH, PYTHON* and user site-packages,
     so nothing the agent sets can shadow the package."""
-    return (PYTHON, "-I", str(kit_dir / RUNTIME_PYZ), *args)
+    return (PYTHON, "-I", str(AgentKit(kit_dir).runtime), *args)
 
 
 class MissingVariables(Exception):
