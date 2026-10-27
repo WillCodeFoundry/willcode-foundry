@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry import paths
+from agent_runtime.agent_kit import AgentKit
 from foundry.errors import FoundryError
 from foundry.runtime_build import build_runtime
 
@@ -22,7 +22,7 @@ def kit_dir(tmp_path: Path) -> Path:
 def test_the_runtime_is_built_into_the_kit_with_its_entry_point(kit_dir: Path) -> None:
     built = build_runtime(kit_dir)
 
-    assert built == paths.runtime_pyz(kit_dir) == kit_dir / ".build" / "agent_runtime.pyz"
+    assert built == AgentKit(kit_dir).runtime == kit_dir / ".build" / "agent_runtime.pyz"
     names = zipfile.ZipFile(built).namelist()
     assert "__main__.py" in names and "agent_runtime/contract.py" in names
     assert all(name == "__main__.py" or name.startswith("agent_runtime/") for name in names)

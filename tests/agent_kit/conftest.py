@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry import paths
+from agent_runtime.agent_kit import AgentKit
 from foundry.session import SessionVariables
 from foundry.task import Task
 
@@ -36,4 +36,4 @@ def runtime_command(kit_dir: Path, *args: str) -> list[str]:
     The tests that run a command exactly as written (managed settings, the git hooks' stubs) use the
     template's interpreter, /usr/bin/python3, as the sandbox does.
     """
-    return [sys.executable, "-I", str(paths.runtime_pyz(kit_dir)), *args]
+    return [sys.executable, "-I", str(AgentKit(kit_dir).runtime), *args]

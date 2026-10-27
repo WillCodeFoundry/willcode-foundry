@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent_runtime.agent_kit import AgentKit
 from foundry import paths
 from foundry.errors import FoundryError
 
@@ -75,7 +76,7 @@ def update(
     """
     conflicted: list[str] = []
 
-    skills_dir = paths.agent_kit_dir(foundry_root) / "skills"
+    skills_dir = AgentKit(paths.agent_kit_dir(foundry_root)).skills
     for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
         source = read_source(skill_md)
         if source is None:

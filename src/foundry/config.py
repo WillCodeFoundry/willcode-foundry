@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent_runtime.agent_kit import AgentKit
 from foundry import paths, yaml_io
 from foundry.errors import FoundryError
 
@@ -79,20 +80,14 @@ def parse(raw: object, *, foundry_root: Path, source: str = "config") -> Config:
     return Config(foundry_name=foundry_name, projects=projects, roles=roles)
 
 
-# What a role's folder in the agent kit must hold. session-setup fails without the gitconfig, and
-# without ROLE.md the agent starts with no role at all: CLAUDE.md imports it, and a missing import
-# is skipped without a word. skills/ is optional: a role without it has none.
-_ROLE_FILES = ("ROLE.md", "gitconfig")
-
-
 def _role(foundry_root: Path, role_name: str, *, source: str) -> Role:
-    """The role, refused unless its folder in the agent kit holds what a sandbox needs from it."""
-    role_dir = paths.role_dir(foundry_root, role_name)
-    if not role_dir.is_dir():
-        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role_dir} doesn't exist")
-    missing = [name for name in _ROLE_FILES if not (role_dir / name).is_file()]
-    if missing:
-        raise FoundryError(f"{source}: role {role_name!r}: {role_dir} has no {' or '.join(missing)}")
+    """The role, refused unless its folder in the agent kit holds what a sandbox needs from it: the rule is
+    agent_kit's, which session-setup applies again in the sandbox."""
+    role = AgentKit(paths.agent_kit_dir(foundry_root)).role(role_name)
+    if not role.dir.is_dir():
+        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role.dir} doesn't exist")
+    if missing := role.missing():
+        raise FoundryError(f"{source}: role {role_name!r}: {role.dir} has no {' or '.join(missing)}")
     github_token_path = paths.github_token_path(foundry_root, role_name)
     return Role(
         name=role_name,

@@ -8,7 +8,6 @@ the way git finds .git.
 
 from pathlib import Path
 
-from agent_runtime.agent_kit import AgentKit
 from foundry.errors import FoundryError
 
 CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
@@ -28,16 +27,6 @@ def config_path(foundry_root: Path) -> Path:
 
 def agent_kit_dir(foundry_root: Path) -> Path:
     return foundry_root / "agent-kit"
-
-
-def runtime_pyz(kit_dir: Path) -> Path:
-    """The built agent runtime inside an agent kit; takes the kit, since a sandbox's may be another foundry's."""
-    return AgentKit(kit_dir).runtime
-
-
-def role_dir(foundry_root: Path, role_name: str) -> Path:
-    """A role's folder in the agent kit: its ROLE.md, gitconfig, memory and skills."""
-    return agent_kit_dir(foundry_root) / "roles" / role_name
 
 
 def ssh_key_path(foundry_root: Path, role_name: str) -> Path:

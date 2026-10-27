@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from agent_runtime import contract
-from foundry import paths
+from agent_runtime.agent_kit import AgentKit
 from tests.agent_kit.conftest import runtime_command
 
 RUNTIME_SOURCE = Path(__file__).parents[2] / "src" / "agent_runtime"
@@ -21,7 +21,7 @@ def test_the_runtime_imports_only_the_standard_library(built_kit: Path) -> None:
     """Every module of the package, imported from the zipapp, loads nothing outside the standard library: neither
     foundry nor yaml, nor anything else installed, has to be in the sandbox. (What the interpreter's own site
     loads before, a virtualenv's for one, isn't the runtime's.)"""
-    pyz = paths.runtime_pyz(built_kit)
+    pyz = AgentKit(built_kit).runtime
     modules = sorted(path.stem for path in RUNTIME_SOURCE.glob("*.py") if path.stem != "__main__")
     code = "\n".join(
         [
@@ -51,7 +51,7 @@ def test_the_entry_points_parse_on_old_interpreters() -> None:
 
 
 def test_no_command_prints_the_usage(built_kit: Path) -> None:
-    result = run_python(str(paths.runtime_pyz(built_kit)))
+    result = run_python(str(AgentKit(built_kit).runtime))
 
     assert result.returncode == 2
     assert "usage: agent_runtime" in result.stderr
