@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -10,6 +11,16 @@ from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
 from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, Task
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Stop a run started as root before anything is collected. Only the docker tier's containers use root,
+    inside them."""
+    if os.geteuid() == 0:
+        raise pytest.UsageError(
+            "the tests run as an ordinary user, never as root: "
+            "root can write anything, so the write checks would mean nothing"
+        )
 
 
 @pytest.fixture
