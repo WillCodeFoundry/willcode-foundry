@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from agent_runtime.git import GitError
 from foundry import cli, task
 from foundry.commands.task import report
 from foundry.errors import FoundryError
@@ -181,7 +182,9 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> Non
 
 
 def test_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
-    with pytest.raises(FoundryError, match=r"^git ls-remote failed: .*does not appear to be a git repository"):
+    with pytest.raises(
+        GitError, match=r"^git ls-remote --symref origin HEAD failed: .*does not appear to be a git repo"
+    ):
         create(tmp_path / "missing.git", git_env)
 
 
