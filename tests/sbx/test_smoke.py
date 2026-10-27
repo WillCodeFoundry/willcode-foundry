@@ -39,10 +39,11 @@ def missing_prerequisites(foundry_root: Path) -> list[str]:
     """Everything the smoke test needs that this machine lacks, all at once."""
     missing = []
     if shutil.which("sbx") is None:
-        return ["sbx is not on PATH"]
-    listed = subprocess.run(["sbx", "ls", "--json"], capture_output=True, text=True, check=False)
-    if listed.returncode != 0:
-        missing.append(f"`sbx ls --json` failed; sign in with `sbx login`: {listed.stderr.strip()}")
+        missing.append("sbx is not on PATH")  # and so `sbx ls` can't say whether you're signed in
+    else:
+        listed = subprocess.run(["sbx", "ls", "--json"], capture_output=True, text=True, check=False)
+        if listed.returncode != 0:
+            missing.append(f"`sbx ls --json` failed; sign in with `sbx login`: {listed.stderr.strip()}")
     try:
         foundry_config = config.load(foundry_root)
         project, role = foundry_config.project(PROJECT), foundry_config.role(ROLE)
@@ -53,7 +54,9 @@ def missing_prerequisites(foundry_root: Path) -> list[str]:
     remote = subprocess.run(
         ["git", "ls-remote", project.url, f"refs/heads/{TASK.branch}"], capture_output=True, text=True, check=False
     )
-    if remote.returncode != 0 or not remote.stdout.strip():
+    if remote.returncode != 0:
+        missing.append(f"can't reach {project.url} to look for {TASK.branch}: {remote.stderr.strip()}")
+    elif not remote.stdout.strip():
         missing.append(
             f"{TASK.branch} isn't on {project.url}; create the task once with "
             f"`uv run foundry task create {PROJECT} {TASK.id}`"
