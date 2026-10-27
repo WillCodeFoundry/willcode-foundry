@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from agent_runtime import contract, git
+from agent_runtime.agent_kit import AgentKit, RoleDir
 
 
 class SetupError(Exception):
@@ -30,42 +31,44 @@ def session_setup(env: contract.Environ | None = None) -> int:
 
 
 def _set_up(environ: contract.Environ) -> None:
-    role_path = environ.kit_dir / "roles" / environ.role
-    if not (role_path / "gitconfig").is_file():
-        raise SetupError(f"{role_path}/gitconfig is missing")
-    _set_identity(environ, role_path)
-    _prepare_checkouts(environ)
+    kit = AgentKit(environ.kit_dir)
+    role = kit.role(environ.role)
+    # The rule foundry's config applies on the host, applied again here, before anything changes.
+    if missing := role.missing():
+        raise SetupError(f"role {environ.role!r}: {role.dir} has no {' or '.join(missing)}")
+    _set_identity(environ, kit, role)
+    _prepare_checkouts(environ, kit)
     task_md_path = environ.notes_dir / environ.task_file
     # Every task has a TASK.md: foundry task create refuses a template without one.
     if not task_md_path.is_file():
         raise SetupError(
             f"{environ.notes_branch} has no {environ.task_file}; push the task's TASK.md there, then run again."
         )
-    _write_instructions(environ, role_path, task_md_path)
-    _link_skills(role_path)
+    _write_instructions(kit, role, task_md_path)
+    _link_skills(role)
     print("session-setup: checkouts ready", flush=True)
     for checkout in (environ.project_dir, environ.notes_dir):
         print(git.run("-C", str(checkout), "status", "-sb").stdout.partition("\n")[0], flush=True)
 
 
-def _set_identity(environ: contract.Environ, role_path: Path) -> None:
+def _set_identity(environ: contract.Environ, kit: AgentKit, role: RoleDir) -> None:
     """Global, so both checkouts share it. Name, email, signing key and shared behaviour all come from the
     role's gitconfig and what it includes."""
-    _git("config", "--global", "include.path", str(role_path / "gitconfig"))
+    _git("config", "--global", "include.path", str(role.gitconfig))
     # Lets agents verify commits signed by any role, or by you.
-    _git("config", "--global", "gpg.ssh.allowedSignersFile", str(environ.kit_dir / "git" / "allowed_signers"))
+    _git("config", "--global", "gpg.ssh.allowedSignersFile", str(kit.allowed_signers))
     if _git_config("commit.gpgsign") == "true" and not _git_config("user.signingkey"):
-        raise SetupError(f"{environ.role} signs commits but {role_path}/gitconfig sets no user.signingkey")
+        raise SetupError(f"{environ.role} signs commits but {role.gitconfig} sets no user.signingkey")
 
 
-def _prepare_checkouts(environ: contract.Environ) -> None:
+def _prepare_checkouts(environ: contract.Environ, kit: AgentKit) -> None:
     project = environ.project_dir
     if not (project / ".git").is_dir():
         project.parent.mkdir(parents=True, exist_ok=True)
         # Blobless partial clone: full history of commits, file contents fetched on demand. Keeps large
         # repositories fast without the limits of --depth.
         _git("clone", "--filter=blob:none", environ.repo_url, str(project))
-    _git("config", "core.hooksPath", str(environ.kit_dir / "hooks"), cwd=project)  # read-only mount
+    _git("config", "core.hooksPath", str(kit.hooks), cwd=project)  # read-only mount
     _git("fetch", "origin", cwd=project)
 
     # The task must already exist on origin, created with its branch and a TASK.md on the notes branch
@@ -103,13 +106,13 @@ def _prepare_checkouts(environ: contract.Environ) -> None:
             )
 
 
-def _write_instructions(environ: contract.Environ, role_path: Path, task_md_path: Path) -> None:
+def _write_instructions(kit: AgentKit, role: RoleDir, task_md_path: Path) -> None:
     """Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @ imports without the approval
     dialog it shows for imports in a project file. Rewritten at every launch, so edits made inside the sandbox
     don't persist."""
     claude_dir = Path.home() / ".claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
-    imports = [environ.kit_dir / "AGENTS.md", role_path / "ROLE.md", task_md_path]
+    imports = [kit.agents_md, role.role_md, task_md_path]
     (claude_dir / "CLAUDE.md").write_text(
         "<!-- Written by session-init at every launch; edits here are discarded. -->\n"
         + "".join(f"@{_escape_spaces(path)}\n" for path in imports)
@@ -121,7 +124,7 @@ def _escape_spaces(path: Path) -> str:
     return str(path).replace(" ", "\\ ")
 
 
-def _link_skills(role_path: Path) -> None:
+def _link_skills(role: RoleDir) -> None:
     """The role's skills: roles/<role>/skills/ holds a link to each skill, and is linked as ~/.claude/skills,
     where Claude Code loads them. Remade at every launch, so a role's changed skills take effect; a role
     without the folder has none."""
@@ -129,8 +132,8 @@ def _link_skills(role_path: Path) -> None:
     if skills_link.exists() and not skills_link.is_symlink():
         raise SetupError(f"{skills_link} is a folder, not the link to the role's skills; remove it, then run again.")
     skills_link.unlink(missing_ok=True)
-    if (role_path / "skills").is_dir():
-        skills_link.symlink_to(role_path / "skills")
+    if role.skills.is_dir():
+        skills_link.symlink_to(role.skills)
 
 
 def _git(*args: str, cwd: Path | None = None) -> None:

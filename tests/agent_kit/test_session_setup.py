@@ -8,6 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from foundry.task import NOTES_BRANCH
 from tests.agent_kit.conftest import runtime_command
 from tests.conftest import TASK, git
@@ -120,3 +122,25 @@ def test_a_skills_folder_in_place_of_the_link_is_refused(tmp_path, kit_env, crea
 
     assert result.returncode == 1
     assert "is a folder, not the link to the role's skills" in result.stderr
+
+
+@pytest.mark.parametrize("removed", [["ROLE.md"], ["gitconfig"], ["ROLE.md", "gitconfig"]])
+def test_a_role_folder_missing_a_required_file_is_refused_before_git(
+    tmp_path, built_kit, kit_env, created_task, removed: list[str]
+) -> None:
+    """Without gitconfig the agent has no identity; without ROLE.md it would start with no role, since a missing
+    @ import is skipped without a word. Either stops setup before it changes anything."""
+    kit = tmp_path / "agent-kit"
+    shutil.copytree(built_kit, kit, symlinks=True)
+    role_dir = kit / "roles" / "dev"
+    for name in removed:
+        (role_dir / name).unlink()
+    env = {**kit_env(TASK), "AGENT_KIT_DIR": str(kit)}
+
+    result = session_setup(env, created_task)
+
+    assert result.returncode == 1
+    assert result.stderr.splitlines() == [f"session-setup: role 'dev': {role_dir} has no {' or '.join(removed)}"]
+    included = subprocess.run(["git", "config", "--global", "--get", "include.path"], capture_output=True, check=False)
+    assert included.returncode == 1  # the role's identity wasn't written
+    assert not Path(env["AGENT_PROJECT_DIR"]).exists()  # nothing cloned
