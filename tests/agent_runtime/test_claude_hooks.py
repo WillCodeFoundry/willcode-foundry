@@ -1,14 +1,18 @@
-"""agent_runtime.claude_hooks: guard-bash against the commands it must allow and refuse, called directly.
+"""agent_runtime.claude_hooks, in-process: guard-bash against the commands it must allow and refuse, and
+session-check against real checkouts that session_setup made.
 
-session-check needs real checkouts, so it is tested end to end, in tests/agent_kit/test_git_hooks.py.
+tests/agent_kit/test_managed_settings.py and test_git_hooks.py run each hook once as the managed settings say.
 """
 
 import io
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 
-from agent_runtime import claude_hooks
+from agent_runtime import claude_hooks, contract
+from tests.support import TASK, git
 
 
 def guard(command: str) -> tuple[int, str]:
@@ -104,3 +108,92 @@ def test_refused_with_a_reason(command: str, reason: str) -> None:
 @pytest.mark.parametrize("raw_input", ["not json", "[]", '{"tool_input": "x"}', '{"tool_input": {"command": 3}}'])
 def test_input_it_does_not_understand_is_let_through(raw_input: str) -> None:
     assert claude_hooks.guard_bash(io.StringIO(raw_input), io.StringIO()) == 0
+
+
+# --- session-check -----------------------------------------------------------
+
+Checkouts = tuple[contract.Environ, Path, Path]
+
+
+def stop(session: contract.Environ, raw_input: str = '{"stop_hook_active": false}') -> str:
+    """session-check's decision on this stop, as the JSON it prints; empty when the stop goes through."""
+    stdout = io.StringIO()
+    assert claude_hooks.session_check(io.StringIO(raw_input), stdout, session) == 0
+    return stdout.getvalue()
+
+
+def block_reason(session: contract.Environ, raw_input: str = '{"stop_hook_active": false}') -> str:
+    decision = json.loads(stop(session, raw_input))
+    assert decision["decision"] == "block"
+    return str(decision["reason"])
+
+
+def commit(cwd: Path, name: str, message: str) -> None:
+    (cwd / name).parent.mkdir(parents=True, exist_ok=True)
+    (cwd / name).write_text(f"{name}\n")
+    git(cwd, "add", name)
+    git(cwd, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", message)
+
+
+def test_a_stop_goes_through_when_both_checkouts_are_clean_and_pushed(checkouts: Checkouts) -> None:
+    session, _, _ = checkouts
+
+    assert stop(session) == ""
+
+
+def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts) -> None:
+    session, code, notes = checkouts
+    (code / "wip.txt").write_text("x\n")
+    commit(notes, f"{TASK.notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
+
+    reason = block_reason(session)
+
+    assert "code checkout has uncommitted changes; notes checkout has commits not pushed" in reason
+    assert reason.endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
+
+
+def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(checkouts: Checkouts) -> None:
+    """The branch is compared with origin, not only HEAD: a detached HEAD at origin's commit hides nothing."""
+    session, code, _ = checkouts
+    commit(code, "work.txt", "feat: work")
+    git(code, "switch", "-q", "--detach", f"origin/{TASK.branch}")
+
+    assert f"code checkout has commits not pushed to origin/{TASK.branch}" in block_reason(session)
+
+
+def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts) -> None:
+    """git failing is no evidence that nothing is unsaved."""
+    session, code, _ = checkouts
+    shutil.rmtree(code)
+
+    assert f"code checkout can't be checked: `git -C {code} status --porcelain` failed: " in block_reason(session)
+
+
+def test_a_stop_is_blocked_when_git_is_missing(
+    checkouts: Checkouts, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, _, _ = checkouts
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+    assert "code checkout can't be checked: git not found in PATH" in block_reason(session)
+
+
+@pytest.mark.parametrize(
+    "raw_input", ['{"stop_hook_active": true}', '{"stop_hook_active" : true}', '{\n  "stop_hook_active":\ttrue\n}']
+)
+def test_a_stop_from_this_hooks_own_block_goes_through(checkouts: Checkouts, raw_input: str) -> None:
+    """Already looping on this hook: the stop goes through rather than spin, whatever the JSON's spacing."""
+    session, code, _ = checkouts
+    (code / "wip.txt").write_text("x\n")
+
+    assert stop(session, raw_input) == ""
+
+
+@pytest.mark.parametrize("raw_input", ["not json", "[]", '{"stop_hook_active": "true"}'])
+def test_input_that_is_not_the_looping_flag_still_gets_checked(checkouts: Checkouts, raw_input: str) -> None:
+    session, code, _ = checkouts
+    (code / "wip.txt").write_text("x\n")
+
+    assert "code checkout has uncommitted changes" in block_reason(session, raw_input)

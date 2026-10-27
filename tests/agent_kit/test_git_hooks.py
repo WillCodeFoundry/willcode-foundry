@@ -1,4 +1,5 @@
-"""agent-kit/hooks and the Stop hook, against a real repository with a local origin.
+"""agent-kit/hooks and the Stop hook as delivered: each hook once, through its stub or the managed settings'
+command, by a real git commit or push. Their rules are tested in-process, in tests/agent_runtime.
 
 The checkouts are made by session-setup, as in a sandbox: a code checkout on the
 task's branch, a notes worktree on agent-notes, and core.hooksPath pointing at the
@@ -14,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from foundry.task import NOTES_BRANCH, Task
-from tests.support import TASK, git
+from tests.support import TASK, UNSIGNED, git
 from tests.support.kit import HOOK_COMMANDS, hook_command, runtime_command
 
 (STOP_COMMAND,) = HOOK_COMMANDS["Stop"]
@@ -27,9 +28,8 @@ def repo(monkeypatch, kit_env, created_task):
     pushed."""
     # session-setup includes the role's gitconfig, which signs with the role's key; there is no
     # private key here, so signing is turned off by git's environment override, which beats any file.
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", "commit.gpgsign")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    for name, value in UNSIGNED.items():
+        monkeypatch.setenv(name, value)
 
     env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}"}
     for key, value in env.items():
@@ -71,23 +71,6 @@ def test_the_task_trailer_is_added_to_a_commit_message(repo) -> None:
     assert last_message(code) == f"feat: hello\n\nWhy.\n\nTask: {TASK.id}\n"
 
 
-def test_the_trailer_is_added_to_a_message_from_a_file(repo, tmp_path) -> None:
-    code, _ = repo
-    change(code, "hello.sh")
-    (tmp_path / "message").write_text("feat: hello\n")
-    assert git(code, "commit", "-q", "-F", str(tmp_path / "message"), check=False).returncode == 0
-    assert last_message(code).endswith(f"\n\nTask: {TASK.id}\n")
-
-
-def test_the_trailer_is_never_added_twice(repo) -> None:
-    code, _ = repo
-    change(code, "hello.sh")
-    commit(code, "feat: hello", f"Task: {TASK.id}")
-    assert last_message(code).count(f"Task: {TASK.id}") == 1
-    git(code, "commit", "-q", "--amend", "--no-edit")
-    assert last_message(code).count(f"Task: {TASK.id}") == 1
-
-
 def test_the_trailer_is_added_even_with_no_verify(repo) -> None:
     code, _ = repo
     change(code, "hello.sh")
@@ -107,21 +90,6 @@ def test_notes_on_the_task_branch_are_refused(repo) -> None:
     code, _ = repo
     change(code, f"{TASK.notes_dir}/PROGRESS.md")
     result = commit(code, "notes")
-    assert result.returncode != 0 and f"Task notes belong on {NOTES_BRANCH}" in result.stderr
-
-
-def test_a_note_named_file_outside_agent_is_accepted(repo) -> None:
-    code, notes = repo
-    (notes / TASK.notes_dir / "PROGRESS.md").write_text("# Progress\n")
-    change(code, "PROGRESS.md")
-    result = commit(code, "the project's own progress file")
-    assert result.returncode == 0, result.stderr
-
-
-def test_notes_under_a_nested_agent_folder_are_refused(repo) -> None:
-    code, _ = repo
-    change(code, f"src/{TASK.notes_dir}/PROGRESS.md")
-    result = commit(code, "notes written from a subfolder")
     assert result.returncode != 0 and f"Task notes belong on {NOTES_BRANCH}" in result.stderr
 
 
@@ -178,47 +146,6 @@ def test_notes_in_own_folder_are_accepted_without_a_task_trailer(repo) -> None:
     assert git(notes, "push", "-q", "origin", NOTES_BRANCH, check=False).returncode == 0
 
 
-def test_a_changed_task_md_is_accepted(repo) -> None:
-    _, notes = repo
-    (notes / TASK.task_file).write_text("changed\n")
-    git(notes, "add", TASK.task_file)
-    result = commit(notes, f"{TASK.id}: write the task")
-    assert result.returncode == 0, result.stderr
-
-
-def test_another_tasks_folder_is_refused(repo) -> None:
-    _, notes = repo
-    change(notes, f"{OTHER_TASK.notes_dir}/PROGRESS.md")
-    result = commit(notes, f"{OTHER_TASK.id}: progress")
-    assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
-
-
-def test_moving_another_tasks_file_into_own_folder_is_refused(repo) -> None:
-    """A rename stages a deletion in the other task's folder; git's rename detection would list only the
-    new path, inside this task's folder."""
-    _, notes = repo
-    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
-    change(notes, theirs)
-    # Another task's agent committed it, with its own hooks: these refuse the path, so they're skipped here.
-    git(notes, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", f"{OTHER_TASK.id}: progress")
-    git(notes, "mv", theirs, f"{TASK.notes_dir}/x.md")
-    result = commit(notes, f"{TASK.id}: progress")
-    assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
-
-
-def test_replacing_another_tasks_file_with_a_link_is_refused(repo) -> None:
-    """A type change: the file in the other task's folder becomes a link, its content gone."""
-    _, notes = repo
-    theirs = f"{OTHER_TASK.notes_dir}/PROGRESS.md"
-    change(notes, theirs)
-    git(notes, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", f"{OTHER_TASK.id}: progress")
-    (notes / theirs).unlink()
-    (notes / theirs).symlink_to("elsewhere")
-    git(notes, "add", theirs)
-    result = commit(notes, f"{TASK.id}: progress")
-    assert result.returncode != 0 and f"only change files in {TASK.notes_dir}/" in result.stderr
-
-
 # --- Stop hook ---------------------------------------------------------------
 
 
@@ -250,56 +177,3 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     assert "code checkout has uncommitted changes; notes checkout" in decision["reason"]
     assert "notes checkout has commits not pushed" in decision["reason"]
     assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
-
-
-def test_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(repo) -> None:
-    """The branch is compared with origin, not HEAD: a detached HEAD at origin's commit hides nothing."""
-    code, _ = repo
-    change(code, "work.txt")
-    commit(code, "feat: work")
-    git(code, "switch", "-q", "--detach", f"origin/{TASK.branch}")
-
-    decision = json.loads(stop().stdout)
-
-    assert f"code checkout has commits not pushed to origin/{TASK.branch}" in decision["reason"]
-
-
-def test_stop_is_blocked_when_a_checkout_cant_be_checked(repo) -> None:
-    """git failing is no evidence that nothing is unsaved."""
-    code, _ = repo
-    shutil.rmtree(code)
-
-    decision = json.loads(stop().stdout)
-
-    assert decision["decision"] == "block"
-    assert f"code checkout can't be checked: `git -C {code} status --porcelain` failed: " in decision["reason"]
-
-
-def test_stop_is_blocked_when_git_is_missing(repo, tmp_path, monkeypatch) -> None:
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    monkeypatch.setenv("PATH", str(empty))  # the hook's command names its interpreter by full path
-
-    decision = json.loads(stop().stdout)
-
-    assert "code checkout can't be checked: git not found in PATH" in decision["reason"]
-
-
-def test_stop_is_allowed_when_the_hook_is_already_looping(repo) -> None:
-    code, _ = repo
-    (code / "wip.txt").write_text("x\n")
-    assert stop(active=True).stdout.strip() == ""
-
-
-@pytest.mark.parametrize("raw_input", ['{"stop_hook_active" : true}', '{\n  "stop_hook_active":\ttrue\n}'])
-def test_the_looping_flag_is_read_whatever_the_json_spacing(repo, raw_input: str) -> None:
-    code, _ = repo
-    (code / "wip.txt").write_text("x\n")
-    assert stop(raw_input=raw_input).stdout.strip() == ""
-
-
-@pytest.mark.parametrize("raw_input", ["not json", "[]", '{"stop_hook_active": "true"}'])
-def test_input_that_is_not_the_looping_flag_still_gets_checked(repo, raw_input: str) -> None:
-    code, _ = repo
-    (code / "wip.txt").write_text("x\n")
-    assert json.loads(stop(raw_input=raw_input).stdout)["decision"] == "block"

@@ -3,11 +3,12 @@
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
 
+from agent_runtime import contract
 from foundry.task import Task
 
 REPOSITORY = Path(__file__).parents[2]
@@ -37,3 +38,11 @@ def run_pytest(*args: str, env: Mapping[str, str] | None = None) -> subprocess.C
         text=True,
         check=False,
     )
+
+
+SessionFor = Callable[[Path, Path], contract.Environ]
+"""Makes the session a sandbox for TASK gets, given the kit's folder and a local origin's."""
+
+UNSIGNED = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
+"""git's environment override turning commit signing off, which beats any config file: the roles sign with keys
+whose private halves the tests don't have."""

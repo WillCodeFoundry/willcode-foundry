@@ -1,11 +1,12 @@
-"""The runtime's session-init, as the launcher runs it, from the built kit against a local origin: on a first
-launch, while sudo still works, and on a relaunch, after hardening has left it unable to run.
+"""session-init as delivered: the built pyz, run as the launcher runs it, handing root mode to sudo.
 
-Everything runs for real except sudo, the system boundary: git against a temporary origin, files under a
-throwaway HOME, and verify's read-only checks. sudo is a stand-in. On a first launch it answers the probe,
-and records any other call without running it; on a relaunch it is mode 0, as the first launch's hardening
-leaves the real one. PATH holds only it and git: the exec search skips an entry it can't execute and tries
-the next, so with the machine's own PATH after it, the real sudo would run.
+What only this shows: the exact command session-init hands sudo, the runtime's isolated interpreter and the kit
+alone preserved, through the real exec of a sudo found on PATH. The order of the launch, and what root mode and
+the verify do, are tested in-process, in tests/agent_runtime/test_session_init.py.
+
+sudo is a stand-in that answers the probe, and records any other call without running it. PATH holds only it
+and git: the exec search skips an entry it can't execute and tries the next, so with the machine's own PATH
+after it, the real sudo would run.
 """
 
 import os
@@ -43,20 +44,6 @@ def launch(
     )
 
 
-def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
-    """Every launch after the first: the bare `sudo` looked up on PATH can't execute, since root mode left it
-    mode 0. It must count as no sudo, so session-init skips root mode and verifies, rather than stopping with
-    a traceback."""
-    result = launch(tmp_path, kit_env, created_task, sudo_script="#!/bin/sh\nexit 0\n", sudo_mode=0)
-
-    assert "Traceback" not in result.stderr
-    assert "session-setup: checkouts ready" in result.stdout
-    # This machine isn't a hardened sandbox, so verify refuses.
-    assert result.returncode == 1
-    assert "verify: " in result.stderr
-    assert "harden: " not in result.stderr  # root mode never ran
-
-
 def first_launch(
     tmp_path: Path, kit_env, created_task: Path, root_exit_code: int
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
@@ -86,11 +73,3 @@ def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
     # This machine isn't a hardened sandbox, so verify refuses.
     assert "verify: " in result.stderr
     assert result.returncode == 1
-
-
-def test_a_failing_root_mode_stops_the_launch_before_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
-    result, record = first_launch(tmp_path, kit_env, created_task, root_exit_code=3)
-
-    assert len(record.read_text().splitlines()) == 1
-    assert result.returncode == 3
-    assert "verify: " not in result.stderr
