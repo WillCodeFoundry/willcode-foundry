@@ -106,6 +106,7 @@ RUNTIME = ("<python>", PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
         (*RUNTIME, "claude-hook", "session-check"),
         (*RUNTIME, "session-init"),
         (*RUNTIME, "session-setup"),
+        (*RUNTIME, "task", "show"),
     ],
 )
 def test_a_command_run_outside_a_sandbox_names_the_variable_it_lacks(built_kit, command: tuple[str, ...]) -> None:

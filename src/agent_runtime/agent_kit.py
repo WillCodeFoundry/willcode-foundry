@@ -74,6 +74,11 @@ class AgentKit:
         return self.dir / "hooks"
 
     @property
+    def task_command(self) -> Path:
+        """The agent's task command: a stub that runs the runtime's ``task``, like the git hooks' stubs."""
+        return self.dir / "bin" / "task"
+
+    @property
     def allowed_signers(self) -> Path:
         """One line per signing role, for verifying commits."""
         return self.dir / "git" / "allowed_signers"

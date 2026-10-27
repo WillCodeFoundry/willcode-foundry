@@ -11,6 +11,8 @@ import pytest
 
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
+from agent_runtime.task.lifecycles import FEATURE
+from agent_runtime.task.state import TaskState
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import TASK, git
 
@@ -197,3 +199,112 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
     assert refusal_of(lambda: git_hooks.prepare_commit_msg([], session, Git(code))) == (
         "prepare-commit-msg: refusing: git passed no message file"
     )
+
+
+# --- STATE.json on the notes branch -------------------------------------------
+
+STATE_PATH = f"{TASK.task_notes_dir}/STATE.json"
+IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", previous="plan", note="Approved.")
+
+
+def with_state(notes: Path, task_state: TaskState = IMPLEMENT) -> None:
+    """STATE.json committed on the notes checkout, as foundry or an earlier turn left it."""
+    (notes / STATE_PATH).write_text(task_state.to_json())
+    git(notes, "add", STATE_PATH)
+    commit_unchecked(notes, "state")
+
+
+def stage_state(notes: Path, task_state: TaskState) -> None:
+    (notes / STATE_PATH).write_text(task_state.to_json())
+    git(notes, "add", STATE_PATH)
+
+
+def test_a_legal_transition_committed_alone_is_accepted(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    with_state(notes)
+    stage_state(notes, IMPLEMENT.after("submit", "dev", "Ready for review."))
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+def test_a_legal_transition_made_by_hand_is_accepted_too(checkouts: Checkouts) -> None:
+    """The content decides, not who wrote it."""
+    session, _, notes = checkouts
+    with_state(notes)
+    (notes / STATE_PATH).write_text(
+        '{"lifecycle": "feature", "state": "blocked", "previous": "implement", "note": "Which base?"}'
+    )
+    git(notes, "add", STATE_PATH)
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+def test_the_task_state_with_other_files_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    with_state(notes)
+    stage_state(notes, IMPLEMENT.after("submit", "dev", "Ready."))
+    stage(notes, f"{TASK.task_notes_dir}/PROGRESS.md")
+
+    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+    assert f"{STATE_PATH} must be committed alone. Also staged:" in refusal
+    assert f"    {TASK.task_notes_dir}/PROGRESS.md" in refusal
+    assert 'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"' in refusal
+
+
+@pytest.mark.parametrize(
+    ("staged", "reason"),
+    [
+        (
+            TaskState(lifecycle=FEATURE, state="deliver", previous="implement", note="Skip review."),
+            "implement can't go to deliver",
+        ),
+        (TaskState(lifecycle=FEATURE, state="review", previous="plan", note="x"), "previous must be implement"),
+    ],
+    ids=["skipping review", "wrong previous"],
+)
+def test_an_illegal_change_is_refused_saying_why(checkouts: Checkouts, staged: TaskState, reason: str) -> None:
+    session, _, notes = checkouts
+    with_state(notes)
+    stage_state(notes, staged)
+
+    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+    assert f"{STATE_PATH}: not a transition the dev may make: {reason}" in refusal
+
+
+def test_a_legal_transition_on_another_roles_turn_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    review = TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready.")
+    with_state(notes, review)
+    stage_state(notes, review.after("approve", "reviewer", "LGTM"))
+
+    assert "it is the reviewer's turn, not the dev's" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+
+def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    stage_state(notes, IMPLEMENT)
+
+    assert "it can't be created by a commit in the sandbox" in refusal_of(
+        lambda: git_hooks.pre_commit(session, Git(notes))
+    )
+
+
+def test_deleting_the_task_state_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    with_state(notes)
+    git(notes, "rm", "-q", STATE_PATH)
+
+    assert "it can't be deleted by a commit in the sandbox" in refusal_of(
+        lambda: git_hooks.pre_commit(session, Git(notes))
+    )
+
+
+def test_a_staged_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    with_state(notes)
+    (notes / STATE_PATH).write_text("{}")
+    git(notes, "add", STATE_PATH)
+
+    assert "is not a task state" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))

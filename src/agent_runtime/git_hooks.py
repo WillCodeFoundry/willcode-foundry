@@ -1,6 +1,7 @@
 """The git hooks, which core.hooksPath runs from the kit's hooks/ stubs; git runs them at the checkout's root.
 
-- ``pre_commit``: what each checkout may commit, so tasks don't step on each other.
+- ``pre_commit``: what each checkout may commit, so tasks don't step on each other, and that a change to
+  STATE.json is committed alone, as a legal transition for this role.
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
 - ``pre_push``: pushes only to this task's branch and the notes branch.
 
@@ -14,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 from agent_runtime import contract
 from agent_runtime.git import Git
+from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused, legal_change
 
 
 class GitHookRefused(Exception):
@@ -25,7 +27,7 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
 
     task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
                  subfolder are caught too;
-    notes branch: only this task's notes dir.
+    notes branch: only this task's notes dir; and STATE.json only alone, as a legal transition for this role.
     Commits on any other branch are left alone: they can't be pushed.
     """
     session = session or _read_session("pre-commit")
@@ -38,8 +40,11 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
             f"not on {session.agent_task_branch}:"
         )
     elif branch == session.agent_notes_branch:
-        refused = [path for path in _staged_paths(git) if not path.startswith(f"{session.agent_task_notes_dir}/")]
+        staged = _staged_paths(git)
+        refused = [path for path in staged if not path.startswith(f"{session.agent_task_notes_dir}/")]
         rule = f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:"
+        if not refused:
+            _check_task_state(session, git, staged)
     else:
         return
     if refused:
@@ -93,6 +98,35 @@ def pre_push(refs: Iterable[str] | None = None, session: contract.Environ | None
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
                 f"Code goes on {session.agent_task_branch}; notes go on {session.agent_notes_branch}.",
             )
+
+
+def _check_task_state(session: contract.Environ, git: Git, staged: Sequence[str]) -> None:
+    """Refuse a staged STATE.json change unless it is the only staged path and a legal transition from HEAD's.
+
+    Whoever makes the change, the task command or a hand edit, the same rule holds: the content decides.
+    """
+    path = f"{session.agent_task_notes_dir}/{STATE_FILE}"
+    if path not in staged:
+        return
+    end_turn = 'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"'
+    if list(staged) != [path]:
+        others = (f"    {other}" for other in staged if other != path)
+        raise _refusal("pre-commit", f"{path} must be committed alone. Also staged:", *others, "", end_turn)
+    try:
+        old, new = (_task_state(git, revision, path) for revision in ("HEAD", ""))
+    except TaskStateRefused as error:
+        raise _refusal("pre-commit", f"{path} can't change this way: {error}", end_turn) from None
+    if reason := legal_change(old, new, session.agent_role):
+        raise _refusal("pre-commit", f"{path}: not a transition the {session.agent_role} may make: {reason}.", end_turn)
+
+
+def _task_state(git: Git, revision: str, path: str) -> TaskState:
+    """The task state at ``revision`` ("" for the index); TaskStateRefused when the file isn't there."""
+    where = f"{revision}:{path}"
+    if not git.succeeds("cat-file", "-e", where):
+        made = "created" if revision == "HEAD" else "deleted"
+        raise TaskStateRefused(f"it can't be {made} by a commit in the sandbox")
+    return TaskState.parse(git.output("show", where), where)
 
 
 def _refusal(hook: str, *lines: str) -> GitHookRefused:

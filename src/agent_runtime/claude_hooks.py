@@ -85,10 +85,7 @@ def session_check(
     session = session or contract.read_environ()
     if _stop_hook_active(stdin or sys.stdin):
         return 0  # already looping on this hook: let the stop through rather than spin
-    problems = [
-        *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
-        *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),
-    ]
+    problems = unsaved_work(session)
     if not problems:
         return 0
     reason = (
@@ -107,6 +104,17 @@ def _stop_hook_active(stdin: TextIO) -> bool:
     except json.JSONDecodeError:
         return False
     return isinstance(event, dict) and event.get("stop_hook_active") is True
+
+
+def unsaved_work(session: contract.Environ) -> list[str]:
+    """What in either checkout isn't saved on origin, one line each; empty when both are clean and pushed.
+
+    session-check refuses the stop on it, and the task command refuses to end a turn on it.
+    """
+    return [
+        *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
+        *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),
+    ]
 
 
 class _CantCheck(Exception):
