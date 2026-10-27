@@ -19,8 +19,6 @@ $ uv run foundry skills update                            # merge upstream's cha
 ```
 .
 ├── pyproject.toml                # the `foundry` package and command
-├── GLOSSARY.md                   # terms the README doesn't define, such as the machine hardening acts on
-├── docs/adr/                     # decisions a later reader might otherwise undo
 ├── src/foundry/                  # launcher code (see below)
 ├── src/agent_runtime/            # the code that runs inside a sandbox, around the agent (see below)
 ├── tests/
