@@ -13,7 +13,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from tests.agent_kit.conftest import TASK, runtime_command
+from tests.agent_kit.conftest import runtime_command
+from tests.conftest import TASK
 
 
 def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, created_task: Path) -> None:

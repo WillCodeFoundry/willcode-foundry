@@ -9,7 +9,8 @@ import subprocess
 from pathlib import Path
 
 from foundry.task import NOTES_BRANCH
-from tests.agent_kit.conftest import TASK, git, runtime_command
+from tests.agent_kit.conftest import runtime_command
+from tests.conftest import TASK, git
 
 
 def session_setup(kit_env: dict[str, str], origin: Path) -> subprocess.CompletedProcess[str]:
