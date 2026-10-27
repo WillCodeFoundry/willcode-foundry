@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import harden, session_init
+from agent_runtime import hardening, session_init
 from agent_runtime.session_setup import SetupError
 from tests.support import SessionFor
 from tests.support.machine import SUDO_USER, TemporaryMachine
@@ -17,10 +17,10 @@ from tests.support.machine import SUDO_USER, TemporaryMachine
 def in_process_root(machine: TemporaryMachine, calls: list[Path], exit_code: int = 0) -> session_init.RunAsRoot:
     """Root mode, run here as root's view of the machine; records the kit it was given."""
 
-    def run_as_root(_: harden.Machine, agent_kit_dir: Path) -> int:
+    def run_as_root(_: hardening.Machine, agent_kit_dir: Path) -> int:
         calls.append(agent_kit_dir)
         if exit_code == 0:
-            harden.harden(agent_kit_dir, SUDO_USER, machine.root_mode)
+            hardening.harden(agent_kit_dir, SUDO_USER, machine.root_mode)
         return exit_code
 
     return run_as_root

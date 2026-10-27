@@ -1,4 +1,4 @@
-"""A temporary machine: the second adapter behind harden.Machine, for running hardening without root.
+"""A temporary machine: the second adapter behind hardening.Machine, for running hardening without root.
 
 The agent is modelled as a user who is neither the owner nor in the group of what it touches: it can write a
 path when the path's "other" bits say so (for a link, its target's). In a test the root owner and the agent are
@@ -14,11 +14,11 @@ import stat
 from collections.abc import Iterator
 from pathlib import Path
 
-from agent_runtime import harden
+from agent_runtime import hardening
 
-ME = harden.Owner(os.getuid(), os.getgid())
-SOMEONE_ELSE = harden.Owner(os.getuid() + 1, os.getgid())
-SUDO_USER = harden.SANDBOX_USER
+ME = hardening.Owner(os.getuid(), os.getgid())
+SOMEONE_ELSE = hardening.Owner(os.getuid() + 1, os.getgid())
+SUDO_USER = hardening.SANDBOX_USER
 
 
 # --- helpers -------------------------------------------------------------------------
@@ -79,7 +79,7 @@ def recording_stand_in(directory: Path, name: str) -> tuple[str, Path]:
 class TemporaryMachine:
     """What a test needs to hand harden a machine, and to look at it afterwards."""
 
-    root_mode: harden.Machine
+    root_mode: hardening.Machine
     """The machine as root mode sees it: effective uid 0."""
     dir: Path
     """Every file the machine holds, except its sockets."""
@@ -88,7 +88,7 @@ class TemporaryMachine:
     """Who owns a path, where a test says someone else does; any other path is the test user's, root's here."""
 
     @property
-    def agent_mode(self) -> harden.Machine:
+    def agent_mode(self) -> hardening.Machine:
         """The same machine as the agent sees it."""
         return dataclasses.replace(self.root_mode, euid=lambda: AGENT_UID)
 
@@ -103,9 +103,9 @@ def writable(directory: Path) -> Iterator[None]:
         directory.chmod(0o555)
 
 
-def assert_refused(kit: Path, machine: harden.Machine, *lines: str, startswith: str = "") -> None:
+def assert_refused(kit: Path, machine: hardening.Machine, *lines: str, startswith: str = "") -> None:
     """the check finds something the agent can still do, and says each of ``lines``."""
-    failures = harden.check(kit, machine)
+    failures = hardening.check(kit, machine)
     assert failures
     for line in lines:
         assert line in failures, failures

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import harden
+from agent_runtime import hardening
 from agent_runtime.__main__ import GIT_HOOKS
 from agent_runtime.agent_kit import PYTHON, PYTHON_FLAGS, AgentKit
 from tests.support import AGENT_KIT_SOURCE, TASK, git
@@ -29,7 +29,7 @@ def test_a_stub_execs_the_hardened_runtime_as_its_own_hook(hook: Path) -> None:
     lines = hook.read_text().splitlines()
 
     assert lines[0] == "#!/bin/sh"
-    assert lines[-1] == f'exec {PYTHON} {PYTHON_FLAGS} {harden.SANDBOX.hooks_runtime_link} git-hook {hook.name} "$@"'
+    assert lines[-1] == f'exec {PYTHON} {PYTHON_FLAGS} {hardening.SANDBOX.hooks_runtime_link} git-hook {hook.name} "$@"'
     assert os.access(hook, os.X_OK)
 
 

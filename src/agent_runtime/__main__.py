@@ -19,8 +19,14 @@ import argparse  # noqa: E402
 from collections.abc import Callable, Sequence  # noqa: E402
 from functools import partial  # noqa: E402
 
-from agent_runtime import claude_hooks, contract, git_hooks, session_init, session_setup  # noqa: E402
-from agent_runtime import harden as hardening  # noqa: E402
+from agent_runtime import (  # noqa: E402
+    claude_hooks,
+    contract,
+    git_hooks,
+    hardening,
+    session_init,
+    session_setup,
+)
 from agent_runtime.git import GitError  # noqa: E402
 
 COMMANDS: dict[str, tuple[Callable[[], int], str]] = {

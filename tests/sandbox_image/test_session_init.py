@@ -1,7 +1,7 @@
 """session-init, as the launcher runs it, in the sandbox's template image: the first launch and the relaunch,
 with real sudo, passwd, /etc, a read-only mount and a numeric docker group, as root inside the container only.
 
-These check, where they matter, what tests/agent_runtime/test_harden.py's modelled machine assumes: what the
+These check, where they matter, what tests/agent_runtime/test_hardening.py's modelled machine assumes: what the
 agent can write, that a read-only mount stops writes to world-writable files, that regrouping the Docker socket
 locks out an agent given the docker group by number, and that /usr/bin/python3 is root's.
 """

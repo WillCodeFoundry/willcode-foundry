@@ -1,6 +1,6 @@
 """Prepare a sandbox for an agent session: what the launcher runs inside the sandbox, as the agent user, before
 the agent starts. Idempotent: safe to run again on a re-attached sandbox. Owns both ends of the handoff to root;
-what each hardening mode does is agent_runtime.harden's.
+what each hardening mode does is agent_runtime.hardening's.
 """
 
 import os
@@ -9,8 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from agent_runtime import contract, session_setup
-from agent_runtime import harden as hardening
+from agent_runtime import contract, hardening, session_setup
 from agent_runtime.agent_kit import AgentKit
 
 RunAsRoot = Callable[[hardening.Machine, Path], int]

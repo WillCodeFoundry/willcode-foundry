@@ -270,7 +270,7 @@ def _refuse_template_docker_config(daemon_config: Path) -> None:
             f"this sandbox's template already has {daemon_config}.\n"
             "  foundry assumes the template leaves dockerd unconfigured, so that it can write\n"
             f"  {_DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
-            "  template's own Docker settings isn't supported; change agent_runtime.harden or the template."
+            "  template's own Docker settings isn't supported; change agent_runtime.hardening or the template."
         )
 
 

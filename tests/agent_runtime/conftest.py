@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import contract, harden, session_setup
+from agent_runtime import contract, hardening, session_setup
 from agent_runtime.agent_kit import AgentKit
 from foundry.session import SessionVariables
 from foundry.task import Task
@@ -48,7 +48,7 @@ def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
     docker_socket = make_socket(socket_dir / "docker.sock", 0o660)
     owners: dict[Path, int] = {}
     return TemporaryMachine(
-        root_mode=harden.Machine(
+        root_mode=hardening.Machine(
             managed_settings=machine_dir / "etc" / "claude-code" / "managed-settings.json",
             docker_daemon_config=machine_dir / "etc" / "docker" / "daemon.json",
             regrouped_socket=docker_socket,
@@ -75,7 +75,7 @@ def read_only_kit(tmp_path: Path, machine: TemporaryMachine) -> Iterator[Path]:
     kit = tmp_path / "agent-kit"
     shutil.copytree(AGENT_KIT_SOURCE, kit, symlinks=True, ignore=shutil.ignore_patterns(".build"))
     settings = AgentKit(kit).managed_settings
-    real_link, machine_link = str(harden.SANDBOX.hooks_runtime_link), str(machine.root_mode.hooks_runtime_link)
+    real_link, machine_link = str(hardening.SANDBOX.hooks_runtime_link), str(machine.root_mode.hooks_runtime_link)
     assert real_link in settings.read_text()
     settings.write_text(settings.read_text().replace(real_link, machine_link))
     with read_only(kit):
@@ -85,7 +85,7 @@ def read_only_kit(tmp_path: Path, machine: TemporaryMachine) -> Iterator[Path]:
 @pytest.fixture
 def hardened(machine: TemporaryMachine, read_only_kit: Path) -> TemporaryMachine:
     """The machine after root mode's first launch."""
-    harden.harden(read_only_kit, SUDO_USER, machine.root_mode)
+    hardening.harden(read_only_kit, SUDO_USER, machine.root_mode)
     return machine
 
 

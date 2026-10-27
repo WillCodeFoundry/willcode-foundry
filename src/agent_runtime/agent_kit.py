@@ -2,7 +2,7 @@
 and the runtime, which reads it in the sandbox. Every path inside the kit is spelled here, and only here.
 
 What can't import this names no path in the kit: the git hooks' stubs and the managed settings run the runtime
-through the link root mode makes to it (harden.Machine.hooks_runtime_link), and their tests hold them to it.
+through the link root mode makes to it (hardening.Machine.hooks_runtime_link), and their tests hold them to it.
 """
 
 from dataclasses import dataclass
