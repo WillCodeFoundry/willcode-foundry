@@ -68,7 +68,7 @@ def update(
     for skill_md, source in copied:
         name, url = skill_md.parent.name, url_for(source.repo)
         if source.repo not in new_shas:
-            new_shas[source.repo] = _fetch(git, url, ref, source.repo)
+            new_shas[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
         new_sha = new_shas[source.repo]
         if new_sha == source.commit:
             report(f"{name}: already at {source.commit[:12]}")
@@ -140,12 +140,11 @@ def _refuse_uncommitted(git: Git, skill_dir: Path) -> None:
         )
 
 
-def _fetch(git: Git, url: str, ref: str, repo: str) -> str:
-    """The SHA of ``ref`` in the repository at ``url``, fetched into a ref of the foundry's own, not FETCH_HEAD,
-    which another fetch in the checkout, an editor's, say, could change meanwhile."""
-    own_ref = f"refs/foundry/skills/{repo}"
-    git.output("fetch", "--quiet", "--no-tags", url, f"+{ref}:{own_ref}")
-    return git.output("rev-parse", own_ref).strip()
+def _fetch(git: Git, url: str, ref: str, *, into: str) -> str:
+    """The SHA of ``ref`` at ``url``, fetched into the foundry's own ref ``into`` rather than FETCH_HEAD, which
+    another fetch in the checkout, an editor's, say, could change meanwhile."""
+    git.output("fetch", "--quiet", "--no-tags", url, f"+{ref}:{into}")
+    return git.output("rev-parse", into).strip()
 
 
 def read_source(skill_md: Path) -> Source | None:
