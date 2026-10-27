@@ -17,28 +17,36 @@ from tests.agent_kit.conftest import runtime_command
 from tests.conftest import TASK
 
 
-def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
-    """The path review finding R12 broke: the bare `sudo` looked up on PATH can't execute. It must count as
-    no sudo, so session-init skips root mode and verifies, rather than stopping with a traceback."""
+def launch(
+    tmp_path: Path, kit_env, created_task: Path, *, sudo_script: str, sudo_mode: int
+) -> subprocess.CompletedProcess[str]:
+    """session-init, as the launcher runs it, through the built pyz, with a stand-in sudo of ``sudo_script`` at
+    ``sudo_mode`` and git alone on PATH, so no other sudo can run."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     sudo = bin_dir / "sudo"
-    sudo.write_text("#!/bin/sh\nexit 0\n")
-    sudo.chmod(0)
+    sudo.write_text(sudo_script)
+    sudo.chmod(sudo_mode)
     git = shutil.which("git")
     assert git is not None
     (bin_dir / "git").symlink_to(git)
     path = str(bin_dir)
-    assert shutil.which("sudo", path=path) is None  # no sudo this run can execute: the real one is out of reach
+    # The stand-in, if it can run, is the only sudo this run can reach: the real one is out of reach.
+    assert shutil.which("sudo", path=path) in (None, str(sudo))
     env = {**os.environ, **kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}", "PATH": path}
-
-    result = subprocess.run(
+    return subprocess.run(
         runtime_command(Path(env["AGENT_KIT_DIR"]), "session-init"),
         env=env,
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def test_a_relaunch_after_hardening_goes_on_to_verify(tmp_path: Path, kit_env, created_task: Path) -> None:
+    """The path review finding R12 broke: the bare `sudo` looked up on PATH can't execute. It must count as
+    no sudo, so session-init skips root mode and verifies, rather than stopping with a traceback."""
+    result = launch(tmp_path, kit_env, created_task, sudo_script="#!/bin/sh\nexit 0\n", sudo_mode=0)
 
     assert "Traceback" not in result.stderr
     assert "session-setup: checkouts ready" in result.stdout
@@ -54,29 +62,11 @@ def first_launch(
     """session-init on a sandbox whose sudo still works: a stand-in that exits 0 for `sudo -n true`, and for any
     other call records its arguments, one line per call, and exits with ``root_exit_code``. It never runs what
     it is given. Returns the run and the stand-in's record."""
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
     record = tmp_path / "sudo.calls"
-    sudo = bin_dir / "sudo"
-    sudo.write_text(
+    script = (
         f'#!/bin/sh\n[ "$*" = "-n true" ] && exit 0\nprintf \'%s\\n\' "$*" >> \'{record}\'\nexit {root_exit_code}\n'
     )
-    sudo.chmod(0o755)
-    git = shutil.which("git")
-    assert git is not None
-    (bin_dir / "git").symlink_to(git)
-    path = str(bin_dir)
-    assert shutil.which("sudo", path=path) == str(sudo)  # the stand-in is the only sudo this run can reach
-    env = {**os.environ, **kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}", "PATH": path}
-
-    result = subprocess.run(
-        runtime_command(Path(env["AGENT_KIT_DIR"]), "session-init"),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result, record
+    return launch(tmp_path, kit_env, created_task, sudo_script=script, sudo_mode=0o755), record
 
 
 def test_a_first_launch_sets_up_runs_root_mode_through_sudo_then_verifies(
