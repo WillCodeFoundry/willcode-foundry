@@ -164,17 +164,22 @@ def _check_hooks_runtime(link: Path, kit_runtime: Path, machine: Machine) -> lis
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def _harden_sudo_and_su(sudo: str, passwd: str) -> None:
-    """sudo can't run, whatever its rules say; su needs root's password, and there is none.
-
-    Refuses, changing nothing, if ``sudo`` can't be found: hardening runs through sudo, so it is there to
-    remove, and reporting it removed when it wasn't found would be wrong.
-    """
-    found = shutil.which(sudo)
+def _find(command: str, why: str) -> str:
+    """Where ``command`` is, or a refusal: root mode checks before its first step. Hardening runs through sudo,
+    so it is there to remove, and reporting it removed when it wasn't found would be wrong."""
+    found = shutil.which(command)
     if found is None:
-        raise _HardenError(f"can't find {sudo} to remove it; check the sandbox template's PATH and sudo")
-    Path(found).resolve().chmod(0)
-    subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=True)
+        raise _HardenError(f"can't find {command} {why}; check the sandbox template's PATH")
+    return found
+
+
+def _harden_sudo_and_su(sudo: str, passwd: str) -> None:
+    """sudo can't run, whatever its rules say; su needs root's password, and there is none. Both found
+    beforehand, by _find."""
+    Path(sudo).resolve().chmod(0)
+    locked = subprocess.run([passwd, "-l", "root"], stdout=subprocess.DEVNULL, check=False)
+    if locked.returncode != 0:
+        raise OSError(f"`{passwd} -l root` failed with exit code {locked.returncode}")
 
 
 def can_sudo(sudo: str) -> bool:
@@ -205,9 +210,17 @@ def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None
     group instead. dockerd reads daemon.json each time it starts and recreates its socket owned by that group;
     the socket that exists now changes too.
 
-    Assumption: the sandbox template doesn't configure dockerd itself. If it ever does, stop with a clear
-    message rather than merge into its settings.
+    The template's own daemon.json is refused beforehand, by _refuse_templates_docker_config.
     """
+    _install_dir(daemon_config.parent, owner)
+    _install_file(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner)
+    if _is_socket(socket_path):
+        os.chown(socket_path, -1, owner.gid)
+
+
+def _refuse_templates_docker_config(daemon_config: Path) -> None:
+    """Assumption: the sandbox template doesn't configure dockerd itself. If it ever does, stop with a clear
+    message rather than merge into its settings. A daemon.json root mode wrote on an earlier launch is its own."""
     if daemon_config.exists() and daemon_config.read_text().rstrip("\n") != _DOCKER_CONFIG:
         raise _HardenError(
             f"this sandbox's template already has {daemon_config}.\n"
@@ -215,10 +228,6 @@ def _harden_docker(daemon_config: Path, socket_path: Path, owner: Owner) -> None
             f"  {_DOCKER_CONFIG} there and keep the agent off the Docker socket. Merging into a\n"
             "  template's own Docker settings isn't supported; change agent_runtime.harden or the template."
         )
-    _install_dir(daemon_config.parent, owner)
-    _install_file(daemon_config, f"{_DOCKER_CONFIG}\n".encode(), owner)
-    if _is_socket(socket_path):
-        os.chown(socket_path, -1, owner.gid)
 
 
 def _check_docker_sockets(sockets: Iterable[Path], can_write: Callable[[Path], bool]) -> list[str]:
@@ -273,10 +282,21 @@ def harden(kit_dir: Path, sudo_user: str, machine: Machine = SANDBOX) -> int:
         )
         return 1
     try:
-        _harden_managed_settings(AgentKit(kit_dir).managed_settings, machine.managed_settings, machine.root)
-        _harden_hooks_runtime(machine.hooks_runtime, AgentKit(kit_dir).runtime, machine.root)
-        _harden_sudo_and_su(machine.sudo, machine.passwd)
-        _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
+        # Everything the steps need is checked first, changing nothing: removing sudo can't be undone, and root
+        # mode can only run again while sudo works.
+        _refuse_templates_docker_config(machine.docker_daemon_config)
+        sudo = _find(machine.sudo, "to remove it")
+        passwd = _find(machine.passwd, "to lock root's password")
+        try:
+            _harden_managed_settings(AgentKit(kit_dir).managed_settings, machine.managed_settings, machine.root)
+            _harden_hooks_runtime(machine.hooks_runtime, AgentKit(kit_dir).runtime, machine.root)
+            _harden_sudo_and_su(sudo, passwd)
+            _harden_docker(machine.docker_daemon_config, machine.regrouped_socket, machine.root)
+        except OSError as error:
+            raise _HardenError(
+                f"{error}\n  This sandbox may be part-hardened, its sudo already gone, so root mode can't run in it"
+                " again: recreate the sandbox (sbx env rm --force sessions/<sandbox>, then delete sessions/<sandbox>/)."
+            ) from None
     except _HardenError as error:
         print(f"harden: refusing: {error}", file=sys.stderr)
         return 1

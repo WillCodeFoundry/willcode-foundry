@@ -590,32 +590,49 @@ def test_dockers_configuration_from_an_earlier_launch_is_kept(machine: Temporary
     assert daemon_config.read_text() == '{"group": "root"}\n'
 
 
-def test_a_templates_own_docker_configuration_is_refused_after_the_other_steps(
+def test_a_templates_own_docker_configuration_is_refused_changing_nothing(
     machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Docker comes last: the settings and sudo steps have run when it refuses, and its own file is untouched."""
+    """Checked before any step: removing sudo can't be undone, so root mode refuses while it still could run again."""
     daemon_config = machine.root_mode.docker_daemon_config
     daemon_config.parent.mkdir(parents=True)
     daemon_config.write_text('{"debug": true}\n')
+    before = snapshot(machine)
 
     assert harden.harden(read_only_kit, "agent", machine.root_mode) == 1
 
     err = capsys.readouterr().err
     assert "harden: refusing:" in err and "already has" in err
-    assert daemon_config.read_text() == '{"debug": true}\n'
-    assert machine.root_mode.managed_settings.is_file()  # step 1 ran
-    assert machine.passwd_log.read_text() == "-l root\n"  # step 2 ran
+    assert snapshot(machine) == before
 
 
-def test_a_sudo_that_cant_be_found_is_refused_after_the_settings_and_before_docker(
-    machine: TemporaryMachine, read_only_kit: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("command", ["sudo", "passwd"])
+def test_a_command_root_mode_needs_that_cant_be_found_is_refused_changing_nothing(
+    machine: TemporaryMachine, read_only_kit: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], command: str
 ) -> None:
-    """sudo and su come second: the settings are installed when it refuses; passwd and Docker are left alone."""
-    root_mode = dataclasses.replace(machine.root_mode, sudo=str(tmp_path / "absent"))
+    absent = str(tmp_path / "absent")
+    if command == "sudo":
+        root_mode = dataclasses.replace(machine.root_mode, sudo=absent)
+    else:
+        root_mode = dataclasses.replace(machine.root_mode, passwd=absent)
+    before = snapshot(machine)
 
     assert harden.harden(read_only_kit, "agent", root_mode) == 1
 
-    assert "harden: refusing: can't find" in capsys.readouterr().err
-    assert root_mode.managed_settings.is_file()  # step 1 ran
-    assert not machine.passwd_log.exists()
-    assert not root_mode.docker_daemon_config.exists()  # step 3 didn't
+    assert f"harden: refusing: can't find {tmp_path / 'absent'}" in capsys.readouterr().err
+    assert snapshot(machine) == before
+
+
+def test_a_step_that_fails_after_sudo_is_gone_says_to_recreate_the_sandbox(
+    machine: TemporaryMachine, read_only_kit: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """passwd fails once sudo is mode 0: root mode can't run again in this sandbox, and says so, no traceback."""
+    failing_passwd = stand_in(machine.dir, "failing-passwd", 1)
+    root_mode = dataclasses.replace(machine.root_mode, passwd=failing_passwd)
+
+    assert harden.harden(read_only_kit, "agent", root_mode) == 1
+
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert f"harden: refusing: `{failing_passwd} -l root` failed" in err
+    assert "recreate the sandbox" in err
