@@ -16,11 +16,11 @@ from typing import NoReturn
 
 from agent_runtime.task.lifecycles import DEFAULT, LIFECYCLES
 from agent_runtime.task.state import TaskState, TaskStateRefused
-from foundry import agent_sandbox, config, paths, session, task
+from foundry import agent_sandbox, config, paths, session
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.runtime_build import build_runtime
-from foundry.task import NOTES_BRANCH, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task, create, load_template, read_state, task_ids
 
 _PROJECT_HELP = "project name, as listed in config/foundry.yaml"
 _TASK_HELP = "task id, e.g. wcf-0042"
@@ -30,18 +30,18 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser = subparsers.add_parser("task", help="create tasks, launch their turns, list them, move them by hand")
     actions = parser.add_subparsers(dest="action", required=True)
 
-    create = actions.add_parser(
+    creating = actions.add_parser(
         "create",
-        help=f"create task/TASK from the default branch, and {task.NOTES_ROOT}/TASK/ on {NOTES_BRANCH} "
+        help=f"create task/TASK from the default branch, and {NOTES_ROOT}/TASK/ on {NOTES_BRANCH} "
         "from config/task-template/, with its task state",
         description="Uses git, with your own access to the project's repository. Refuses a task that already exists.",
     )
-    create.add_argument("project_name", metavar="PROJECT", help=_PROJECT_HELP)
-    create.add_argument("task_id", metavar="TASK", help=_TASK_HELP)
-    create.add_argument(
+    creating.add_argument("project_name", metavar="PROJECT", help=_PROJECT_HELP)
+    creating.add_argument("task_id", metavar="TASK", help=_TASK_HELP)
+    creating.add_argument(
         "--lifecycle", choices=LIFECYCLES, default=DEFAULT, help=f"the lifecycle the task follows (default: {DEFAULT})"
     )
-    create.set_defaults(func=create_main)
+    creating.set_defaults(func=create_main)
 
     run = actions.add_parser(
         "run",
@@ -84,18 +84,18 @@ def create_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, task template and repository, in a scratch clone."""
     foundry_root = paths.find_foundry_root()
     project = config.load(foundry_root).project(args.project_name)
-    new_task = Task(args.task_id)
-    template = task.load_template(paths.task_template_dir(foundry_root))
+    task = Task(args.task_id)
+    template = load_template(paths.task_template_dir(foundry_root))
     with _scratch_clone(project.url) as clone:
-        task.create(clone, new_task, template, LIFECYCLES[args.lifecycle])
-    print("\n".join(report(project.name, new_task)))
+        create(clone, task, template, LIFECYCLES[args.lifecycle])
+    print("\n".join(report(project.name, task)))
     return 0
 
 
-def report(project_name: str, new_task: Task) -> list[str]:
+def report(project_name: str, task: Task) -> list[str]:
     return [
-        f"created task {new_task.id} in {project_name}",
-        f"run it with: foundry task run {project_name} {new_task.id}",
+        f"created task {task.id} in {project_name}",
+        f"run it with: foundry task run {project_name} {task.id}",
     ]
 
 
@@ -108,12 +108,12 @@ def run_main(args: argparse.Namespace) -> NoReturn:
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(args.project_name)
-    the_task = Task(args.task_id)
+    task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
         clone.check_out(NOTES_BRANCH)
-        task_state = task.read_state(clone, the_task)
-    role_name = whose_turn(task_state, project_name=project.name, task=the_task)
-    launch = prepare_launch(foundry_root, foundry_config, project=project, role_name=role_name, task=the_task)
+        task_state = read_state(clone, task)
+    role_name = whose_turn(task_state, project_name=project.name, task=task)
+    launch = prepare_launch(foundry_root, foundry_config, project=project, role_name=role_name, task=task)
     print(f"==> turn:      {role_name}, in {task_state.state}", file=sys.stderr)
     if launch.created:
         print(f"==> session:   {launch.request.definition_dir} (new)", file=sys.stderr)
@@ -181,11 +181,11 @@ def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
         return []
     clone.check_out(NOTES_BRANCH)
     rows = []
-    for each_task in map(Task, task.task_ids(clone)):
+    for task in map(Task, task_ids(clone)):
         try:
-            rows.append(Row(project_name, each_task, task.read_state(clone, each_task)))
+            rows.append(Row(project_name, task, read_state(clone, task)))
         except (FoundryError, TaskStateRefused) as error:
-            rows.append(Row(project_name, each_task, None, str(error)))
+            rows.append(Row(project_name, task, None, str(error)))
     return rows
 
 
@@ -237,16 +237,16 @@ class Move:
     after: TaskState
 
 
-def move_task(clone: ProjectClone, the_task: Task, *, to: str, note: str) -> Move:
+def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> Move:
     """Move the task to ``to`` with a hand-off note, then commit (signed) and push NOTES_BRANCH alone.
 
     Nothing is committed if the move is refused.
     """
     clone.check_out(NOTES_BRANCH)
-    before = task.read_state(clone, the_task)
+    before = read_state(clone, task)
     after = before.moved(to, note)
-    clone.write({the_task.state_file: after.to_json()})
-    clone.commit(f"{the_task.id}: {before.state} → {after.state} (moved by hand)")
+    clone.write({task.state_file: after.to_json()})
+    clone.commit(f"{task.id}: {before.state} → {after.state} (moved by hand)")
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
     return Move(before, after)
 
@@ -254,10 +254,10 @@ def move_task(clone: ProjectClone, the_task: Task, *, to: str, note: str) -> Mov
 def move_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
     project = config.load(paths.find_foundry_root()).project(args.project_name)
-    the_task = Task(args.task_id)
+    task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
-        moved = move_task(clone, the_task, to=args.state, note=args.note)
-    print(f"moved task {the_task.id} from {moved.before.state} to {moved.after.state}")
+        moved = move_task(clone, task, to=args.state, note=args.note)
+    print(f"moved task {task.id} from {moved.before.state} to {moved.after.state}")
     if moved.after.role:
-        print(f"run it with: foundry task run {project.name} {the_task.id}")
+        print(f"run it with: foundry task run {project.name} {task.id}")
     return 0
