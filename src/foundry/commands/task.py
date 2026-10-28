@@ -166,13 +166,19 @@ _NONE = "—"
 
 
 @dataclass(frozen=True)
+class Unreadable:
+    """Why a task's state couldn't be read, in the error's own words."""
+
+    reason: str
+
+
+@dataclass(frozen=True)
 class Row:
     """One task in `foundry task list`: its task state, or why it couldn't be read."""
 
     project: str
     task: Task
-    state: TaskState | None
-    error: str | None = None
+    task_state: TaskState | Unreadable
 
 
 def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
@@ -185,7 +191,7 @@ def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
         try:
             rows.append(Row(project_name, task, read_state(clone, task)))
         except (FoundryError, TaskStateRefused) as error:
-            rows.append(Row(project_name, task, None, str(error)))
+            rows.append(Row(project_name, task, Unreadable(str(error))))
     return rows
 
 
@@ -200,15 +206,17 @@ def table(rows: Sequence[Row], live_sandboxes: set[str]) -> list[str]:
 
 
 def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
-    if row.state is None:
-        first_line = (row.error or "").splitlines()[0]
-        return [row.project, row.task.id, _NONE, _NONE, _NONE, _NONE, f"error: {first_line}"]
-    role = row.state.role
-    who = role or ("you" if row.state.assigned_to_human else _NONE)
-    running = role and session.sandbox_name(role_name=role, project_name=row.project, task=row.task)
-    sandbox = "running" if running in live_sandboxes else _NONE
-    note = row.state.note.splitlines()[0] if row.state.note.strip() else ""
-    return [row.project, row.task.id, row.state.lifecycle.name, row.state.state, who, sandbox, note]
+    task_state = row.task_state
+    if isinstance(task_state, Unreadable):
+        return [row.project, row.task.id, _NONE, _NONE, _NONE, _NONE, f"error: {task_state.reason.splitlines()[0]}"]
+    role = task_state.role
+    if role is None:
+        who, sandbox = ("you" if task_state.assigned_to_human else _NONE), _NONE
+    else:
+        name = session.sandbox_name(role_name=role, project_name=row.project, task=row.task)
+        who, sandbox = role, ("running" if name in live_sandboxes else _NONE)
+    note = task_state.note.splitlines()[0] if task_state.note.strip() else ""
+    return [row.project, row.task.id, task_state.lifecycle.name, task_state.state, who, sandbox, note]
 
 
 def list_main(args: argparse.Namespace) -> int:
@@ -223,32 +231,24 @@ def list_main(args: argparse.Namespace) -> int:
         print("no tasks")
         return 0
     print("\n".join(table(rows, agent_sandbox.live_sandboxes())))
-    return 1 if any(row.error for row in rows) else 0
+    return 1 if any(isinstance(row.task_state, Unreadable) for row in rows) else 0
 
 
 # --- move -----------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class Move:
-    """A task's state before and after a move by hand."""
-
-    before: TaskState
-    after: TaskState
-
-
-def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> Move:
-    """Move the task to ``to`` with a hand-off note, then commit (signed) and push NOTES_BRANCH alone.
+def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> TaskState:
+    """Move the task to ``to`` with a hand-off note, then commit (signed) and push NOTES_BRANCH alone; the task
+    state it now has, whose ``previous`` is where it was.
 
     Nothing is committed if the move is refused.
     """
     clone.check_out(NOTES_BRANCH)
-    before = read_state(clone, task)
-    after = before.moved(to, note)
-    clone.write({task.state_file: after.to_json()})
-    clone.commit(after.commit_subject(task.id, "moved by hand"))
+    moved = read_state(clone, task).moved(to, note)
+    clone.write({task.state_file: moved.to_json()})
+    clone.commit(moved.commit_subject(task.id, "moved by hand"))
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
-    return Move(before, after)
+    return moved
 
 
 def move_main(args: argparse.Namespace) -> int:
@@ -257,7 +257,7 @@ def move_main(args: argparse.Namespace) -> int:
     task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
         moved = move_task(clone, task, to=args.state, note=args.note)
-    print(f"moved task {task.id} from {moved.before.state} to {moved.after.state}")
-    if moved.after.role:
+    print(f"moved task {task.id} from {moved.previous} to {moved.state}")
+    if moved.role:
         print(f"run it with: foundry task run {project.name} {task.id}")
     return 0

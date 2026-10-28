@@ -72,29 +72,28 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
         )
     if problems := unsaved_work(session):
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
-    found = notes.output("rev-parse", "HEAD").strip()
-    before = _origin_state(session)
-    after = before.after(event, note)
-    subject = after.commit_subject(session.agent_task, event)
-    if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, after, subject):
-        notes.output("reset", "--quiet", "--hard", found)
+    start_head = notes.output("rev-parse", "HEAD").strip()
+    next_state = _origin_state(session).after(event, note)
+    subject = next_state.commit_subject(session.agent_task, event)
+    if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, next_state, subject):
+        notes.output("reset", "--quiet", "--hard", start_head)
         raise TaskStateRefused(
             f"couldn't {failure}\n"
             "Your turn has not ended, and the notes checkout is as it was. "
             "If another push landed first, run the same command again."
         )
-    print(f"{subject}\n{_assigned_now(after)}", file=out)
+    print(f"{subject}\n{_assigned_now(next_state)}", file=out)
 
 
-def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState, subject: str) -> str | None:
-    """Bring in origin's notes, then commit ``after`` alone and push it; the step that failed and why, or None.
+def _commit_and_push(notes: Git, branch: str, state_file: Path, next_state: TaskState, subject: str) -> str | None:
+    """Bring in origin's notes, then commit ``next_state`` alone and push it; the step that failed and why, or None.
 
-    Run only once ``after`` is known to be allowed, so a refused event never moves the checkout.
+    Run only once ``next_state`` is known to be allowed, so a refused event never moves the checkout.
     """
     merged = notes.run_captured("merge", "--ff-only", "--quiet", f"origin/{branch}")
     if merged.returncode != 0:
         return f"bring in origin/{branch}: {(merged.stderr or merged.stdout).strip()}"
-    state_file.write_text(after.to_json())
+    state_file.write_text(next_state.to_json())
     steps = [
         ("commit STATE.json", ("commit", "--quiet", "--message", subject, "--", str(state_file))),
         (f"push {branch}", ("push", "--quiet", "origin", branch)),

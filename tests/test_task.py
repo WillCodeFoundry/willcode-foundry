@@ -12,7 +12,7 @@ from agent_runtime.git import GitError
 from agent_runtime.task.lifecycles import BUGFIX, FEATURE, Lifecycle
 from agent_runtime.task.state import TaskState
 from foundry import cli, task
-from foundry.commands.task import Row, move_task, read_rows, report, table
+from foundry.commands.task import Row, Unreadable, move_task, read_rows, report, table
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.task import Task
@@ -317,7 +317,7 @@ def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branc
 
     moved = move_task(scratch_clone(origin_dir, git_env, "move"), Task("T1"), to="implement", note="Write it yourself.")
 
-    assert (moved.before.state, moved.after.state) == ("plan", "implement")
+    assert (moved.previous, moved.state) == ("plan", "implement")
     files = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     assert TaskState.parse(files[".agent/t1/STATE.json"], "STATE.json") == TaskState(
         lifecycle=FEATURE, state="implement", previous="plan", note="Write it yourself."
@@ -344,10 +344,9 @@ def test_list_has_a_row_per_task_an_unreadable_one_showing_its_error(origin_dir,
 
     rows = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
 
-    assert [(row.task.id, row.state, row.error is not None) for row in rows] == [
-        ("t0", None, True),
-        ("t1", TaskState.new(FEATURE), False),
-    ]
+    assert [row.task.id for row in rows] == ["t0", "t1"]
+    assert isinstance(rows[0].task_state, Unreadable) and "has no .agent/t0/STATE.json" in rows[0].task_state.reason
+    assert rows[1].task_state == TaskState.new(FEATURE)
 
 
 def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> None:
@@ -365,7 +364,7 @@ def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
         Row("store", Task("t2"), state("review", "Ready.")),
         Row("store", Task("t3"), state("blocked", "Which base?")),
         Row("store", Task("t4"), state("done")),
-        Row("store", Task("t0"), None, "task t0 has no STATE.json\nmore"),
+        Row("store", Task("t0"), Unreadable("task t0 has no STATE.json\nmore")),
     ]
 
     assert table(rows, live_sandboxes={"reviewer-store-t2"}) == [
