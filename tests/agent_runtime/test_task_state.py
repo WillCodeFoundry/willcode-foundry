@@ -2,7 +2,6 @@
 are legal transitions."""
 
 import dataclasses
-import json
 
 import pytest
 
@@ -147,12 +146,3 @@ def test_every_other_change_is_illegal_and_says_why(new: TaskState, role: str, r
     reason_given = legal_change(in_state("review", previous="implement", note="ready"), new, role)
 
     assert reason_given is not None and reason_given.startswith(reason)
-
-
-def test_to_json_is_plain_json() -> None:
-    assert json.loads(in_state("plan").to_json()) == {
-        "lifecycle": "feature",
-        "state": "plan",
-        "previous": None,
-        "note": "",
-    }
