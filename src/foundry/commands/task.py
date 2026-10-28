@@ -246,7 +246,7 @@ def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> Move:
     before = read_state(clone, task)
     after = before.moved(to, note)
     clone.write({task.state_file: after.to_json()})
-    clone.commit(f"{task.id}: {before.state} → {after.state} (moved by hand)")
+    clone.commit(after.commit_subject(task.id, "moved by hand"))
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
     return Move(before, after)
 

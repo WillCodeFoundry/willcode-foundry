@@ -128,6 +128,10 @@ class TaskState:
             )
         return self._moved(to, note)
 
+    def commit_subject(self, task_id: str, how: str) -> str:
+        """The subject of the commit that moved the task here: where from, where to, and ``how``."""
+        return f"{task_id}: {self.previous} → {self.state} ({how})"
+
     def _moved(self, to: str, note: str) -> "TaskState":
         if not note.strip():
             raise TaskStateRefused("give a hand-off note: what the next assignee should read first")

@@ -75,7 +75,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     found = notes.output("rev-parse", "HEAD").strip()
     before = _origin_state(session)
     after = before.after(event, note)
-    subject = f"{session.agent_task}: {before.state} → {after.state} ({event})"
+    subject = after.commit_subject(session.agent_task, event)
     if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, after, subject):
         notes.output("reset", "--quiet", "--hard", found)
         raise TaskStateRefused(
