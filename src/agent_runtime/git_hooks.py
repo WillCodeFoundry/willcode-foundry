@@ -1,9 +1,9 @@
 """The git hooks, which core.hooksPath runs from the kit's hooks/ stubs; git runs them at the checkout's root.
 
-- ``pre_commit``: what each checkout may commit, so tasks don't step on each other, and that a change to
-  STATE.json is committed alone, as a legal transition for this role.
+- ``pre_commit``: what each checkout may commit, so tasks don't step on each other.
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
-- ``pre_push``: pushes only to this task's branch and the notes branch.
+- ``pre_push``: pushes only to this task's branch and the notes branch, and a change to STATE.json only as a legal
+  transition for this role.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
@@ -17,6 +17,9 @@ from agent_runtime import contract
 from agent_runtime.git import Git
 from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused, legal_change
 
+_ZERO = "0" * 40
+"""The sha git passes for a ref that doesn't exist on one side of a push."""
+
 
 class GitHookRefused(Exception):
     """A hook refuses: the message is the whole refusal, as the agent will read it."""
@@ -27,7 +30,7 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
 
     task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
                  subfolder are caught too;
-    notes branch: only this task's notes dir; and STATE.json only alone, as a legal transition for this role.
+    notes branch: only this task's notes dir. pre_push judges a change to STATE.json.
     Commits on any other branch are left alone: they can't be pushed.
     """
     session = session or _read_session("pre-commit")
@@ -43,8 +46,6 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
         staged = _staged_paths(git)
         refused = [path for path in staged if not path.startswith(f"{session.agent_task_notes_dir}/")]
         rule = f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:"
-        if not refused:
-            _check_task_state(session, git, staged)
     else:
         return
     if refused:
@@ -74,23 +75,28 @@ def prepare_commit_msg(
     git.output("interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file)
 
 
-def pre_push(refs: Iterable[str] | None = None, session: contract.Environ | None = None) -> None:
-    """Refuse a push to anything but this task's branch and the notes branch.
+def pre_push(
+    refs: Iterable[str] | None = None, session: contract.Environ | None = None, git: Git | None = None
+) -> None:
+    """Refuse a push to anything but this task's branch and the notes branch, and a push to the notes branch
+    that changes STATE.json other than by a legal transition for this role.
 
     The project's GitHub rulesets allow any task branch, since GitHub can't tell one task from another;
     this keeps a role to its own. git passes one line per ref on stdin:
     ``<local ref> <local sha> <remote ref> <remote sha>``.
     """
     session = session or _read_session("pre-push")
-    allowed = {f"refs/heads/{session.agent_task_branch}", f"refs/heads/{session.agent_notes_branch}"}
+    git = git or Git()
+    notes_ref = f"refs/heads/{session.agent_notes_branch}"
+    allowed = {f"refs/heads/{session.agent_task_branch}", notes_ref}
     for line in sys.stdin if refs is None else refs:
         match line.split():
             case []:
                 continue
-            case [_local_ref, _local_sha, remote_ref, *_]:
+            case [_local_ref, local_sha, remote_ref, remote_sha]:
                 pass
             case _:
-                remote_ref = ""
+                local_sha = remote_ref = remote_sha = ""
         if remote_ref not in allowed:
             raise _refusal(
                 "pre-push",
@@ -98,34 +104,41 @@ def pre_push(refs: Iterable[str] | None = None, session: contract.Environ | None
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
                 f"Code goes on {session.agent_task_branch}; notes go on {session.agent_notes_branch}.",
             )
+        if remote_ref == notes_ref:
+            _check_task_state(session, git, local_sha, remote_sha)
 
 
-def _check_task_state(session: contract.Environ, git: Git, staged: Sequence[str]) -> None:
-    """Refuse a staged STATE.json change unless it is the only staged path and a legal transition from HEAD's.
+def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remote_sha: str) -> None:
+    """Refuse a push that leaves STATE.json other than as a legal transition, for this role, from origin's.
 
-    Whoever makes the change, the task command or a hand edit, the same rule holds: the content decides.
+    Only the states before and after the push are judged. So every git command that makes commits is judged
+    alike, and who made the change doesn't matter. A deletion, a new branch, or a remote commit this checkout
+    hasn't fetched is left to the rulesets, which refuse it as a deletion or a push that isn't a fast-forward.
     """
-    path = f"{session.agent_task_notes_dir}/{STATE_FILE}"
-    if path not in staged:
+    if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
         return
-    end_turn = 'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"'
-    if list(staged) != [path]:
-        others = (f"    {other}" for other in staged if other != path)
-        raise _refusal("pre-commit", f"{path} must be committed alone. Also staged:", *others, "", end_turn)
+    path = f"{session.agent_task_notes_dir}/{STATE_FILE}"
+    if git.succeeds("diff", "--quiet", remote_sha, local_sha, "--", path):
+        return
+    undo = (
+        "",
+        "Put it back as origin has it, then commit and push again:",
+        f"    git checkout origin/{session.agent_notes_branch} -- {path}",
+        'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"',
+    )
     try:
-        old, new = (_task_state(git, revision, path) for revision in ("HEAD", ""))
+        old, new = _task_state(git, remote_sha, path, "created"), _task_state(git, local_sha, path, "deleted")
     except TaskStateRefused as error:
-        raise _refusal("pre-commit", f"{path} can't change this way: {error}", end_turn) from None
+        raise _refusal("pre-push", f"{path} can't change this way: {error}", *undo) from None
     if reason := legal_change(old, new, session.agent_role):
-        raise _refusal("pre-commit", f"{path}: not a transition the {session.agent_role} may make: {reason}.", end_turn)
+        raise _refusal("pre-push", f"{path}: not a transition the {session.agent_role} may make: {reason}.", *undo)
 
 
-def _task_state(git: Git, revision: str, path: str) -> TaskState:
-    """The task state at ``revision`` ("" for the index); TaskStateRefused when the file isn't there."""
+def _task_state(git: Git, revision: str, path: str, missing: str) -> TaskState:
+    """The task state at ``revision``; TaskStateRefused saying it can't be ``missing`` when the file isn't there."""
     where = f"{revision}:{path}"
     if not git.succeeds("cat-file", "-e", where):
-        made = "created" if revision == "HEAD" else "deleted"
-        raise TaskStateRefused(f"it can't be {made} by a commit in the sandbox")
+        raise TaskStateRefused(f"it can't be {missing} in the sandbox")
     return TaskState.parse(git.output("show", where), where)
 
 

@@ -1,7 +1,7 @@
 """agent_runtime.task.command, in-process, against real checkouts session_setup made from a local origin.
 
-The git hooks are off here, except at the end, where the command's own commit goes through the built runtime's
-pre-commit. tests/agent_runtime/test_git_hooks.py tests the STATE.json rule itself, and
+The git hooks are off here, except at the end, where the command's own push goes through the built runtime's
+pre-push. tests/agent_runtime/test_git_hooks.py tests the STATE.json rule itself, and
 tests/agent_kit/test_task_command.py the stub that runs this command.
 """
 
@@ -222,19 +222,18 @@ def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Che
     assert origin_state(session).state == "review"
 
 
-# --- through the real pre-commit -----------------------------------------------
+# --- through the real hooks ----------------------------------------------------
 
 
 def hooks_dir(tmp_path: Path, built_kit: Path, pre_commit: str | None = None) -> Path:
-    """A hooks dir whose pre-commit runs the built runtime's, as the kit's stub does through its link; or
-    ``pre_commit``, a script of the test's own."""
+    """A hooks dir whose pre-commit and pre-push run the built runtime's, as the kit's stubs do through its link.
+    ``pre_commit`` replaces pre-commit with a script of the test's own."""
     hooks = tmp_path / "hooks"
     hooks.mkdir()
-    script = (
-        pre_commit or f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook pre-commit "$@"\n'
-    )
-    (hooks / "pre-commit").write_text(script)
-    (hooks / "pre-commit").chmod(0o755)
+    for hook in ("pre-commit", "pre-push"):
+        script = f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook {hook} "$@"\n'
+        (hooks / hook).write_text(pre_commit if pre_commit and hook == "pre-commit" else script)
+        (hooks / hook).chmod(0o755)
     return hooks
 
 
@@ -245,7 +244,7 @@ def use_hooks(monkeypatch: pytest.MonkeyPatch, session: contract.Environ, hooks:
         monkeypatch.setenv(name, str(getattr(session, name.lower())))
 
 
-def test_the_commands_own_commit_passes_the_real_pre_commit_guard(
+def test_the_commands_own_push_passes_the_real_guard(
     turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     session, _, _ = turn

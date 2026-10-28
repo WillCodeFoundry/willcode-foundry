@@ -201,110 +201,120 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
     )
 
 
-# --- STATE.json on the notes branch -------------------------------------------
+# --- STATE.json, judged by pre-push -------------------------------------------
 
 STATE_PATH = f"{TASK.task_notes_dir}/STATE.json"
 IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", previous="plan", note="Approved.")
+REVIEW = IMPLEMENT.after("submit", "dev", "Ready for review.")
 
 
-def with_state(notes: Path, task_state: TaskState = IMPLEMENT) -> None:
-    """STATE.json committed on the notes checkout, as foundry or an earlier turn left it."""
+def commit_state(notes: Path, task_state: TaskState, *also: str) -> None:
+    """A commit of STATE.json, and of ``also``, that no hook sees, as any git command could make it."""
     (notes / STATE_PATH).write_text(task_state.to_json())
     git(notes, "add", STATE_PATH)
-    commit_unchecked(notes, "state")
+    for name in also:
+        stage(notes, name)
+    commit_unchecked(notes, f"state: {task_state.state}")
 
 
-def stage_state(notes: Path, task_state: TaskState) -> None:
-    (notes / STATE_PATH).write_text(task_state.to_json())
-    git(notes, "add", STATE_PATH)
+def pushed(notes: Path) -> None:
+    """What is on the notes checkout, pushed past the hooks: foundry's or an earlier turn's."""
+    git(notes, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD")
 
 
-def test_a_legal_transition_committed_alone_is_accepted(checkouts: Checkouts) -> None:
+def push_check(session: contract.Environ, notes: Path) -> None:
+    """pre_push on the line git passes for pushing the notes checkout's HEAD to origin's notes branch."""
+    ref = f"refs/heads/{session.agent_notes_branch}"
+    local = git(notes, "rev-parse", "HEAD").stdout.strip()
+    remote = git(notes, "rev-parse", f"origin/{session.agent_notes_branch}").stdout.strip()
+    git_hooks.pre_push([f"{ref} {local} {ref} {remote}\n"], session, Git(notes))
+
+
+def test_a_legal_transition_is_accepted_however_it_was_committed(checkouts: Checkouts) -> None:
+    """The content decides: not who wrote it, nor whether it came with other notes."""
     session, _, notes = checkouts
-    with_state(notes)
-    stage_state(notes, IMPLEMENT.after("submit", "dev", "Ready for review."))
+    commit_state(notes, IMPLEMENT)
+    pushed(notes)
+    commit_state(notes, REVIEW, f"{TASK.task_notes_dir}/PROGRESS.md")
 
-    git_hooks.pre_commit(session, Git(notes))
+    push_check(session, notes)
 
 
-def test_a_legal_transition_made_by_hand_is_accepted_too(checkouts: Checkouts) -> None:
-    """The content decides, not who wrote it."""
+def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    with_state(notes)
-    (notes / STATE_PATH).write_text(
-        '{"lifecycle": "feature", "state": "blocked", "previous": "implement", "note": "Which base?"}'
-    )
-    git(notes, "add", STATE_PATH)
+    commit_state(notes, IMPLEMENT)
+    pushed(notes)
+    commit_state(notes, REVIEW)
+    git(notes, "-c", "core.hooksPath=/dev/null", "revert", "--no-edit", "HEAD")
 
-    git_hooks.pre_commit(session, Git(notes))
-
-
-def test_the_task_state_with_other_files_is_refused(checkouts: Checkouts) -> None:
-    session, _, notes = checkouts
-    with_state(notes)
-    stage_state(notes, IMPLEMENT.after("submit", "dev", "Ready."))
-    stage(notes, f"{TASK.task_notes_dir}/PROGRESS.md")
-
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
-
-    assert f"{STATE_PATH} must be committed alone. Also staged:" in refusal
-    assert f"    {TASK.task_notes_dir}/PROGRESS.md" in refusal
-    assert 'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"' in refusal
+    push_check(session, notes)
 
 
 @pytest.mark.parametrize(
-    ("staged", "reason"),
+    ("before", "after", "reason"),
     [
+        (IMPLEMENT, REVIEW.after("approve", "reviewer", "LGTM"), "implement can't go to deliver"),
         (
-            TaskState(lifecycle=FEATURE, state="deliver", previous="implement", note="Skip review."),
-            "implement can't go to deliver",
+            IMPLEMENT,
+            TaskState(lifecycle=FEATURE, state="done", previous="implement", note="x"),
+            "implement can't go to done",
         ),
-        (TaskState(lifecycle=FEATURE, state="review", previous="plan", note="x"), "previous must be implement"),
+        (
+            IMPLEMENT,
+            TaskState(lifecycle=FEATURE, state="review", previous="plan", note="x"),
+            "previous must be implement",
+        ),
+        (REVIEW, IMPLEMENT, "it is the reviewer's turn, not the dev's"),
     ],
-    ids=["skipping review", "wrong previous"],
+    ids=["two turns in one push", "cherry-picked or merged", "wrong previous", "a pushed turn reverted"],
 )
-def test_an_illegal_change_is_refused_saying_why(checkouts: Checkouts, staged: TaskState, reason: str) -> None:
+def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
+    checkouts: Checkouts, before: TaskState, after: TaskState, reason: str
+) -> None:
     session, _, notes = checkouts
-    with_state(notes)
-    stage_state(notes, staged)
+    commit_state(notes, before)
+    pushed(notes)
+    commit_state(notes, after)
 
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    refusal = refusal_of(lambda: push_check(session, notes))
 
     assert f"{STATE_PATH}: not a transition the dev may make: {reason}" in refusal
-
-
-def test_a_legal_transition_on_another_roles_turn_is_refused(checkouts: Checkouts) -> None:
-    session, _, notes = checkouts
-    review = TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready.")
-    with_state(notes, review)
-    stage_state(notes, review.after("approve", "reviewer", "LGTM"))
-
-    assert "it is the reviewer's turn, not the dev's" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert f"git checkout origin/{session.agent_notes_branch} -- {STATE_PATH}" in refusal
 
 
 def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    stage_state(notes, IMPLEMENT)
+    commit_state(notes, IMPLEMENT)
 
-    assert "it can't be created by a commit in the sandbox" in refusal_of(
-        lambda: git_hooks.pre_commit(session, Git(notes))
-    )
+    assert "it can't be created in the sandbox" in refusal_of(lambda: push_check(session, notes))
 
 
 def test_deleting_the_task_state_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    with_state(notes)
+    commit_state(notes, IMPLEMENT)
+    pushed(notes)
     git(notes, "rm", "-q", STATE_PATH)
+    commit_unchecked(notes, "drop state")
 
-    assert "it can't be deleted by a commit in the sandbox" in refusal_of(
-        lambda: git_hooks.pre_commit(session, Git(notes))
-    )
+    assert "it can't be deleted in the sandbox" in refusal_of(lambda: push_check(session, notes))
 
 
-def test_a_staged_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:
+def test_a_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    with_state(notes)
+    commit_state(notes, IMPLEMENT)
+    pushed(notes)
     (notes / STATE_PATH).write_text("{}")
     git(notes, "add", STATE_PATH)
+    commit_unchecked(notes, "bad state")
 
-    assert "is not a task state" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert "is not a task state" in refusal_of(lambda: push_check(session, notes))
+
+
+def test_pre_commit_no_longer_judges_the_task_state(checkouts: Checkouts) -> None:
+    """One guard: pre-push. A commit pre-push would refuse still commits, and is refused when pushed."""
+    session, _, notes = checkouts
+    commit_state(notes, IMPLEMENT)
+    (notes / STATE_PATH).write_text(IMPLEMENT.moved("done", "x").to_json())
+    git(notes, "add", STATE_PATH)
+
+    git_hooks.pre_commit(session, Git(notes))
