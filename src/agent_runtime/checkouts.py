@@ -10,10 +10,7 @@ from agent_runtime.git import Git, GitError
 
 
 def unsaved_work(session: contract.Environ) -> list[str]:
-    """What in either checkout isn't saved on origin, one line each; empty when both are clean and pushed.
-
-    session-check refuses the stop on it, and the task command refuses to end a turn on it.
-    """
+    """What in either checkout isn't saved on origin, one line each; empty when both are clean and pushed."""
     return [
         *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
         *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),

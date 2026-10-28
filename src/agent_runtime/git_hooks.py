@@ -113,8 +113,11 @@ def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remot
     """Refuse a push that leaves STATE.json other than as a legal transition, for this role, from origin's.
 
     Only the states before and after the push are judged. So every git command that makes commits is judged
-    alike, and who made the change doesn't matter. A deletion, a new branch, or a remote commit this checkout
-    hasn't fetched is left to the rulesets, which refuse it as a deletion or a push that isn't a fast-forward.
+    alike, and who made the change doesn't matter. Three pushes are left unjudged:
+
+    - a deletion, which the rulesets refuse;
+    - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
+    - a new branch, which can't happen here: foundry creates the notes branch before any sandbox starts.
     """
     if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
         return

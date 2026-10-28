@@ -310,8 +310,8 @@ def test_a_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:
     assert "is not a task state" in refusal_of(lambda: push_check(session, notes))
 
 
-def test_pre_commit_no_longer_judges_the_task_state(checkouts: Checkouts) -> None:
-    """One guard: pre-push. A commit pre-push would refuse still commits, and is refused when pushed."""
+def test_pre_commit_leaves_the_task_state_to_pre_push(checkouts: Checkouts) -> None:
+    """There is one guard, pre-push: pre-commit lets through a change that pre-push would refuse."""
     session, _, notes = checkouts
     commit_state(notes, IMPLEMENT)
     (notes / STATE_PATH).write_text(IMPLEMENT.moved("done", "x").to_json())
