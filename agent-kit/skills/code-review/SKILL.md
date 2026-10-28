@@ -75,6 +75,11 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 Issue all three sub-agent calls together, in the foreground, and aggregate the reports they return.
 
+Every brief also carries these two rules, word for word:
+
+- "Cite each finding as `file:line` at `HEAD`, read from that one file (`git show HEAD:<path> | cat -n`). Never take line numbers from a listing of several files joined together, since every number after the first file is shifted."
+- "Say what is wrong, where, and why it matters. Give the fix as one line of direction at most, never code. The dev fixes each finding test-first, and a ready-made fix skips the failing test."
+
 **Standards sub-agent prompt** should include:
 
 - The full diff command and commit list.
@@ -99,6 +104,8 @@ If the spec is missing, skip the Spec sub-agent and note this in the final repor
 ### 5. Aggregate
 
 Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "Reviewing" section describes, with the three reports under `### Standards`, `### Spec` and `### Behaviour` headings in the round, verbatim or lightly cleaned, each finding with its id. Do **not** merge or rerank findings, because the axes are deliberately separate (see _Why separate axes_).
+
+Before writing the round, check every cited `file:line` against the file at `HEAD`, and correct any that don't match. Drop a finding the code shows to be wrong, such as a Speculative Generality flag on something the spec asks for. Remove any code fix a report included, keeping its one line of direction.
 
 End the reports with a one-line summary, before the round's verdict: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 
