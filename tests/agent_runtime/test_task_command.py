@@ -205,13 +205,17 @@ def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Che
 
 
 def hooks_dir(tmp_path: Path, built_kit: Path, pre_commit: str | None = None) -> Path:
-    """A hooks dir whose pre-commit and pre-push run the built runtime's, as the kit's stubs do through its link.
-    ``pre_commit`` replaces pre-commit with a script of the test's own."""
+    """A hooks dir whose pre-push runs the built runtime's, as the kit's stub does through its link. ``pre_commit``
+    adds a pre-commit of the test's own, to make the command's commit fail."""
     hooks = tmp_path / "hooks"
     hooks.mkdir()
-    for hook in ("pre-commit", "pre-push"):
-        script = f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook {hook} "$@"\n'
-        (hooks / hook).write_text(pre_commit if pre_commit and hook == "pre-commit" else script)
+    scripts = {
+        "pre-push": f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook pre-push "$@"\n'
+    }
+    if pre_commit:
+        scripts["pre-commit"] = pre_commit
+    for hook, script in scripts.items():
+        (hooks / hook).write_text(script)
         (hooks / hook).chmod(0o755)
     return hooks
 

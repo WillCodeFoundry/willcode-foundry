@@ -1,4 +1,4 @@
-"""agent_runtime.git_hooks, in-process: pre_push on the lines git passes it, and pre_commit and prepare_commit_msg
+"""agent_runtime.git_hooks, in-process: pre_push on the lines git passes it, and pre_push and prepare_commit_msg
 against real checkouts that session_setup made, each given the repository as a Git.
 
 tests/sandbox_image/test_git_hooks.py runs each hook through its stub, by real commits and pushes.
@@ -12,7 +12,7 @@ import pytest
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
 from agent_runtime.task.lifecycles import FEATURE
-from agent_runtime.task.state import TaskState
+from agent_runtime.task.state import TaskState, state_path
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import TASK, git
 
@@ -59,7 +59,7 @@ def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
     assert str(refused.value) == (  # what was wrong, then what to do instead
         "pre-push: refusing\n\n"
         f"  You may only push task/t1 and notes, not {named}.\n"
-        "  Code goes on task/t1; notes go on notes.\n"
+        "  Code goes on task/t1. Notes go on notes.\n"
     )
 
 
@@ -88,74 +88,108 @@ def refusal_of(call: Callable[[], None]) -> str:
     return str(refused.value)
 
 
+def push_check(session: contract.Environ, checkout: Path, branch: str | None = None) -> None:
+    """pre_push on the line git passes for pushing ``checkout``'s HEAD to ``branch`` on origin: the notes branch by
+    default."""
+    branch = branch or session.agent_notes_branch
+    ref = f"refs/heads/{branch}"
+    local = git(checkout, "rev-parse", "HEAD").stdout.strip()
+    remote = git(checkout, "rev-parse", f"origin/{branch}").stdout.strip()
+    git_hooks.pre_push([f"HEAD {local} {ref} {remote}\n"], session, Git(checkout))
+
+
+def committed(checkout: Path, *paths: str) -> None:
+    """``paths`` committed on ``checkout``, as any git command could commit them."""
+    for path in paths:
+        stage(checkout, path)
+    commit_unchecked(checkout, "change")
+
+
 @pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md"])
 def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts, path: str) -> None:
     session, code, _ = checkouts
-    stage(code, path)
+    committed(code, path)
 
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(code)))
+    refusal = refusal_of(lambda: push_check(session, code, session.agent_task_branch))
 
-    assert refusal.startswith("pre-commit: refusing\n\n")
+    assert refusal.startswith("pre-push: refusing\n\n")
     assert f"Task notes belong on {NOTES_BRANCH}" in refusal and f"    {path}" in refusal
+    assert f"git reset origin/{session.agent_task_branch}" in refusal
 
 
 @pytest.mark.parametrize("path", ["NOTES.md", "PROGRESS.md", "src/main.py"])
 def test_code_files_are_accepted_on_the_task_branch(checkouts: Checkouts, path: str) -> None:
     session, code, _ = checkouts
-    stage(code, path)
+    committed(code, path)
 
-    git_hooks.pre_commit(session, Git(code))
+    push_check(session, code, session.agent_task_branch)
 
 
 @pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", TASK.task_file])
 def test_this_tasks_notes_are_accepted_on_the_notes_branch(checkouts: Checkouts, path: str) -> None:
     session, _, notes = checkouts
-    stage(notes, path)
+    committed(notes, path)
 
-    git_hooks.pre_commit(session, Git(notes))
+    push_check(session, notes)
 
 
 def test_another_tasks_folder_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
-    stage(notes, f"{OTHER_TASK.task_notes_dir}/PROGRESS.md")
+    committed(notes, f"{OTHER_TASK.task_notes_dir}/PROGRESS.md")
 
-    assert f"only change files in {TASK.task_notes_dir}/" in refusal_of(
-        lambda: git_hooks.pre_commit(session, Git(notes))
-    )
+    assert f"only change files in {TASK.task_notes_dir}/" in refusal_of(lambda: push_check(session, notes))
+
+
+def test_another_tasks_state_committed_on_a_detached_head_is_refused(checkouts: Checkouts) -> None:
+    """Round 2's R32: no commit hook runs on a detached HEAD, and the push names the notes branch only remotely."""
+    session, _, notes = checkouts
+    theirs = state_path(OTHER_TASK.task_notes_dir)
+    committed(notes, theirs)
+    pushed(notes)
+    git(notes, "switch", "-q", "--detach")
+    (notes / theirs).write_text("changed\n")
+    git(notes, "add", theirs)
+    commit_unchecked(notes, "move their task")
+
+    assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
+
+
+def test_reverting_another_tasks_notes_is_refused(checkouts: Checkouts) -> None:
+    """A revert deletes what the reverted commit added, in the other task's folder."""
+    session, _, notes = checkouts
+    theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
+    committed(notes, theirs)
+    pushed(notes)
+    git(notes, "-c", "core.hooksPath=/dev/null", "revert", "--no-edit", "HEAD")
+
+    assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
 
 
 def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
-    """A rename stages a deletion in the other task's folder; git's rename detection would list only the new
+    """A rename deletes the file in the other task's folder; git's rename detection would list only the new
     path, inside this task's folder."""
     session, _, notes = checkouts
     theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
-    stage(notes, theirs)
-    commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
+    committed(notes, theirs)
+    pushed(notes)
     git(notes, "mv", theirs, f"{TASK.task_notes_dir}/x.md")
+    commit_unchecked(notes, "move")
 
-    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
 
 
 def test_replacing_another_tasks_file_with_a_link_is_refused(checkouts: Checkouts) -> None:
     """A type change: the file in the other task's folder becomes a link, its content gone."""
     session, _, notes = checkouts
     theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
-    stage(notes, theirs)
-    commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
+    committed(notes, theirs)
+    pushed(notes)
     (notes / theirs).unlink()
     (notes / theirs).symlink_to("elsewhere")
     git(notes, "add", theirs)
+    commit_unchecked(notes, "link")
 
-    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
-
-
-def test_a_commit_on_another_branch_is_left_alone(checkouts: Checkouts) -> None:
-    """It can't be pushed: pre-push refuses it."""
-    session, code, _ = checkouts
-    git(code, "switch", "-q", "-c", "scratch")
-    stage(code, f"{TASK.task_notes_dir}/PROGRESS.md")
-
-    git_hooks.pre_commit(session, Git(code))
+    assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
 
 
 def message_file(tmp_path: Path, text: str) -> Path:
@@ -220,14 +254,6 @@ def commit_state(notes: Path, task_state: TaskState, *also: str) -> None:
 def pushed(notes: Path) -> None:
     """What is on the notes checkout, pushed past the hooks: foundry's or an earlier turn's."""
     git(notes, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD")
-
-
-def push_check(session: contract.Environ, notes: Path) -> None:
-    """pre_push on the line git passes for pushing the notes checkout's HEAD to origin's notes branch."""
-    ref = f"refs/heads/{session.agent_notes_branch}"
-    local = git(notes, "rev-parse", "HEAD").stdout.strip()
-    remote = git(notes, "rev-parse", f"origin/{session.agent_notes_branch}").stdout.strip()
-    git_hooks.pre_push([f"{ref} {local} {ref} {remote}\n"], session, Git(notes))
 
 
 def test_a_legal_transition_is_accepted_however_it_was_committed(checkouts: Checkouts) -> None:
@@ -308,13 +334,3 @@ def test_a_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:
     commit_unchecked(notes, "bad state")
 
     assert "is not a task state" in refusal_of(lambda: push_check(session, notes))
-
-
-def test_pre_commit_leaves_the_task_state_to_pre_push(checkouts: Checkouts) -> None:
-    """There is one guard, pre-push: pre-commit lets through a change that pre-push would refuse."""
-    session, _, notes = checkouts
-    commit_state(notes, IMPLEMENT)
-    (notes / STATE_PATH).write_text(IMPLEMENT.moved("done", "x").to_json())
-    git(notes, "add", STATE_PATH)
-
-    git_hooks.pre_commit(session, Git(notes))

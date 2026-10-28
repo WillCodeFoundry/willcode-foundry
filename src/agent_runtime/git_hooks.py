@@ -1,9 +1,12 @@
 """The git hooks, which core.hooksPath runs from the kit's hooks/ stubs; git runs them at the checkout's root.
 
-- ``pre_commit``: what each checkout may commit, so tasks don't step on each other.
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
-- ``pre_push``: pushes only to this task's branch and the notes branch, and a change to STATE.json only as a legal
-  transition for this role.
+- ``pre_push``: pushes only to this task's branch and the notes branch, and each push judged by what it changes
+  there. Task notes stay off the task branch. On the notes branch, a role changes only its own task's notes, and
+  its STATE.json only by a legal transition for the role.
+
+pre_push judges what a push changes since origin, not each commit. So every git command that makes commits is
+judged alike, and so is a commit made on a detached HEAD or another branch and pushed to one of these.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
@@ -24,35 +27,6 @@ _ZERO = "0" * 40
 
 class GitHookRefused(Exception):
     """A hook refuses: the message is the whole refusal, as the agent will read it."""
-
-
-def pre_commit(session: contract.Environ | None = None, git: Git | None = None) -> None:
-    """Refuse a commit that puts files where they don't belong.
-
-    task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
-                 subfolder are caught too;
-    notes branch: only this task's notes dir. pre_push judges a change to STATE.json.
-    Commits on any other branch are left alone: they can't be pushed.
-    """
-    session = session or _read_session("pre-commit")
-    git = git or Git()
-    branch = git.current_branch()
-    if branch == session.agent_task_branch:
-        refused = [path for path in _staged_paths(git) if _is_under(session.agent_notes_root, path)]
-        rule = (
-            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
-            f"not on {session.agent_task_branch}:"
-        )
-    elif branch == session.agent_notes_branch:
-        staged = _staged_paths(git)
-        refused = [path for path in staged if not path.startswith(f"{session.agent_task_notes_dir}/")]
-        rule = f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:"
-    else:
-        return
-    if refused:
-        raise _refusal(
-            "pre-commit", rule, *(f"    {path}" for path in refused), "", "Unstage with: git restore --staged <file>"
-        )
 
 
 def prepare_commit_msg(
@@ -79,8 +53,8 @@ def prepare_commit_msg(
 def pre_push(
     refs: Iterable[str] | None = None, session: contract.Environ | None = None, git: Git | None = None
 ) -> None:
-    """Refuse a push to anything but this task's branch and the notes branch, and a push to the notes branch
-    that changes STATE.json other than by a legal transition for this role.
+    """Refuse a push to anything but this task's branch and the notes branch, or one that changes there what this
+    role may not.
 
     The project's GitHub rulesets allow any task branch, since GitHub can't tell one task from another;
     this keeps a role to its own. git passes one line per ref on stdin:
@@ -88,8 +62,7 @@ def pre_push(
     """
     session = session or _read_session("pre-push")
     git = git or Git()
-    notes_ref = f"refs/heads/{session.agent_notes_branch}"
-    allowed = {f"refs/heads/{session.agent_task_branch}", notes_ref}
+    task_ref, notes_ref = f"refs/heads/{session.agent_task_branch}", f"refs/heads/{session.agent_notes_branch}"
     for line in sys.stdin if refs is None else refs:
         match line.split():
             case []:
@@ -98,31 +71,61 @@ def pre_push(
                 pass
             case _:
                 local_sha = remote_ref = remote_sha = ""
-        if remote_ref not in allowed:
+        if remote_ref not in (task_ref, notes_ref):
             raise _refusal(
                 "pre-push",
                 f"You may only push {session.agent_task_branch} and {session.agent_notes_branch}, "
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
-                f"Code goes on {session.agent_task_branch}; notes go on {session.agent_notes_branch}.",
+                f"Code goes on {session.agent_task_branch}. Notes go on {session.agent_notes_branch}.",
             )
-        if remote_ref == notes_ref:
-            _check_task_state(session, git, local_sha, remote_sha)
+        changed = _changed_paths(git, remote_sha, local_sha)
+        if remote_ref == task_ref:
+            _require_no_notes(session, changed)
+        else:
+            _require_own_notes(session, git, changed, remote_sha, local_sha)
 
 
-def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remote_sha: str) -> None:
-    """Refuse a push that leaves STATE.json other than as a legal transition, for this role, from origin's.
+def _changed_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
+    """Every path the push changes since origin, as git spells it, whatever characters it holds.
 
-    Only the states before and after the push are judged. So every git command that makes commits is judged
-    alike, and who made the change doesn't matter. Three pushes are left unjudged:
+    Every kind of change counts, a type change included, and a rename is listed as both its paths. Three pushes
+    change nothing to judge:
 
     - a deletion, which the rulesets refuse;
     - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
-    - a new branch, which can't happen here: foundry creates the notes branch before any sandbox starts.
+    - a new branch, which can't happen here: foundry creates both branches before any sandbox starts.
     """
     if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
-        return
+        return []
+    changed = git.output("diff", "--name-only", "--no-renames", "-z", remote_sha, local_sha)
+    return [path for path in changed.split("\0") if path]
+
+
+def _require_no_notes(session: contract.Environ, changed: Sequence[str]) -> None:
+    """Refuse task notes on the task branch: nothing under the notes root, at any depth, so notes written from a
+    subfolder are caught too."""
+    if refused := [path for path in changed if _is_under(session.agent_notes_root, path)]:
+        raise _misplaced(
+            session.agent_task_branch,
+            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
+            f"not on {session.agent_task_branch}:",
+            refused,
+        )
+
+
+def _require_own_notes(
+    session: contract.Environ, git: Git, changed: Sequence[str], remote_sha: str, local_sha: str
+) -> None:
+    """Refuse a change to the notes branch outside this task's notes dir, and a change to its STATE.json that
+    isn't a legal transition for this role."""
+    if refused := [path for path in changed if not path.startswith(f"{session.agent_task_notes_dir}/")]:
+        raise _misplaced(
+            session.agent_notes_branch,
+            f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:",
+            refused,
+        )
     path = state_path(session.agent_task_notes_dir)
-    if git.succeeds("diff", "--quiet", remote_sha, local_sha, "--", path):
+    if path not in changed:
         return
     undo = (
         "",
@@ -139,6 +142,18 @@ def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remot
         raise _refusal("pre-push", f"{path} can't change this way: it can't be {made} in the sandbox", *undo)
     if reason := legal_change(old, new, session.agent_role):
         raise _refusal("pre-push", f"{path}: not a transition the {session.agent_role} may make: {reason}.", *undo)
+
+
+def _misplaced(branch: str, rule: str, paths: Sequence[str]) -> GitHookRefused:
+    """A refusal of files a push puts where they don't belong, saying how to take them out."""
+    return _refusal(
+        "pre-push",
+        rule,
+        *(f"    {path}" for path in paths),
+        "",
+        "Undo the commits you were pushing, keeping their changes, then commit only what belongs:",
+        f"    git reset origin/{branch}",
+    )
 
 
 def _refusal(hook: str, *lines: str) -> GitHookRefused:
@@ -159,10 +174,3 @@ def _is_under(root: str, path: str) -> bool:
     """Whether ``path`` sits in a folder named ``root``, at any depth."""
     root_parts, folders = PurePosixPath(root).parts, PurePosixPath(path).parts[:-1]
     return any(folders[i : i + len(root_parts)] == root_parts for i in range(len(folders)))
-
-
-def _staged_paths(git: Git) -> list[str]:
-    """Paths staged for the commit being made, as git spells them, whatever characters they hold. Every kind of
-    change counts, a type change included, and a rename is listed as both its paths."""
-    staged = git.output("diff", "--cached", "--name-only", "--no-renames", "-z")
-    return [path for path in staged.split("\0") if path]

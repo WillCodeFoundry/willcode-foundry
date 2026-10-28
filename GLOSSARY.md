@@ -154,7 +154,7 @@ A control that stops mistakes, not an agent set on getting past it: the git hook
 _Avoid_: boundary, security (for a guardrail)
 
 **Git hooks**:
-`pre-commit`, `prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
+`prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
 
 **Claude hooks**:
 `guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.

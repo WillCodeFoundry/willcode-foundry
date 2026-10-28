@@ -30,7 +30,7 @@ ALLOWED = [
     "git push -u origin task/T1",
     "git pull --rebase origin agent-notes",
     "pytest tests/hooks.py",
-    "cat agent-kit/hooks/pre-commit",
+    "cat agent-kit/hooks/pre-push",
     "GIT_TRACE=1 git status",
     # Allowed on purpose: the project's GitHub rulesets refuse force-pushes,
     # deletions and pushes outside task/** and agent-notes, and a local

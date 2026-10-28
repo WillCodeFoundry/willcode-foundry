@@ -209,7 +209,7 @@ git push -u origin "$AGENT_TASK_BRANCH"
 ```
 
 - Only code and project documentation go here.
-- Never commit task notes here. The hooks refuse anything under `$AGENT_NOTES_ROOT/`.
+- Never commit task notes here. The hooks refuse to push anything under `$AGENT_NOTES_ROOT/`.
 - Never touch any branch other than `$AGENT_TASK_BRANCH`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
@@ -225,7 +225,7 @@ git push origin "$AGENT_NOTES_BRANCH"
 ```
 
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
-  for their own tasks at the same time; hooks refuse changes to anything else.
+  for their own tasks at the same time. The hooks refuse to push changes to anything else.
 - Always `pull --rebase` before pushing. Because every agent touches only its
   own dir, this never conflicts.
 

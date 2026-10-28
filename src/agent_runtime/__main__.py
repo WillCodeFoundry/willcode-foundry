@@ -42,11 +42,10 @@ CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "session-check": claude_hooks.session_check,
 }
 GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
-    "pre-commit": lambda _args: git_hooks.pre_commit(),
     "prepare-commit-msg": git_hooks.prepare_commit_msg,
     "pre-push": lambda _args: git_hooks.pre_push(),
 }
-"""What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
+"""What each stub in agent-kit/hooks/ runs, by the name git ran it as."""
 _EXPECTED = (
     contract.MissingVariables,
     hardening.HardeningRefused,

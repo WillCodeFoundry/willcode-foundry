@@ -1,3 +1,0 @@
-#!/bin/sh
-# Run by git from core.hooksPath, through the root-owned link to the runtime that hardening makes.
-exec /usr/bin/python3 -IS /etc/claude-code/agent_runtime.pyz git-hook pre-commit "$@"

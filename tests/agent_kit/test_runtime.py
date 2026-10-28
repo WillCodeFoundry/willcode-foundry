@@ -100,7 +100,6 @@ RUNTIME = ("<python>", PYTHON_FLAGS, f"<kit>/{RUNTIME_PYZ}")
 @pytest.mark.parametrize(
     "command",
     [
-        (*RUNTIME, "git-hook", "pre-commit"),
         (*RUNTIME, "git-hook", "pre-push"),
         (*RUNTIME, "git-hook", "prepare-commit-msg", "<kit>/message"),
         (*RUNTIME, "claude-hook", "session-check"),

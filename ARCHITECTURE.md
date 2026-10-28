@@ -58,7 +58,7 @@ The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <com
 | `harden` | `session-init`, as root through sudo, on the first launch |
 | `check-hardening` | `session-init` runs agent mode in-process on every launch; the command runs it alone |
 | `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from the managed settings |
-| `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
+| `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
 | `task` | the agent, from the stub `agent-kit/bin/task` |
 
 The runtime targets Python 3.11, like foundry. `__main__.py` checks the version before importing anything, so an older interpreter fails with a message.

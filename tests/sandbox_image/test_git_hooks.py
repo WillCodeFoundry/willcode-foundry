@@ -57,15 +57,14 @@ def test_a_commit_on_the_task_branch_gets_the_task_trailer_even_with_no_verify(c
         assert message.rstrip("\n").endswith(f"\n\nTask: {TASK.id}"), message
 
 
-def test_notes_on_the_task_branch_are_refused(checkouts: Checkouts) -> None:
+def test_notes_on_the_task_branch_are_refused_when_pushed(checkouts: Checkouts) -> None:
     checkouts.change(checkouts.code, f"{TASK.task_notes_dir}/PROGRESS.md")
-    before = checkouts.commits(checkouts.code)
+    assert checkouts.git(checkouts.code, "commit", "-q", "-m", "notes").returncode == 0
 
-    refused = checkouts.git(checkouts.code, "commit", "-q", "-m", "notes")
+    refused = checkouts.git(checkouts.code, "push", "origin", TASK.branch)
 
     assert refused.returncode != 0
-    assert "pre-commit: refusing" in refused.stderr and f"Task notes belong on {NOTES_BRANCH}" in refused.stderr
-    assert checkouts.commits(checkouts.code) == before
+    assert "pre-push: refusing" in refused.stderr and f"Task notes belong on {NOTES_BRANCH}" in refused.stderr
 
 
 def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts: Checkouts) -> None:
@@ -82,7 +81,7 @@ def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts:
 
 
 def test_what_the_agent_sets_in_its_environment_changes_no_rule(checkouts: Checkouts) -> None:
-    """The agent sets its git commands' environment. Each of these would approve the commit if the stubs read
+    """The agent sets its git commands' environment. Each of these would approve the push if the stubs read
     it: a startup file for the shell, a sitecustomize and a pathlib ahead of the standard library's, a kit
     elsewhere. (Not PYTHONHOME: a wrong one stops Python starting, which refuses the commit whatever the flags.)"""
     agents_own = f"{AGENT_HOME}/agents-own"
@@ -94,10 +93,11 @@ def test_what_the_agent_sets_in_its_environment_changes_no_rule(checkouts: Check
     )
     assert planted.returncode == 0, planted.stderr
     checkouts.change(checkouts.code, f"{TASK.task_notes_dir}/PROGRESS.md")
+    assert checkouts.git(checkouts.code, "commit", "-q", "-m", "notes").returncode == 0
 
     refused = checkouts.git(
         checkouts.code,
-        "commit", "-q", "-m", "notes",
+        "push", "origin", TASK.branch,
         env={
             "ENV": f"{agents_own}/startup.sh",
             "BASH_ENV": f"{agents_own}/startup.sh",
