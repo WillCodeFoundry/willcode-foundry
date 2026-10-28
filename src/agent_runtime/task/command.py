@@ -18,7 +18,8 @@ from typing import Final, TextIO
 from agent_runtime import contract
 from agent_runtime.claude_hooks import unsaved_work
 from agent_runtime.git import Git
-from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused
+from agent_runtime.task.committed import committed_state
+from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, state_path
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
 
@@ -59,7 +60,11 @@ def show(session: contract.Environ, out: TextIO) -> None:
 
 def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
     """Apply ``event``, then commit STATE.json alone and push it."""
-    notes, branch, path = Git(session.agent_notes_dir), session.agent_notes_branch, _state_path(session)
+    notes, branch, path = (
+        Git(session.agent_notes_dir),
+        session.agent_notes_branch,
+        state_path(session.agent_task_notes_dir),
+    )
     if notes.current_branch() != branch:
         raise TaskStateRefused(
             f"the notes checkout isn't on {branch}, so ending your turn would push nothing. "
@@ -107,21 +112,14 @@ def _whose_turn_now(task_state: TaskState) -> str:
     return f"It is {task_state.whose} turn now. Stop here."
 
 
-def _state_path(session: contract.Environ) -> str:
-    return f"{session.agent_task_notes_dir}/{STATE_FILE}"
-
-
 def _origin_state(session: contract.Environ) -> TaskState:
+    """The task state origin has, freshly fetched; TaskStateRefused when there is none, or it isn't one."""
     notes, branch = Git(session.agent_notes_dir), session.agent_notes_branch
     notes.output("fetch", "--quiet", "origin", branch)
-    return _read(notes, f"origin/{branch}:{_state_path(session)}", session)
-
-
-def _read(notes: Git, revision_path: str, session: contract.Environ) -> TaskState:
-    """The task state at ``<revision>:<path>``; TaskStateRefused when there is none, or it isn't one."""
-    if not notes.succeeds("cat-file", "-e", revision_path):
+    task_state = committed_state(notes, f"origin/{branch}", state_path(session.agent_task_notes_dir))
+    if task_state is None:
         raise TaskStateRefused(
-            f"task {session.agent_task} has no {STATE_FILE} on {session.agent_notes_branch}: "
+            f"task {session.agent_task} has no {STATE_FILE} on {branch}: "
             "it was created before task states. Stop here, and tell the human."
         )
-    return TaskState.parse(notes.output("show", revision_path), revision_path)
+    return task_state

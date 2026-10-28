@@ -15,7 +15,13 @@ from agent_runtime.agent_kit import TASK_COMMAND
 from agent_runtime.task.lifecycles import HUMAN, LIFECYCLES, Lifecycle, State
 
 STATE_FILE: Final = "STATE.json"
-"""A task's task state, in its task notes dir. Spelled here only; foundry.task.Task.state_file builds on it."""
+"""A task's task state, in its task notes dir. Spelled here only; state_path builds on it."""
+
+
+def state_path(task_notes_dir: str) -> str:
+    """Where a task's STATE.json sits, relative to the repository root, given its task notes dir."""
+    return f"{task_notes_dir}/{STATE_FILE}"
+
 
 END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
 """How an agent ends its turn, as every message that tells it to spells it."""

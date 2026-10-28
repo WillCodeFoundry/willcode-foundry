@@ -15,7 +15,8 @@ from pathlib import Path, PurePosixPath
 
 from agent_runtime import contract
 from agent_runtime.git import Git
-from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, legal_change
+from agent_runtime.task.committed import committed_state
+from agent_runtime.task.state import END_TURN, TaskStateRefused, legal_change, state_path
 
 _ZERO = "0" * 40
 """The sha git passes for a ref that doesn't exist on one side of a push."""
@@ -117,7 +118,7 @@ def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remot
     """
     if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
         return
-    path = f"{session.agent_task_notes_dir}/{STATE_FILE}"
+    path = state_path(session.agent_task_notes_dir)
     if git.succeeds("diff", "--quiet", remote_sha, local_sha, "--", path):
         return
     undo = (
@@ -127,19 +128,14 @@ def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remot
         f"End your turn with: {END_TURN}",
     )
     try:
-        old, new = _task_state(git, remote_sha, path, "created"), _task_state(git, local_sha, path, "deleted")
+        old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
     except TaskStateRefused as error:
         raise _refusal("pre-push", f"{path} can't change this way: {error}", *undo) from None
+    if old is None or new is None:
+        made = "created" if old is None else "deleted"
+        raise _refusal("pre-push", f"{path} can't change this way: it can't be {made} in the sandbox", *undo)
     if reason := legal_change(old, new, session.agent_role):
         raise _refusal("pre-push", f"{path}: not a transition the {session.agent_role} may make: {reason}.", *undo)
-
-
-def _task_state(git: Git, revision: str, path: str, missing: str) -> TaskState:
-    """The task state at ``revision``; TaskStateRefused saying it can't be ``missing`` when the file isn't there."""
-    where = f"{revision}:{path}"
-    if not git.succeeds("cat-file", "-e", where):
-        raise TaskStateRefused(f"it can't be {missing} in the sandbox")
-    return TaskState.parse(git.output("show", where), where)
 
 
 def _refusal(hook: str, *lines: str) -> GitHookRefused:

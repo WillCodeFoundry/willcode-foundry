@@ -45,6 +45,7 @@ A launch, end to end:
 | `claude_hooks.py`, `git_hooks.py` | The Claude hooks and the git hooks. |
 | `task/lifecycles.py`, `task/state.py` | Shared with foundry: the lifecycles, and a task's `STATE.json`: reading it, applying an event, moving it by hand, and which changes are legal. |
 | `task/command.py` | `task`: the agent's command, through `agent-kit/bin/task`, to show the task state and end a turn. |
+| `task/committed.py` | Reading a task's `STATE.json` from a revision of the notes checkout, for `task/command.py` and `pre-push`. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 
 The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <command>`:

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Final
 
 from agent_runtime.task.lifecycles import FEATURE, Lifecycle
-from agent_runtime.task.state import STATE_FILE, TaskState
+from agent_runtime.task.state import TaskState, state_path
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 
@@ -69,7 +69,7 @@ class Task:
     @property
     def state_file(self) -> str:
         """The task's task state on NOTES_BRANCH, relative to the repository root."""
-        return f"{self.task_notes_dir}/{STATE_FILE}"
+        return state_path(self.task_notes_dir)
 
 
 def load_template(template_dir: Path) -> dict[str, str]:
