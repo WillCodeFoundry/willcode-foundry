@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 from agent_runtime import contract
 from agent_runtime.git import Git
 from agent_runtime.task.committed import committed_state
-from agent_runtime.task.state import END_TURN, TaskStateRefused, legal_change, state_path
+from agent_runtime.task.state import END_TURN, TaskStateRefused, state_path
 
 _ZERO = "0" * 40
 """The sha git passes for a ref that doesn't exist on one side of a push."""
@@ -133,15 +133,24 @@ def _require_own_notes(
         f"    git checkout origin/{session.agent_notes_branch} -- {path}",
         f"End your turn with: {END_TURN}",
     )
+    # The push carries the new state, not the event: send the event leading to it, and it must give exactly that.
+    # Two events leading to one state give the same result.
     try:
         old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
+        if old is None or new is None:
+            raise TaskStateRefused(f"It can't be {'created' if old is None else 'deleted'} in the sandbox.")
+        if old.turn != session.agent_role:
+            raise TaskStateRefused(
+                f"It is {old.whose} turn, not the {session.agent_role}'s. The task is in {old.state}."
+            )
+        leading = [name for name, event in old.definition.events.items() if event.target == new.state]
+        if not leading:
+            targets = ", ".join(sorted({event.target for event in old.definition.events.values()}))
+            raise TaskStateRefused(f"{old.state} can't go to {new.state}. Its events lead to {targets}.")
+        if (sent := old.after(leading[0], new.note)) != new:
+            raise TaskStateRefused(f"It must read as {leading[0]} leaves it:\n{sent.to_json()}")
     except TaskStateRefused as error:
-        raise _refusal("pre-push", f"{path} can't change this way: {error}", *undo) from None
-    if old is None or new is None:
-        made = "created" if old is None else "deleted"
-        raise _refusal("pre-push", f"{path} can't change this way: it can't be {made} in the sandbox", *undo)
-    if reason := legal_change(old, new, session.agent_role):
-        raise _refusal("pre-push", f"{path}: not a transition the {session.agent_role} may make: {reason}.", *undo)
+        raise _refusal("pre-push", f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 
 
 def _misplaced(branch: str, rule: str, paths: Sequence[str]) -> GitHookRefused:

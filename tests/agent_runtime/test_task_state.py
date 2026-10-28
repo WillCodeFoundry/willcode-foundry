@@ -1,12 +1,10 @@
 """agent_runtime.task.state: reading and writing STATE.json, applying events, moves by hand, and which changes
 are legal transitions."""
 
-import dataclasses
-
 import pytest
 
 from agent_runtime.task.lifecycles import BUGFIX, FEATURE
-from agent_runtime.task.state import TaskState, TaskStateRefused, legal_change
+from agent_runtime.task.state import TaskState, TaskStateRefused
 
 WHERE = ".agent/t1/STATE.json"
 
@@ -116,33 +114,3 @@ def test_a_move_to_a_state_the_lifecycle_lacks_is_refused() -> None:
 
 def test_a_move_without_a_note_is_refused() -> None:
     assert "give a hand-off note" in refusal(lambda: in_state("blocked").moved("review", " "))
-
-
-# --- legal changes ------------------------------------------------------------
-
-
-def test_what_an_event_does_is_a_legal_change() -> None:
-    old = in_state("review", previous="implement", note="ready")
-
-    assert legal_change(old, old.after("approve", "LGTM"), "reviewer") is None
-
-
-@pytest.mark.parametrize(
-    ("new", "role", "reason"),
-    [
-        (
-            dataclasses.replace(in_state("implement", previous="review", note="n"), lifecycle=BUGFIX),
-            "reviewer",
-            "the lifecycle changed from feature to bugfix",
-        ),
-        (in_state("deliver", previous="review", note="n"), "dev", "it is the reviewer's turn, not the dev's"),
-        (in_state("done", previous="review", note="n"), "reviewer", "review can't go to done: its events lead to"),
-        (in_state("deliver", previous="plan", note="n"), "reviewer", "previous must be review"),
-        (in_state("deliver", previous="review", note=" "), "reviewer", "the hand-off note is empty"),
-    ],
-    ids=["lifecycle", "not the role's turn", "not a target", "previous", "no note"],
-)
-def test_every_other_change_is_illegal_and_says_why(new: TaskState, role: str, reason: str) -> None:
-    reason_given = legal_change(in_state("review", previous="implement", note="ready"), new, role)
-
-    assert reason_given is not None and reason_given.startswith(reason)

@@ -132,23 +132,3 @@ class TaskState:
         if not note.strip():
             raise TaskStateRefused("give a hand-off note: what the next assignee should read first")
         return replace(self, state=to, previous=self.state, note=note.strip())
-
-
-def legal_change(old: TaskState, new: TaskState, role: str) -> str | None:
-    """Why going from ``old`` to ``new`` isn't a transition ``role`` may make, or None if it is one.
-
-    A legal change keeps the lifecycle, is made on the role's turn, goes where one of the state's events leads,
-    records the state it left as ``previous``, and leaves a hand-off note. It needn't say which event it was.
-    """
-    if new.lifecycle != old.lifecycle:
-        return f"the lifecycle changed from {old.lifecycle.name} to {new.lifecycle.name}"
-    if old.turn != role:
-        return f"it is {old.whose} turn, not the {role}'s: the task is in {old.state}"
-    targets = {event.target for event in old.definition.events.values()}
-    if new.state not in targets:
-        return f"{old.state} can't go to {new.state}: its events lead to {', '.join(sorted(targets))}"
-    if new.previous != old.state:
-        return f"previous must be {old.state}, the state it left, not {new.previous}"
-    if not new.note.strip():
-        return "the hand-off note is empty"
-    return None

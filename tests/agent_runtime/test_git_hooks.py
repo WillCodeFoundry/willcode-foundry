@@ -11,7 +11,7 @@ import pytest
 
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
-from agent_runtime.task.lifecycles import FEATURE
+from agent_runtime.task.lifecycles import BUGFIX, FEATURE
 from agent_runtime.task.state import TaskState, state_path
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import TASK, git
@@ -288,11 +288,29 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
         (
             IMPLEMENT,
             TaskState(lifecycle=FEATURE, state="review", previous="plan", note="x"),
-            "previous must be implement",
+            'It must read as submit leaves it:\n  {\n    "lifecycle": "feature",\n    "state": "review",\n'
+            '    "previous": "implement",',
         ),
-        (REVIEW, IMPLEMENT, "it is the reviewer's turn, not the dev's"),
+        (
+            IMPLEMENT,
+            TaskState(lifecycle=BUGFIX, state="review", previous="implement", note="x"),
+            'It must read as submit leaves it:\n  {\n    "lifecycle": "feature",',
+        ),
+        (
+            IMPLEMENT,
+            TaskState(lifecycle=FEATURE, state="review", previous="implement", note=" "),
+            "give a hand-off note",
+        ),
+        (REVIEW, IMPLEMENT, "It is the reviewer's turn, not the dev's. The task is in review."),
     ],
-    ids=["two turns in one push", "cherry-picked or merged", "wrong previous", "a pushed turn reverted"],
+    ids=[
+        "two turns in one push",
+        "cherry-picked or merged",
+        "wrong previous",
+        "another lifecycle",
+        "no note",
+        "a pushed turn reverted",
+    ],
 )
 def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     checkouts: Checkouts, before: TaskState, after: TaskState, reason: str
@@ -304,7 +322,7 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
 
     refusal = refusal_of(lambda: push_check(session, notes))
 
-    assert f"{STATE_PATH}: not a transition the dev may make: {reason}" in refusal
+    assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
     assert f"git checkout origin/{session.agent_notes_branch} -- {STATE_PATH}" in refusal
 
 
@@ -312,7 +330,7 @@ def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:
     session, _, notes = checkouts
     commit_state(notes, IMPLEMENT)
 
-    assert "it can't be created in the sandbox" in refusal_of(lambda: push_check(session, notes))
+    assert "It can't be created in the sandbox." in refusal_of(lambda: push_check(session, notes))
 
 
 def test_deleting_the_task_state_is_refused(checkouts: Checkouts) -> None:
@@ -322,7 +340,7 @@ def test_deleting_the_task_state_is_refused(checkouts: Checkouts) -> None:
     git(notes, "rm", "-q", STATE_PATH)
     commit_unchecked(notes, "drop state")
 
-    assert "it can't be deleted in the sandbox" in refusal_of(lambda: push_check(session, notes))
+    assert "It can't be deleted in the sandbox." in refusal_of(lambda: push_check(session, notes))
 
 
 def test_a_file_that_isnt_a_task_state_is_refused(checkouts: Checkouts) -> None:

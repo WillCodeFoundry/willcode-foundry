@@ -264,6 +264,6 @@ def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes
 
     message = refusal(session, "approve", "Looks good to me.")
 
-    assert "it is the reviewer's turn, not the dev's" in message and "Your turn has not ended" in message
+    assert "It is the reviewer's turn, not the dev's." in message and "Your turn has not ended" in message
     assert git(notes, "rev-parse", "HEAD").stdout == head
     assert origin_state(session).state == "review"
