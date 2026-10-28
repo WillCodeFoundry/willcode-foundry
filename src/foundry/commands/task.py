@@ -131,7 +131,7 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
             f"task {task.id} is waiting for you, in {task_state.state}{came_from}: {task_state.note or '(no note)'}\n"
             f"  once you've answered, hand it on: {move} {task_state.previous or 'STATE'} --note …"
         )
-    raise FoundryError(f"task {task.id} is {task_state.state}; to reopen it: {move} STATE --note …")
+    raise FoundryError(f"task {task.id} is {task_state.state}. To reopen it, run {move} STATE --note …")
 
 
 @dataclass(frozen=True)

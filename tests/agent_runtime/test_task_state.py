@@ -39,14 +39,14 @@ def test_a_task_state_reads_back_as_written() -> None:
     ("text", "message"),
     [
         ("{", f"{WHERE} is not valid JSON"),
-        ("[]", f"{WHERE} is not a task state: it must hold exactly lifecycle, state, previous, note"),
+        ("[]", f"{WHERE} is not a task state. It must hold exactly lifecycle, state, previous, note."),
         (
             '{"lifecycle": "feature", "state": "plan", "previous": null, "note": "", "counts": {}}',
             f"{WHERE} is not a task state",
         ),
         (
             '{"lifecycle": "epic", "state": "plan", "previous": null, "note": ""}',
-            f"{WHERE} names no known lifecycle: 'epic'",
+            f"{WHERE} names no known lifecycle, 'epic'.",
         ),
         (
             '{"lifecycle": "bugfix", "state": "plan", "previous": null, "note": ""}',
@@ -87,13 +87,13 @@ def test_a_state_without_events_refuses_any(state: str) -> None:
 
 def test_an_event_the_state_doesnt_accept_is_refused_listing_those_it_does() -> None:
     assert refusal(lambda: in_state("implement").after("approve", "note")) == (
-        "implement doesn't accept 'approve': send one of submit, block (see \"$AGENT_KIT_DIR/bin/task\" show)"
+        "implement doesn't accept 'approve'. Send one of submit, block (see \"$AGENT_KIT_DIR/bin/task\" show)."
     )
 
 
 @pytest.mark.parametrize("note", ["", "  \n"])
 def test_an_event_without_a_hand_off_note_is_refused(note: str) -> None:
-    assert "give a hand-off note" in refusal(lambda: in_state("implement").after("submit", note))
+    assert "Give a hand-off note" in refusal(lambda: in_state("implement").after("submit", note))
 
 
 # --- moves by hand ------------------------------------------------------------
@@ -108,9 +108,9 @@ def test_a_move_by_hand_goes_to_any_state(to: str) -> None:
 
 def test_a_move_to_a_state_the_lifecycle_lacks_is_refused() -> None:
     assert refusal(lambda: in_state("blocked").moved("draft", "x")) == (
-        "feature has no state 'draft'; its states: plan, implement, review, deliver, blocked, done"
+        "feature has no state 'draft'. Its states are plan, implement, review, deliver, blocked, done."
     )
 
 
 def test_a_move_without_a_note_is_refused() -> None:
-    assert "give a hand-off note" in refusal(lambda: in_state("blocked").moved("review", " "))
+    assert "Give a hand-off note" in refusal(lambda: in_state("blocked").moved("review", " "))

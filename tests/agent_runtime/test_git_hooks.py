@@ -299,7 +299,7 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
         (
             IMPLEMENT,
             TaskState(lifecycle=FEATURE, state="review", previous="implement", note=" "),
-            "give a hand-off note",
+            "Give a hand-off note",
         ),
         (REVIEW, IMPLEMENT, "The task is assigned to the reviewer, not the dev. It is in review."),
     ],

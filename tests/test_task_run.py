@@ -121,6 +121,6 @@ def test_a_task_waiting_for_you_is_refused_with_its_note_and_how_to_hand_it_back
 
 def test_a_done_task_is_refused_saying_how_to_reopen_it() -> None:
     with pytest.raises(
-        FoundryError, match=r"^task t1 is done; to reopen it: foundry task move store t1 STATE --note …$"
+        FoundryError, match=r"^task t1 is done\. To reopen it, run foundry task move store t1 STATE --note …$"
     ):
         whose_turn(in_state("done", "deliver"), project_name="store", task=Task("t1"))

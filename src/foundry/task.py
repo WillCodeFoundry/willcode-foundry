@@ -127,11 +127,11 @@ def read_state(clone: ProjectClone, task: Task) -> TaskState:
     FoundryError if there is no such task, or it has no task state; TaskStateRefused if the file isn't one.
     """
     if not clone.exists(task.task_notes_dir):
-        raise FoundryError(f"there is no task {task.id}: {NOTES_BRANCH} has no {task.task_notes_dir}/")
+        raise FoundryError(f"there is no task {task.id}. {NOTES_BRANCH} has no {task.task_notes_dir}/.")
     text = clone.read(task.state_file)
     if text is None:
         raise FoundryError(
-            f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}: it was created before task states. "
+            f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}. It was created before task states. "
             f"Add it on {NOTES_BRANCH}, naming the lifecycle and the state it is in, for example:\n"
             + textwrap.indent(_EXAMPLE_STATE.to_json(), "  ")
         )

@@ -121,7 +121,7 @@ def _origin_state(session: contract.Environ) -> TaskState:
     task_state = committed_state(notes, f"origin/{branch}", state_path(session.agent_task_notes_dir))
     if task_state is None:
         raise TaskStateRefused(
-            f"task {session.agent_task} has no {STATE_FILE} on {branch}: "
-            "it was created before task states. Stop here, and tell the human."
+            f"Task {session.agent_task} has no {STATE_FILE} on {branch}. "
+            "It was created before task states. Stop here, and tell the human."
         )
     return task_state

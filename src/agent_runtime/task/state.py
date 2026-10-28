@@ -55,11 +55,11 @@ class TaskState:
         except json.JSONDecodeError as error:
             raise TaskStateRefused(f"{where} is not valid JSON: {error}") from None
         if not isinstance(raw, dict) or set(raw) != set(_KEYS):
-            raise TaskStateRefused(f"{where} is not a task state: it must hold exactly {', '.join(_KEYS)}")
+            raise TaskStateRefused(f"{where} is not a task state. It must hold exactly {', '.join(_KEYS)}.")
         lifecycle = LIFECYCLES.get(raw["lifecycle"]) if isinstance(raw["lifecycle"], str) else None
         if lifecycle is None:
             raise TaskStateRefused(
-                f"{where} names no known lifecycle: {raw['lifecycle']!r}; the lifecycles: {', '.join(LIFECYCLES)}"
+                f"{where} names no known lifecycle, {raw['lifecycle']!r}. The lifecycles are {', '.join(LIFECYCLES)}."
             )
         for key in ("state", "previous"):
             value = raw[key]
@@ -115,7 +115,7 @@ class TaskState:
             raise TaskStateRefused(f"{self.state} accepts no events")
         if event not in events:
             raise TaskStateRefused(
-                f"{self.state} doesn't accept {event!r}: send one of {', '.join(events)} (see {TASK_COMMAND} show)"
+                f"{self.state} doesn't accept {event!r}. Send one of {', '.join(events)} (see {TASK_COMMAND} show)."
             )
         return self._moved(events[event].target, note)
 
@@ -123,7 +123,7 @@ class TaskState:
         """The task state moved by hand to any state of its lifecycle; TaskStateRefused for one it lacks."""
         if to not in self.lifecycle.states:
             raise TaskStateRefused(
-                f"{self.lifecycle.name} has no state {to!r}; its states: {', '.join(self.lifecycle.states)}"
+                f"{self.lifecycle.name} has no state {to!r}. Its states are {', '.join(self.lifecycle.states)}."
             )
         return self._moved(to, note)
 
@@ -133,5 +133,5 @@ class TaskState:
 
     def _moved(self, to: str, note: str) -> "TaskState":
         if not note.strip():
-            raise TaskStateRefused("give a hand-off note: what the next assignee should read first")
+            raise TaskStateRefused("Give a hand-off note. Say what the next assignee should read first.")
         return replace(self, state=to, previous=self.state, note=note.strip())

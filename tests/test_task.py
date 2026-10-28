@@ -298,7 +298,7 @@ def test_a_tasks_state_is_read_from_the_notes_branch(origin_dir, git_env) -> Non
 
 
 def test_reading_a_task_that_doesnt_exist_is_refused(origin_dir, git_env) -> None:
-    with pytest.raises(FoundryError, match=r"^there is no task t9: agent-notes has no .agent/t9/$"):
+    with pytest.raises(FoundryError, match=r"^there is no task t9\. agent-notes has no \.agent/t9/\.$"):
         task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T9"))
 
 
@@ -307,7 +307,7 @@ def test_a_task_created_before_task_states_is_refused_saying_what_to_add(origin_
         task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T0"))
 
     message = str(refused.value)
-    assert message.startswith("task t0 has no .agent/t0/STATE.json on agent-notes: it was created before task states.")
+    assert message.startswith("task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states.")
     assert '  "lifecycle": "feature",' in message
 
 
@@ -328,7 +328,7 @@ def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branc
 
 
 @pytest.mark.parametrize(
-    ("to", "note", "message"), [("draft", "x", "feature has no state 'draft'"), ("review", " ", "give a hand-off note")]
+    ("to", "note", "message"), [("draft", "x", "feature has no state 'draft'"), ("review", " ", "Give a hand-off note")]
 )
 def test_a_refused_move_pushes_nothing(origin_dir, git_env, to: str, note: str, message: str) -> None:
     create(origin_dir, git_env)
