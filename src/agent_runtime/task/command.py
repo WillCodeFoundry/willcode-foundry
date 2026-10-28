@@ -64,9 +64,14 @@ def show(session: contract.Environ, out: TextIO) -> None:
 
 def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
     """Apply ``event`` as this role, then commit STATE.json alone, with the event's trailer, and push it."""
+    notes, branch, path = Git(session.agent_notes_dir), session.agent_notes_branch, _state_path(session)
+    if notes.current_branch() != branch:
+        raise TaskStateRefused(
+            f"the notes checkout isn't on {branch}, so ending your turn would push nothing. "
+            f"Run git switch {branch} in $AGENT_NOTES_DIR, then this command again."
+        )
     if problems := unsaved_work(session):
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
-    notes, branch, path = Git(session.agent_notes_dir), session.agent_notes_branch, _state_path(session)
     found = notes.output("rev-parse", "HEAD").strip()
     notes.output("fetch", "--quiet", "origin", branch)
     notes.output("merge", "--ff-only", "--quiet", f"origin/{branch}")

@@ -168,6 +168,21 @@ def test_unsaved_work_is_refused_and_nothing_changes(turn: Checkouts, dirty: str
     assert origin_state(session).state == "implement"
 
 
+@pytest.mark.parametrize("checkout", [("switch", "-q", "--detach"), ("switch", "-q", "-c", "elsewhere")])
+def test_an_event_is_refused_while_the_notes_checkout_is_off_its_branch(
+    turn: Checkouts, checkout: tuple[str, ...]
+) -> None:
+    session, _, notes = turn
+    git(notes, *checkout)
+    head = git(notes, "rev-parse", "HEAD").stdout
+
+    message = refusal(session, "submit", "All met.")
+
+    assert message.startswith(f"the notes checkout isn't on {session.agent_notes_branch}")
+    assert git(notes, "rev-parse", "HEAD").stdout == head
+    assert origin_state(session).state == "implement"
+
+
 def test_an_event_off_the_roles_turn_is_refused_and_nothing_changes(turn: Checkouts) -> None:
     session, _, notes = turn
     push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
