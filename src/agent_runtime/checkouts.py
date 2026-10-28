@@ -1,6 +1,6 @@
-"""Whether the session's two checkouts are saved: committed, and pushed to origin.
+"""Whether the sandbox's two checkouts are saved: committed, and pushed to origin.
 
-session-check refuses to end the session on it, and the task command refuses to end a turn on it.
+session-check refuses to end the agent run on it, and the task command refuses to end a turn on it.
 """
 
 from pathlib import Path
