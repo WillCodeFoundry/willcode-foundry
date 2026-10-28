@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Final, TextIO
 
 from agent_runtime import contract
-from agent_runtime.claude_hooks import unsaved_work
+from agent_runtime.checkouts import unsaved_work
 from agent_runtime.git import Git
 from agent_runtime.task.committed import committed_state
 from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, state_path
