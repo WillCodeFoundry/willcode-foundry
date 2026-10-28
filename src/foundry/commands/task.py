@@ -111,12 +111,13 @@ def run_main(args: argparse.Namespace) -> NoReturn:
     """Composition root: read the task state from origin, prepare the launch of whoever's turn it is, then hand
     over to sbx."""
     foundry_root = paths.find_foundry_root()
-    project = config.load(foundry_root).project(args.project_name)
+    foundry_config = config.load(foundry_root)
+    project = foundry_config.project(args.project_name)
     the_task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
         task_state = task.read_state(_notes_clone(clone), the_task)
     role_name = whose_turn(task_state, project_name=project.name, task=the_task)
-    launch = prepare_launch(foundry_root, project_name=project.name, role_name=role_name, task=the_task)
+    launch = prepare_launch(foundry_root, foundry_config, project=project, role_name=role_name, task=the_task)
     print(f"==> turn:      {role_name}, in {task_state.state}", file=sys.stderr)
     if launch.created:
         print(f"==> session:   {launch.request.definition_dir} (new)", file=sys.stderr)
@@ -145,11 +146,11 @@ class Launch:
     created: bool
 
 
-def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> Launch:
+def prepare_launch(
+    foundry_root: Path, foundry_config: config.Config, *, project: config.Project, role_name: str, task: Task
+) -> Launch:
     """Everything up to the hand-over: the session, created the first time, the agent runtime built into its
     kit, and the request to launch it. A failed build aborts."""
-    foundry_config = config.load(foundry_root)
-    project = foundry_config.project(project_name)
     role = foundry_config.role(role_name)
     opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
     build_runtime(paths.agent_kit_dir(foundry_root))

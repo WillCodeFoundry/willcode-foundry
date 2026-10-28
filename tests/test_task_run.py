@@ -8,8 +8,9 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from agent_runtime.task.lifecycles import FEATURE
 from agent_runtime.task.state import TaskState
+from foundry import config
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.task import prepare_launch, whose_turn
+from foundry.commands.task import Launch, prepare_launch, whose_turn
 from foundry.errors import FoundryError
 from foundry.session import SessionVariables
 from foundry.task import Task
@@ -33,8 +34,15 @@ def foundry_root(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def launch_dev(foundry_root: Path, project_name: str = "tkt-store", role_name: str = "dev") -> Launch:
+    """prepare_launch for the dev on tkt-store's WCF-0042, with the foundry's config as run_main loads it."""
+    foundry_config = config.load(foundry_root)
+    project = foundry_config.project(project_name)
+    return prepare_launch(foundry_root, foundry_config, project=project, role_name=role_name, task=Task("WCF-0042"))
+
+
 def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
-    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    launch = launch_dev(foundry_root)
     request = launch.request
 
     assert launch.created
@@ -53,7 +61,7 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 
 
 def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    launch_dev(foundry_root)
 
     assert AgentKit(foundry_root / "agent-kit").runtime.is_file()
 
@@ -62,12 +70,12 @@ def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
     AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
 
     with pytest.raises(FoundryError, match="can't build the agent runtime"):
-        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+        launch_dev(foundry_root)
 
 
 def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
-    first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
-    again = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042"))
+    first = launch_dev(foundry_root)
+    again = launch_dev(foundry_root)
     assert (again.request, again.created) == (first.request, False)
 
 
@@ -75,12 +83,7 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token = foundry_root / "secrets" / "github" / "dev.token"
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
-    assert (
-        prepare_launch(
-            foundry_root, project_name="tkt-store", role_name="dev", task=Task("WCF-0042")
-        ).request.github_token_path
-        == token
-    )
+    assert launch_dev(foundry_root).request.github_token_path == token
 
 
 @pytest.mark.parametrize(
@@ -89,7 +92,7 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 )
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
-        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task("t1"))
+        launch_dev(foundry_root, project_name, role_name)
 
 
 # --- whose turn ----------------------------------------------------------------
