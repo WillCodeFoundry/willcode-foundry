@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from agent_runtime.task.lifecycles import DEFAULT, HUMAN, LIFECYCLES
+from agent_runtime.task.lifecycles import DEFAULT, LIFECYCLES
 from agent_runtime.task.state import TaskState, TaskStateRefused
 from foundry import agent_sandbox, config, paths, session, task
 from foundry.errors import FoundryError
@@ -125,16 +125,16 @@ def run_main(args: argparse.Namespace) -> NoReturn:
 
 def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
     """The role to launch; FoundryError, saying what to do, when the task is yours or done."""
+    if task_state.role:
+        return task_state.role
     move = f"foundry task move {project_name} {task.id}"
-    if task_state.turn is None:
-        raise FoundryError(f"task {task.id} is {task_state.state}; to reopen it: {move} STATE --note …")
-    if task_state.turn == HUMAN:
+    if task_state.waits_for_human:
         came_from = f" (from {task_state.previous})" if task_state.previous else ""
         raise FoundryError(
             f"task {task.id} is waiting for you, in {task_state.state}{came_from}: {task_state.note or '(no note)'}\n"
             f"  once you've answered, hand it on: {move} {task_state.previous or 'STATE'} --note …"
         )
-    return task_state.turn
+    raise FoundryError(f"task {task.id} is {task_state.state}; to reopen it: {move} STATE --note …")
 
 
 @dataclass(frozen=True)
@@ -173,7 +173,7 @@ class Row:
     """One task in `foundry task list`: its task state, or why it couldn't be read."""
 
     project: str
-    task: str
+    task: Task
     state: TaskState | None
     error: str | None = None
 
@@ -184,11 +184,11 @@ def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
         return []
     _notes_clone(clone)
     rows = []
-    for task_id in task.task_ids(clone):
+    for each_task in map(Task, task.task_ids(clone)):
         try:
-            rows.append(Row(project_name, task_id, task.read_state(clone, Task(task_id))))
+            rows.append(Row(project_name, each_task, task.read_state(clone, each_task)))
         except (FoundryError, TaskStateRefused) as error:
-            rows.append(Row(project_name, task_id, None, str(error)))
+            rows.append(Row(project_name, each_task, None, str(error)))
     return rows
 
 
@@ -205,17 +205,13 @@ def table(rows: Sequence[Row], live_sandboxes: set[str]) -> list[str]:
 def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
     if row.state is None:
         first_line = (row.error or "").splitlines()[0]
-        return [row.project, row.task, _NONE, _NONE, _NONE, _NONE, f"error: {first_line}"]
-    turn = row.state.turn
-    if turn is None:
-        who, sandbox = _NONE, _NONE
-    elif turn == HUMAN:
-        who, sandbox = "you", _NONE
-    else:
-        name = session.sandbox_name(role_name=turn, project_name=row.project, task=Task(row.task))
-        who, sandbox = turn, "running" if name in live_sandboxes else _NONE
+        return [row.project, row.task.id, _NONE, _NONE, _NONE, _NONE, f"error: {first_line}"]
+    role = row.state.role
+    who = role or ("you" if row.state.waits_for_human else _NONE)
+    running = role and session.sandbox_name(role_name=role, project_name=row.project, task=row.task)
+    sandbox = "running" if running in live_sandboxes else _NONE
     note = row.state.note.splitlines()[0] if row.state.note.strip() else ""
-    return [row.project, row.task, row.state.lifecycle.name, row.state.state, who, sandbox, note]
+    return [row.project, row.task.id, row.state.lifecycle.name, row.state.state, who, sandbox, note]
 
 
 def list_main(args: argparse.Namespace) -> int:
@@ -264,6 +260,6 @@ def move_main(args: argparse.Namespace) -> int:
     with _scratch_clone(project.url) as clone:
         moved = move_task(clone, the_task, to=args.state, note=args.note)
     print(f"moved task {the_task.id} from {moved.before.state} to {moved.after.state}")
-    if moved.after.turn not in (None, HUMAN):
+    if moved.after.role:
         print(f"run it with: foundry task run {project.name} {the_task.id}")
     return 0

@@ -85,6 +85,21 @@ class TaskState:
         """Whose turn it is: a role, HUMAN, or None once the task is done."""
         return self.definition.assignee
 
+    @property
+    def role(self) -> str | None:
+        """The role whose turn it is; None when it is the human's, or no one's once the task is done."""
+        return None if self.turn in (None, HUMAN) else self.turn
+
+    @property
+    def waits_for_human(self) -> bool:
+        """Whether it is the human's turn."""
+        return self.turn == HUMAN
+
+    @property
+    def whose(self) -> str:
+        """Whose turn it is, as a sentence says it: "the dev's", "the human's", or "no one's"."""
+        return "no one's" if self.turn is None else f"the {self.turn}'s"
+
     def after(self, event: str, note: str) -> "TaskState":
         """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not.
 
@@ -113,14 +128,6 @@ class TaskState:
         return replace(self, state=to, previous=self.state, note=note.strip())
 
 
-def not_your_turn(task_state: TaskState, role: str) -> str:
-    """Whose turn it is, said to ``role``, whose turn it isn't."""
-    if task_state.turn is None:
-        return f"the task is {task_state.state}: it is no one's turn"
-    who = "the human's" if task_state.turn == HUMAN else f"the {task_state.turn}'s"
-    return f"it is {who} turn, not the {role}'s: the task is in {task_state.state}"
-
-
 def legal_change(old: TaskState, new: TaskState, role: str) -> str | None:
     """Why going from ``old`` to ``new`` isn't a transition ``role`` may make, or None if it is one.
 
@@ -130,7 +137,7 @@ def legal_change(old: TaskState, new: TaskState, role: str) -> str | None:
     if new.lifecycle != old.lifecycle:
         return f"the lifecycle changed from {old.lifecycle.name} to {new.lifecycle.name}"
     if old.turn != role:
-        return not_your_turn(old, role)
+        return f"it is {old.whose} turn, not the {role}'s: the task is in {old.state}"
     targets = {event.target for event in old.definition.events.values()}
     if new.state not in targets:
         return f"{old.state} can't go to {new.state}: its events lead to {', '.join(sorted(targets))}"

@@ -344,7 +344,7 @@ def test_list_has_a_row_per_task_an_unreadable_one_showing_its_error(origin_dir,
 
     rows = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
 
-    assert [(row.task, row.state, row.error is not None) for row in rows] == [
+    assert [(row.task.id, row.state, row.error is not None) for row in rows] == [
         ("t0", None, True),
         ("t1", TaskState.new(FEATURE), False),
     ]
@@ -361,11 +361,11 @@ def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
         return TaskState(lifecycle=FEATURE, state=name, previous=None, note=note)
 
     rows = [
-        Row("store", "t1", state("implement", "R3 is open.\nSee REVIEW.md.")),
-        Row("store", "t2", state("review", "Ready.")),
-        Row("store", "t3", state("blocked", "Which base?")),
-        Row("store", "t4", state("done")),
-        Row("store", "t0", None, "task t0 has no STATE.json\nmore"),
+        Row("store", Task("t1"), state("implement", "R3 is open.\nSee REVIEW.md.")),
+        Row("store", Task("t2"), state("review", "Ready.")),
+        Row("store", Task("t3"), state("blocked", "Which base?")),
+        Row("store", Task("t4"), state("done")),
+        Row("store", Task("t0"), None, "task t0 has no STATE.json\nmore"),
     ]
 
     assert table(rows, live_sandboxes={"reviewer-store-t2"}) == [

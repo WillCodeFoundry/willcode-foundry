@@ -18,7 +18,6 @@ from typing import Final, TextIO
 from agent_runtime import contract
 from agent_runtime.claude_hooks import unsaved_work
 from agent_runtime.git import Git
-from agent_runtime.task.lifecycles import HUMAN
 from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
@@ -103,11 +102,9 @@ def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState
 
 
 def _whose_turn_now(task_state: TaskState) -> str:
-    if task_state.turn is None:
-        return f"The task is {task_state.state}. Stop here."
-    if task_state.turn == HUMAN:
+    if task_state.waits_for_human:
         return "It is the human's turn now. Stop here, and ask your question in the conversation."
-    return f"It is the {task_state.turn}'s turn now. Stop here."
+    return f"It is {task_state.whose} turn now. Stop here."
 
 
 def _state_path(session: contract.Environ) -> str:
