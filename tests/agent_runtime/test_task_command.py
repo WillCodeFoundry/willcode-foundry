@@ -146,6 +146,18 @@ def test_a_move_on_origin_is_picked_up_before_the_event(turn: Checkouts, tmp_pat
     assert origin_state(session).state == "done"
 
 
+def test_a_refused_event_leaves_the_notes_checkout_behind_origin_as_it_was(turn: Checkouts, tmp_path: Path) -> None:
+    session, _, notes = turn
+    other = tmp_path / "elsewhere"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
+    push_state(other, TaskState(lifecycle=FEATURE, state="implement", previous="blocked", note="Use main."))
+    head = git(notes, "rev-parse", "HEAD").stdout
+
+    assert "implement doesn't accept 'approve'" in refusal(session, "approve", "Looks good.")
+    assert git(notes, "rev-parse", "HEAD").stdout == head
+
+
 @pytest.mark.parametrize(
     ("dirty", "problem"),
     [
