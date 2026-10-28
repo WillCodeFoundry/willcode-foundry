@@ -47,6 +47,8 @@ If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spe
 
 In this order: the project's own `AGENTS.md` at the repository root first, since it wins for anything about the code (as `AGENTS.md` in the agent kit says); then the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`; then `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Each counts only if present. Where they disagree, the earlier one wins.
 
+The project's `GLOSSARY.md` is a standard for names, if present (or the glossaries a `GLOSSARY-MAP.md` points to). Code names a concept with the glossary's word, never with a word the glossary says to avoid.
+
 A change that contradicts a recorded decision is a finding, even if the code is good: the decision changes only through a new ADR that supersedes it, not silently.
 
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below: a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
@@ -56,7 +58,7 @@ On top of whatever the repo documents, the Standards axis always carries the **s
 
 Each smell reads *what it is* → *how to fix*; match it against the diff:
 
-- **Mysterious Name**: a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
+- **Mysterious Name**: a function, variable, or type whose name doesn't reveal what it does or holds. Judge a name where it is used, not where it is defined, by reading each call site as a sentence. Flag a call site that reads as a contradiction (`before.after(event)`), one word used for two things in the same scope (`after = before.after(…)`), and a name that misses the glossary's word for its concept. → rename it, quoting the call site before and after; if no honest name comes, the design's murky.
 - **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
 - **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
