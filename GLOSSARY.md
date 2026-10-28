@@ -77,7 +77,7 @@ The time a task is in a state assigned to a role. Only that role is launched on 
 _Avoid_: session (that is the foundry's record of a sandbox)
 
 **Event**:
-What an agent sends to end its turn: `submit`, `approve`, `reject` or `block`. The lifecycle decides which state it leads to.
+What an agent sends to end its turn. The lifecycle names each state's events, and which state each leads to.
 _Avoid_: action, command
 
 **Transition**:

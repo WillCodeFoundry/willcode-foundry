@@ -49,16 +49,7 @@ foundry approves each sandbox's plan for you (`--auto-approve`). Each plan mount
 
 A task passes from role to role along its lifecycle. Its task state, `.agent/<task>/STATE.json` on `agent-notes`, says which state it is in, whose turn that makes it, and the hand-off note the last turn left. The lifecycles are in `src/agent_runtime/task/lifecycles.py`; [ADR 0011](docs/adr/0011-task-states.md) says why they are code.
 
-| State | Turn | Ends with |
-|---|---|---|
-| `plan` | planner | `submit` → `implement`, once you approve its `TASK.md` |
-| `implement` | dev | `submit` → `review` |
-| `review` | reviewer | `approve` → `deliver`, or `reject` → `implement` |
-| `deliver` | dev | `submit` → `done`, once the pull request is open |
-| `blocked` | you | your `foundry task move` |
-| `done` | no one | |
-
-That is `feature`, the default. `bugfix` is the same without `plan`: write its `TASK.md` yourself, before its first run. Every role can also `block`, handing the task to you with a question as its note.
+`feature`, the default, is planned with you, implemented, reviewed in rounds, then delivered as a pull request. `bugfix` is the same without planning: write its `TASK.md` yourself, before its first run. Every role can also `block`, handing the task to you with a question as its note.
 
 Agents end their turns with `agent-kit/bin/task`. A push that changes `STATE.json` must make a legal transition for that role, or `pre-push` refuses it. `foundry task run` launches only the role whose turn it is.
 
