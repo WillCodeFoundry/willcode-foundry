@@ -81,11 +81,14 @@ class TaskState:
         """Whose turn it is: a role, HUMAN, or None once the task is done."""
         return self.definition.assignee
 
-    def after(self, event: str, role: str, note: str) -> "TaskState":
-        """The task state once ``role`` sends ``event`` with a hand-off note; TaskStateRefused saying why not."""
-        if self.turn != role:
-            raise TaskStateRefused(f"{not_your_turn(self, role)}. Stop here: your turn has ended.")
+    def after(self, event: str, note: str) -> "TaskState":
+        """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not.
+
+        Whose turn it is isn't checked here: launch checks it, and pre-push guards the change (ADR 0011).
+        """
         events = self.definition.events
+        if not events:
+            raise TaskStateRefused(f"{self.state} accepts no events")
         if event not in events:
             raise TaskStateRefused(
                 f"{self.state} doesn't accept {event!r}: send one of {', '.join(events)} "

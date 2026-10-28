@@ -71,39 +71,32 @@ def test_anything_but_a_task_state_is_refused_naming_the_file(text: str, message
 
 
 def test_an_event_moves_the_task_and_records_where_it_came_from() -> None:
-    after = in_state("review", previous="implement", note="ready").after("reject", "reviewer", "  R3 is open.  ")
+    after = in_state("review", previous="implement", note="ready").after("reject", "  R3 is open.  ")
 
     assert after == in_state("implement", previous="review", note="R3 is open.")
     assert after.turn == "dev"
 
 
 def test_block_hands_any_role_state_to_the_human() -> None:
-    after = in_state("deliver").after("block", "dev", "Which base branch?")
+    after = in_state("deliver").after("block", "Which base branch?")
 
     assert (after.state, after.turn) == ("blocked", "human")
 
 
-@pytest.mark.parametrize(
-    ("state", "role", "message"),
-    [
-        ("review", "dev", "it is the reviewer's turn, not the dev's: the task is in review. Stop here"),
-        ("blocked", "dev", "it is the human's turn, not the dev's: the task is in blocked. Stop here"),
-        ("done", "dev", "the task is done: it is no one's turn. Stop here"),
-    ],
-)
-def test_an_event_off_the_roles_turn_is_refused(state: str, role: str, message: str) -> None:
-    assert refusal(lambda: in_state(state).after("submit", role, "note")).startswith(message)
+@pytest.mark.parametrize("state", ["blocked", "done"])
+def test_a_state_without_events_refuses_any(state: str) -> None:
+    assert refusal(lambda: in_state(state).after("submit", "note")) == f"{state} accepts no events"
 
 
 def test_an_event_the_state_doesnt_accept_is_refused_listing_those_it_does() -> None:
-    assert refusal(lambda: in_state("implement").after("approve", "dev", "note")) == (
+    assert refusal(lambda: in_state("implement").after("approve", "note")) == (
         "implement doesn't accept 'approve': send one of submit, block (see \"$AGENT_KIT_DIR/bin/task\" show)"
     )
 
 
 @pytest.mark.parametrize("note", ["", "  \n"])
 def test_an_event_without_a_hand_off_note_is_refused(note: str) -> None:
-    assert "give a hand-off note" in refusal(lambda: in_state("implement").after("submit", "dev", note))
+    assert "give a hand-off note" in refusal(lambda: in_state("implement").after("submit", note))
 
 
 # --- moves by hand ------------------------------------------------------------
@@ -132,7 +125,7 @@ def test_a_move_without_a_note_is_refused() -> None:
 def test_what_an_event_does_is_a_legal_change() -> None:
     old = in_state("review", previous="implement", note="ready")
 
-    assert legal_change(old, old.after("approve", "reviewer", "LGTM"), "reviewer") is None
+    assert legal_change(old, old.after("approve", "LGTM"), "reviewer") is None
 
 
 @pytest.mark.parametrize(

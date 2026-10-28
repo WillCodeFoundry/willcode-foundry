@@ -205,7 +205,7 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
 
 STATE_PATH = f"{TASK.task_notes_dir}/STATE.json"
 IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", previous="plan", note="Approved.")
-REVIEW = IMPLEMENT.after("submit", "dev", "Ready for review.")
+REVIEW = IMPLEMENT.after("submit", "Ready for review.")
 
 
 def commit_state(notes: Path, task_state: TaskState, *also: str) -> None:
@@ -253,7 +253,7 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
 @pytest.mark.parametrize(
     ("before", "after", "reason"),
     [
-        (IMPLEMENT, REVIEW.after("approve", "reviewer", "LGTM"), "implement can't go to deliver"),
+        (IMPLEMENT, REVIEW.after("approve", "LGTM"), "implement can't go to deliver"),
         (
             IMPLEMENT,
             TaskState(lifecycle=FEATURE, state="done", previous="implement", note="x"),

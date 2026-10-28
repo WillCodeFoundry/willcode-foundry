@@ -19,7 +19,7 @@ from agent_runtime import contract
 from agent_runtime.claude_hooks import unsaved_work
 from agent_runtime.git import Git
 from agent_runtime.task.lifecycles import HUMAN
-from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused, not_your_turn
+from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
 TRAILER_KEY: Final = "Task-Event"
@@ -42,20 +42,18 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
 
 
 def show(session: contract.Environ, out: TextIO) -> None:
-    """Print the task state as origin has it, and what this role's turn asks of it."""
+    """Print the task state as origin has it, and what its turn asks for."""
     task_state = _origin_state(session)
     lifecycle, state = task_state.lifecycle, task_state.definition
     lines = [f"Task {session.agent_task} ({lifecycle.name}) is in {task_state.state}."]
     if task_state.previous:
         lines.append(f"It came from {task_state.previous}.")
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
-    if task_state.turn != session.agent_role:
-        lines.append(f"It is not your turn: {not_your_turn(task_state, session.agent_role)}. Stop here.")
-    else:
+    if state.events:
         lines += [
-            f"It is your turn. Your goal: {state.goal}",
+            f"The goal: {state.goal}",
             "",
-            "End your turn with one of these events, once your work is pushed:",
+            "End the turn with one of these events, once its work is pushed:",
             *(f"  {name} → {event.target}: when {event.when}" for name, event in state.events.items()),
             "",
             f"  {END_TURN}",
@@ -75,7 +73,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
     found = notes.output("rev-parse", "HEAD").strip()
     before = _origin_state(session)
-    after = before.after(event, session.agent_role, note)
+    after = before.after(event, note)
     subject = f"{session.agent_task}: {before.state} → {after.state} ({event})"
     message = (subject, f"{TRAILER_KEY}: {event}")
     if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, after, message):

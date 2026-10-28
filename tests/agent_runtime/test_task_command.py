@@ -71,19 +71,9 @@ def test_show_tells_the_role_its_goal_its_events_and_the_note(turn: Checkouts) -
     assert f"Task {TASK.id} (feature) is in implement." in shown
     assert "It came from plan." in shown
     assert "  TASK.md is approved." in shown
-    assert "It is your turn. Your goal: Implement TASK.md" in shown
+    assert "The goal: Implement TASK.md" in shown
     assert "  submit → review: when every acceptance criterion is met" in shown
     assert "  block → blocked: when you need the human" in shown
-
-
-def test_show_tells_a_role_whose_turn_it_isnt_to_stop(turn: Checkouts) -> None:
-    session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
-
-    shown = run(session)
-
-    assert "It is not your turn: it is the reviewer's turn, not the dev's: the task is in review. Stop here." in shown
-    assert "Your goal" not in shown
 
 
 def test_a_task_without_a_task_state_is_refused(checkouts: Checkouts) -> None:
@@ -195,14 +185,6 @@ def test_an_event_is_refused_while_the_notes_checkout_is_off_its_branch(
     assert origin_state(session).state == "implement"
 
 
-def test_an_event_off_the_roles_turn_is_refused_and_nothing_changes(turn: Checkouts) -> None:
-    session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
-
-    assert refusal(session, "submit", "again").startswith("it is the reviewer's turn, not the dev's")
-    assert origin_state(session).state == "review"
-
-
 def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Checkouts) -> None:
     session, _, notes = turn
     origin = Path(git(notes, "remote", "get-url", "origin").stdout.strip().removeprefix("file://"))
@@ -268,3 +250,19 @@ def test_a_refused_commit_leaves_the_notes_checkout_as_it_was(
     assert git(notes, "rev-parse", "HEAD").stdout == head
     assert git(notes, "status", "--porcelain").stdout == ""
     assert origin_state(session).state == "implement"
+
+
+def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command doesn't check the turn itself: pre-push refuses the change, and the command resets."""
+    session, _, notes = turn
+    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
+    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit))
+    head = git(notes, "rev-parse", "HEAD").stdout
+
+    message = refusal(session, "approve", "Looks good to me.")
+
+    assert "it is the reviewer's turn, not the dev's" in message and "Your turn has not ended" in message
+    assert git(notes, "rev-parse", "HEAD").stdout == head
+    assert origin_state(session).state == "review"

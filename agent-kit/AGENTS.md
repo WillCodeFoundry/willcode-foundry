@@ -138,7 +138,8 @@ where to look, and anything left open, in a few sentences.
 
 ### Start
 
-1. Run `"$AGENT_KIT_DIR/bin/task" show`. If it isn't your turn, stop.
+1. Run `"$AGENT_KIT_DIR/bin/task" show`: your goal, and the events that end
+   your turn.
 2. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
    what "done" means: **stop and ask**. Do not guess at scope.
 3. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
