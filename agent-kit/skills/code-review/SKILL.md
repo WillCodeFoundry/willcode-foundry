@@ -66,7 +66,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Repeated Switches**: the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
 - **Shotgun Surgery**: one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
 - **Divergent Change**: one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality**: abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
+- **Speculative Generality**: abstraction, parameters, or hooks added for needs the spec doesn't have. Check `TASK.md` first: what it asks for is never speculative. → delete it; inline back until a real need shows.
 - **Message Chains**: long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
 - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
@@ -79,13 +79,14 @@ Issue all three sub-agent calls together, in the foreground, and aggregate the r
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full (the sub-agent has no other access to it).
+- The text of `TASK.md` from step 2, for one use only: to check that something flagged as Speculative Generality isn't what the spec asks for. Judging the change against the spec is the Spec axis's job.
 - The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** should include:
 
 - The diff command and commit list.
 - The text of `TASK.md` from step 2, and the commit it came from.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. A requirement is met only when you can name the code and the test, or the check you ran, that shows it; code that merely looks like it does the job is partial. Under 400 words."
 
 **Behaviour sub-agent prompt** should include:
 
