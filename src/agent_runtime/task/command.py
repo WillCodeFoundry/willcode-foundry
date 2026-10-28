@@ -19,10 +19,9 @@ from agent_runtime import contract
 from agent_runtime.claude_hooks import unsaved_work
 from agent_runtime.git import Git
 from agent_runtime.task.lifecycles import HUMAN
-from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused
+from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
-END_TURN: Final = '"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"'
 
 
 def task(args: Sequence[str], session: contract.Environ | None = None, out: TextIO | None = None) -> int:

@@ -11,10 +11,14 @@ import json
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
+from agent_runtime.agent_kit import TASK_COMMAND
 from agent_runtime.task.lifecycles import HUMAN, LIFECYCLES, Lifecycle, State
 
 STATE_FILE: Final = "STATE.json"
 """A task's task state, in its task notes dir. Spelled here only; foundry.task.Task.state_file builds on it."""
+
+END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
+"""How an agent ends its turn, as every message that tells it to spells it."""
 
 _KEYS: Final = ("lifecycle", "state", "previous", "note")
 
@@ -91,8 +95,7 @@ class TaskState:
             raise TaskStateRefused(f"{self.state} accepts no events")
         if event not in events:
             raise TaskStateRefused(
-                f"{self.state} doesn't accept {event!r}: send one of {', '.join(events)} "
-                '(see "$AGENT_KIT_DIR/bin/task" show)'
+                f"{self.state} doesn't accept {event!r}: send one of {', '.join(events)} (see {TASK_COMMAND} show)"
             )
         return self._moved(events[event].target, note)
 

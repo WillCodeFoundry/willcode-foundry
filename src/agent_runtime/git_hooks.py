@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 
 from agent_runtime import contract
 from agent_runtime.git import Git
-from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused, legal_change
+from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, legal_change
 
 _ZERO = "0" * 40
 """The sha git passes for a ref that doesn't exist on one side of a push."""
@@ -124,7 +124,7 @@ def _check_task_state(session: contract.Environ, git: Git, local_sha: str, remot
         "",
         "Put it back as origin has it, then commit and push again:",
         f"    git checkout origin/{session.agent_notes_branch} -- {path}",
-        'End your turn with: "$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"',
+        f"End your turn with: {END_TURN}",
     )
     try:
         old, new = _task_state(git, remote_sha, path, "created"), _task_state(git, local_sha, path, "deleted")

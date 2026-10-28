@@ -9,8 +9,16 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import ClassVar, Final
 
+from agent_runtime.contract import KIT_DIR
+
 RUNTIME_PYZ: Final = PurePosixPath(".build") / "agent_runtime.pyz"
 """Where the built runtime sits, relative to the kit."""
+
+TASK_COMMAND_PATH: Final = PurePosixPath("bin") / "task"
+"""The agent's task command, relative to the kit: a stub that runs the runtime's ``task``, like the hooks' stubs."""
+
+TASK_COMMAND: Final = f'"${KIT_DIR}/{TASK_COMMAND_PATH}"'
+"""The task command as the agent types it, and as every message that tells the agent to run it spells it."""
 
 PYTHON: Final = "/usr/bin/python3"
 """The interpreter every call into the runtime uses: the template's own, root-owned, never ``env python3``."""
@@ -75,8 +83,8 @@ class AgentKit:
 
     @property
     def task_command(self) -> Path:
-        """The agent's task command: a stub that runs the runtime's ``task``, like the git hooks' stubs."""
-        return self.dir / "bin" / "task"
+        """The agent's task command: TASK_COMMAND_PATH in this kit."""
+        return self.dir / TASK_COMMAND_PATH
 
     @property
     def allowed_signers(self) -> Path:
