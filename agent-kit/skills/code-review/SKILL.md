@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review a task branch''s changes since it left the default branch along two axes: Standards (does the code follow the project''s documented coding standards?) and Spec (does the code do what the task''s TASK.md asks?). Runs both reviews in parallel sub-agents and writes them side by side as a round in REVIEW.md. Use when the reviewer role reviews a task.'
+description: 'Review a task branch''s changes since it left the default branch along three axes: Standards (does the code follow the project''s documented coding standards?), Spec (does the code do what the task''s TASK.md asks?) and Behaviour (does it break in the situations it will meet?). Runs the three reviews in parallel sub-agents and writes them side by side as a round in REVIEW.md. Use when the reviewer role reviews a task.'
 metadata:
   source:
     repo: mattpocock/skills
@@ -11,12 +11,13 @@ metadata:
   adapted: for willcode-foundry, edited in place; see docs/skills.md in its repository
 ---
 
-Two-axis review of the diff between `HEAD` and the point where the task branch left the default branch:
+Three-axis review of the diff between `HEAD` and the point where the task branch left the default branch:
 
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the task's `TASK.md`?
+- **Behaviour**: does the code still work in the situations it will meet, error paths included?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+All three axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
 ## Process
 
@@ -30,7 +31,7 @@ git merge-base HEAD origin/<default branch>
 
 Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here, not inside two parallel sub-agents.
+Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here, not inside the parallel sub-agents.
 
 ### 2. Identify the spec source
 
@@ -68,9 +69,9 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Spawn the three sub-agents in parallel
 
-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
+Issue all three sub-agent calls together, in the foreground, and aggregate the reports they return.
 
 **Standards sub-agent prompt** should include:
 
@@ -84,19 +85,26 @@ Issue both sub-agent calls together, in the foreground, and aggregate the report
 - The text of `TASK.md` from step 2, and the commit it came from.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+**Behaviour sub-agent prompt** should include:
+
+- The diff command and commit list.
+- How the project runs its tests, from its `AGENTS.md` or `CONTRIBUTING.md`.
+- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Under 400 words."
+
+If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour sub-agent and say so.
 
 ### 5. Aggregate
 
-Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "Reviewing" section describes, with the two reports under `### Standards` and `### Spec` headings in the round, verbatim or lightly cleaned, each finding with its id. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
+Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "Reviewing" section describes, with the three reports under `### Standards`, `### Spec` and `### Behaviour` headings in the round, verbatim or lightly cleaned, each finding with its id. Do **not** merge or rerank findings, because the axes are deliberately separate (see _Why separate axes_).
 
 End the reports with a one-line summary, before the round's verdict: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 
-## Why two axes
+## Why separate axes
 
-A change can pass one axis and fail the other:
+A change can pass one axis and fail another:
 
 - Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
+- Code that reads well and matches the spec line by line, but breaks on an error path or an unusual state → **Standards and Spec pass, Behaviour fail.**
 
-Reporting them separately stops one axis from masking the other.
+Reading the diff finds the first two. The third shows only when the code is run in the situation that breaks it, so it needs a reviewer briefed to build that situation. Reporting the axes separately stops one from masking another.
