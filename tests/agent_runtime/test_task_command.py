@@ -109,8 +109,8 @@ def test_block_hands_the_task_to_the_human(turn: Checkouts) -> None:
 
     printed = run(session, "block", "Should retries be configurable?")
 
-    assert origin_state(session).turn == "human"
-    assert "It is the human's turn now. Stop here, and ask your question in the conversation." in printed
+    assert origin_state(session).assignee == "human"
+    assert "The task is assigned to the human now. Stop here, and ask your question in the conversation." in printed
 
 
 def test_a_move_on_origin_is_picked_up_before_the_event(turn: Checkouts, tmp_path: Path) -> None:
@@ -264,6 +264,6 @@ def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes
 
     message = refusal(session, "approve", "Looks good to me.")
 
-    assert "It is the reviewer's turn, not the dev's." in message and "Your turn has not ended" in message
+    assert "The task is assigned to the reviewer, not the dev." in message and "Your turn has not ended" in message
     assert git(notes, "rev-parse", "HEAD").stdout == head
     assert origin_state(session).state == "review"

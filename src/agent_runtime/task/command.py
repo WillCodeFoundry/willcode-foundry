@@ -1,6 +1,6 @@
 """The agent's ``task`` command, which agent-kit/bin/task runs: where the task stands, and ending a turn.
 
-    task show                       the task state as origin has it: whose turn, the goal, the events
+    task show                       the task state as origin has it: its assignee, the goal, the events
     task EVENT "<hand-off note>"    end your turn: apply EVENT, then commit and push STATE.json alone
 
 Both read the task state as origin has it, freshly fetched. Ending a turn needs both checkouts clean and pushed
@@ -83,7 +83,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
             "Your turn has not ended, and the notes checkout is as it was. "
             "If another push landed first, run the same command again."
         )
-    print(f"{subject}\n{_whose_turn_now(after)}", file=out)
+    print(f"{subject}\n{_assigned_now(after)}", file=out)
 
 
 def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState, subject: str) -> str | None:
@@ -106,10 +106,12 @@ def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState
     return None
 
 
-def _whose_turn_now(task_state: TaskState) -> str:
-    if task_state.waits_for_human:
-        return "It is the human's turn now. Stop here, and ask your question in the conversation."
-    return f"It is {task_state.whose} turn now. Stop here."
+def _assigned_now(task_state: TaskState) -> str:
+    if task_state.role:
+        return f"It is the {task_state.role}'s turn now. Stop here."
+    if task_state.assigned_to_human:
+        return "The task is assigned to the human now. Stop here, and ask your question in the conversation."
+    return f"The task is {task_state.state}, assigned to no one. Stop here."
 
 
 def _origin_state(session: contract.Environ) -> TaskState:

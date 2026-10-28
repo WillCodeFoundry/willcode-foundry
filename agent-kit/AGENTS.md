@@ -73,7 +73,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
-| `STATE.json` | `bin/task` | The task state: whose turn it is, and the hand-off note from the last turn. **Never edit it.** `bin/task` changes it; the hooks refuse any other change that isn't a legal transition. |
+| `STATE.json` | `bin/task` | The task state: who it is assigned to, and the hand-off note from the last turn. **Never edit it.** `bin/task` changes it; the hooks refuse any other change that isn't a legal transition. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -117,9 +117,10 @@ entries as you go, not at the end.
 
 ### Taking turns
 
-A task passes from role to role. Each turn is one role's, or the human's, and
-you were started because it is yours. `bin/task show` says what your turn is
-for: your goal, and the events that end the turn, each with when to send it.
+A task passes from role to role, and sometimes to the human. Each state is
+assigned to one role, or the human, and you were started because it is your
+turn. `bin/task show` says what your turn is for: your goal, and the events
+that end the turn, each with when to send it.
 
 ```bash
 "$AGENT_KIT_DIR/bin/task" show                       # where the task stands: your goal and your events

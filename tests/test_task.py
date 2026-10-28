@@ -369,7 +369,7 @@ def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
     ]
 
     assert table(rows, live_sandboxes={"reviewer-store-t2"}) == [
-        "PROJECT  TASK  LIFECYCLE  STATE      TURN      SANDBOX  NOTE",
+        "PROJECT  TASK  LIFECYCLE  STATE      ASSIGNEE  SANDBOX  NOTE",
         "store    t1    feature    implement  dev       —        R3 is open.",
         "store    t2    feature    review     reviewer  running  Ready.",
         "store    t3    feature    blocked    you       —        Which base?",

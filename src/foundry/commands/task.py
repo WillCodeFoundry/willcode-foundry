@@ -54,7 +54,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     run.set_defaults(func=run_main)
 
     listing = actions.add_parser(
-        "list", help="every task of every project: its state, whose turn it is, its sandbox and its hand-off note"
+        "list", help="every task of every project: its state, its assignee, its sandbox and its hand-off note"
     )
     listing.set_defaults(func=list_main)
 
@@ -125,7 +125,7 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
     if task_state.role:
         return task_state.role
     move = f"foundry task move {project_name} {task.id}"
-    if task_state.waits_for_human:
+    if task_state.assigned_to_human:
         came_from = f" (from {task_state.previous})" if task_state.previous else ""
         raise FoundryError(
             f"task {task.id} is waiting for you, in {task_state.state}{came_from}: {task_state.note or '(no note)'}\n"
@@ -161,7 +161,7 @@ def prepare_launch(
 
 # --- list -----------------------------------------------------------------------
 
-_COLUMNS = ("PROJECT", "TASK", "LIFECYCLE", "STATE", "TURN", "SANDBOX", "NOTE")
+_COLUMNS = ("PROJECT", "TASK", "LIFECYCLE", "STATE", "ASSIGNEE", "SANDBOX", "NOTE")
 _NONE = "—"
 
 
@@ -204,7 +204,7 @@ def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
         first_line = (row.error or "").splitlines()[0]
         return [row.project, row.task.id, _NONE, _NONE, _NONE, _NONE, f"error: {first_line}"]
     role = row.state.role
-    who = role or ("you" if row.state.waits_for_human else _NONE)
+    who = role or ("you" if row.state.assigned_to_human else _NONE)
     running = role and session.sandbox_name(role_name=role, project_name=row.project, task=row.task)
     sandbox = "running" if running in live_sandboxes else _NONE
     note = row.state.note.splitlines()[0] if row.state.note.strip() else ""

@@ -87,24 +87,23 @@ class TaskState:
         return self.lifecycle.states[self.state]
 
     @property
-    def turn(self) -> str | None:
-        """Whose turn it is: a role, HUMAN, or None once the task is done."""
+    def assignee(self) -> str | None:
+        """The assignee of the state the task is in: a role, HUMAN, or None once the task is done."""
         return self.definition.assignee
 
     @property
     def role(self) -> str | None:
-        """The role whose turn it is; None when it is the human's, or no one's once the task is done."""
-        return None if self.turn in (None, HUMAN) else self.turn
+        """The role whose turn it is. None when the task is assigned to the human, or to no one once it is done."""
+        return None if self.assignee in (None, HUMAN) else self.assignee
 
     @property
-    def waits_for_human(self) -> bool:
-        """Whether it is the human's turn."""
-        return self.turn == HUMAN
+    def assigned_to_human(self) -> bool:
+        return self.assignee == HUMAN
 
     @property
-    def whose(self) -> str:
-        """Whose turn it is, as a sentence says it: "the dev's", "the human's", or "no one's"."""
-        return "no one's" if self.turn is None else f"the {self.turn}'s"
+    def assignee_named(self) -> str:
+        """The assignee as a sentence names it: "the dev", "the human", or "no one"."""
+        return "no one" if self.assignee is None else f"the {self.assignee}"
 
     def after(self, event: str, note: str) -> "TaskState":
         """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not.

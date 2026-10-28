@@ -71,13 +71,13 @@ def test_an_event_moves_the_task_and_records_where_it_came_from() -> None:
     after = in_state("review", previous="implement", note="ready").after("reject", "  R3 is open.  ")
 
     assert after == in_state("implement", previous="review", note="R3 is open.")
-    assert after.turn == "dev"
+    assert after.assignee == "dev"
 
 
 def test_block_hands_any_role_state_to_the_human() -> None:
     after = in_state("deliver").after("block", "Which base branch?")
 
-    assert (after.state, after.turn) == ("blocked", "human")
+    assert (after.state, after.assignee) == ("blocked", "human")
 
 
 @pytest.mark.parametrize("state", ["blocked", "done"])

@@ -139,9 +139,9 @@ def _require_own_notes(
         old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
         if old is None or new is None:
             raise TaskStateRefused(f"It can't be {'created' if old is None else 'deleted'} in the sandbox.")
-        if old.turn != session.agent_role:
+        if old.assignee != session.agent_role:
             raise TaskStateRefused(
-                f"It is {old.whose} turn, not the {session.agent_role}'s. The task is in {old.state}."
+                f"The task is assigned to {old.assignee_named}, not the {session.agent_role}. It is in {old.state}."
             )
         leading = [name for name, event in old.definition.events.items() if event.target == new.state]
         if not leading:
