@@ -66,7 +66,21 @@ class Lifecycle:
                 return f"{name} is a role's state, so it must accept {BLOCK}"
             elif self.states[state.events[BLOCK].target].assignee != HUMAN:
                 return f"{name}'s {BLOCK} must lead to a state assigned to {HUMAN}"
+            elif problem := _role_state_problem(name, state):
+                return problem
         return None
+
+
+def _role_state_problem(name: str, state: State) -> str | None:
+    """What a role's state lacks: a way forward besides BLOCK, its goal, or when to send an event."""
+    if set(state.events) == {BLOCK}:
+        return f"{name} is a role's state, so it needs an event besides {BLOCK}"
+    if not state.goal.strip():
+        return f"{name} is a role's state, so it must say its goal"
+    for event_name, event in state.events.items():
+        if not event.when.strip():
+            return f"{name}'s {event_name} must say when to send it"
+    return None
 
 
 _BLOCKED: Final = "blocked"

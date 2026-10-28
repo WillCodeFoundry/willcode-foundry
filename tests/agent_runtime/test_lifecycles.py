@@ -45,14 +45,6 @@ def test_the_lifecycles_are_found_by_name() -> None:
     assert LIFECYCLES == {"feature": FEATURE, "bugfix": BUGFIX}
 
 
-def test_every_role_state_says_its_goal_and_when_to_send_each_event() -> None:
-    for lifecycle in LIFECYCLES.values():
-        for state in lifecycle.states.values():
-            if state.assignee not in (None, HUMAN):
-                assert state.goal
-                assert all(event.when for event in state.events.values())
-
-
 def role_state(**events: str) -> State:
     return State("dev", "a goal", {name: Event(target, "when") for name, target in events.items()})
 
@@ -73,16 +65,49 @@ def role_state(**events: str) -> State:
         ),
         (
             "work",
-            {"work": role_state(block="end"), "end": State(None)},
+            {"work": role_state(submit="end", block="end"), "end": State(None)},
             f"work's {BLOCK} must lead to a state assigned to {HUMAN}",
         ),
         (
             "work",
-            {"work": role_state(block="stuck"), "stuck": State(HUMAN, events={"x": Event("work", "w")})},
+            {
+                "work": role_state(submit="stuck", block="stuck"),
+                "stuck": State(HUMAN, events={"x": Event("work", "w")}),
+            },
             "stuck is the human's or final, so it accepts no events",
         ),
+        (
+            "work",
+            {
+                "work": State("dev", " ", {"submit": Event("stuck", "w"), BLOCK: Event("stuck", "w")}),
+                "stuck": State(HUMAN),
+            },
+            "work is a role's state, so it must say its goal",
+        ),
+        (
+            "work",
+            {
+                "work": State("dev", "a goal", {"submit": Event("stuck", " "), BLOCK: Event("stuck", "w")}),
+                "stuck": State(HUMAN),
+            },
+            "work's submit must say when to send it",
+        ),
+        (
+            "work",
+            {"work": role_state(block="stuck"), "stuck": State(HUMAN)},
+            f"work is a role's state, so it needs an event besides {BLOCK}",
+        ),
     ],
-    ids=["initial missing", "target missing", "no block", "block not to the human", "human state with events"],
+    ids=[
+        "initial missing",
+        "target missing",
+        "no block",
+        "block not to the human",
+        "human state with events",
+        "no goal",
+        "no when",
+        "only block",
+    ],
 )
 def test_a_lifecycle_that_breaks_a_rule_is_refused_when_defined(
     initial: str, states: dict[str, State], problem: str
