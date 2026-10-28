@@ -22,8 +22,6 @@ from agent_runtime.task.lifecycles import HUMAN
 from agent_runtime.task.state import STATE_FILE, TaskState, TaskStateRefused
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
-TRAILER_KEY: Final = "Task-Event"
-"""The trailer naming the event, on each commit the command makes. Written for git log's reader; never checked."""
 END_TURN: Final = '"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"'
 
 
@@ -62,7 +60,7 @@ def show(session: contract.Environ, out: TextIO) -> None:
 
 
 def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
-    """Apply ``event`` as this role, then commit STATE.json alone, with the event's trailer, and push it."""
+    """Apply ``event``, then commit STATE.json alone and push it."""
     notes, branch, path = Git(session.agent_notes_dir), session.agent_notes_branch, _state_path(session)
     if notes.current_branch() != branch:
         raise TaskStateRefused(
@@ -75,8 +73,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     before = _origin_state(session)
     after = before.after(event, note)
     subject = f"{session.agent_task}: {before.state} → {after.state} ({event})"
-    message = (subject, f"{TRAILER_KEY}: {event}")
-    if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, after, message):
+    if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, after, subject):
         notes.output("reset", "--quiet", "--hard", found)
         raise TaskStateRefused(
             f"couldn't {failure}\n"
@@ -86,7 +83,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     print(f"{subject}\n{_whose_turn_now(after)}", file=out)
 
 
-def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState, message: Sequence[str]) -> str | None:
+def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState, subject: str) -> str | None:
     """Bring in origin's notes, then commit ``after`` alone and push it; the step that failed and why, or None.
 
     Run only once ``after`` is known to be allowed, so a refused event never moves the checkout.
@@ -95,9 +92,8 @@ def _commit_and_push(notes: Git, branch: str, state_file: Path, after: TaskState
     if merged.returncode != 0:
         return f"bring in origin/{branch}: {(merged.stderr or merged.stdout).strip()}"
     state_file.write_text(after.to_json())
-    paragraphs = [arg for paragraph in message for arg in ("--message", paragraph)]
     steps = [
-        ("commit STATE.json", ("commit", "--quiet", *paragraphs, "--", str(state_file))),
+        ("commit STATE.json", ("commit", "--quiet", "--message", subject, "--", str(state_file))),
         (f"push {branch}", ("push", "--quiet", "origin", branch)),
     ]
     for step, args in steps:

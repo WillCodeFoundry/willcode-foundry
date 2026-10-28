@@ -101,10 +101,7 @@ def test_an_event_commits_and_pushes_the_task_state_alone(turn: Checkouts) -> No
     )
     assert printed == f"{TASK.id}: implement → review (submit)\nIt is the reviewer's turn now. Stop here.\n"
     assert git(notes, "show", "--name-only", "--format=", "HEAD").stdout.split() == [STATE_PATH]
-    assert (
-        git(notes, "log", "-1", "--format=%B").stdout
-        == f"{TASK.id}: implement → review (submit)\n\nTask-Event: submit\n\n"
-    )
+    assert git(notes, "log", "-1", "--format=%B").stdout == f"{TASK.id}: implement → review (submit)\n\n"
 
 
 def test_block_hands_the_task_to_the_human(turn: Checkouts) -> None:
