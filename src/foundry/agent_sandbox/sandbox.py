@@ -13,7 +13,7 @@ from typing import NoReturn, Protocol
 
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_host_keys import GITHUB_HOST_KEYS
-from foundry.agent_sandbox.host import Host
+from foundry.agent_sandbox.host import Host, SystemHost
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, parse_fingerprint
 
 
@@ -135,3 +135,8 @@ def list_live_sandboxes(host: Host) -> set[str]:
     if result.returncode != 0:
         raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")
     return {sandbox["name"] for sandbox in json.loads(result.stdout)["sandboxes"] if sandbox["status"] != "stopped"}
+
+
+def live_sandboxes() -> set[str]:
+    """Composition root: list_live_sandboxes on this machine."""
+    return list_live_sandboxes(SystemHost())
