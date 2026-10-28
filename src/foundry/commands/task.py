@@ -77,11 +77,6 @@ def _scratch_clone(url: str) -> Iterator[ProjectClone]:
         yield ProjectClone.init(url, Path(scratch_dir), os.environ)
 
 
-def _notes_clone(clone: ProjectClone) -> ProjectClone:
-    clone.check_out(NOTES_BRANCH)
-    return clone
-
-
 # --- create ---------------------------------------------------------------------
 
 
@@ -115,7 +110,8 @@ def run_main(args: argparse.Namespace) -> NoReturn:
     project = foundry_config.project(args.project_name)
     the_task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
-        task_state = task.read_state(_notes_clone(clone), the_task)
+        clone.check_out(NOTES_BRANCH)
+        task_state = task.read_state(clone, the_task)
     role_name = whose_turn(task_state, project_name=project.name, task=the_task)
     launch = prepare_launch(foundry_root, foundry_config, project=project, role_name=role_name, task=the_task)
     print(f"==> turn:      {role_name}, in {task_state.state}", file=sys.stderr)
@@ -183,7 +179,7 @@ def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
     """A row per task on the project's NOTES_BRANCH, in id order; none if it has no NOTES_BRANCH yet."""
     if NOTES_BRANCH not in clone.branches():
         return []
-    _notes_clone(clone)
+    clone.check_out(NOTES_BRANCH)
     rows = []
     for each_task in map(Task, task.task_ids(clone)):
         try:
@@ -246,7 +242,8 @@ def move_task(clone: ProjectClone, the_task: Task, *, to: str, note: str) -> Mov
 
     Nothing is committed if the move is refused.
     """
-    before = task.read_state(_notes_clone(clone), the_task)
+    clone.check_out(NOTES_BRANCH)
+    before = task.read_state(clone, the_task)
     after = before.moved(to, note)
     clone.write({the_task.state_file: after.to_json()})
     clone.commit(f"{the_task.id}: {before.state} → {after.state} (moved by hand)")
