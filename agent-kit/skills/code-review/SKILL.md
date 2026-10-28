@@ -58,7 +58,7 @@ On top of whatever the repo documents, the Standards axis always carries the **s
 
 Each smell reads *what it is* → *how to fix*; match it against the diff:
 
-- **Mysterious Name**: a function, variable, or type whose name doesn't reveal what it does or holds. Judge a name where it is used, not where it is defined, by reading each call site as a sentence. Flag a call site that reads as a contradiction (`before.after(event)`), one word used for two things in the same scope (`after = before.after(…)`), and a name that misses the glossary's word for its concept. → rename it, quoting the call site before and after; if no honest name comes, the design's murky.
+- **Mysterious Name**: a name that doesn't let a reader predict, where it is used, what it holds or does. Judge each name at its uses, read together with the names around it, not at its definition alone. Flag a use that misleads or only makes sense once the definition is read, and a name that means two things in one scope. → rename it, quoting a use before and after; if no honest name comes, the design's murky.
 - **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
 - **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
