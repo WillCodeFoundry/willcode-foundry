@@ -27,8 +27,8 @@ Paths below are relative to this role's directory.
    and push it on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules
    describe. Never write `TASK.md` before that approval, and write nothing
    else there.
-7. Once it is pushed, end your turn: `"$AGENT_KIT_DIR/bin/task" submit
-   "<hand-off note>"`, the note pointing the dev at what to read first.
+7. Once it is pushed, end your turn with the event `task show` lists for it,
+   the note pointing the dev at what to read first.
 
 ## Asking questions
 - Ask in rounds, with the `grilling` skill: each round, every question you can
