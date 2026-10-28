@@ -1,6 +1,6 @@
 # Skills
 
-The agents' skills live in `agent-kit/skills/`. Six are copied from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. `git-conventions` and `address-review` are the foundry's own. Why they are copied rather than installed is in [ADR 0007](adr/0007-skills-copied-not-installed.md).
+The agents' skills live in `agent-kit/skills/`. Six are copied from [mattpocock/skills](https://github.com/mattpocock/skills), by Matt Pocock, under the MIT licence: `tdd`, `codebase-design`, `domain-modeling`, `code-review`, `pr` and `grilling`. `git-conventions` is the foundry's own. Why they are copied rather than installed is in [ADR 0007](adr/0007-skills-copied-not-installed.md).
 
 ## Where each skill comes from
 

@@ -15,8 +15,12 @@ take it through review to a pull request.
   decisions as ADRs in `docs/adr/`. Nothing else goes in either.
 
 ## Review
-- When the latest round in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`
-  says `Verdict: changes needed`, answer it with the `address-review` skill.
+The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
+
+- When the latest round says `Verdict: changes needed`: under each open
+  finding, add "Fixed in `<commit>`." or "Disagree: <why>.", without editing
+  the reviewer's text. Commit and push it on `$AGENT_NOTES_BRANCH`, with the fixes on
+  the task branch.
 - Open the pull request only when `"$AGENT_KIT_DIR/bin/task" show` says that is
   your goal: into the default branch with `gh pr create`, the title as the
   `git-conventions` skill says and the body from the `pr` skill. Put its URL in
