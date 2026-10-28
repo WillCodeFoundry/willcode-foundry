@@ -98,6 +98,7 @@ class TaskState:
 
     @property
     def assigned_to_human(self) -> bool:
+        """Whether the task waits for the human, as blocked does."""
         return self.assignee == HUMAN
 
     @property
@@ -108,7 +109,7 @@ class TaskState:
     def after(self, event: str, note: str) -> "TaskState":
         """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not.
 
-        Whose turn it is isn't checked here: launch checks it, and pre-push guards the change (ADR 0011).
+        Whose turn it is isn't checked here. Launch checks it, and pre-push guards the change (ADR 0011).
         """
         events = self.definition.events
         if not events:

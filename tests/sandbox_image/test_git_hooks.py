@@ -83,7 +83,7 @@ def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts:
 def test_what_the_agent_sets_in_its_environment_changes_no_rule(checkouts: Checkouts) -> None:
     """The agent sets its git commands' environment. Each of these would approve the push if the stubs read
     it: a startup file for the shell, a sitecustomize and a pathlib ahead of the standard library's, a kit
-    elsewhere. (Not PYTHONHOME: a wrong one stops Python starting, which refuses the commit whatever the flags.)"""
+    elsewhere. (Not PYTHONHOME: a wrong one stops Python starting, which refuses the push whatever the flags.)"""
     agents_own = f"{AGENT_HOME}/agents-own"
     approve = "raise SystemExit(0)"
     planted = checkouts.container.shell(

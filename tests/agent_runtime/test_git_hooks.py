@@ -1,9 +1,10 @@
-"""agent_runtime.git_hooks, in-process: pre_push on the lines git passes it, and pre_push and prepare_commit_msg
+"""agent_runtime.git_hooks, in-process: pre_push on the lines git passes it, then pre_push and prepare_commit_msg
 against real checkouts that session_setup made, each given the repository as a Git.
 
 tests/sandbox_image/test_git_hooks.py runs each hook through its stub, by real commits and pushes.
 """
 
+import shlex
 from collections.abc import Callable
 from pathlib import Path
 
@@ -114,7 +115,7 @@ def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts,
 
     assert refusal.startswith("pre-push: refusing\n\n")
     assert f"Task notes belong on {NOTES_BRANCH}" in refusal and f"    {path}" in refusal
-    assert f"git reset origin/{session.agent_task_branch}" in refusal
+    assert f"git restore --source=origin/{session.agent_task_branch} --staged --worktree -- {path}" in refusal
 
 
 @pytest.mark.parametrize("path", ["NOTES.md", "PROGRESS.md", "src/main.py"])
@@ -163,6 +164,29 @@ def test_reverting_another_tasks_notes_is_refused(checkouts: Checkouts) -> None:
     git(notes, "-c", "core.hooksPath=/dev/null", "revert", "--no-edit", "HEAD")
 
     assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
+
+
+def test_following_the_refusals_advice_makes_the_push_pass(checkouts: Checkouts) -> None:
+    """The refusal's own command puts back what didn't belong: a change, a deletion and a new file alike."""
+    session, _, notes = checkouts
+    changed, deleted, added = (f"{OTHER_TASK.task_notes_dir}/{name}.md" for name in ("changed", "deleted", "added"))
+    committed(notes, changed, deleted)
+    pushed(notes)
+    (notes / changed).write_text("theirs, changed\n")
+    git(notes, "add", changed)
+    git(notes, "rm", "-q", deleted)
+    committed(notes, added, f"{TASK.task_notes_dir}/PROGRESS.md")
+    assert len(git(notes, "diff", "--name-only", f"origin/{session.agent_notes_branch}", "HEAD").stdout.split()) == 4
+    advice = refusal_of(lambda: push_check(session, notes)).splitlines()
+    command = next(line.strip() for line in advice if line.strip().startswith("git restore"))
+
+    git(notes, *shlex.split(command)[1:])
+    commit_unchecked(notes, "put back")
+
+    push_check(session, notes)
+    assert git(notes, "diff", "--name-only", f"origin/{session.agent_notes_branch}", "HEAD").stdout.split() == [
+        f"{TASK.task_notes_dir}/PROGRESS.md"
+    ]
 
 
 def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
@@ -323,7 +347,7 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     refusal = refusal_of(lambda: push_check(session, notes))
 
     assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
-    assert f"git checkout origin/{session.agent_notes_branch} -- {STATE_PATH}" in refusal
+    assert f"git restore --source=origin/{session.agent_notes_branch} --staged --worktree -- {STATE_PATH}" in refusal
 
 
 def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:

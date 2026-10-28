@@ -12,6 +12,7 @@ Each takes what git passes, the session variables and the repository, defaulting
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
 """
 
+import shlex
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
@@ -93,7 +94,10 @@ def _changed_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
 
     - a deletion, which the rulesets refuse;
     - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
-    - a new branch, which can't happen here: foundry creates both branches before any sandbox starts.
+    - a new branch, since there is nothing to compare it with.
+
+    foundry creates both branches before any sandbox starts. So a new branch is a task branch pushed again after
+    its pull request merged and it was deleted, a rare mistake this guardrail lets through.
     """
     if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
         return []
@@ -105,11 +109,14 @@ def _require_no_notes(session: contract.Environ, changed: Sequence[str]) -> None
     """Refuse task notes on the task branch: nothing under the notes root, at any depth, so notes written from a
     subfolder are caught too."""
     if refused := [path for path in changed if _is_under(session.agent_notes_root, path)]:
-        raise _misplaced(
-            session.agent_task_branch,
+        raise _refusal(
+            "pre-push",
             f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
             f"not on {session.agent_task_branch}:",
-            refused,
+            *(f"    {path}" for path in refused),
+            "",
+            "Copy anything you still need to $AGENT_NOTES_DIR first.",
+            *_put_back(session.agent_task_branch, refused),
         )
 
 
@@ -119,19 +126,20 @@ def _require_own_notes(
     """Refuse a change to the notes branch outside this task's notes dir, and a change to its STATE.json that
     isn't a legal transition for this role."""
     if refused := [path for path in changed if not path.startswith(f"{session.agent_task_notes_dir}/")]:
-        raise _misplaced(
-            session.agent_notes_branch,
+        raise _refusal(
+            "pre-push",
             f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:",
-            refused,
+            *(f"    {path}" for path in refused),
+            "",
+            *_put_back(session.agent_notes_branch, refused),
         )
     path = state_path(session.agent_task_notes_dir)
     if path not in changed:
         return
     undo = (
         "",
-        "Put it back as origin has it, then commit and push again:",
-        f"    git checkout origin/{session.agent_notes_branch} -- {path}",
-        f"End your turn with: {END_TURN}",
+        *_put_back(session.agent_notes_branch, [path]),
+        f"Only end your turn changes it, on your turn: {END_TURN}",
     )
     # The push carries the new state, not the event: send the event leading to it, and it must give exactly that.
     # Two events leading to one state give the same result.
@@ -153,15 +161,11 @@ def _require_own_notes(
         raise _refusal("pre-push", f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 
 
-def _misplaced(branch: str, rule: str, paths: Sequence[str]) -> GitHookRefused:
-    """A refusal of files a push puts where they don't belong, saying how to take them out."""
-    return _refusal(
-        "pre-push",
-        rule,
-        *(f"    {path}" for path in paths),
-        "",
-        "Undo the commits you were pushing, keeping their changes, then commit only what belongs:",
-        f"    git reset origin/{branch}",
+def _put_back(branch: str, paths: Sequence[str]) -> tuple[str, ...]:
+    """How to undo a refused change to ``paths``: put each back as origin has it, deleting one origin lacks."""
+    return (
+        "Put them back as origin has them, then commit and push again:",
+        f"    git restore --source=origin/{branch} --staged --worktree -- {shlex.join(paths)}",
     )
 
 
