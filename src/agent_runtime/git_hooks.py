@@ -5,8 +5,9 @@
   there. Task notes stay off the task branch. On the notes branch, a role changes only its own task's notes, and
   its STATE.json only by a legal transition for the role.
 
-pre_push judges what a push brings to origin. The paths every pushed commit touches must belong there, since
-they stay in the branch's history. STATE.json is judged by what the push leaves. So every git command that
+pre_push judges what a push brings to origin. The paths every pushed commit touches, and those the push leaves
+changed, must belong there, since they stay in the branch's history. STATE.json is judged by what the push
+leaves. So every git command that
 makes commits is judged alike, and so is a commit made on a detached HEAD or another branch.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
@@ -65,6 +66,19 @@ def pre_push(
     The project's GitHub rulesets allow any task branch, since GitHub can't tell one task from another;
     this keeps a role to its own. git passes one line per ref on stdin:
     ``<local ref> <local sha> <remote ref> <remote sha>``.
+
+    A path counts if any pushed commit touches it, or if the push leaves it changed. So a path added and removed
+    again within one push is judged, since it stays in the branch's history. So is one a merge commit changes
+    itself, which ``git log`` doesn't list. Commits already on origin, such as another task's that a pull
+    merged, aren't in the push. Every kind of change counts, a type change included, and a rename is listed as
+    both its paths. Three pushes have nothing to judge:
+
+    - a deletion, which the rulesets refuse;
+    - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
+    - a new branch, since there is nothing to compare it with.
+
+    foundry creates both branches before any sandbox starts. So a new branch is a task branch pushed again after
+    its pull request merged and it was deleted, a rare mistake this guardrail lets through.
     """
     session = session or _read_session("pre-push")
     git = git or Git()
@@ -84,35 +98,23 @@ def pre_push(
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
                 f"Code goes on {session.agent_task_branch}. Notes go on {session.agent_notes_branch}.",
             )
-        touched = _touched_paths(git, remote_sha, local_sha)
+        if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
+            continue
+        left = _paths(git, "diff", "--name-only", "--no-renames", "-z", remote_sha, local_sha)
+        pushed = _paths(git, "log", "--format=", "--name-only", "--no-renames", "-z", local_sha, f"^{remote_sha}")
+        touched = list(dict.fromkeys([*pushed, *left]))
         if remote_ref == task_ref:
-            _require_no_notes(session, touched)
+            _require_no_notes(session, touched, left)
         else:
-            _require_own_notes(session, git, touched, remote_sha, local_sha)
+            _require_own_notes(session, git, touched, left, remote_sha, local_sha)
 
 
-def _touched_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
-    """Every path a commit the push brings to origin touches, as git spells it, whatever characters it holds.
-
-    Each commit counts, so a path added and removed again within one push is still judged, since it stays in
-    the branch's history. Commits already on origin, such as another task's that a pull merged, aren't in the
-    push. Every kind of change counts, a type change included, and a rename is listed as both its paths. Three
-    pushes touch nothing to judge:
-
-    - a deletion, which the rulesets refuse;
-    - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
-    - a new branch, since there is nothing to compare it with.
-
-    foundry creates both branches before any sandbox starts. So a new branch is a task branch pushed again after
-    its pull request merged and it was deleted, a rare mistake this guardrail lets through.
-    """
-    if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
-        return []
-    touched = git.output("log", "--format=", "--name-only", "--no-renames", "-z", local_sha, f"^{remote_sha}")
-    return list(dict.fromkeys(path.strip("\n") for path in touched.split("\0") if path.strip("\n")))
+def _paths(git: Git, *args: str) -> list[str]:
+    """The paths a git command lists, NUL-separated, as git spells them, whatever characters they hold."""
+    return [path for path in git.output(*args).split("\0") if path]
 
 
-def _require_no_notes(session: contract.Environ, touched: Sequence[str]) -> None:
+def _require_no_notes(session: contract.Environ, touched: Sequence[str], left: Sequence[str]) -> None:
     """Refuse task notes on the task branch: nothing under the notes root, at any depth, so notes written from a
     subfolder are caught too."""
     if refused := [path for path in touched if _is_under(session.agent_notes_root, path)]:
@@ -123,12 +125,12 @@ def _require_no_notes(session: contract.Environ, touched: Sequence[str]) -> None
             *(f"    {path}" for path in refused),
             "",
             "Copy anything you still need to $AGENT_NOTES_DIR first.",
-            *_put_back(contract.PROJECT_DIR, session.agent_task_branch, refused),
+            *_put_back(contract.PROJECT_DIR, session.agent_task_branch, refused, left),
         )
 
 
 def _require_own_notes(
-    session: contract.Environ, git: Git, touched: Sequence[str], remote_sha: str, local_sha: str
+    session: contract.Environ, git: Git, touched: Sequence[str], left: Sequence[str], remote_sha: str, local_sha: str
 ) -> None:
     """Refuse a change to the notes branch outside this task's task notes dir, and a change to its STATE.json that
     isn't a legal transition for this role."""
@@ -138,16 +140,17 @@ def _require_own_notes(
             f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:",
             *(f"    {path}" for path in refused),
             "",
-            *_put_back(contract.NOTES_DIR, session.agent_notes_branch, refused),
+            *_put_back(contract.NOTES_DIR, session.agent_notes_branch, refused, left),
         )
     path = state_path(session.agent_task_notes_dir)
     # A pushed commit may change it and a later one change it back. What the push leaves is what is judged.
-    if path not in touched or git.succeeds("diff", "--quiet", remote_sha, local_sha, "--", path):
+    if path not in left:
         return
     undo = (
         "",
-        "If you touched it by hand, put it back.",
-        *_put_back(contract.NOTES_DIR, session.agent_notes_branch, [path]),
+        "If you changed it by hand, put it back as origin has it, then commit and push again:",
+        f'    git -C "${contract.NOTES_DIR}" restore --source=origin/{session.agent_notes_branch} '
+        f"--staged --worktree -- {shlex.quote(path)}",
         f"Only bin/task changes it, when it is your turn: {END_TURN}",
     )
     # The push carries the new state, not the event: send the event leading to it, and it must give exactly that.
@@ -170,18 +173,28 @@ def _require_own_notes(
         raise _refusal("pre-push", f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 
 
-def _put_back(checkout: str, branch: str, paths: Sequence[str]) -> tuple[str, ...]:
-    """How to undo a refused change to ``paths``. Undo the unpushed commits, keeping their changes staged. Then put
-    each path back as origin has it, deleting one origin lacks, and commit the rest again.
+def _put_back(checkout: str, branch: str, refused: Sequence[str], left: Sequence[str]) -> tuple[str, ...]:
+    """How to undo a refused push. Undo its unpushed commits, keeping their changes staged, and put back each
+    refused path the push would leave changed. A path added and removed within the push is gone once the commits
+    are undone, so it needs no putting back.
 
     Every pushed commit is judged, so a commit that puts the paths back isn't enough. ``checkout`` is the variable
     naming the checkout, so the commands act on it from any directory, with paths from its root.
     """
     git_in = f'git -C "${checkout}"'
+    put_back = [path for path in refused if path in left]
+    restore = (
+        (
+            "Put these back as origin has them:",
+            f"    {git_in} restore --source=origin/{branch} --staged --worktree -- {shlex.join(put_back)}",
+        )
+        if put_back
+        else ()
+    )
     return (
-        "Undo your unpushed commits, keeping their changes, and put these back as origin has them:",
+        "Undo your unpushed commits, keeping their changes, which folds them into one commit:",
         f"    {git_in} reset --soft origin/{branch}",
-        f"    {git_in} restore --source=origin/{branch} --staged --worktree -- {shlex.join(paths)}",
+        *restore,
         "Then commit what is left and push again.",
     )
 

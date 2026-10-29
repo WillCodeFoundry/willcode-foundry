@@ -207,6 +207,64 @@ def test_notes_added_and_removed_within_one_push_are_refused(checkouts: Checkout
     assert f"    {path}" in refusal_of(lambda: push_check(session, code, session.agent_task_branch))
 
 
+def test_the_advice_for_notes_added_and_removed_within_one_push_makes_it_pass(checkouts: Checkouts) -> None:
+    """Once the commits are undone, such a path exists nowhere, so the advice doesn't try to put it back."""
+    session, code, _ = checkouts
+    path = f"{TASK.task_notes_dir}/P.md"
+    committed(code, path, "src/main.py")
+    git(code, "rm", "-q", path)
+    commit_unchecked(code, "remove it again")
+    advice = refusal_of(lambda: push_check(session, code, session.agent_task_branch)).splitlines()
+    commands = [line.strip() for line in advice if line.strip().startswith("git -C")]
+
+    for command in commands:
+        environ = {**os.environ, "AGENT_PROJECT_DIR": str(code)}
+        subprocess.run(["sh", "-c", command], cwd=code, env=environ, check=True, capture_output=True)
+    commit_unchecked(code, "feat: main")
+
+    assert len(commands) == 1
+    push_check(session, code, session.agent_task_branch)
+
+
+def test_a_merge_of_another_tasks_newer_notes_from_origin_is_accepted(checkouts: Checkouts, tmp_path: Path) -> None:
+    """A pull without --rebase: the other task's commit is already on origin, so it isn't in the push."""
+    session, _, notes = checkouts
+    other = tmp_path / "other-role"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
+    committed(other, f"{OTHER_TASK.task_notes_dir}/PROGRESS.md")
+    pushed(other)
+    committed(notes, f"{TASK.task_notes_dir}/PROGRESS.md")
+    git(
+        notes,
+        "-c",
+        "core.hooksPath=/dev/null",
+        "pull",
+        "-q",
+        "--no-rebase",
+        "--no-edit",
+        "origin",
+        session.agent_notes_branch,
+    )
+
+    push_check(session, notes)
+
+
+def test_another_tasks_notes_changed_by_a_merge_itself_are_refused(checkouts: Checkouts) -> None:
+    """git log lists nothing for a merge commit, so what the push leaves is judged too."""
+    session, _, notes = checkouts
+    git(notes, "switch", "-q", "-c", "side")
+    committed(notes, f"{TASK.task_notes_dir}/side.md")
+    git(notes, "switch", "-q", session.agent_notes_branch)
+    committed(notes, f"{TASK.task_notes_dir}/main.md")
+    git(notes, "-c", "core.hooksPath=/dev/null", "merge", "-q", "--no-ff", "--no-commit", "side")
+    theirs = f"{OTHER_TASK.task_notes_dir}/EVIL.md"
+    stage(notes, theirs)
+    commit_unchecked(notes, "merge side")
+
+    assert f"    {theirs}" in refusal_of(lambda: push_check(session, notes))
+
+
 def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
     """A rename deletes the file in the other task's folder; git's rename detection would list only the new
     path, inside this task's folder."""
@@ -366,7 +424,7 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
 
     assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
     restore = f"--source=origin/{session.agent_notes_branch} --staged --worktree -- {STATE_PATH}"
-    assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal
+    assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal and "reset --soft" not in refusal
 
 
 def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:

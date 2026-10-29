@@ -22,8 +22,8 @@ The agent runs with permission prompts off. What it may do is set by the rows ab
 The git hooks and `guard-bash` run inside the sandbox, so an agent set on getting past them can: through a script, an alias, or an edit to `.git/config`. They keep only rules nothing else enforces, and each refusal says what to do instead:
 
 - **`pre-push`:** push only this task's branch and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another. It judges what each push brings to origin, so the content decides, not who wrote it or which git command made it ([ADR 0011](adr/0011-task-states.md)):
-  - no pushed commit touches anything under `.agent/` on the task branch;
-  - on `agent-notes`, no pushed commit touches anything outside this task's dir;
+  - on the task branch, nothing under `.agent/`, in any pushed commit or in what the push leaves;
+  - on `agent-notes`, nothing outside this task's dir, in the same way;
   - the push leaves the task's `STATE.json` as origin had it, or changed by a legal transition for the role.
 - **`prepare-commit-msg`:** adds the `Task: <task>` trailer to commits on the task branch, even with `--no-verify`.
 - **`guard-bash`:** refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the git hooks.
