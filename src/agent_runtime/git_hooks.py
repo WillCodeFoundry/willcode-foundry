@@ -5,8 +5,9 @@
   there. Task notes stay off the task branch. On the notes branch, a role changes only its own task's notes, and
   its STATE.json only by a legal transition for the role.
 
-pre_push judges what a push changes since origin, not each commit. So every git command that makes commits is
-judged alike, and so is a commit made on a detached HEAD or another branch and pushed to one of these.
+pre_push judges what a push brings to origin. The paths every pushed commit touches must belong there, since
+they stay in the branch's history. STATE.json is judged by what the push leaves. So every git command that
+makes commits is judged alike, and so is a commit made on a detached HEAD or another branch.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
@@ -16,11 +17,15 @@ import shlex
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
+from typing import Final
 
 from agent_runtime import contract
 from agent_runtime.git import Git
 from agent_runtime.task.committed import committed_state
 from agent_runtime.task.state import END_TURN, TaskStateRefused, state_path
+
+REFUSING: Final = ": refusing"
+"""What follows a hook's name at the start of each of its refusals, so the task command can tell one apart."""
 
 _ZERO = "0" * 40
 """The sha git passes for a ref that doesn't exist on one side of a push."""
@@ -42,7 +47,7 @@ def prepare_commit_msg(
     if git.current_branch() != session.agent_task_branch:
         return
     if not arguments:
-        raise GitHookRefused("prepare-commit-msg: refusing: git passed no message file")
+        raise _refusal("prepare-commit-msg", "git passed no message file.")
     message_file = arguments[0]
     # An empty message aborts the commit; a trailer would make it go through.
     if not git.output("stripspace", "--strip-comments", input=Path(message_file).read_text()):
@@ -79,18 +84,20 @@ def pre_push(
                 f"not {remote_ref.removeprefix('refs/heads/')}.",
                 f"Code goes on {session.agent_task_branch}. Notes go on {session.agent_notes_branch}.",
             )
-        changed = _changed_paths(git, remote_sha, local_sha)
+        touched = _touched_paths(git, remote_sha, local_sha)
         if remote_ref == task_ref:
-            _require_no_notes(session, changed)
+            _require_no_notes(session, touched)
         else:
-            _require_own_notes(session, git, changed, remote_sha, local_sha)
+            _require_own_notes(session, git, touched, remote_sha, local_sha)
 
 
-def _changed_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
-    """Every path the push changes since origin, as git spells it, whatever characters it holds.
+def _touched_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
+    """Every path a commit the push brings to origin touches, as git spells it, whatever characters it holds.
 
-    Every kind of change counts, a type change included, and a rename is listed as both its paths. Three pushes
-    change nothing to judge:
+    Each commit counts, so a path added and removed again within one push is still judged, since it stays in
+    the branch's history. Commits already on origin, such as another task's that a pull merged, aren't in the
+    push. Every kind of change counts, a type change included, and a rename is listed as both its paths. Three
+    pushes touch nothing to judge:
 
     - a deletion, which the rulesets refuse;
     - a remote commit this checkout hasn't fetched, which can't be a fast-forward, so the rulesets refuse it;
@@ -101,14 +108,14 @@ def _changed_paths(git: Git, remote_sha: str, local_sha: str) -> list[str]:
     """
     if local_sha == _ZERO or not git.succeeds("cat-file", "-e", f"{remote_sha}^{{commit}}"):
         return []
-    changed = git.output("diff", "--name-only", "--no-renames", "-z", remote_sha, local_sha)
-    return [path for path in changed.split("\0") if path]
+    touched = git.output("log", "--format=", "--name-only", "--no-renames", "-z", local_sha, f"^{remote_sha}")
+    return list(dict.fromkeys(path.strip("\n") for path in touched.split("\0") if path.strip("\n")))
 
 
-def _require_no_notes(session: contract.Environ, changed: Sequence[str]) -> None:
+def _require_no_notes(session: contract.Environ, touched: Sequence[str]) -> None:
     """Refuse task notes on the task branch: nothing under the notes root, at any depth, so notes written from a
     subfolder are caught too."""
-    if refused := [path for path in changed if _is_under(session.agent_notes_root, path)]:
+    if refused := [path for path in touched if _is_under(session.agent_notes_root, path)]:
         raise _refusal(
             "pre-push",
             f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
@@ -116,30 +123,32 @@ def _require_no_notes(session: contract.Environ, changed: Sequence[str]) -> None
             *(f"    {path}" for path in refused),
             "",
             "Copy anything you still need to $AGENT_NOTES_DIR first.",
-            *_put_back(session.agent_task_branch, refused),
+            *_put_back(contract.PROJECT_DIR, session.agent_task_branch, refused),
         )
 
 
 def _require_own_notes(
-    session: contract.Environ, git: Git, changed: Sequence[str], remote_sha: str, local_sha: str
+    session: contract.Environ, git: Git, touched: Sequence[str], remote_sha: str, local_sha: str
 ) -> None:
     """Refuse a change to the notes branch outside this task's notes dir, and a change to its STATE.json that
     isn't a legal transition for this role."""
-    if refused := [path for path in changed if not path.startswith(f"{session.agent_task_notes_dir}/")]:
+    if refused := [path for path in touched if not path.startswith(f"{session.agent_task_notes_dir}/")]:
         raise _refusal(
             "pre-push",
             f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:",
             *(f"    {path}" for path in refused),
             "",
-            *_put_back(session.agent_notes_branch, refused),
+            *_put_back(contract.NOTES_DIR, session.agent_notes_branch, refused),
         )
     path = state_path(session.agent_task_notes_dir)
-    if path not in changed:
+    # A pushed commit may change it and a later one change it back. What the push leaves is what is judged.
+    if path not in touched or git.succeeds("diff", "--quiet", remote_sha, local_sha, "--", path):
         return
     undo = (
         "",
-        *_put_back(session.agent_notes_branch, [path]),
-        f"Only end your turn changes it, on your turn: {END_TURN}",
+        "If you touched it by hand, put it back.",
+        *_put_back(contract.NOTES_DIR, session.agent_notes_branch, [path]),
+        f"Only bin/task changes it, when it is your turn: {END_TURN}",
     )
     # The push carries the new state, not the event: send the event leading to it, and it must give exactly that.
     # Two events leading to one state give the same result.
@@ -161,18 +170,26 @@ def _require_own_notes(
         raise _refusal("pre-push", f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 
 
-def _put_back(branch: str, paths: Sequence[str]) -> tuple[str, ...]:
-    """How to undo a refused change to ``paths``: put each back as origin has it, deleting one origin lacks."""
+def _put_back(checkout: str, branch: str, paths: Sequence[str]) -> tuple[str, ...]:
+    """How to undo a refused change to ``paths``. Undo the unpushed commits, keeping their changes staged. Then put
+    each path back as origin has it, deleting one origin lacks, and commit the rest again.
+
+    Every pushed commit is judged, so a commit that puts the paths back isn't enough. ``checkout`` is the variable
+    naming the checkout, so the commands act on it from any directory, with paths from its root.
+    """
+    git_in = f'git -C "${checkout}"'
     return (
-        "Put them back as origin has them, then commit and push again:",
-        f"    git restore --source=origin/{branch} --staged --worktree -- {shlex.join(paths)}",
+        "Undo your unpushed commits, keeping their changes, and put these back as origin has them:",
+        f"    {git_in} reset --soft origin/{branch}",
+        f"    {git_in} restore --source=origin/{branch} --staged --worktree -- {shlex.join(paths)}",
+        "Then commit what is left and push again.",
     )
 
 
 def _refusal(hook: str, *lines: str) -> GitHookRefused:
     """Every refusal's shape: the hook, what was wrong, then what to do instead."""
     body = "".join(f"  {line}\n" for line in lines)
-    return GitHookRefused(f"{hook}: refusing\n\n{body}")
+    return GitHookRefused(f"{hook}{REFUSING}\n\n{body}")
 
 
 def _read_session(hook: str) -> contract.Environ:
@@ -180,7 +197,7 @@ def _read_session(hook: str) -> contract.Environ:
     try:
         return contract.read_environ()
     except contract.MissingVariables as error:
-        raise GitHookRefused(f"{hook}: {error}") from None
+        raise _refusal(hook, str(error)) from None
 
 
 def _is_under(root: str, path: str) -> bool:

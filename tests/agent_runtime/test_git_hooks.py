@@ -4,7 +4,8 @@ against real checkouts that session_setup made, each given the repository as a G
 tests/sandbox_image/test_git_hooks.py runs each hook through its stub, by real commits and pushes.
 """
 
-import shlex
+import os
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -115,7 +116,8 @@ def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts,
 
     assert refusal.startswith("pre-push: refusing\n\n")
     assert f"Task notes belong on {NOTES_BRANCH}" in refusal and f"    {path}" in refusal
-    assert f"git restore --source=origin/{session.agent_task_branch} --staged --worktree -- {path}" in refusal
+    restore = f"--source=origin/{session.agent_task_branch} --staged --worktree -- {path}"
+    assert f'git -C "$AGENT_PROJECT_DIR" restore {restore}' in refusal
 
 
 @pytest.mark.parametrize("path", ["NOTES.md", "PROGRESS.md", "src/main.py"])
@@ -167,8 +169,9 @@ def test_reverting_another_tasks_notes_is_refused(checkouts: Checkouts) -> None:
 
 
 def test_following_the_refusals_advice_makes_the_push_pass(checkouts: Checkouts) -> None:
-    """The refusal's own command puts back what didn't belong: a change, a deletion and a new file alike."""
-    session, _, notes = checkouts
+    """The refusal's own commands put back what didn't belong: a change, a deletion and a new file alike. They
+    name their checkout, so they work run from a subfolder of the other checkout too."""
+    session, code, notes = checkouts
     changed, deleted, added = (f"{OTHER_TASK.task_notes_dir}/{name}.md" for name in ("changed", "deleted", "added"))
     committed(notes, changed, deleted)
     pushed(notes)
@@ -176,17 +179,32 @@ def test_following_the_refusals_advice_makes_the_push_pass(checkouts: Checkouts)
     git(notes, "add", changed)
     git(notes, "rm", "-q", deleted)
     committed(notes, added, f"{TASK.task_notes_dir}/PROGRESS.md")
-    assert len(git(notes, "diff", "--name-only", f"origin/{session.agent_notes_branch}", "HEAD").stdout.split()) == 4
     advice = refusal_of(lambda: push_check(session, notes)).splitlines()
-    command = next(line.strip() for line in advice if line.strip().startswith("git restore"))
+    commands = [line.strip() for line in advice if line.strip().startswith("git -C")]
+    elsewhere = code / "src"
+    elsewhere.mkdir(exist_ok=True)
 
-    git(notes, *shlex.split(command)[1:])
-    commit_unchecked(notes, "put back")
+    environ = {**os.environ, "AGENT_NOTES_DIR": str(notes)}
+    for command in commands:
+        subprocess.run(["sh", "-c", command], cwd=elsewhere, env=environ, check=True, capture_output=True)
+    commit_unchecked(notes, "progress")
 
     push_check(session, notes)
     assert git(notes, "diff", "--name-only", f"origin/{session.agent_notes_branch}", "HEAD").stdout.split() == [
         f"{TASK.task_notes_dir}/PROGRESS.md"
     ]
+    assert git(code, "status", "--porcelain").stdout == ""
+
+
+def test_notes_added_and_removed_within_one_push_are_refused(checkouts: Checkouts) -> None:
+    """Round 3's R44: the push leaves no notes, but its commits carry them into the task branch's history."""
+    session, code, _ = checkouts
+    path = f"{TASK.task_notes_dir}/P.md"
+    committed(code, path)
+    git(code, "rm", "-q", path)
+    commit_unchecked(code, "remove it again")
+
+    assert f"    {path}" in refusal_of(lambda: push_check(session, code, session.agent_task_branch))
 
 
 def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
@@ -255,7 +273,7 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
     session, code, _ = checkouts
 
     assert refusal_of(lambda: git_hooks.prepare_commit_msg([], session, Git(code))) == (
-        "prepare-commit-msg: refusing: git passed no message file"
+        "prepare-commit-msg: refusing\n\n  git passed no message file.\n"
     )
 
 
@@ -347,7 +365,8 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     refusal = refusal_of(lambda: push_check(session, notes))
 
     assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
-    assert f"git restore --source=origin/{session.agent_notes_branch} --staged --worktree -- {STATE_PATH}" in refusal
+    restore = f"--source=origin/{session.agent_notes_branch} --staged --worktree -- {STATE_PATH}"
+    assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal
 
 
 def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:
