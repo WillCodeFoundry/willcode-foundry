@@ -351,6 +351,26 @@ def test_list_has_a_row_per_readable_task_and_the_whole_error_for_each_other(ori
     assert len(errors) == 1
 
 
+def test_a_bad_task_id_or_a_state_that_isnt_text_is_that_tasks_own_error(origin_dir, git_env, tmp_path) -> None:
+    """Round 4's R51 and R52: neither stops the list."""
+    create(origin_dir, git_env)
+    notes_dir = tmp_path / "notes"
+    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(notes_dir))
+    (notes_dir / ".agent" / "Old Notes").mkdir()
+    (notes_dir / ".agent" / "Old Notes" / "TASK.md").write_text("old\n")
+    (notes_dir / ".agent" / "t2").mkdir()
+    (notes_dir / ".agent" / "t2" / "STATE.json").write_bytes(b"\xff\xfe")
+    git(git_env, "-C", str(notes_dir), "add", ".agent")
+    git(git_env, "-C", str(notes_dir), "commit", "--quiet", "--no-gpg-sign", "-m", "odd tasks")
+    git(git_env, "-C", str(notes_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
+
+    rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
+
+    assert [row.task.id for row in rows] == ["t1"]
+    assert [error.split(":")[0] for error in errors] == ["store Old Notes", "store t0", "store t2"]
+    assert errors[2] == "store t2: .agent/t2/STATE.json on agent-notes is not UTF-8 text. Fix it on agent-notes."
+
+
 def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> None:
     git(git_env, f"--git-dir={origin_dir}", "branch", "--quiet", "-D", task.NOTES_BRANCH)
 

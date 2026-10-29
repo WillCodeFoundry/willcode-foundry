@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Final
 
 from agent_runtime.task.lifecycles import FEATURE, Lifecycle
-from agent_runtime.task.state import TaskState, state_path
+from agent_runtime.task.state import TaskState, TaskStateRefused, state_path
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 
@@ -124,15 +124,19 @@ def task_ids(clone: ProjectClone) -> list[str]:
 def read_state(clone: ProjectClone, task: Task) -> TaskState:
     """The task's task state, from ``clone`` with NOTES_BRANCH checked out.
 
-    FoundryError if there is no such task, or it has no task state; TaskStateRefused if the file isn't one.
+    FoundryError if there is no such task, or it has no task state. TaskStateRefused if the file isn't one.
     """
     if not clone.exists(task.task_notes_dir):
         raise FoundryError(f"there is no task {task.id}. {NOTES_BRANCH} has no {task.task_notes_dir}/.")
-    text = clone.read(task.state_file)
+    where = f"{task.state_file} on {NOTES_BRANCH}"
+    try:
+        text = clone.read(task.state_file)
+    except UnicodeDecodeError:
+        raise TaskStateRefused(f"{where} is not UTF-8 text. Fix it on {NOTES_BRANCH}.") from None
     if text is None:
         raise FoundryError(
             f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}. It was created before task states. "
             f"Add it on {NOTES_BRANCH}, naming the lifecycle and the state it is in, for example:\n"
             + textwrap.indent(_EXAMPLE_STATE.to_json(), "  ")
         )
-    return TaskState.parse(text, f"{task.state_file} on {NOTES_BRANCH}")
+    return TaskState.parse(text, where)

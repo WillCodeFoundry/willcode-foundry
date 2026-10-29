@@ -181,11 +181,12 @@ def read_rows(project_name: str, clone: ProjectClone) -> tuple[list[Row], list[s
         return [], []
     clone.check_out(NOTES_BRANCH)
     rows, errors = [], []
-    for task in map(Task, task_ids(clone)):
+    for task_id in task_ids(clone):
         try:
+            task = Task(task_id)
             rows.append(Row(project_name, task, read_state(clone, task)))
         except (FoundryError, TaskStateRefused) as error:
-            errors.append(f"{project_name} {task.id}: {error}")
+            errors.append(f"{project_name} {task_id}: {error}")
     return rows, errors
 
 
