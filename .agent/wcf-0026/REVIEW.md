@@ -23,3 +23,29 @@ All acceptance criteria trace to code and a test (relaunch of both checkouts, mi
 Standards 2 findings, Spec 2 (R3, R4), Behaviour 1; 0 Blocking. Worst per axis: Standards, the overclaiming comment (R1); Spec, same cause as R1 (R3); Behaviour, the misleading "detached" diagnosis (R5).
 
 Verdict: approved
+
+## Round 2 (reviewing 75b822f)
+
+Redo of round 1 on the same commit, this time with the checks run: `uv run --group dev pytest`, `ruff check .`, `ruff format --check .`, `mypy`. Round 1 could not run them, so its "approved" rested on reading alone. TASK.md is unchanged (still `c283670`, shared architect/planner identity).
+
+Check results at 75b822f: `ruff check` passes, `ruff format --check` passes, `mypy` passes. **`pytest` fails: 6 tests.**
+
+### Open findings from round 1
+- **R1** (comment at `session_setup.py:72` overclaims; shares a cause with R3): still open, Follow-up.
+- **R2** (data clump): accepted as is.
+- **R3** (code checkout starting on another branch is switched before a later refusal; out of scope in TASK.md): deferred, Follow-up.
+- **R4** (wrong-branch refusal doesn't say whether work exists): accepted as is.
+- **R5** (non-checkout notes dir reported as "detached"): still open, Follow-up.
+
+### New findings
+- **R6 (Blocking) — six of the new tests fail on any machine that has no signing key in an agent.**
+  - Failing: `test_a_relaunch_brings_both_checkouts_to_origins_tip`, `test_the_notes_branch_is_brought_forward_when_only_its_directory_is_missing`, `test_uncommitted_changes_that_dont_conflict_survive_the_update`, `test_a_diverged_branch_is_refused_naming_the_local_commits`, `test_uncommitted_changes_the_update_would_overwrite_are_refused`, `test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was`.
+  - Cause: `session_setup` runs `git config --global include.path <role gitconfig>` (`session_setup.py:58`), which turns `commit.gpgsign` on in the tests' throwaway HOME. `push_to_origin` (`tests/agent_runtime/test_session_setup.py:227`) then runs `git commit` in a fresh clone without the repo's `UNSIGNED` override (`tests/support/__init__.py:46`, used by the other tests that commit). With no key in an agent, git exits 128: `error: Couldn't find key in agent? fatal: failed to write commit object`. Each test fails at this commit, before its assertions, so these tests do not currently check relaunch fast-forward, the missing-notes-dir case, dirty-tree survival, the diverged refusal, the conflicting-dirty refusal, or no-change-after-refusal.
+  - Who hits it: anyone running `uv run pytest` where the role signing key isn't loaded: CI, the human's machine, and this reviewer sandbox. It reproduces here every run.
+  - Evidence the code itself is fine: in a throwaway clone, with only the `push_to_origin` commit made `UNSIGNED`, all 25 tests in the file pass.
+  - Violates the criterion "`uv run pytest` ... pass" and leaves the other criteria untested. Direction: make `push_to_origin`'s commit unsigned the way the repo's other tests do; the dev's own run should be unaffected by whether a key is present.
+
+### Summary
+New findings this round: 1 (Blocking), in tests. Round 1's findings stand as Follow-ups. Worst issue: R6, six failing tests that hide the criteria they exist to check.
+
+Verdict: changes needed
