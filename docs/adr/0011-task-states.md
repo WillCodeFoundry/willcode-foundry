@@ -1,6 +1,10 @@
 # Task states follow a lifecycle written in code, decided at launch and judged by one transition rule
 
-A task's `STATE.json` on `agent-notes` says which state of its lifecycle it is in, from a Python table in `src/agent_runtime/task/lifecycles.py` that foundry and the sandbox share, and a test holds every lifecycle to its rules. The turn is decided once, by `foundry task run` on your machine, and the agent's task command only writes `STATE.json`, which the agent commits and pushes like any other note. One transition rule judges every change to it: the task command applies it before writing, and `pre-push` refuses a push whose change to `STATE.json` breaks it.
+A task's `STATE.json` on `agent-notes` says which state of its lifecycle it is in. The lifecycles are a Python table in `src/agent_runtime/task/lifecycles.py`, which foundry and the sandbox share. A test holds every lifecycle to its rules.
+
+The turn is decided once, by `foundry task run` on your machine. The task command only writes `STATE.json`. The agent commits and pushes it like any other note.
+
+One transition rule, in `TaskState.after`, judges every change to it. The task command applies it to an event, and `pre-push` to what a push changes.
 
 ## Considered options
 
@@ -13,6 +17,7 @@ A task's `STATE.json` on `agent-notes` says which state of its lifecycle it is i
 - **The task command committing and pushing `STATE.json` itself.** It needed a fast-forward, a commit, a push, and a reset when any of them failed, for what the agent already does with every other note.
 - **Checking a lifecycle's rules when it is defined.** The lifecycles are constants the tests import, so a test catches a broken one as early, without an exception type and a rule engine.
 - **Recording the state a task came from in `STATE.json`.** It repeated the last entry of the file's history, and `pre-push` had to keep it consistent.
+- **Refusals that script how to undo a change.** Each recipe broke on a checkout it didn't foresee. A refusal says what is wrong and which rule it breaks, and the agent fixes it with git.
 - **Counting review rounds, with a limit and a fallback state.** A field, a reset flag and a rule, for what one sentence in the reviewer's `ROLE.md` does.
 - **A Stop-hook check that the turn was ended.** It would fire at every question the planner asks while grilling, and a paused turn is normal. `foundry task list` shows a turn whose sandbox isn't running instead.
 
