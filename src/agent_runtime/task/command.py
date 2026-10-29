@@ -4,8 +4,8 @@
     task EVENT "<hand-off note>"    end your turn: apply EVENT, then commit and push STATE.json alone
 
 Both read the task state as origin has it, freshly fetched. Ending a turn needs both checkouts clean and pushed
-first, the test session-check uses. A refused event, or a git step that fails, leaves the notes checkout as it was.
-Running the same command again then works, and it never retries (ARCHITECTURE.md, design rule 6).
+first, as session-check does. A refused event or failed git step leaves the notes checkout as it was, and it never
+retries (ARCHITECTURE.md, design rule 6).
 
 Runs only in the sandbox: foundry never imports it.
 """
@@ -40,17 +40,21 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
 
 
 def show(session: contract.Environ, out: TextIO) -> None:
-    """Print the task state as origin has it, and what its turn asks for."""
+    """Print the task state as origin has it: its assignee, and their goal and events. The same for every role."""
     task_state = _origin_state(session)
-    lines = [f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}."]
+    assignee = task_state.assignee_named
+    lines = [
+        f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}, assigned to {assignee}."
+    ]
     if task_state.previous:
         lines.append(f"It came from {task_state.previous}.")
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
     if task_state.events:
+        whose = f"{assignee[0].upper()}{assignee[1:]}"
         lines += [
-            f"The goal: {task_state.goal}",
+            f"{whose}'s goal: {task_state.goal}",
             "",
-            "End the turn with one of these events, once its work is pushed:",
+            f"{whose} ends the turn with one of these events, once its work is pushed:",
             *(f"  {name} → {event.target}: when {event.when}" for name, event in task_state.events.items()),
             "",
             f"  {END_TURN}",

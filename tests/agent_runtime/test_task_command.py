@@ -63,17 +63,41 @@ def refusal(session: contract.Environ, *args: str) -> str:
 # --- show ---------------------------------------------------------------------
 
 
-def test_show_tells_the_role_its_goal_its_events_and_the_note(turn: Checkouts) -> None:
+def test_show_names_the_assignee_their_goal_their_events_and_the_note(turn: Checkouts) -> None:
     session, _, _ = turn
 
     shown = run(session, "show")
 
-    assert f"Task {TASK.id} (feature) is in implement." in shown
+    assert f"Task {TASK.id} (feature) is in implement, assigned to the dev." in shown
     assert "It came from plan." in shown
     assert "  TASK.md is approved." in shown
-    assert "The goal: Implement TASK.md" in shown
+    assert "The dev's goal: Implement TASK.md" in shown
+    assert "The dev ends the turn with one of these events" in shown
     assert "  submit → review: when every acceptance criterion is met" in shown
     assert "  block → blocked: when you need the human" in shown
+
+
+def test_show_says_the_same_whichever_role_runs_it(turn: Checkouts) -> None:
+    """Round 4's R49: a dev still in its sandbox after submit reads the reviewer's goal and events as the
+    reviewer's. show decides nothing about whose turn it is."""
+    session, _, notes = turn
+    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
+
+    shown = run(session, "show")
+
+    assert "is in review, assigned to the reviewer." in shown
+    assert "The reviewer's goal: Review the task branch" in shown
+    assert "The reviewer ends the turn with one of these events" in shown and "  approve → deliver" in shown
+    assert "your" not in shown.lower()
+
+
+def test_show_lists_no_events_for_the_human(turn: Checkouts) -> None:
+    session, _, notes = turn
+    push_state(notes, TaskState(lifecycle=FEATURE, state="blocked", previous="implement", note="Which base?"))
+
+    shown = run(session, "show")
+
+    assert "is in blocked, assigned to the human." in shown and "goal" not in shown
 
 
 def test_a_task_without_a_task_state_is_refused(checkouts: Checkouts) -> None:
