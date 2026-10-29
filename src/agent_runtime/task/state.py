@@ -122,7 +122,7 @@ class TaskState:
 
         Whose turn it is isn't checked here. Launch checks it, and pre-push guards the change (ADR 0011).
         """
-        events = self._definition.events
+        events = self.events
         if not events:
             raise TaskStateRefused(
                 f"{self.state} accepts no events. The task is assigned to {self.assignee_named}, so stop here."

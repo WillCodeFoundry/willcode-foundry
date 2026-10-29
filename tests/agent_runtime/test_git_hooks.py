@@ -116,8 +116,9 @@ def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts,
 
     assert refusal.startswith("pre-push: refusing\n\n")
     assert f"Task notes belong on {NOTES_BRANCH}" in refusal and f"    {path}" in refusal
-    restore = f"--source=origin/{session.agent_task_branch} --staged --worktree -- {path}"
-    assert f'git -C "$AGENT_PROJECT_DIR" restore {restore}' in refusal
+    origin_sha = git(code, "rev-parse", f"origin/{session.agent_task_branch}").stdout.strip()
+    assert f'git -C "$AGENT_PROJECT_DIR" reset --soft {origin_sha}' in refusal
+    assert f'git -C "$AGENT_PROJECT_DIR" restore --source={origin_sha} --staged --worktree -- {path}' in refusal
 
 
 @pytest.mark.parametrize("path", ["NOTES.md", "PROGRESS.md", "src/main.py"])
@@ -194,6 +195,29 @@ def test_following_the_refusals_advice_makes_the_push_pass(checkouts: Checkouts)
         f"{TASK.task_notes_dir}/PROGRESS.md"
     ]
     assert git(code, "status", "--porcelain").stdout == ""
+
+
+def test_the_advice_still_works_after_origin_moves(checkouts: Checkouts, tmp_path: Path) -> None:
+    """Round 4's R50: another task pushes after the refusal, and this checkout fetches it. The advice resets to
+    the commit the push was judged against, so it doesn't undo the other task's change."""
+    session, _, notes = checkouts
+    committed(notes, f"{OTHER_TASK.task_notes_dir}/OOPS.md", f"{TASK.task_notes_dir}/PROGRESS.md")
+    advice = refusal_of(lambda: push_check(session, notes)).splitlines()
+    other = tmp_path / "other-role"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
+    committed(other, f"{OTHER_TASK.task_notes_dir}/THEIRS.md")
+    pushed(other)
+    git(notes, "fetch", "-q", "origin")
+
+    for command in (line.strip() for line in advice if line.strip().startswith("git -C")):
+        environ = {**os.environ, "AGENT_NOTES_DIR": str(notes)}
+        subprocess.run(["sh", "-c", command], cwd=notes, env=environ, check=True, capture_output=True)
+    commit_unchecked(notes, "progress")
+    git(notes, "-c", "core.hooksPath=/dev/null", "pull", "-q", "--rebase", "origin", session.agent_notes_branch)
+
+    push_check(session, notes)
+    assert (notes / OTHER_TASK.task_notes_dir / "THEIRS.md").exists()
 
 
 def test_notes_added_and_removed_within_one_push_are_refused(checkouts: Checkouts) -> None:
@@ -423,7 +447,8 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     refusal = refusal_of(lambda: push_check(session, notes))
 
     assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
-    restore = f"--source=origin/{session.agent_notes_branch} --staged --worktree -- {STATE_PATH}"
+    origin_sha = git(notes, "rev-parse", f"origin/{session.agent_notes_branch}").stdout.strip()
+    restore = f"--source={origin_sha} --staged --worktree -- {STATE_PATH}"
     assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal and "reset --soft" not in refusal
 
 
