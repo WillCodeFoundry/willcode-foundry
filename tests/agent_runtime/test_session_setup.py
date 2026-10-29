@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import session_setup
+from agent_runtime import contract, session_setup
 from agent_runtime.session_setup import SetupError
 from foundry.task import NOTES_BRANCH
 from tests.support import TASK, SessionFor, git
@@ -211,3 +211,194 @@ def test_a_failed_step_names_the_checkout_it_ran_in(
 
     project = session.agent_project_dir
     assert str(refused.value) == f"session-setup: `git -C {project} fetch origin` failed; see git's message above"
+
+
+def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, str], message: str = "more") -> None:
+    """A commit on origin's ``branch`` adding or changing ``files``, as another role's push would."""
+    other = tmp_path / f"other-{branch.replace('/', '-')}"
+    if not other.exists():
+        git(tmp_path, "clone", "-q", str(origin), str(other))
+    git(other, "fetch", "-q", "origin")
+    git(other, "checkout", "-q", "-B", branch, f"origin/{branch}")
+    for name, text in files.items():
+        (other / name).parent.mkdir(parents=True, exist_ok=True)
+        (other / name).write_text(text)
+    git(other, "add", ".")
+    git(other, "commit", "-qm", message)
+    git(other, "push", "-q", "origin", branch)
+
+
+def tips(session: contract.Environ) -> tuple[str, str]:
+    return (
+        git(session.agent_project_dir, "rev-parse", "HEAD").stdout.strip(),
+        git(session.agent_notes_dir, "rev-parse", "HEAD").stdout.strip(),
+    )
+
+
+def snapshot(session: contract.Environ) -> tuple[str, ...]:
+    """Everything a refusal must leave alone: each checkout's HEAD, status, stashes and branch tips."""
+    state = []
+    for checkout in (session.agent_project_dir, session.agent_notes_dir):
+        for args in (
+            ("rev-parse", "HEAD"),
+            ("status", "--porcelain"),
+            ("stash", "list"),
+            ("for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"),
+        ):
+            state.append(git(checkout, *args).stdout)
+    return tuple(state)
+
+
+def test_a_relaunch_brings_both_checkouts_to_origins_tip(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    """The wcf-0025 bug: the dev was relaunched and read the notes as it had left them."""
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
+    push_to_origin(
+        created_task,
+        tmp_path,
+        NOTES_BRANCH,
+        {
+            TASK.task_file: "# Task, edited\n",
+            f"{TASK.task_notes_dir}/REVIEW.md": "review\n",
+            f"{TASK.task_notes_dir}/TURN": "dev\n",
+        },
+    )
+
+    session_setup.session_setup(session, home)
+
+    code, notes = session.agent_project_dir, session.agent_notes_dir
+    assert (code / "new.py").read_text() == "x\n"
+    assert git(code, "rev-parse", "HEAD").stdout == git(code, "rev-parse", f"origin/{TASK.branch}").stdout
+    assert git(notes, "rev-parse", "HEAD").stdout == git(notes, "rev-parse", f"origin/{NOTES_BRANCH}").stdout
+    assert (notes / TASK.task_notes_dir / "REVIEW.md").read_text() == "review\n"
+    assert (notes / TASK.task_file).read_text() == "# Task, edited\n"
+    imports = [line for line in (home / ".claude" / "CLAUDE.md").read_text().splitlines() if line.startswith("@")]
+    assert imports[-1] == f"@{notes / TASK.task_file}"
+
+
+def test_the_notes_branch_is_brought_forward_when_only_its_directory_is_missing(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    git(session.agent_project_dir, "worktree", "remove", str(session.agent_notes_dir))
+    push_to_origin(created_task, tmp_path, NOTES_BRANCH, {f"{TASK.task_notes_dir}/TURN": "dev\n"})
+
+    session_setup.session_setup(session, home)
+
+    assert (session.agent_notes_dir / TASK.task_notes_dir / "TURN").read_text() == "dev\n"
+
+
+def test_unpushed_commits_are_left_as_they_are(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    for checkout in (session.agent_project_dir, session.agent_notes_dir):
+        git(checkout, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "local")
+    before = tips(session)
+
+    session_setup.session_setup(session, home)
+
+    assert tips(session) == before
+
+
+def test_uncommitted_changes_that_dont_conflict_survive_the_update(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    code, notes = session.agent_project_dir, session.agent_notes_dir
+    (code / "README.md").write_text("edited\n")
+    (notes / TASK.task_notes_dir / "PROGRESS.md").write_text("wip\n")
+    push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
+    push_to_origin(created_task, tmp_path, NOTES_BRANCH, {f"{TASK.task_notes_dir}/TURN": "dev\n"})
+
+    session_setup.session_setup(session, home)
+
+    assert (code / "new.py").is_file() and (code / "README.md").read_text() == "edited\n"
+    assert (notes / TASK.task_notes_dir / "TURN").is_file()
+    assert (notes / TASK.task_notes_dir / "PROGRESS.md").read_text() == "wip\n"
+
+
+RECREATING = 'README\'s "Recreating a sandbox"'
+
+
+def test_a_diverged_branch_is_refused_naming_the_local_commits(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    code = session.agent_project_dir
+    git(code, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "my unpushed work")
+    push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
+    before = snapshot(session)
+
+    with pytest.raises(SetupError) as refused:
+        session_setup.session_setup(session, home)
+
+    message = str(refused.value)
+    assert message.index("code checkout") < message.index("Recreating a sandbox")
+    assert TASK.branch in message and "diverged" in message and "my unpushed work" in message
+    assert RECREATING in message and "discards" in message
+    assert snapshot(session) == before
+
+
+def test_uncommitted_changes_the_update_would_overwrite_are_refused(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    notes = session.agent_notes_dir
+    (notes / TASK.task_file).write_text("# mine\n")
+    push_to_origin(created_task, tmp_path, NOTES_BRANCH, {TASK.task_file: "# theirs\n"})
+    before = snapshot(session)
+
+    with pytest.raises(SetupError) as refused:
+        session_setup.session_setup(session, home)
+
+    message = str(refused.value)
+    assert "notes checkout" in message and NOTES_BRANCH in message and TASK.task_file in message
+    assert "uncommitted changes" in message and RECREATING in message
+    assert snapshot(session) == before
+    assert (notes / TASK.task_file).read_text() == "# mine\n"
+
+
+def test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, tmp_path: Path
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    git(session.agent_notes_dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "local")
+    push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
+    push_to_origin(created_task, tmp_path, NOTES_BRANCH, {"other.md": "x\n"})
+    before = snapshot(session)
+
+    with pytest.raises(SetupError, match="notes checkout"):
+        session_setup.session_setup(session, home)
+
+    assert snapshot(session) == before
+    assert not (session.agent_project_dir / "new.py").exists()
+
+
+@pytest.mark.parametrize("make", ["detached", "other branch"])
+def test_a_notes_worktree_not_on_the_notes_branch_is_refused(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path, make: str
+) -> None:
+    session = session_for(built_kit, created_task)
+    session_setup.session_setup(session, home)
+    notes = session.agent_notes_dir
+    git(notes, "switch", "-q", "--detach") if make == "detached" else git(notes, "switch", "-q", "-c", "elsewhere")
+    before = snapshot(session)
+
+    with pytest.raises(SetupError) as refused:
+        session_setup.session_setup(session, home)
+
+    message = str(refused.value)
+    assert "notes checkout" in message and f"expected {NOTES_BRANCH}" in message
+    assert ("detached" if make == "detached" else "elsewhere") in message
+    assert RECREATING in message and "discards" in message
+    assert snapshot(session) == before
