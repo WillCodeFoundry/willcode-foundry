@@ -19,6 +19,8 @@ Three-axis review of the diff between `HEAD` and the point where the task branch
 
 All three axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
+Each finding is **Blocking** or a **Follow-up**, against a bar for its own axis (step 4). Only Blocking findings hold the verdict, so a round can approve with follow-ups open.
+
 ## Process
 
 ### 1. Pin the fixed point
@@ -32,6 +34,13 @@ git merge-base HEAD origin/<default branch>
 Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
 
 Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here, not inside the parallel sub-agents.
+
+**From round 2 on, review the fixes, not the branch again.** Round 1 reviews the whole diff. Later rounds take two things from `REVIEW.md`:
+
+- the commit the last round reviewed, from its heading;
+- every finding that is closed, accepted as is or deferred: the settled list.
+
+Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents judge each open finding, and look for new problems only in the lines the fix diff touches. Code an earlier round reviewed and no fix touched isn't reviewed again.
 
 ### 2. Identify the spec source
 
@@ -75,10 +84,22 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 Issue all three sub-agent calls together, in the foreground, and aggregate the reports they return.
 
-Every brief also carries these two rules, word for word:
+Every brief also carries these rules, word for word:
 
 - "Cite each finding as `file:line` at `HEAD`, read from that one file (`git show HEAD:<path> | cat -n`). Never take line numbers from a listing of several files joined together, since every number after the first file is shifted."
 - "Say what is wrong, where, and why it matters. Give the fix as one line of direction at most, never code. The dev fixes each finding test-first, and a ready-made fix skips the failing test."
+- "Label each finding Blocking or Follow-up, by your axis's bar below. Everything that misses the bar is a Follow-up."
+- "Say who would hit each finding, doing what, and how often. Drop a finding nobody realistic would hit."
+- "Direct the smallest fix. 'Accept as is' is a valid direction. If the only fix you see adds machinery, or instructions that script a recovery, say so: that is a design question for the owner, not a fix."
+- "Report at most five findings, most important first. Fewer, or none, is a good result."
+
+The bar for Blocking, each brief carrying its own axis's:
+
+- **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a name that misleads where it is used, or a contradicted ADR.
+- **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out.
+- **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
+
+From round 2 on, every brief also carries the fix diff command, the open findings to judge, and the settled list, with this rule: "Don't raise a settled finding again. Look for new problems only in the lines the fix diff touches."
 
 **Standards sub-agent prompt** should include:
 
@@ -97,7 +118,7 @@ Every brief also carries these two rules, word for word:
 
 - The diff command and commit list.
 - How the project runs its tests, from its `AGENTS.md` or `CONTRIBUTING.md`.
-- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Under 400 words."
+- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Before building a situation, say who causes it and how often. Skip anything that needs a deliberate bypass, or two actors within the same few seconds. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour sub-agent and say so.
 
@@ -107,7 +128,9 @@ Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "
 
 Before writing the round, check every cited `file:line` against the file at `HEAD`, and correct any that don't match. Drop a finding the code shows to be wrong, such as a Speculative Generality flag on something the spec asks for. Remove any code fix a report included, keeping its one line of direction.
 
-End the reports with a one-line summary, before the round's verdict: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
+Check each label against its axis's bar, and downgrade a Blocking finding that misses it. Drop a finding that raises a settled one again. Where two axes find one cause, keep both, each saying it shares a cause with the other.
+
+End the reports with a one-line summary, before the round's verdict: findings per axis, how many block, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 
 ## Why separate axes
 
@@ -118,3 +141,7 @@ A change can pass one axis and fail another:
 - Code that reads well and matches the spec line by line, but breaks on an error path or an unusual state → **Standards and Spec pass, Behaviour fail.**
 
 Reading the diff finds the first two. The third shows only when the code is run in the situation that breaks it, so it needs a reviewer briefed to build that situation. Reporting the axes separately stops one from masking another.
+
+## Why a bar, and why later rounds review only the fixes
+
+Fresh reviewers always find something. Without a bar, every finding holds the verdict, so a round approves only when it finds nothing, and it rarely will. Without a scope, each round sweeps the whole branch again, including the last round's fixes, and each fix is new surface to find fault with. The bar ends a review once nothing blocks. The scope stops each fix from opening a new round on code already settled.
