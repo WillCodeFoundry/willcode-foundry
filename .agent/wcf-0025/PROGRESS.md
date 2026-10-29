@@ -8,8 +8,10 @@
 ## In progress
 
 ## Next
-- Reviewer's round.
+- Human merges the pull request.
 
 ## Blockers
+
+Reviewer approved (round 1). Pull request: https://github.com/WillCodeFoundry/willcode-foundry/pull/26
 
 Status: ready for review
