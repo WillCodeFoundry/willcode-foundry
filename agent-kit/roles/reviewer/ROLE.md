@@ -67,3 +67,17 @@ Never edit earlier rounds. In each round, in this order:
 
 Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.
+
+## Ending your turn
+
+End your turn with the event that matches the round's verdict:
+
+```bash
+"$AGENT_KIT_DIR/bin/task" approve "<hand-off note>"   # Verdict: approved
+"$AGENT_KIT_DIR/bin/task" reject "<hand-off note>"    # Verdict: changes needed
+```
+
+From round 3 on, don't `reject` again: `block` instead, with the findings
+still open and why the dev and you disagree, so the human decides rather than
+another round. The hand-off note names the round, and the findings to look at
+first.

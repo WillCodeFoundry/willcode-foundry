@@ -28,6 +28,8 @@ from agent_runtime import (  # noqa: E402
     session_setup,
 )
 from agent_runtime.git import GitError  # noqa: E402
+from agent_runtime.task import command as task_command  # noqa: E402
+from agent_runtime.task.state import TaskStateRefused  # noqa: E402
 
 COMMANDS: dict[str, tuple[Callable[[], int], str]] = {
     "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),
@@ -40,17 +42,17 @@ CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
     "session-check": claude_hooks.session_check,
 }
 GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
-    "pre-commit": lambda _args: git_hooks.pre_commit(),
     "prepare-commit-msg": git_hooks.prepare_commit_msg,
     "pre-push": lambda _args: git_hooks.pre_push(),
 }
-"""What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
+"""What each stub in agent-kit/hooks/ runs, by the name git ran it as."""
 _EXPECTED = (
     contract.MissingVariables,
     hardening.HardeningRefused,
     session_setup.SetupError,
     git_hooks.GitHookRefused,
     GitError,
+    TaskStateRefused,
 )
 """What a command raises to stop with a message, rather than a traceback."""
 
@@ -71,6 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
     git_hook = subparsers.add_parser("git-hook", help="a git hook, as agent-kit/hooks/ runs it")
     git_hook.add_argument("name", choices=GIT_HOOKS)
     git_hook.add_argument("args", nargs=argparse.REMAINDER, help="what git passed the hook")
+    task = subparsers.add_parser(
+        "task",
+        help="the agent's task state: show it, or write the next one with an event",
+        description=task_command.USAGE,
+    )
+    task.add_argument("args", nargs=argparse.REMAINDER, help='show, or EVENT "<hand-off note>"')
     return parser
 
 
@@ -82,12 +90,14 @@ def run(argv: Sequence[str] | None = None) -> int:
         func = CLAUDE_HOOKS[args.name]
     elif args.command == "git-hook":
         func = partial(_ran, partial(GIT_HOOKS[args.name], args.args))
+    elif args.command == "task":
+        func = partial(task_command.task, args.args)
     else:
         func = args.func
     try:
         return func()
     except _EXPECTED as error:
-        if isinstance(error, (contract.MissingVariables, GitError)):
+        if isinstance(error, (contract.MissingVariables, GitError, TaskStateRefused)):
             # Messages that don't say which command they come from; a hook says its own name.
             command = args.name if args.command in ("claude-hook", "git-hook") else args.command
             print(f"agent_runtime {command}: {error}", file=sys.stderr)

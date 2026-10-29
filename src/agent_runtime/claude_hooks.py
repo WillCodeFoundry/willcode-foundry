@@ -1,7 +1,7 @@
 """Claude Code's hooks, as managed settings run them: the tool call or event as JSON on stdin.
 
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
-``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
+``session_check`` (Stop) refuses to end the agent run while either checkout has uncommitted or unpushed work,
 or can't be checked.
 Both are guardrails against mistakes, not boundaries: see docs/security-model.md. Both trust the
 environment Claude Code gives them, which a settings file the agent writes can change: session-check reads the
@@ -12,11 +12,10 @@ import json
 import re
 import shlex
 import sys
-from pathlib import Path
 from typing import TextIO
 
 from agent_runtime import contract
-from agent_runtime.git import Git, GitError
+from agent_runtime.checkouts import unsaved_work
 
 _BLOCK = 2
 """Claude Code: a PreToolUse hook exiting 2 blocks the tool call and shows its stderr to the agent."""
@@ -68,8 +67,8 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
         return 0
     print(
         f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
-        "  Fix the cause instead. If you believe this is wrong, record it under\n"
-        "  Blockers in PROGRESS.md and ask.",
+        "  Fix the cause instead. If you can't, or believe this is wrong, say so\n"
+        "  in the conversation and stop.",
         file=stderr or sys.stderr,
     )
     return _BLOCK
@@ -85,15 +84,13 @@ def session_check(
     session = session or contract.read_environ()
     if _stop_hook_active(stdin or sys.stdin):
         return 0  # already looping on this hook: let the stop through rather than spin
-    problems = [
-        *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
-        *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),
-    ]
+    problems = unsaved_work(session)
     if not problems:
         return 0
     reason = (
-        f"Cannot end the session yet: {'; '.join(problems)}. "
-        'Commit and push that work (see "Git rules" in AGENTS.md), then finish.'
+        f"Cannot stop yet: {'; '.join(problems)}. "
+        'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
+        "If a push was refused, say so in the conversation and stop."
     )
     print(json.dumps({"decision": "block", "reason": reason}), file=stdout or sys.stdout)
     return 0
@@ -107,39 +104,3 @@ def _stop_hook_active(stdin: TextIO) -> bool:
     except json.JSONDecodeError:
         return False
     return isinstance(event, dict) and event.get("stop_hook_active") is True
-
-
-class _CantCheck(Exception):
-    """A git command session-check needs failed; the message names it and git's first line."""
-
-
-def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
-    """What in ``checkout`` isn't saved on origin. When git can't tell, that is reported too: the stop is
-    blocked rather than let through unchecked."""
-    git = Git(checkout)
-    try:
-        return [*_uncommitted(git, label), *_unpushed(git, branch, label)]
-    except (_CantCheck, GitError) as error:
-        return [f"{label} can't be checked: {error}"]
-
-
-def _uncommitted(git: Git, label: str) -> list[str]:
-    return [f"{label} has uncommitted changes"] if _checked(git, "status", "--porcelain").strip() else []
-
-
-def _unpushed(git: Git, branch: str, label: str) -> list[str]:
-    """Commits origin/``branch`` lacks: on the branch, and at HEAD, which a detached HEAD moves off it."""
-    git.run_captured("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
-    for rev in (f"refs/heads/{branch}", "HEAD"):
-        if int(_checked(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0:
-            return [f"{label} has commits not pushed to origin/{branch}"]
-    return []
-
-
-def _checked(git: Git, *args: str) -> str:
-    """The command's output; a failure raises _CantCheck naming it, with git's first line."""
-    result = git.run_captured(*args)
-    if result.returncode != 0:
-        first_line = result.stderr.strip().splitlines()[0] if result.stderr.strip() else "no message"
-        raise _CantCheck(f"`{git.describe(*args)}` failed: {first_line}")
-    return result.stdout

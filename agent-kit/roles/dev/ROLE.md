@@ -21,6 +21,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   finding, add "Fixed in `<commit>`." or "Disagree: <why>.", without editing
   the reviewer's text. Commit and push it on `$AGENT_NOTES_BRANCH`, with the fixes on
   the task branch.
-- When it says `Verdict: approved`: open the pull request into the default
-  branch with `gh pr create`, the title as the `git-conventions` skill says
-  and the body from the `pr` skill. Never before that verdict.
+- Open the pull request only when `"$AGENT_KIT_DIR/bin/task" show` says that is
+  your goal: into the default branch with `gh pr create`, the title as the
+  `git-conventions` skill says and the body from the `pr` skill. Put its URL in
+  your hand-off note.

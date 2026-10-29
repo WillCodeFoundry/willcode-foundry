@@ -10,6 +10,7 @@ from foundry.agent_sandbox.definition import MAX_SANDBOX_NAME_LENGTH, SandboxDef
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.launcher import LaunchRequest, launch
 from foundry.agent_sandbox.pruning import Pruned, prune
+from foundry.agent_sandbox.sandbox import live_sandboxes
 
 __all__ = [
     "MAX_SANDBOX_NAME_LENGTH",
@@ -18,6 +19,7 @@ __all__ = [
     "SandboxDefinition",
     "SandboxError",
     "launch",
+    "live_sandboxes",
     "prune",
     "valid_sandbox_name",
 ]

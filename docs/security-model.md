@@ -13,19 +13,21 @@ Some controls hold whatever the agent does; the rest only stop mistakes. Why it 
 | Which branches and tags may be pushed; no force-push or deletion; signed agent commits | the project's GitHub rulesets ([repo policy](../config/repo-policy/README.md)), except under `dependabot/**` | anything with the role's credentials |
 | Git hooks | git, through `core.hooksPath` | mistakes only |
 | `guard-bash` | Claude Code, before each shell command | mistakes only |
-| `session-check` | Claude Code, at the end of each of the agent's turns | forgetting to commit or push |
+| `session-check` | Claude Code, each time the agent stops | forgetting to commit or push |
 
 The agent runs with permission prompts off. What it may do is set by the rows above, not by asking you.
 
 ## The guardrails
 
-The git hooks and `guard-bash` run inside the sandbox, so an agent set on getting past them can: through a script, an alias, or an edit to `.git/config`. They keep only rules nothing else enforces, and each refusal says what to do instead:
+The git hooks and `guard-bash` run inside the sandbox, so an agent set on getting past them can: through a script, an alias, or an edit to `.git/config`. They keep only rules nothing else enforces. Each refusal says what is wrong and which rule it breaks, and the agent fixes the cause:
 
-- **`pre-push`:** push only this task's branch and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another.
-- **`pre-commit`:** nothing under `.agent/` on the task branch; on `agent-notes`, only this task's dir.
+- **`pre-push`:** push only this task's branch and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another. It judges what each push brings to origin, so the content decides, not who wrote it or which git command made it ([ADR 0011](adr/0011-task-states.md)):
+  - on the task branch, nothing under `.agent/`, in any pushed commit or in what the push leaves;
+  - on `agent-notes`, nothing outside this task's dir, in the same way;
+  - the push leaves the task's `STATE.json` as origin had it, or changed by a legal transition for the role.
 - **`prepare-commit-msg`:** adds the `Task: <task>` trailer to commits on the task branch, even with `--no-verify`.
 - **`guard-bash`:** refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the git hooks.
-- **`session-check`:** blocks the end of a turn while either checkout has work not committed or not pushed. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
+- **`session-check`:** blocks the agent from stopping while either checkout has work not committed or not pushed. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
 
 Force-pushes, deletions, history rewrites and pushes elsewhere are left to the rulesets, which refuse them on the server.
 

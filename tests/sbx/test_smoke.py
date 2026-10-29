@@ -25,7 +25,7 @@ from foundry import agent_sandbox, config, paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.launcher import LaunchRequest, PreparedSandbox, start
 from foundry.agent_sandbox.ssh_agent import ssh_agent_socket_path
-from foundry.commands.run import prepare_launch
+from foundry.commands.task import prepare_launch
 from foundry.errors import FoundryError
 from foundry.task import Task
 
@@ -75,7 +75,11 @@ class Smoke:
 
     def prepare(self) -> LaunchRequest:
         """The session, created if missing, and the runtime built into the kit: no sbx call yet."""
-        self.request = prepare_launch(self.foundry_root, project_name=PROJECT, role_name=ROLE, task=TASK).request
+        foundry_config = config.load(self.foundry_root)
+        project = foundry_config.project(PROJECT)
+        self.request = prepare_launch(
+            self.foundry_root, foundry_config, project=project, role_name=ROLE, task=TASK
+        ).request
         return self.request
 
     def launch(self) -> PreparedSandbox:

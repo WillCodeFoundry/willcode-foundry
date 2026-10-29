@@ -1,12 +1,20 @@
-"""foundry imports four runtime modules and no others: the sandbox's code stays the sandbox's, and ARCHITECTURE.md's
+"""foundry imports six runtime modules and no others: the sandbox's code stays the sandbox's, and ARCHITECTURE.md's
 rule is checked rather than only stated."""
 
 import ast
 from pathlib import Path
 
 FOUNDRY_DIR = Path(__file__).parents[1] / "src" / "foundry"
-SHARED = {"agent_runtime.contract", "agent_runtime.agent_kit", "agent_runtime.atomic_files", "agent_runtime.git"}
-"""What both packages use: the session variables, the kit's layout, replacing files, and running git."""
+SHARED = {
+    "agent_runtime.contract",
+    "agent_runtime.agent_kit",
+    "agent_runtime.atomic_files",
+    "agent_runtime.git",
+    "agent_runtime.task.lifecycles",
+    "agent_runtime.task.state",
+}
+"""What both packages use: the session variables, the kit's layout, replacing files, running git, and the
+lifecycles and task states. Never agent_runtime.task.command, which runs only in the sandbox."""
 
 
 def runtime_imports(module_path: Path) -> set[str]:

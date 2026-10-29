@@ -1,4 +1,5 @@
-"""foundry/task.py against a real repository on disk, and the `foundry task create` command's report and arguments."""
+"""foundry/task.py and the `foundry task` commands' git, against a real repository on disk: creating a task, reading
+its task state, listing tasks and moving one by hand; and the commands' reports and arguments."""
 
 import os
 import re
@@ -8,8 +9,10 @@ from pathlib import Path
 import pytest
 
 from agent_runtime.git import GitError
+from agent_runtime.task.lifecycles import BUGFIX, FEATURE, Lifecycle
+from agent_runtime.task.state import TaskState
 from foundry import cli, task
-from foundry.commands.task import report
+from foundry.commands.task import Row, move_task, read_rows, report, table
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.task import Task
@@ -68,11 +71,14 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
     return origin_dir
 
 
-def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> None:
-    scratch_dir = origin_dir.parent / f"scratch-{task_id}"
+def scratch_clone(origin_dir: Path, git_env: dict[str, str], name: str) -> ProjectClone:
+    scratch_dir = origin_dir.parent / f"scratch-{name}"
     scratch_dir.mkdir()
-    clone = ProjectClone.init(str(origin_dir), scratch_dir, git_env)
-    task.create(clone, Task(task_id), TEMPLATE)
+    return ProjectClone.init(str(origin_dir), scratch_dir, git_env)
+
+
+def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1", lifecycle: Lifecycle = FEATURE) -> None:
+    task.create(scratch_clone(origin_dir, git_env, task_id), Task(task_id), TEMPLATE, lifecycle)
 
 
 def branch_files(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
@@ -123,6 +129,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_no
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         ".agent/t0/TASK.md": "an earlier task\n",
         ".agent/t1/PROGRESS.md": "# Progress\n",
+        ".agent/t1/STATE.json": TaskState.new(FEATURE).to_json(),
         ".agent/t1/TASK.md": "# Task <id>: <title>\n",
     }
     notes_parent = git(git_env, f"--git-dir={origin_dir}", "rev-parse", f"{task.NOTES_BRANCH}^")
@@ -136,6 +143,7 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
 
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         ".agent/t1/PROGRESS.md": "# Progress\n",
+        ".agent/t1/STATE.json": TaskState.new(FEATURE).to_json(),
         ".agent/t1/TASK.md": "# Task <id>: <title>\n",
     }
     assert git(git_env, f"--git-dir={origin_dir}", "rev-list", "--count", task.NOTES_BRANCH) == "1"
@@ -220,12 +228,40 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 
 
 def test_the_report_says_what_was_created_and_how_to_run_it() -> None:
-    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry run store ROLE t1"]
+    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry task run store t1"]
 
 
-def test_create_takes_a_project_and_a_task() -> None:
+def test_create_takes_a_project_and_a_task_and_a_lifecycle_defaulting_to_feature() -> None:
     args = cli.build_parser().parse_args(["task", "create", "store", "T1"])
+    assert (args.project_name, args.task_id, args.lifecycle) == ("store", "T1", "feature")
+    assert (
+        cli.build_parser().parse_args(["task", "create", "store", "T1", "--lifecycle", "bugfix"]).lifecycle == "bugfix"
+    )
+
+
+def test_an_unknown_lifecycle_is_refused_before_anything_runs(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["task", "create", "store", "T1", "--lifecycle", "epic"])
+    assert "argument --lifecycle: invalid choice: 'epic'" in capsys.readouterr().err
+
+
+def test_move_takes_a_state_and_requires_a_note(capsys: pytest.CaptureFixture[str]) -> None:
+    args = cli.build_parser().parse_args(["task", "move", "store", "T1", "review", "--note", "Answered."])
+    assert (args.project_name, args.task_id, args.state, args.note) == ("store", "T1", "review", "Answered.")
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["task", "move", "store", "T1", "review"])
+    assert "--note" in capsys.readouterr().err
+
+
+def test_run_takes_no_role() -> None:
+    args = cli.build_parser().parse_args(["task", "run", "store", "T1"])
     assert (args.project_name, args.task_id) == ("store", "T1")
+
+
+def test_there_is_no_foundry_run(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["run", "store", "dev", "T1"])
+    assert "invalid choice: 'run'" in capsys.readouterr().err
 
 
 # --- ProjectClone: what task.create can't reach ---------------------------------------
@@ -237,3 +273,154 @@ def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
     clone = ProjectClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
     with pytest.raises(AssertionError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])
+
+
+# --- task states -------------------------------------------------------------------
+
+
+def test_a_task_chooses_its_lifecycle(origin_dir, git_env) -> None:
+    create(origin_dir, git_env, lifecycle=BUGFIX)
+
+    files = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
+    assert TaskState.parse(files[".agent/t1/STATE.json"], "STATE.json") == TaskState.new(BUGFIX)
+
+
+def notes_clone(origin_dir: Path, git_env: dict[str, str], name: str) -> ProjectClone:
+    clone = scratch_clone(origin_dir, git_env, name)
+    clone.check_out(task.NOTES_BRANCH)
+    return clone
+
+
+def test_a_tasks_state_is_read_from_the_notes_branch(origin_dir, git_env) -> None:
+    create(origin_dir, git_env)
+
+    assert task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T1")) == TaskState.new(FEATURE)
+
+
+def test_reading_a_task_that_doesnt_exist_is_refused(origin_dir, git_env) -> None:
+    with pytest.raises(FoundryError, match=r"^there is no task t9\. agent-notes has no \.agent/t9/\.$"):
+        task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T9"))
+
+
+def test_a_task_created_before_task_states_is_refused(origin_dir, git_env) -> None:
+    with pytest.raises(FoundryError) as refused:
+        task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T0"))
+
+    assert (
+        str(refused.value) == "task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states."
+    )
+
+
+def test_a_move_that_changes_nothing_is_refused_before_committing(origin_dir, git_env) -> None:
+    """Round 6's R70: repeating a move would otherwise fail in git commit, and blame signing."""
+    create(origin_dir, git_env)
+    move_task(scratch_clone(origin_dir, git_env, "first"), Task("T1"), to="implement", note="Write it yourself.")
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+
+    with pytest.raises(FoundryError, match=r"^task t1 is already in implement with that note, so there is nothing to"):
+        move_task(scratch_clone(origin_dir, git_env, "again"), Task("T1"), to="implement", note="Write it yourself.")
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
+def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branch_alone(origin_dir, git_env) -> None:
+    create(origin_dir, git_env)
+    task_branch = head(origin_dir, git_env, "task/t1")
+
+    old, moved = move_task(
+        scratch_clone(origin_dir, git_env, "move"), Task("T1"), to="implement", note="Write it yourself."
+    )
+
+    assert (old.state, moved.state) == ("plan", "implement")
+    files = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
+    assert TaskState.parse(files[".agent/t1/STATE.json"], "STATE.json") == TaskState(
+        lifecycle=FEATURE, state="implement", note="Write it yourself."
+    )
+    commit = git(git_env, f"--git-dir={origin_dir}", "cat-file", "commit", task.NOTES_BRANCH)
+    assert "t1: plan → implement (moved by hand)" in commit and "gpgsig -----BEGIN SSH SIGNATURE-----" in commit
+    assert head(origin_dir, git_env, "task/t1") == task_branch
+
+
+@pytest.mark.parametrize(
+    ("to", "note", "message"), [("draft", "x", "feature has no state 'draft'"), ("review", " ", "Give a hand-off note")]
+)
+def test_a_refused_move_pushes_nothing(origin_dir, git_env, to: str, note: str, message: str) -> None:
+    create(origin_dir, git_env)
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+
+    with pytest.raises(Exception, match=message):
+        move_task(scratch_clone(origin_dir, git_env, "move"), Task("T1"), to=to, note=note)
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
+def test_list_has_a_row_per_readable_task_and_the_whole_error_for_each_other(origin_dir, git_env) -> None:
+    create(origin_dir, git_env)
+
+    rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
+
+    assert [(row.task.id, row.task_state) for row in rows] == [("t1", TaskState.new(FEATURE))]
+    assert (
+        errors[0] == "store t0: task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states."
+    )
+    assert len(errors) == 1
+
+
+def test_a_bad_task_id_or_a_state_that_isnt_a_text_file_is_that_tasks_own_error(origin_dir, git_env, tmp_path) -> None:
+    """Round 4's R51 and R52, and a STATE.json that is a folder or a link: none stops the list, and a link is
+    never followed out of the clone."""
+    create(origin_dir, git_env)
+    notes_dir = tmp_path / "notes"
+    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(notes_dir))
+    (notes_dir / ".agent" / "Old Notes").mkdir()
+    (notes_dir / ".agent" / "Old Notes" / "TASK.md").write_text("old\n")
+    (notes_dir / ".agent" / "t2").mkdir()
+    (notes_dir / ".agent" / "t2" / "STATE.json").write_bytes(b"\xff\xfe")
+    (notes_dir / ".agent" / "t3" / "STATE.json").mkdir(parents=True)
+    (notes_dir / ".agent" / "t3" / "STATE.json" / "x").write_text("x\n")
+    (notes_dir / ".agent" / "t4").mkdir()
+    (notes_dir / ".agent" / "t4" / "STATE.json").symlink_to("/etc/hostname")
+    git(git_env, "-C", str(notes_dir), "add", ".agent")
+    git(git_env, "-C", str(notes_dir), "commit", "--quiet", "--no-gpg-sign", "-m", "odd tasks")
+    git(git_env, "-C", str(notes_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
+
+    rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
+
+    assert [row.task.id for row in rows] == ["t1"]
+    assert [error.split(":")[0] for error in errors] == [
+        "store Old Notes",
+        "store t0",
+        "store t2",
+        "store t3",
+        "store t4",
+    ]
+    assert errors[2] == "store t2: .agent/t2/STATE.json is not UTF-8 text, on agent-notes. Fix it there."
+    assert (
+        errors[3]
+        == errors[4].replace("t4", "t3")
+        == ("store t3: .agent/t3/STATE.json is not a plain file, on agent-notes. Fix it there.")
+    )
+
+
+def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> None:
+    git(git_env, f"--git-dir={origin_dir}", "branch", "--quiet", "-D", task.NOTES_BRANCH)
+
+    assert read_rows("store", scratch_clone(origin_dir, git_env, "list")) == ([], [])
+
+
+def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
+    def state(name: str, note: str = "") -> TaskState:
+        return TaskState(lifecycle=FEATURE, state=name, note=note)
+
+    rows = [
+        Row("store", Task("t1"), state("implement", "R3 is open.\nSee REVIEW.md.")),
+        Row("store", Task("t2"), state("review", "Ready.")),
+        Row("store", Task("t3"), state("blocked", "Which base?")),
+        Row("store", Task("t4"), state("done")),
+    ]
+
+    assert table(rows, live_sandboxes={"reviewer-store-t2"}) == [
+        "PROJECT  TASK  LIFECYCLE  STATE      ROLE      SANDBOX  NOTE",
+        "store    t1    feature    implement  dev       —        R3 is open.",
+        "store    t2    feature    review     reviewer  running  Ready.",
+        "store    t3    feature    blocked    —         —        Which base?",
+        "store    t4    feature    done       —         —",
+    ]

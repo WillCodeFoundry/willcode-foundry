@@ -46,7 +46,8 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/ROLE.md` | your role's identity, method, definition of done and boundaries |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
 | `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills/`) are loaded as Claude Code skills; `git-conventions` is read by its path |
-| `$AGENT_KIT_DIR/.build/` | the runtime the hooks run; not for you to call |
+| `$AGENT_KIT_DIR/bin/task` | your task command: where the task stands, and the event that ends your turn (see "Taking turns") |
+| `$AGENT_KIT_DIR/.build/` | the runtime the hooks and `bin/task` run; not for you to call |
 
 You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
 not available to you. If the task needs them, record it under "Blockers" and
@@ -72,6 +73,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
+| `STATE.json` | the task command | The task state: the state the task is in, and the hand-off note from the last turn. Only the task command, or the human, changes it. **Never edit it.** `pre-push` refuses a change that isn't a legal transition for your role. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -113,17 +115,44 @@ entries as you go, not at the end.
 
 ## 3. Workflow
 
+### Taking turns
+
+A task passes from role to role. Each state belongs to one role, except
+terminal states, which no event leaves and no role works on. You were started
+because it is your turn. `bin/task show` says what your turn is for: your goal,
+and the events that end the turn, each with when to send it.
+
+```bash
+"$AGENT_KIT_DIR/bin/task" show                       # where the task stands: your goal and your events
+"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"  # write the next task state
+```
+
+- Run `task show` first, and read its hand-off note: the last turn left it for you.
+- Push your code and notes, then send the event that says what happened. It
+  writes your task state. Your turn ends when you commit and push it, with the
+  commands the task command prints. Do nothing else in between.
+- The task command refuses while either checkout has unsaved work, or the notes
+  checkout isn't up to date with origin.
+- When you are stuck, end your turn with `block`, the question as its note
+  (see "When to stop and ask").
+- Once your turn has passed, push nothing more, and stop.
+
+The hand-off note is the first thing the next role reads. Say what you did,
+where to look, and anything left open, in a few sentences.
+
 ### Start
 
-1. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
+1. Run `"$AGENT_KIT_DIR/bin/task" show`: your goal, and the events that end
+   your turn.
+2. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
    what "done" means: **stop and ask**. Do not guess at scope.
-2. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
+3. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
    continue from "In progress" / "Next" rather than starting over.
-3. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
+4. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
    role's `memory/` that relate to the task. If the project has them, read its
    `ARCHITECTURE.md` and the decisions in `docs/adr/` too: they say how its
    code is built and why.
-4. If starting fresh, write a short plan into `PROGRESS.md` → "Next", commit
+5. If starting fresh, write a short plan into `PROGRESS.md` → "Next", commit
    and push it before writing code.
 
 ### Work in small steps
@@ -152,21 +181,20 @@ after every meaningful step, and always before anything risky or long.
 
 ### Finish
 
-The task is done when every acceptance criterion in `TASK.md` is met. Then:
+Your turn's work is done when its goal is met. Then:
 
 1. Run all project checks one last time.
 2. Make sure the diff against the default branch contains only what the task
    needs: `git diff --stat origin/HEAD...HEAD`
-3. Update `PROGRESS.md`: everything under "Done", with a final line
-   `Status: ready for review`. Tick the criteria you met in your summary, not in
-   `TASK.md`.
+3. Update `PROGRESS.md`: everything under "Done". Tick the criteria you met
+   in your summary, not in `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
-6. Your `ROLE.md` says what happens next (review, the pull request);
-   otherwise tell the human the task is ready, summarising what changed and
-   anything they should check.
+6. Send the event `task show` lists for what happened, with a hand-off note:
+   `"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"`. Your turn ends when
+   you commit and push the task state it writes, with the commands it prints.
 
-If you run out of turns or time, push whatever state you have and make sure
+If you run out of time, push whatever state you have and make sure
 `PROGRESS.md` → "In progress" says exactly where you stopped.
 
 ## 4. Git rules
@@ -185,7 +213,7 @@ git push -u origin "$AGENT_TASK_BRANCH"
 ```
 
 - Only code and project documentation go here.
-- Never commit task notes here. The hooks refuse anything under `$AGENT_NOTES_ROOT/`.
+- Never commit task notes here. The hooks refuse to push anything under `$AGENT_NOTES_ROOT/`.
 - Never touch any branch other than `$AGENT_TASK_BRANCH`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
 - Do not merge or rebase onto `main` unless the task requires it; if `main`
@@ -201,19 +229,22 @@ git push origin "$AGENT_NOTES_BRANCH"
 ```
 
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
-  for their own tasks at the same time; hooks refuse changes to anything else.
-- Always `pull --rebase` before pushing. Because every agent touches only its
-  own dir, this never conflicts.
+  for their own tasks at the same time. The hooks refuse to push changes to anything else.
+- Always `pull --rebase` before pushing. Every agent touches only its own dir,
+  so it conflicts only on `STATE.json`.
+- Such a conflict means the human moved the task after your task-state commit.
+  That commit can never be pushed. It was never pushed, so it is yours to drop.
+  Then run `task show`, and carry on from what it says.
 
 ### Hooks
 
 Git hooks, and a check on the shell commands you run, refuse actions that break
-the rules above. If one refuses an action, read its message:
-it says what was wrong and what to do instead. Never bypass a hook. If you
-believe a hook is wrong, record the case under "Blockers" and ask.
+the rules above. Each refusal says what is wrong and which rule it breaks. Fix
+it with ordinary git. Never bypass a hook. If you
+can't fix it, or believe a hook is wrong, say so in the conversation and stop.
 
-You will not be allowed to end the session while either checkout has
-uncommitted or unpushed changes.
+You will not be allowed to stop while either checkout has uncommitted or
+unpushed changes.
 
 ## 5. Sharing what you learn
 
@@ -229,16 +260,19 @@ uncommitted or unpushed changes.
 
 ## 6. When to stop and ask
 
-Stop, record the question in `PROGRESS.md` → "Blockers", commit, push, and ask
-the human when:
+Stop, record the question in `PROGRESS.md` → "Blockers", commit, push, then
+end your turn with `"$AGENT_KIT_DIR/bin/task" block "<the question>"` and ask
+it in the conversation, when:
 
 - `TASK.md` is missing, unclear, or contradicts the code or itself;
 - the work needs something outside the task's scope, new dependencies, or
   credentials you don't have;
 - an action would be hard to undo (deleting data, rewriting pushed history,
   changing shared configuration);
-- a hook refuses something and you believe it shouldn't;
 - you have been stuck on the same problem for several attempts.
+
+If a push is refused, say so in the conversation and stop, as "Hooks" says.
+`block` can't help, because it needs both checkouts pushed.
 
 Asking early is always better than guessing.
 
@@ -262,3 +296,4 @@ Asking early is always better than guessing.
 - [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
 - [ ] Notes committed and pushed on `$AGENT_NOTES_BRANCH`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation
+- [ ] Your turn ended with `bin/task <event>` and a push of the task state it wrote, unless you stopped part-way

@@ -89,4 +89,7 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     assert decision["decision"] == "block"
     assert "code checkout has uncommitted changes; notes checkout" in decision["reason"]
     assert "notes checkout has commits not pushed" in decision["reason"]
-    assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
+    assert decision["reason"].endswith(
+        'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
+        "If a push was refused, say so in the conversation and stop."
+    )

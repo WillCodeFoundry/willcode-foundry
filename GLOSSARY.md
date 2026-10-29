@@ -45,7 +45,7 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md` and `REVIEW.md`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` and `STATE.json`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Code checkout** and **notes checkout**:
@@ -53,6 +53,38 @@ The two working copies of a project inside a sandbox: one on the task branch, on
 
 **Task template**:
 `config/task-template/`, the files every new task's notes dir starts from.
+
+### Task states
+
+**Lifecycle**:
+The state machine one kind of task follows, such as `feature` or `bugfix`. Defined in `src/agent_runtime/task/lifecycles.py`.
+_Avoid_: workflow, pipeline
+
+**State**:
+One named step of a lifecycle, such as `review`, with its role, its goal and its events. A terminal state, such as `blocked` or `done`, has none of them.
+_Avoid_: stage, status
+
+**Task state**:
+A task's `STATE.json`: its lifecycle, the state it is in, and the hand-off note. Its history is the file's history on the notes branch. "The task is in `review`."
+_Avoid_: ticket
+
+**Terminal state**:
+A state no event leaves, and which belongs to no role. Only a human, moving the task by hand, takes it elsewhere. `blocked`, where a question waits for a human, and `done` are terminal.
+_Avoid_: final state, the human's state
+
+**Turn**:
+The time a task is in a state assigned to a role. Only that role is launched on the task. A turn can span several agent runs.
+_Avoid_: session (that is the foundry's record of a sandbox)
+
+**Event**:
+What an agent sends with the task command to end its turn. The lifecycle names each state's events, and which state each leads to. The turn ends when the task state it writes is pushed.
+_Avoid_: action, command
+
+**Transition**:
+An event applied to a task state, or a move by hand with `foundry task move`.
+
+**Hand-off note**:
+The note a transition leaves for whoever is next, who reads it first. In `blocked`, it is the question for the human.
 
 ### Sandboxes and sessions
 
@@ -70,7 +102,7 @@ _Avoid_: session (for one run of Claude Code; that is an agent run)
 The `AGENT_*` environment variables a sandbox is created with, which tell the agent kit everything about its role, project and task. They never change for the life of the sandbox.
 
 **Launch**:
-One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
+One `foundry task run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
 
 **Agent run**:
 One run of Claude Code inside a sandbox, from start until the agent stops.
@@ -122,13 +154,13 @@ A control that stops mistakes, not an agent set on getting past it: the git hook
 _Avoid_: boundary, security (for a guardrail)
 
 **Git hooks**:
-`pre-commit`, `prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
+`prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
 
 **Claude hooks**:
-`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.
+`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs each time the agent stops.
 
 **Refusal**:
-What a hook or a hardening mode says when it stops something: what was wrong, and what to do instead.
+What a hook, a hardening mode or the task command says when it stops something: what is wrong, and which rule it breaks.
 
 ### Testing
 
@@ -138,6 +170,8 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 ## Relationships
 
 - A **project** has many **tasks**; a **task** has one **task branch** and one **task notes dir** on the project's **notes branch**.
+- A **task** has one **task state**, which names one **lifecycle** and one of its **states**.
+- A **turn** spans one or more **agent runs** of its state's **role**.
 - A **sandbox** runs one **role** on one **task** of one **project**, and has one **session**.
 - A **sandbox** sees one **agent kit**, read-only; the **runtime** in it does the **hardening** and runs the **hooks**.
 - A **sandbox** has many **launches** and **agent runs** over its life; its **session variables** stay the same for all of them.
@@ -148,3 +182,4 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 - "notes dir" meant both a task's dir on the notes branch and the notes checkout. Resolved: **task notes dir** and **notes checkout**.
 - "launcher" meant both the whole foundry and `agent_sandbox/launcher.py`. Resolved: **foundry** for the whole.
 - "template" meant both the task template and the template image. Resolved: always say which.
+- "state" could mean a lifecycle's step or the record of which step a task is in. Resolved: **state** is the step, **task state** is the record. "Status" is for neither: it is a sandbox's (`running`).

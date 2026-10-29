@@ -2,9 +2,10 @@
 remote's name, refspecs) stay inside it."""
 
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from agent_runtime.git import Git, GitError
+from foundry.errors import FoundryError
 
 _REMOTE_NAME = "origin"
 
@@ -60,6 +61,34 @@ class ProjectClone:
     def exists(self, path: str) -> bool:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
         return (self._work_dir / path).exists()
+
+    def read(self, path: str) -> str | None:
+        """The text of ``path``, relative to the repository root, in the checked-out files; None if it isn't there.
+
+        FoundryError if it is there but isn't a plain file, or can't be read as UTF-8 text. A link counts as not
+        a plain file, so nothing is read from outside the clone.
+        """
+        steps = [
+            self._work_dir.joinpath(*PurePosixPath(path).parts[: i + 1]) for i in range(len(PurePosixPath(path).parts))
+        ]
+        if any(step.is_symlink() for step in steps):
+            raise FoundryError(f"{path} is not a plain file")
+        file_path = steps[-1]
+        if not file_path.exists():
+            return None
+        if not file_path.is_file():
+            raise FoundryError(f"{path} is not a plain file")
+        try:
+            return file_path.read_text()
+        except UnicodeDecodeError:
+            raise FoundryError(f"{path} is not UTF-8 text") from None
+        except OSError as error:
+            raise FoundryError(f"{path} can't be read. {error.strerror}") from None
+
+    def dirs(self, path: str) -> list[str]:
+        """The names of the dirs directly in ``path``, sorted; empty if ``path`` isn't there."""
+        folder = self._work_dir / path
+        return sorted(child.name for child in folder.iterdir() if child.is_dir()) if folder.is_dir() else []
 
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
