@@ -22,7 +22,7 @@ from typing import Final
 from agent_runtime import contract
 from agent_runtime.git import Git
 from agent_runtime.task.committed import committed_state
-from agent_runtime.task.state import END_TURN, TaskStateRefused, state_path
+from agent_runtime.task.state import END_TURN, TaskStateRefused, require_legal_transition, state_path
 
 REFUSING: Final = ": refusing"
 """What follows a hook's name at the start of each of its refusals."""
@@ -170,22 +170,11 @@ def _require_own_notes(
         *_put_back(contract.NOTES_DIR, remote_sha, [path], net_changed),
         f"Only bin/task changes it, when it is your turn: {END_TURN}",
     )
-    # The push carries the new state, not the event. So send the event leading to that state, and it must give
-    # exactly that. Two events leading to one state give the same result.
     try:
         old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
         if old is None or new is None:
             raise TaskStateRefused(f"It can't be {'created' if old is None else 'deleted'} in the sandbox.")
-        if old.assignee != session.agent_role:
-            raise TaskStateRefused(
-                f"The task is assigned to {old.assignee_named}, not the {session.agent_role}. It is in {old.state}."
-            )
-        leading = [name for name, event in old.events.items() if event.target == new.state]
-        if not leading:
-            targets = ", ".join(sorted({event.target for event in old.events.values()}))
-            raise TaskStateRefused(f"{old.state} can't go to {new.state}. Its events lead to {targets}.")
-        if (sent := old.after(leading[0], new.note)) != new:
-            raise TaskStateRefused(f"It must read as {leading[0]} leaves it:\n{sent.to_json()}")
+        require_legal_transition(old, new, session.agent_role)
     except TaskStateRefused as error:
         raise _refusal(PRE_PUSH, f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 

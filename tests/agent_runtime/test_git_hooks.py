@@ -412,7 +412,7 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
         (
             IMPLEMENT,
             TaskState(lifecycle=BUGFIX, state="review", note="x"),
-            'It must read as submit leaves it:\n  {\n    "lifecycle": "feature",',
+            "The lifecycle can't change. It is feature.",
         ),
         (
             IMPLEMENT,

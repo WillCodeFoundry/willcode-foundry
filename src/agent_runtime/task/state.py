@@ -29,6 +29,8 @@ END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
 
 _KEYS: Final = ("lifecycle", "state", "note")
 
+_NO_NOTE: Final = "Give a hand-off note. Say what the next assignee should read first."
+
 
 class TaskStateRefused(Exception):
     """A task state can't be read or changed as asked; the message says why, and what to do instead."""
@@ -112,10 +114,7 @@ class TaskState:
         return "no one" if self.assignee is None else f"the {self.assignee}"
 
     def after(self, event: str, note: str) -> "TaskState":
-        """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not.
-
-        Whose turn it is isn't checked here. Launch checks it, and pre-push guards the change (ADR 0011).
-        """
+        """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not."""
         events = self.events
         if not events:
             raise TaskStateRefused(
@@ -137,8 +136,32 @@ class TaskState:
 
     def _moved(self, to: str, note: str) -> "TaskState":
         if not note.strip():
-            raise TaskStateRefused("Give a hand-off note. Say what the next assignee should read first.")
+            raise TaskStateRefused(_NO_NOTE)
         return replace(self, state=to, note=note.strip())
+
+
+def require_assignee(task_state: TaskState, role: str) -> None:
+    """Refuse unless the task state is assigned to ``role``: TaskStateRefused saying whose it is."""
+    if task_state.assignee != role:
+        raise TaskStateRefused(
+            f"The task is assigned to {task_state.assignee_named}, not the {role}. It is in {task_state.state}."
+        )
+
+
+def require_legal_transition(old: TaskState, new: TaskState, role: str) -> None:
+    """Refuse a change from ``old`` to ``new`` that isn't a legal transition for ``role``: TaskStateRefused saying
+    why. Whether ``new`` came from an event or a hand edit doesn't matter (ADR 0011).
+
+    The task command applies this rule before it writes the next task state, and pre-push to what a push changes.
+    """
+    require_assignee(old, role)
+    if new.lifecycle != old.lifecycle:
+        raise TaskStateRefused(f"The lifecycle can't change. It is {old.lifecycle.name}.")
+    targets = sorted({event.target for event in old.events.values()})
+    if new.state not in targets:
+        raise TaskStateRefused(f"{old.state} can't go to {new.state}. Its events lead to {', '.join(targets)}.")
+    if not new.note.strip():
+        raise TaskStateRefused(_NO_NOTE)
 
 
 def commit_subject(task_id: str, old: str, new: str, cause: str) -> str:

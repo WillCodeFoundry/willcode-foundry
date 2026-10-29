@@ -1,10 +1,15 @@
-"""agent_runtime.task.state: reading and writing STATE.json, applying events, moves by hand, and which changes
-are legal transitions."""
+"""agent_runtime.task.state: reading and writing STATE.json, applying events, moves by hand, and the transition
+rule."""
 
 import pytest
 
 from agent_runtime.task.lifecycles import BUGFIX, FEATURE
-from agent_runtime.task.state import TaskState, TaskStateRefused, commit_subject
+from agent_runtime.task.state import (
+    TaskState,
+    TaskStateRefused,
+    commit_subject,
+    require_legal_transition,
+)
 
 WHERE = ".agent/t1/STATE.json"
 
@@ -112,3 +117,49 @@ def test_a_move_to_a_state_the_lifecycle_lacks_is_refused() -> None:
 
 def test_a_move_without_a_note_is_refused() -> None:
     assert "Give a hand-off note" in refusal(lambda: in_state("blocked").moved("review", " "))
+
+
+# --- the transition rule ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("event", "note"), [("approve", "LGTM"), ("reject", "R3 is open."), ("block", "Is R4 in scope?")]
+)
+def test_what_an_event_does_is_a_legal_transition(event: str, note: str) -> None:
+    review = in_state("review", note="Ready.")
+
+    require_legal_transition(review, review.after(event, note), "reviewer")
+
+
+def test_a_note_with_surrounding_whitespace_is_legal() -> None:
+    require_legal_transition(in_state("review"), in_state("deliver", note="  LGTM \n"), "reviewer")
+
+
+@pytest.mark.parametrize(
+    ("new", "role", "refusal_given"),
+    [
+        (
+            in_state("deliver", note="LGTM"),
+            "dev",
+            "The task is assigned to the reviewer, not the dev. It is in review.",
+        ),
+        (
+            TaskState(lifecycle=BUGFIX, state="deliver", note="LGTM"),
+            "reviewer",
+            "The lifecycle can't change. It is feature.",
+        ),
+        (
+            in_state("done", note="LGTM"),
+            "reviewer",
+            "review can't go to done. Its events lead to blocked, deliver, implement.",
+        ),
+        (
+            in_state("deliver", note=" \n"),
+            "reviewer",
+            "Give a hand-off note. Say what the next assignee should read first.",
+        ),
+    ],
+    ids=["another role", "another lifecycle", "not a target", "no note"],
+)
+def test_every_other_change_is_refused_saying_why(new: TaskState, role: str, refusal_given: str) -> None:
+    assert refusal(lambda: require_legal_transition(in_state("review"), new, role)) == refusal_given

@@ -44,7 +44,7 @@ A launch, end to end:
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
 | `claude_hooks.py`, `git_hooks.py` | The Claude hooks and the git hooks. |
 | `checkouts.py` | Whether both checkouts are committed and pushed, for `session-check` and the task command. |
-| `task/lifecycles.py`, `task/state.py` | Shared with foundry: the lifecycles, and a task's `STATE.json`. That is reading it, applying an event, and moving it by hand. |
+| `task/lifecycles.py`, `task/state.py` | Shared with foundry: the lifecycles, and a task's `STATE.json`. That is reading it, applying an event, moving it by hand, and the transition rule. |
 | `task/command.py` | `task`: the agent's command, through `agent-kit/bin/task`, to show the task state and end a turn. |
 | `task/committed.py` | Reading a task's `STATE.json` from a revision of the notes checkout, for `task/command.py` and `pre-push`. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
