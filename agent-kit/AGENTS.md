@@ -117,7 +117,7 @@ entries as you go, not at the end.
 ### Taking turns
 
 A task passes from role to role. `TURN` names whose turn it is, and
-`foundry run` starts that role. You were started because it is yours.
+`foundry run` starts that role, unless the human names another.
 
 When your turn ends, write the next role's name in `TURN`, alone on one line,
 then commit and push it with your last notes. Your `ROLE.md` says which role is

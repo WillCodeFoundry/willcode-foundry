@@ -68,6 +68,7 @@ Never edit earlier rounds. In each round, in this order:
 Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.
 
-Whatever the verdict, the turn is then the `dev`'s. From round 3 on, write
-`human` instead of another `changes needed`: say under "Blockers" in
-`PROGRESS.md` which findings stay open and why you and the dev disagree.
+Then write `dev` in `TURN`, whatever the verdict, with one exception. From
+round 3 on, when the verdict is `changes needed`, write `human` in `TURN`
+instead of `dev`. Then say under "Blockers" in `PROGRESS.md` which findings
+stay open, and why you and the dev disagree.

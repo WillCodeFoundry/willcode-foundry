@@ -24,8 +24,9 @@ Paths below are relative to this role's directory.
 6. Present the draft in the session for approval. Once the human approves
    it, write it to `$AGENT_NOTES_DIR/$AGENT_TASK_FILE`, then commit
    and push it on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules
-   describe. Never write `TASK.md` before that approval, and write nothing
-   else there but `TURN`.
+   describe. Never write `TASK.md` before that approval. Write nothing else
+   there but `TURN`, and your questions under "Blockers" in `PROGRESS.md`
+   when you are stuck.
 7. With `TASK.md` pushed, the turn is the `dev`'s.
 
 ## Asking questions

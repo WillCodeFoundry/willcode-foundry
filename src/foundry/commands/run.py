@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import tempfile
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -12,7 +13,7 @@ from foundry import agent_sandbox, config, paths, session
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.runtime_build import build_runtime
-from foundry.task import HUMAN, Task, read_turn
+from foundry.task import HUMAN, NOTES_BRANCH, Task, read_turn
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -36,10 +37,11 @@ def main(args: argparse.Namespace) -> NoReturn:
     task = Task(args.task_id)
     role_name = args.role_name
     if role_name is None:
-        url = config.load(foundry_root).project(args.project_name).url
+        foundry_config = config.load(foundry_root)
+        url = foundry_config.project(args.project_name).url
         with tempfile.TemporaryDirectory(prefix="foundry-run-") as scratch_dir:
             turn = read_turn(ProjectClone.init(url, Path(scratch_dir), os.environ), task)
-        role_name = role_for_turn(turn, project_name=args.project_name, task=task)
+        role_name = role_for_turn(turn, foundry_config.roles, project_name=args.project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
     launch = prepare_launch(foundry_root, project_name=args.project_name, role_name=role_name, task=task)
     if launch.created:
@@ -47,14 +49,19 @@ def main(args: argparse.Namespace) -> NoReturn:
     agent_sandbox.launch(launch.request)
 
 
-def role_for_turn(turn: str, *, project_name: str, task: Task) -> str:
-    """The role to launch for ``turn``; FoundryError when the turn is HUMAN, since the task waits for you."""
-    if turn != HUMAN:
-        return turn
-    raise FoundryError(
-        f"task {task.id} is waiting for you: see Blockers in its PROGRESS.md. "
-        f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
-    )
+def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
+    """The role to launch for ``turn``; FoundryError when the turn is HUMAN, since the task waits for you, or
+    names no role in ``roles``."""
+    override = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
+    if turn == HUMAN:
+        raise FoundryError(f"task {task.id} is waiting for you: see Blockers in its PROGRESS.md. {override}")
+    if turn not in roles:
+        known = ", ".join(sorted(roles)) or "none"
+        raise FoundryError(
+            f"task {task.id}'s {task.turn_file} on {NOTES_BRANCH} names {turn!r}, which is not a role; "
+            f"known: {known}, or {HUMAN}. {override}"
+        )
+    return turn
 
 
 @dataclass(frozen=True)

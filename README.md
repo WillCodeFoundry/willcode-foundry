@@ -27,10 +27,12 @@ The foundry runs coding agents on your projects. Each agent works in its own Doc
 ```console
 $ uv sync
 $ uv run foundry task create tkt-store wcf-0042   # create the task: its branch, and its notes from config/task-template/
-$ uv run foundry run tkt-store wcf-0042           # start the role whose turn it is, or re-attach to it
+$ uv run foundry run tkt-store wcf-0042           # start the role whose turn it is
 ```
 
-A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question in its `PROGRESS.md`. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. Task ids are lowercased: `WCF-0042` is task `wcf-0042`. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
+Task ids are lowercased: `WCF-0042` is task `wcf-0042`. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
+
+A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question in its `PROGRESS.md`. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, write `dev` in `TURN` too, or the planner starts.
 
 | Command | What it does |
 |---|---|

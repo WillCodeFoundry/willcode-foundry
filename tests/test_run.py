@@ -94,13 +94,22 @@ def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_
 # --- whose turn -----------------------------------------------------------------------
 
 
+ROLES = ("dev", "reviewer")
+
+
 def test_a_role_s_turn_launches_that_role() -> None:
-    assert role_for_turn("reviewer", project_name="tkt-store", task=Task("t1")) == "reviewer"
+    assert role_for_turn("reviewer", ROLES, project_name="tkt-store", task=Task("t1")) == "reviewer"
 
 
 def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None:
     with pytest.raises(FoundryError, match=r"t1 is waiting for you.*foundry run tkt-store ROLE t1"):
-        role_for_turn(HUMAN, project_name="tkt-store", task=Task("t1"))
+        role_for_turn(HUMAN, ROLES, project_name="tkt-store", task=Task("t1"))
+
+
+@pytest.mark.parametrize("turn", ["Human", "dev\nreviewer", "qa"])
+def test_a_turn_that_names_no_role_is_refused_naming_the_turn_file(turn: str) -> None:
+    with pytest.raises(FoundryError, match=r"\.agent/t1/TURN on agent-notes names .*not a role.*ROLE t1"):
+        role_for_turn(turn, ROLES, project_name="tkt-store", task=Task("t1"))
 
 
 @pytest.mark.parametrize(
