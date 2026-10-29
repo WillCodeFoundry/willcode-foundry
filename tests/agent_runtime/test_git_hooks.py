@@ -362,7 +362,7 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
 # --- STATE.json, judged by pre-push -------------------------------------------
 
 STATE_PATH = f"{TASK.task_notes_dir}/STATE.json"
-IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", previous="plan", note="Approved.")
+IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", note="Approved.")
 REVIEW = IMPLEMENT.after("submit", "Ready for review.")
 
 
@@ -406,23 +406,17 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
         (IMPLEMENT, REVIEW.after("approve", "LGTM"), "implement can't go to deliver"),
         (
             IMPLEMENT,
-            TaskState(lifecycle=FEATURE, state="done", previous="implement", note="x"),
+            TaskState(lifecycle=FEATURE, state="done", note="x"),
             "implement can't go to done",
         ),
         (
             IMPLEMENT,
-            TaskState(lifecycle=FEATURE, state="review", previous="plan", note="x"),
-            'It must read as submit leaves it:\n  {\n    "lifecycle": "feature",\n    "state": "review",\n'
-            '    "previous": "implement",',
-        ),
-        (
-            IMPLEMENT,
-            TaskState(lifecycle=BUGFIX, state="review", previous="implement", note="x"),
+            TaskState(lifecycle=BUGFIX, state="review", note="x"),
             'It must read as submit leaves it:\n  {\n    "lifecycle": "feature",',
         ),
         (
             IMPLEMENT,
-            TaskState(lifecycle=FEATURE, state="review", previous="implement", note=" "),
+            TaskState(lifecycle=FEATURE, state="review", note=" "),
             "Give a hand-off note",
         ),
         (REVIEW, IMPLEMENT, "The task is assigned to the reviewer, not the dev. It is in review."),
@@ -430,7 +424,6 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
     ids=[
         "two turns in one push",
         "cherry-picked or merged",
-        "wrong previous",
         "another lifecycle",
         "no note",
         "a pushed turn reverted",

@@ -31,7 +31,7 @@ def turn(checkouts: Checkouts, monkeypatch: pytest.MonkeyPatch) -> Checkouts:
     monkeypatch.setenv("GIT_CONFIG_VALUE_1", "/dev/null")
     session, _, notes = checkouts
     assert session.agent_role == "dev"
-    push_state(notes, TaskState(lifecycle=FEATURE, state="implement", previous="plan", note="TASK.md is approved."))
+    push_state(notes, TaskState(lifecycle=FEATURE, state="implement", note="TASK.md is approved."))
     return checkouts
 
 
@@ -69,7 +69,7 @@ def test_show_names_the_assignee_their_goal_their_events_and_the_note(turn: Chec
     shown = run(session, "show")
 
     assert f"Task {TASK.id} (feature) is in implement, assigned to the dev." in shown
-    assert "It came from plan." in shown
+    assert "came from" not in shown
     assert "  TASK.md is approved." in shown
     assert "The dev's goal: Implement TASK.md" in shown
     assert "The dev ends the turn with one of these events" in shown
@@ -81,7 +81,7 @@ def test_show_says_the_same_whichever_role_runs_it(turn: Checkouts) -> None:
     """Round 4's R49: a dev still in its sandbox after submit reads the reviewer's goal and events as the
     reviewer's. show decides nothing about whose turn it is."""
     session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
+    push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
 
     shown = run(session, "show")
 
@@ -93,7 +93,7 @@ def test_show_says_the_same_whichever_role_runs_it(turn: Checkouts) -> None:
 
 def test_show_lists_no_events_for_the_human(turn: Checkouts) -> None:
     session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="blocked", previous="implement", note="Which base?"))
+    push_state(notes, TaskState(lifecycle=FEATURE, state="blocked", note="Which base?"))
 
     shown = run(session, "show")
 
@@ -121,7 +121,7 @@ def test_an_event_commits_and_pushes_the_task_state_alone(turn: Checkouts) -> No
     printed = run(session, "submit", "All criteria met. Start with parser.py.")
 
     assert origin_state(session) == TaskState(
-        lifecycle=FEATURE, state="review", previous="implement", note="All criteria met. Start with parser.py."
+        lifecycle=FEATURE, state="review", note="All criteria met. Start with parser.py."
     )
     assert printed == f"{TASK.id}: implement → review (submit)\nIt is the reviewer's turn now. Stop here.\n"
     assert git(notes, "show", "--name-only", "--format=", "HEAD").stdout.split() == [STATE_PATH]
@@ -150,7 +150,7 @@ def test_a_move_on_origin_is_picked_up_before_the_event(turn: Checkouts, tmp_pat
         git(notes, "remote", "get-url", "origin").stdout.strip(),
         str(other),
     )
-    push_state(other, TaskState(lifecycle=FEATURE, state="deliver", previous="blocked", note="Use main."))
+    push_state(other, TaskState(lifecycle=FEATURE, state="deliver", note="Use main."))
 
     run(session, "submit", "PR: https://example.com/pr/1")
 
@@ -162,7 +162,7 @@ def test_a_refused_event_leaves_the_notes_checkout_behind_origin_as_it_was(turn:
     other = tmp_path / "elsewhere"
     url = git(notes, "remote", "get-url", "origin").stdout.strip()
     git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
-    push_state(other, TaskState(lifecycle=FEATURE, state="implement", previous="blocked", note="Use main."))
+    push_state(other, TaskState(lifecycle=FEATURE, state="implement", note="Use main."))
     head = git(notes, "rev-parse", "HEAD").stdout
 
     assert "implement doesn't accept 'approve'" in refusal(session, "approve", "Looks good.")
@@ -282,7 +282,7 @@ def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes
 ) -> None:
     """The command doesn't check the turn itself: pre-push refuses the change, and the command resets."""
     session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="review", previous="implement", note="Ready."))
+    push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
     use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit))
     head = git(notes, "rev-parse", "HEAD").stdout
 

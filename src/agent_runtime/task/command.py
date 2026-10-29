@@ -20,7 +20,7 @@ from agent_runtime.checkouts import unsaved_work
 from agent_runtime.git import Git
 from agent_runtime.git_hooks import PUSH_REFUSED
 from agent_runtime.task.committed import committed_state
-from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, state_path
+from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, commit_subject, state_path
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
 
@@ -46,8 +46,6 @@ def show(session: contract.Environ, out: TextIO) -> None:
     lines = [
         f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}, assigned to {assignee}."
     ]
-    if task_state.previous:
-        lines.append(f"It came from {task_state.previous}.")
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
     if task_state.events:
         whose = f"{assignee[0].upper()}{assignee[1:]}"
@@ -77,8 +75,9 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     if problems := unsaved_work(session):
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
     start_head = notes.output("rev-parse", "HEAD").strip()
-    next_state = _origin_state(session).after(event, note)
-    subject = next_state.commit_subject(session.agent_task, event)
+    current = _origin_state(session)
+    next_state = current.after(event, note)
+    subject = commit_subject(session.agent_task, current.state, next_state.state, event)
     if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, next_state, subject):
         notes.output("reset", "--quiet", "--hard", start_head)
         next_step = "Stop here." if PUSH_REFUSED in failure else "If another push landed first, run it again."

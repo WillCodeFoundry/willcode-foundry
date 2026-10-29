@@ -65,7 +65,7 @@ One named step of a lifecycle, such as `review`, with its assignee, its goal and
 _Avoid_: stage, status
 
 **Task state**:
-A task's `STATE.json`: its lifecycle, the state it is in, the state it came from, and the hand-off note. "The task is in `review`."
+A task's `STATE.json`: its lifecycle, the state it is in, and the hand-off note. Its history is the file's history on the notes branch. "The task is in `review`."
 _Avoid_: ticket
 
 **Assignee**:

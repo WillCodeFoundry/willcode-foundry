@@ -98,8 +98,8 @@ def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_
 # --- whose turn ----------------------------------------------------------------
 
 
-def in_state(state: str, previous: str | None = None, note: str = "") -> TaskState:
-    return TaskState(lifecycle=FEATURE, state=state, previous=previous, note=note)
+def in_state(state: str, note: str = "") -> TaskState:
+    return TaskState(lifecycle=FEATURE, state=state, note=note)
 
 
 @pytest.mark.parametrize(
@@ -111,11 +111,11 @@ def test_the_role_launched_is_the_one_whose_turn_it_is(state: str, role: str) ->
 
 def test_a_task_waiting_for_you_is_refused_with_its_note_and_how_to_hand_it_back() -> None:
     with pytest.raises(FoundryError) as refused:
-        whose_turn(in_state("blocked", "review", "Is R4 in scope?"), project_name="store", task=Task("t1"))
+        whose_turn(in_state("blocked", "Is R4 in scope?"), project_name="store", task=Task("t1"))
 
     assert str(refused.value) == (
-        "task t1 is waiting for you, in blocked (from review): Is R4 in scope?\n"
-        "  once you've answered, hand it on: foundry task move store t1 review --note …"
+        "task t1 is waiting for you, in blocked: Is R4 in scope?\n"
+        "  once you've answered, hand it on: foundry task move store t1 STATE --note …"
     )
 
 
@@ -123,4 +123,4 @@ def test_a_done_task_is_refused_saying_how_to_reopen_it() -> None:
     with pytest.raises(
         FoundryError, match=r"^task t1 is done\. To reopen it, run foundry task move store t1 STATE --note …$"
     ):
-        whose_turn(in_state("done", "deliver"), project_name="store", task=Task("t1"))
+        whose_turn(in_state("done"), project_name="store", task=Task("t1"))

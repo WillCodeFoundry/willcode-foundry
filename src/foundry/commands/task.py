@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from agent_runtime.task.lifecycles import DEFAULT, LIFECYCLES
-from agent_runtime.task.state import TaskState, TaskStateRefused
+from agent_runtime.task.state import TaskState, TaskStateRefused, commit_subject
 from foundry import agent_sandbox, config, paths, session
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
@@ -126,10 +126,9 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
         return task_state.role
     move = f"foundry task move {project_name} {task.id}"
     if task_state.assigned_to_human:
-        came_from = f" (from {task_state.previous})" if task_state.previous else ""
         raise FoundryError(
-            f"task {task.id} is waiting for you, in {task_state.state}{came_from}: {task_state.note or '(no note)'}\n"
-            f"  once you've answered, hand it on: {move} {task_state.previous or 'STATE'} --note …"
+            f"task {task.id} is waiting for you, in {task_state.state}: {task_state.note or '(no note)'}\n"
+            f"  once you've answered, hand it on: {move} STATE --note …"
         )
     raise FoundryError(f"task {task.id} is {task_state.state}. To reopen it, run {move} STATE --note …")
 
@@ -238,18 +237,19 @@ def list_main(args: argparse.Namespace) -> int:
 # --- move -----------------------------------------------------------------------
 
 
-def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> TaskState:
+def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> tuple[TaskState, TaskState]:
     """Move the task to ``to`` with a hand-off note, then commit (signed) and push NOTES_BRANCH alone; the task
-    state it now has, whose ``previous`` is where it was.
+    state before and after.
 
     Nothing is committed if the move is refused.
     """
     clone.check_out(NOTES_BRANCH)
-    moved = read_state(clone, task).moved(to, note)
+    old = read_state(clone, task)
+    moved = old.moved(to, note)
     clone.write({task.state_file: moved.to_json()})
-    clone.commit(moved.commit_subject(task.id, "moved by hand"))
+    clone.commit(commit_subject(task.id, old.state, moved.state, "moved by hand"))
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
-    return moved
+    return old, moved
 
 
 def move_main(args: argparse.Namespace) -> int:
@@ -257,8 +257,8 @@ def move_main(args: argparse.Namespace) -> int:
     project = config.load(paths.find_foundry_root()).project(args.project_name)
     task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
-        moved = move_task(clone, task, to=args.state, note=args.note)
-    print(f"moved task {task.id} from {moved.previous} to {moved.state}")
+        old, moved = move_task(clone, task, to=args.state, note=args.note)
+    print(f"moved task {task.id} from {old.state} to {moved.state}")
     if moved.role:
         print(f"run it with: foundry task run {project.name} {task.id}")
     return 0

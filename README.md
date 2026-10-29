@@ -55,7 +55,7 @@ Agents end their turns with `agent-kit/bin/task`. A push that changes `STATE.jso
 
 Move a task by hand with `foundry task move PROJECT TASK STATE --note "…"`. It commits the task state as you, signed, and pushes `agent-notes`. The usual moves:
 
-- **After an agent's question:** answer it, in `TASK.md` or the note, and move the task back to the state it came from. `foundry task run` prints that state.
+- **After an agent's question:** answer it, in `TASK.md` or the note, and move the task on to the state its hand-off note asks for. That is usually the one it was blocked from, which its task state's history shows: `git log agent-notes -- .agent/<task>/STATE.json`.
 - **After the review limit:** from round 3 on, the reviewer blocks instead of rejecting. Move the task on to `deliver`, back to `implement` for one more round, or to `plan` to rescope it.
 - **After it is done:** if the pull request needs more work, move it back to `implement`.
 

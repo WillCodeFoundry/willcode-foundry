@@ -315,12 +315,14 @@ def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branc
     create(origin_dir, git_env)
     task_branch = head(origin_dir, git_env, "task/t1")
 
-    moved = move_task(scratch_clone(origin_dir, git_env, "move"), Task("T1"), to="implement", note="Write it yourself.")
+    old, moved = move_task(
+        scratch_clone(origin_dir, git_env, "move"), Task("T1"), to="implement", note="Write it yourself."
+    )
 
-    assert (moved.previous, moved.state) == ("plan", "implement")
+    assert (old.state, moved.state) == ("plan", "implement")
     files = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     assert TaskState.parse(files[".agent/t1/STATE.json"], "STATE.json") == TaskState(
-        lifecycle=FEATURE, state="implement", previous="plan", note="Write it yourself."
+        lifecycle=FEATURE, state="implement", note="Write it yourself."
     )
     commit = git(git_env, f"--git-dir={origin_dir}", "cat-file", "commit", task.NOTES_BRANCH)
     assert "t1: plan → implement (moved by hand)" in commit and "gpgsig -----BEGIN SSH SIGNATURE-----" in commit
@@ -395,7 +397,7 @@ def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> No
 
 def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
     def state(name: str, note: str = "") -> TaskState:
-        return TaskState(lifecycle=FEATURE, state=name, previous=None, note=note)
+        return TaskState(lifecycle=FEATURE, state=name, note=note)
 
     rows = [
         Row("store", Task("t1"), state("implement", "R3 is open.\nSee REVIEW.md.")),

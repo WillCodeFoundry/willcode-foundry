@@ -1,8 +1,8 @@
 """A task state: a task's STATE.json, which says which state of its lifecycle the task is in.
 
-The file holds exactly four keys: ``lifecycle``, ``state``, ``previous`` and ``note``. Its history is the file's
-git log on the notes branch. This module only reads, checks and changes task states: no git, no files. The
-runtime's ``task`` command and foundry do the git around it.
+The file holds exactly three keys: ``lifecycle``, ``state`` and ``note``. Its history is the file's git log on the
+notes branch, which also says which state the task came from. This module only reads, checks and changes task
+states, with no git and no files, and the runtime's ``task`` command and foundry do the git around it.
 
 Shared with foundry (ARCHITECTURE.md, design rule 2).
 """
@@ -27,7 +27,7 @@ def state_path(task_notes_dir: str) -> str:
 END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
 """How an agent ends its turn, as every message that tells it to spells it."""
 
-_KEYS: Final = ("lifecycle", "state", "previous", "note")
+_KEYS: Final = ("lifecycle", "state", "note")
 
 
 class TaskStateRefused(Exception):
@@ -36,17 +36,16 @@ class TaskStateRefused(Exception):
 
 @dataclass(frozen=True, kw_only=True)
 class TaskState:
-    """A task's lifecycle, the state it is in, the state it came from, and the hand-off note it was left."""
+    """A task's lifecycle, the state it is in, and the hand-off note it was left."""
 
     lifecycle: Lifecycle
     state: str
-    previous: str | None
     note: str
 
     @classmethod
     def new(cls, lifecycle: Lifecycle) -> "TaskState":
         """A new task's state: its lifecycle's initial state, with no hand-off note yet."""
-        return cls(lifecycle=lifecycle, state=lifecycle.initial, previous=None, note="")
+        return cls(lifecycle=lifecycle, state=lifecycle.initial, note="")
 
     @classmethod
     def parse(cls, text: str, where: str) -> "TaskState":
@@ -62,22 +61,17 @@ class TaskState:
             raise TaskStateRefused(
                 f"{where} names no known lifecycle, {raw['lifecycle']!r}. The lifecycles are {', '.join(LIFECYCLES)}."
             )
-        for key in ("state", "previous"):
-            value = raw[key]
-            if key == "previous" and value is None:
-                continue
-            if not isinstance(value, str) or value not in lifecycle.states:
-                raise TaskStateRefused(f"{where}: {key} {value!r} is not a state of {lifecycle.name}")
+        if not isinstance(raw["state"], str) or raw["state"] not in lifecycle.states:
+            raise TaskStateRefused(f"{where}: state {raw['state']!r} is not a state of {lifecycle.name}")
         if not isinstance(raw["note"], str):
             raise TaskStateRefused(f"{where}: note must be text")
-        return cls(lifecycle=lifecycle, state=raw["state"], previous=raw["previous"], note=raw["note"])
+        return cls(lifecycle=lifecycle, state=raw["state"], note=raw["note"])
 
     def to_json(self) -> str:
-        """The STATE.json text: the four keys in order, two-space indented, ending with a newline."""
+        """The STATE.json text: the three keys in order, two-space indented, ending with a newline."""
         raw: dict[str, Any] = {
             "lifecycle": self.lifecycle.name,
             "state": self.state,
-            "previous": self.previous,
             "note": self.note,
         }
         return json.dumps(raw, indent=2, ensure_ascii=False) + "\n"
@@ -141,12 +135,15 @@ class TaskState:
             )
         return self._moved(to, note)
 
-    def commit_subject(self, task_id: str, cause: str) -> str:
-        """The subject of the commit that moved the task here: where from, where to, and the event or other
-        ``cause``."""
-        return f"{task_id}: {self.previous} → {self.state} ({cause})"
-
     def _moved(self, to: str, note: str) -> "TaskState":
         if not note.strip():
             raise TaskStateRefused("Give a hand-off note. Say what the next assignee should read first.")
-        return replace(self, state=to, previous=self.state, note=note.strip())
+        return replace(self, state=to, note=note.strip())
+
+
+def commit_subject(task_id: str, old: str, new: str, cause: str) -> str:
+    """The subject of the commit that moves a task from state ``old`` to ``new``, and the event or other ``cause``.
+
+    The file's history reads as these subjects.
+    """
+    return f"{task_id}: {old} → {new} ({cause})"

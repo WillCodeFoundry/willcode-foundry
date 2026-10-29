@@ -111,7 +111,7 @@ def create(clone: ProjectClone, task: Task, template: Mapping[str, str], lifecyc
 
 
 _EXAMPLE_STATE: Final = TaskState(
-    lifecycle=FEATURE, state="implement", previous=None, note="Started before task states: read PROGRESS.md."
+    lifecycle=FEATURE, state="implement", note="Started before task states: read PROGRESS.md."
 )
 """What read_state suggests adding to a task created before task states."""
 
