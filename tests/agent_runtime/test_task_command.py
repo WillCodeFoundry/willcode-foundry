@@ -126,11 +126,7 @@ def nothing_written(session: contract.Environ, notes: Path) -> bool:
 
 def commands(printed: str) -> list[str]:
     """The git commands an event prints, as the agent would copy them."""
-    return [
-        line.strip().removeprefix("To take the event back before committing: ")
-        for line in printed.splitlines()
-        if "git -C " in line
-    ]
+    return [line.strip() for line in printed.splitlines() if "git -C " in line]
 
 
 def test_an_event_writes_the_next_task_state_and_prints_how_to_end_the_turn(turn: Checkouts) -> None:
@@ -148,7 +144,6 @@ def test_an_event_writes_the_next_task_state_and_prints_how_to_end_the_turn(turn
         f"  {git_in} commit --quiet --message '{TASK.id}: implement → review (submit)' -- {STATE_PATH}\n"
         f"  {git_in} pull --quiet --rebase origin {session.agent_notes_branch}\n"
         f"  {git_in} push --quiet origin {session.agent_notes_branch}\n"
-        f"To take the event back before committing: {git_in} restore -- {STATE_PATH}\n"
         "Then it is the reviewer's turn. Stop once it is pushed.\n"
     )
 
@@ -215,7 +210,9 @@ def test_an_event_is_refused_while_the_notes_checkout_is_off_its_branch(
 
     message = refusal(session, "submit", "All met.")
 
-    assert message.startswith(f"The notes checkout isn't on origin/{session.agent_notes_branch}.")
+    assert message == (
+        f"The notes checkout isn't on {session.agent_notes_branch}, so a task state written there can't be pushed."
+    )
     assert nothing_written(session, notes)
 
 
@@ -229,18 +226,11 @@ def test_an_event_is_refused_while_the_notes_checkout_is_behind_origin(turn: Che
 
     message = refusal(session, "submit", "PR: https://example.com/pr/1")
 
-    assert message.startswith(f"The notes checkout isn't on origin/{session.agent_notes_branch}.")
+    assert message == (
+        f"The notes checkout is behind origin/{session.agent_notes_branch}, "
+        "so the task state would be written from an old one."
+    )
     assert git(notes, "status", "--porcelain").stdout == ""
-
-
-def test_the_printed_restore_puts_the_notes_checkout_back(turn: Checkouts) -> None:
-    session, _, notes = turn
-    printed = run(session, "submit", "All met.")
-
-    subprocess.run(["sh", "-c", commands(printed)[-1]], check=True, capture_output=True)
-
-    assert git(notes, "status", "--porcelain").stdout == ""
-    run(session, "block", "Which base branch?")
 
 
 # --- through the real pre-push ----------------------------------------------------
@@ -294,3 +284,25 @@ def test_the_printed_commands_still_push_after_another_task_pushed(
         subprocess.run(["sh", "-c", command], cwd=tmp_path, check=True, capture_output=True)
 
     assert origin_state(session).state == "review"
+
+
+def test_a_human_move_before_the_push_stops_the_pull_and_loses_no_work(turn: Checkouts, tmp_path: Path) -> None:
+    """Round 5's R59: the printed pull --rebase stops on STATE.json, and says so. AGENTS.md tells the agent that
+    means the human moved the task, and to stop. Aborting the rebase gives back exactly the agent's commit."""
+    session, _, notes = turn
+    printed = run(session, "submit", "All met.")
+    human = tmp_path / "human"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(human))
+    push_state(human, TaskState(lifecycle=FEATURE, state="blocked", note="Wait for me."))
+    commit, pull, _ = commands(printed)
+
+    subprocess.run(["sh", "-c", commit], check=True, capture_output=True)
+    agents_commit = git(notes, "rev-parse", "HEAD").stdout
+    pulled = subprocess.run(["sh", "-c", pull], check=False, capture_output=True, text=True)
+
+    assert pulled.returncode != 0 and STATE_PATH in pulled.stdout + pulled.stderr
+    assert origin_state(session).state == "blocked"
+    git(notes, "rebase", "--abort")
+    assert git(notes, "rev-parse", "HEAD").stdout == agents_commit
+    assert written_state(notes).state == "review"

@@ -132,8 +132,7 @@ that end the turn, each with when to send it.
   writes your task state. Your turn ends when you commit and push it, with the
   commands the task command prints. Do nothing else in between.
 - The task command refuses while either checkout has unsaved work, or the notes
-  checkout isn't up to date with origin. To take an event back before
-  committing, run the `restore` command it prints.
+  checkout isn't up to date with origin.
 - When you are stuck, end your turn with `block`, the question as its note
   (see "When to stop and ask").
 - Once your turn has passed, push nothing more, and stop.
@@ -232,18 +231,15 @@ git push origin "$AGENT_NOTES_BRANCH"
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
   for their own tasks at the same time. The hooks refuse to push changes to anything else.
 - Always `pull --rebase` before pushing. Every agent touches only its own dir,
-  so it conflicts only on `STATE.json`. That happens when the human moved the
-  task after the task command read it.
-- If it does, run `git rebase --abort`, then
-  `git reset --keep origin/$AGENT_NOTES_BRANCH`. That drops only the task
-  state's commit, the last one you made. Then run `task show` again.
+  so it conflicts only on `STATE.json`. That means the human moved the task
+  after the task command read it. Say so in the conversation, and stop.
 
 ### Hooks
 
 Git hooks, and a check on the shell commands you run, refuse actions that break
-the rules above. If one refuses an action, read its message:
-it says what was wrong and what to do instead. Never bypass a hook. If you
-believe a hook is wrong, record the case under "Blockers" and ask.
+the rules above. Each refusal says what is wrong and which rule it breaks. Fix
+it with ordinary git, in the checkout it names. Never bypass a hook. If you
+can't fix it, or believe a hook is wrong, say so in the conversation and stop.
 
 You will not be allowed to stop while either checkout has uncommitted or
 unpushed changes.

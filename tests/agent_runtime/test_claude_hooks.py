@@ -149,7 +149,10 @@ def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts
     reason = block_reason(session)
 
     assert "code checkout has uncommitted changes; notes checkout has commits not pushed" in reason
-    assert reason.endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
+    assert reason.endswith(
+        'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
+        "If a push was refused, say so in the conversation and stop."
+    )
 
 
 def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(checkouts: Checkouts) -> None:

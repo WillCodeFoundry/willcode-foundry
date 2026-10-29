@@ -72,18 +72,15 @@ def send_event(event: str, note: str, session: contract.Environ, out: TextIO) ->
     notes branch, or when the transition rule refuses the event.
     """
     if problems := unsaved_work(session):
-        raise TaskStateRefused(
-            f"Commit and push your work before sending an event: {'; '.join(problems)}. To take back an event you "
-            "already sent, run the restore command it printed."
-        )
+        raise TaskStateRefused(f"Commit and push your work before sending an event: {'; '.join(problems)}.")
     current_state = _origin_state(session)
     notes_dir, branch = session.agent_notes_dir, session.agent_notes_branch
     notes = Git(notes_dir)
-    at_origin = notes.output("rev-parse", "HEAD") == notes.output("rev-parse", f"origin/{branch}")
-    if notes.current_branch() != branch or not at_origin:
+    if notes.current_branch() != branch:
+        raise TaskStateRefused(f"The notes checkout isn't on {branch}, so a task state written there can't be pushed.")
+    if notes.output("rev-parse", "HEAD") != notes.output("rev-parse", f"origin/{branch}"):
         raise TaskStateRefused(
-            f"The notes checkout isn't on origin/{branch}. "
-            f"Run git switch {branch} and git pull --rebase in $AGENT_NOTES_DIR, then this command again."
+            f"The notes checkout is behind origin/{branch}, so the task state would be written from an old one."
         )
     next_state = current_state.after(event, note, session.agent_role)
     path = state_path(session.agent_task_notes_dir)
@@ -95,7 +92,6 @@ def send_event(event: str, note: str, session: contract.Environ, out: TextIO) ->
         f"  {shlex.join([*git_in, 'commit', '--quiet', '--message', subject, '--', path])}",
         f"  {shlex.join([*git_in, 'pull', '--quiet', '--rebase', 'origin', branch])}",
         f"  {shlex.join([*git_in, 'push', '--quiet', 'origin', branch])}",
-        f"To take the event back before committing: {shlex.join([*git_in, 'restore', '--', path])}",
         _assigned_next(next_state),
     ]
     print("\n".join(lines), file=out)

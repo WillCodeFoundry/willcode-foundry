@@ -19,7 +19,7 @@ The agent runs with permission prompts off. What it may do is set by the rows ab
 
 ## The guardrails
 
-The git hooks and `guard-bash` run inside the sandbox, so an agent set on getting past them can: through a script, an alias, or an edit to `.git/config`. They keep only rules nothing else enforces, and each refusal says what to do instead:
+The git hooks and `guard-bash` run inside the sandbox, so an agent set on getting past them can: through a script, an alias, or an edit to `.git/config`. They keep only rules nothing else enforces. Each refusal says what is wrong and which rule it breaks, and the agent fixes it with ordinary git:
 
 - **`pre-push`:** push only this task's branch and `agent-notes`. The rulesets allow any `task/**`, since GitHub can't tell one task from another. It judges what each push brings to origin, so the content decides, not who wrote it or which git command made it ([ADR 0011](adr/0011-task-states.md)):
   - on the task branch, nothing under `.agent/`, in any pushed commit or in what the push leaves;

@@ -10,10 +10,10 @@ every pushed commit touches, and those the push leaves changed, must belong ther
 branch's history. STATE.json is judged by what the push leaves.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
-current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
+current directory's. Each raises GitHookRefused, whose message says what is wrong and which rule it breaks. The
+agent fixes it with ordinary git, and pre-push judges the next push again.
 """
 
-import shlex
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
@@ -94,7 +94,7 @@ def pre_push(
             continue
         touched, net_changed = paths
         if remote_ref == task_ref:
-            _require_no_notes(session, touched, net_changed, remote_sha)
+            _require_no_notes(session, touched)
         else:
             _require_own_notes(session, git, touched, net_changed, remote_sha, local_sha)
 
@@ -122,20 +122,16 @@ def _paths(git: Git, *args: str) -> list[str]:
     return [path for path in git.output(*args).split("\0") if path]
 
 
-def _require_no_notes(
-    session: contract.Environ, touched: Sequence[str], net_changed: Sequence[str], remote_sha: str
-) -> None:
+def _require_no_notes(session: contract.Environ, touched: Sequence[str]) -> None:
     """Refuse task notes on the task branch: nothing under the notes root, at any depth, so notes written from a
     subfolder are caught too."""
     if refused := [path for path in touched if _is_under(session.agent_notes_root, path)]:
         raise _refusal(
             PRE_PUSH,
-            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/, "
-            f"not on {session.agent_task_branch}:",
+            f"These are task notes, so they can't be pushed to {session.agent_task_branch}:",
             *(f"    {path}" for path in refused),
-            "",
-            "Copy anything you still need to $AGENT_NOTES_DIR first.",
-            *_put_back(contract.PROJECT_DIR, remote_sha, refused, net_changed),
+            f"Task notes belong on {session.agent_notes_branch}, in $AGENT_NOTES_DIR/{session.agent_task_notes_dir}/.",
+            "No commit you push to the task branch may touch them.",
         )
 
 
@@ -152,21 +148,15 @@ def _require_own_notes(
     if refused := [path for path in touched if not path.startswith(f"{session.agent_task_notes_dir}/")]:
         raise _refusal(
             PRE_PUSH,
-            f"On {session.agent_notes_branch} you may only change files in {session.agent_task_notes_dir}/:",
+            f"These are outside your task notes dir, {session.agent_task_notes_dir}/, so they can't be pushed:",
             *(f"    {path}" for path in refused),
-            "",
-            *_put_back(contract.NOTES_DIR, remote_sha, refused, net_changed),
+            f"On {session.agent_notes_branch}, no commit you push may touch another task's notes.",
         )
     path = state_path(session.agent_task_notes_dir)
     # What the push leaves is judged, so a change a later pushed commit undoes passes.
     if path not in net_changed:
         return
-    undo = (
-        "",
-        "If you changed it by hand, put it back.",
-        *_put_back(contract.NOTES_DIR, remote_sha, [path], net_changed),
-        f"Only the task command changes it, when it is your turn: {END_TURN}",
-    )
+    rule = f"Only the task command changes it, on your turn ({END_TURN}), and the push must leave it as written."
     try:
         old_state, new_state = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
         if old_state is None or new_state is None:
@@ -177,38 +167,11 @@ def _require_own_notes(
         if sent_state.lifecycle != new_state.lifecycle:
             raise TaskStateRefused(f"The lifecycle can't change. It is {old_state.lifecycle.name}.")
     except TaskStateRefused as error:
-        raise _refusal(PRE_PUSH, f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
-
-
-def _put_back(checkout: str, remote_sha: str, refused: Sequence[str], net_changed: Sequence[str]) -> tuple[str, ...]:
-    """How to undo a refused push, from ``remote_sha``, the commit it was judged against. Origin may have moved
-    since. Undo the pushed commits, keeping their changes staged, then put back each refused path the push changes
-    overall.
-
-    A path added and removed within the push is gone once the commits are undone, so it needs no putting back.
-    ``checkout`` is the variable naming the checkout, so the commands act on it from any directory, with paths
-    from its root.
-    """
-    git_in = f'git -C "${checkout}"'
-    put_back = [path for path in refused if path in net_changed]
-    restore = (
-        (
-            "Put these back as they were:",
-            f"    {git_in} restore --source={remote_sha} --staged --worktree -- {shlex.join(put_back)}",
-        )
-        if put_back
-        else ()
-    )
-    return (
-        "Undo the commits you were pushing, keeping their changes, which folds them into one commit:",
-        f"    {git_in} reset --soft {remote_sha}",
-        *restore,
-        "Then commit what is left, pull --rebase, and push again.",
-    )
+        raise _refusal(PRE_PUSH, f"{path} can't change this way.", *str(error).splitlines(), rule) from None
 
 
 def _refusal(hook: str, *lines: str) -> GitHookRefused:
-    """Every refusal's shape: the hook, what was wrong, then what to do instead."""
+    """Every refusal's shape: the hook, what is wrong, and the rule it breaks. The agent fixes it with git."""
     body = "".join(f"  {line}\n" for line in lines)
     return GitHookRefused(f"{hook}{REFUSING}\n\n{body}")
 
