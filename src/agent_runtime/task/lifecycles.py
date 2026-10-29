@@ -18,10 +18,6 @@ BLOCK: Final = "block"
 """The event every role's state accepts: hand the task to the human with a question."""
 
 
-class LifecycleInvalid(Exception):
-    """A lifecycle breaks a rule of its form; raised when it is defined, so a bad one never loads."""
-
-
 @dataclass(frozen=True)
 class Event:
     """What an agent sends to end its turn: the state it leads to, and when to send it."""
@@ -42,45 +38,12 @@ class State:
 
 @dataclass(frozen=True)
 class Lifecycle:
-    """A named state machine. Defining one that breaks a rule raises LifecycleInvalid."""
+    """A named state machine. tests/agent_runtime/test_lifecycles.py holds every lifecycle to the rules of its
+    form."""
 
     name: str
     initial: str
     states: Mapping[str, State]
-
-    def __post_init__(self) -> None:
-        if problem := self._problem():
-            raise LifecycleInvalid(f"lifecycle {self.name}: {problem}")
-
-    def _problem(self) -> str | None:
-        if self.initial not in self.states:
-            return f"its initial state {self.initial!r} isn't one of its states"
-        for name, state in self.states.items():
-            for event_name, event in state.events.items():
-                if event.target not in self.states:
-                    return f"{name}'s {event_name} leads to {event.target!r}, which isn't one of its states"
-            if state.assignee in (None, HUMAN):
-                if state.events:
-                    return f"{name} is the human's or final, so it accepts no events"
-            elif BLOCK not in state.events:
-                return f"{name} is a role's state, so it must accept {BLOCK}"
-            elif self.states[state.events[BLOCK].target].assignee != HUMAN:
-                return f"{name}'s {BLOCK} must lead to a state assigned to {HUMAN}"
-            elif problem := _role_state_problem(name, state):
-                return problem
-        return None
-
-
-def _role_state_problem(name: str, state: State) -> str | None:
-    """What a role's state lacks: a way forward besides BLOCK, its goal, or when to send an event."""
-    if set(state.events) == {BLOCK}:
-        return f"{name} is a role's state, so it needs an event besides {BLOCK}"
-    if not state.goal.strip():
-        return f"{name} is a role's state, so it must say its goal"
-    for event_name, event in state.events.items():
-        if not event.when.strip():
-            return f"{name}'s {event_name} must say when to send it"
-    return None
 
 
 _BLOCKED: Final = "blocked"

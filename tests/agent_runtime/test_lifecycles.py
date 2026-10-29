@@ -1,5 +1,5 @@
-"""agent_runtime.task.lifecycles: the lifecycles as written, and the rules a lifecycle is checked against when
-it is defined. The expected tables are literals, so a change to a lifecycle shows here."""
+"""agent_runtime.task.lifecycles: the lifecycles as written, and the rules of a lifecycle's form, which every
+lifecycle is held to here. The expected tables are literals, so a change to a lifecycle shows here."""
 
 import pytest
 
@@ -9,10 +9,7 @@ from agent_runtime.task.lifecycles import (
     FEATURE,
     HUMAN,
     LIFECYCLES,
-    Event,
     Lifecycle,
-    LifecycleInvalid,
-    State,
 )
 
 
@@ -45,74 +42,17 @@ def test_the_lifecycles_are_found_by_name() -> None:
     assert LIFECYCLES == {"feature": FEATURE, "bugfix": BUGFIX}
 
 
-def role_state(**events: str) -> State:
-    return State("dev", "a goal", {name: Event(target, "when") for name, target in events.items()})
-
-
-@pytest.mark.parametrize(
-    ("initial", "states", "problem"),
-    [
-        ("start", {"work": role_state(block="stuck")}, "its initial state 'start' isn't one of its states"),
-        (
-            "work",
-            {"work": role_state(submit="nowhere", block="stuck"), "stuck": State(HUMAN)},
-            "work's submit leads to 'nowhere', which isn't one of its states",
-        ),
-        (
-            "work",
-            {"work": role_state(submit="end"), "end": State(None)},
-            f"work is a role's state, so it must accept {BLOCK}",
-        ),
-        (
-            "work",
-            {"work": role_state(submit="end", block="end"), "end": State(None)},
-            f"work's {BLOCK} must lead to a state assigned to {HUMAN}",
-        ),
-        (
-            "work",
-            {
-                "work": role_state(submit="stuck", block="stuck"),
-                "stuck": State(HUMAN, events={"x": Event("work", "w")}),
-            },
-            "stuck is the human's or final, so it accepts no events",
-        ),
-        (
-            "work",
-            {
-                "work": State("dev", " ", {"submit": Event("stuck", "w"), BLOCK: Event("stuck", "w")}),
-                "stuck": State(HUMAN),
-            },
-            "work is a role's state, so it must say its goal",
-        ),
-        (
-            "work",
-            {
-                "work": State("dev", "a goal", {"submit": Event("stuck", " "), BLOCK: Event("stuck", "w")}),
-                "stuck": State(HUMAN),
-            },
-            "work's submit must say when to send it",
-        ),
-        (
-            "work",
-            {"work": role_state(block="stuck"), "stuck": State(HUMAN)},
-            f"work is a role's state, so it needs an event besides {BLOCK}",
-        ),
-    ],
-    ids=[
-        "initial missing",
-        "target missing",
-        "no block",
-        "block not to the human",
-        "human state with events",
-        "no goal",
-        "no when",
-        "only block",
-    ],
-)
-def test_a_lifecycle_that_breaks_a_rule_is_refused_when_defined(
-    initial: str, states: dict[str, State], problem: str
-) -> None:
-    with pytest.raises(LifecycleInvalid) as refused:
-        Lifecycle(name="bad", initial=initial, states=states)
-
-    assert str(refused.value) == f"lifecycle bad: {problem}"
+@pytest.mark.parametrize("lifecycle", LIFECYCLES.values(), ids=LIFECYCLES)
+def test_every_lifecycle_keeps_the_rules_of_its_form(lifecycle: Lifecycle) -> None:
+    states = lifecycle.states
+    assert lifecycle.initial in states
+    for state in states.values():
+        assert all(event.target in states for event in state.events.values())
+        if state.assignee in (None, HUMAN):
+            assert not state.events
+        else:
+            assert state.goal.strip()
+            assert all(event.when.strip() for event in state.events.values())
+            assert BLOCK in state.events
+            assert set(state.events) != {BLOCK}
+            assert states[state.events[BLOCK].target].assignee == HUMAN
