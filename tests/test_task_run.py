@@ -118,6 +118,6 @@ def test_a_terminal_task_is_refused_with_its_note_where_it_came_from_and_how_to_
 
     assert str(refused.value) == (
         f"task t1 is {state}, where no role works: {note}\n"
-        "  where it came from: git log -p origin/agent-notes -- .agent/t1/STATE.json\n"
+        "  where it came from: git fetch origin agent-notes && git log -p FETCH_HEAD -- .agent/t1/STATE.json\n"
         "  to move it on: foundry task move store t1 STATE --note …"
     )

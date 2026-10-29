@@ -1,8 +1,8 @@
 """The lifecycles: the state machine each kind of task follows, written once, as data in Python.
 
 Each state of a lifecycle names its role, goal and events, each event with where it leads and when to send it. A
-terminal state has no role, so no events. Every role's state accepts BLOCK, which leads to the terminal state
-`blocked`.
+terminal state is one no event leaves, and it has no role. Every role's state accepts BLOCK, which leads to the
+terminal state `blocked`.
 
 States name no skills, since an agent picks among its role's skills.
 

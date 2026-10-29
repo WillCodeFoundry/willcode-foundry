@@ -269,8 +269,8 @@ it in the conversation, when:
   changing shared configuration);
 - you have been stuck on the same problem for several attempts.
 
-A refused push leaves work unpushed, so `block` can't succeed after one. Say
-so in the conversation and stop, as "Hooks" says.
+If a push is refused, say so in the conversation and stop, as "Hooks" says.
+`block` can't help, because it needs both checkouts pushed.
 
 Asking early is always better than guessing.
 

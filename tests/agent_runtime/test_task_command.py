@@ -184,7 +184,7 @@ def test_an_event_the_state_doesnt_accept_is_refused_writing_nothing(turn: Check
     ("dirty", "problem"),
     [
         ("uncommitted code", "code checkout has uncommitted changes"),
-        ("unpushed notes", "notes checkout has commits not pushed"),
+        ("unpushed notes", "notes checkout has commits not pushed to origin/agent-notes: progress"),
     ],
 )
 def test_unsaved_work_is_refused_writing_nothing(turn: Checkouts, dirty: str, problem: str) -> None:

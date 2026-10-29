@@ -127,7 +127,7 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
     move = f"foundry task move {project_name} {task.id}"
     raise FoundryError(
         f"task {task.id} is {task_state.state}, where no role works: {task_state.note or '(no note)'}\n"
-        f"  where it came from: git log -p origin/{NOTES_BRANCH} -- {task.state_file}\n"
+        f"  where it came from: git fetch origin {NOTES_BRANCH} && git log -p FETCH_HEAD -- {task.state_file}\n"
         f"  to move it on: {move} STATE --note …"
     )
 
