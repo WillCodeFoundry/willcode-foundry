@@ -42,17 +42,16 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
 def show(session: contract.Environ, out: TextIO) -> None:
     """Print the task state as origin has it, and what its turn asks for."""
     task_state = _origin_state(session)
-    lifecycle, state = task_state.lifecycle, task_state.definition
-    lines = [f"Task {session.agent_task} ({lifecycle.name}) is in {task_state.state}."]
+    lines = [f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}."]
     if task_state.previous:
         lines.append(f"It came from {task_state.previous}.")
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
-    if state.events:
+    if task_state.events:
         lines += [
-            f"The goal: {state.goal}",
+            f"The goal: {task_state.goal}",
             "",
             "End the turn with one of these events, once its work is pushed:",
-            *(f"  {name} → {event.target}: when {event.when}" for name, event in state.events.items()),
+            *(f"  {name} → {event.target}: when {event.when}" for name, event in task_state.events.items()),
             "",
             f"  {END_TURN}",
         ]

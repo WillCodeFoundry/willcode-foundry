@@ -160,9 +160,9 @@ def _require_own_notes(
             raise TaskStateRefused(
                 f"The task is assigned to {old.assignee_named}, not the {session.agent_role}. It is in {old.state}."
             )
-        leading = [name for name, event in old.definition.events.items() if event.target == new.state]
+        leading = [name for name, event in old.events.items() if event.target == new.state]
         if not leading:
-            targets = ", ".join(sorted({event.target for event in old.definition.events.values()}))
+            targets = ", ".join(sorted({event.target for event in old.events.values()}))
             raise TaskStateRefused(f"{old.state} can't go to {new.state}. Its events lead to {targets}.")
         if (sent := old.after(leading[0], new.note)) != new:
             raise TaskStateRefused(f"It must read as {leading[0]} leaves it:\n{sent.to_json()}")

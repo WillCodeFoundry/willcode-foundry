@@ -8,11 +8,12 @@ Shared with foundry (ARCHITECTURE.md, design rule 2).
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from agent_runtime.agent_kit import TASK_COMMAND
-from agent_runtime.task.lifecycles import HUMAN, LIFECYCLES, Lifecycle, State
+from agent_runtime.task.lifecycles import HUMAN, LIFECYCLES, Event, Lifecycle, State
 
 STATE_FILE: Final = "STATE.json"
 """A task's task state, in its task notes dir. Spelled here only; state_path builds on it."""
@@ -82,14 +83,24 @@ class TaskState:
         return json.dumps(raw, indent=2, ensure_ascii=False) + "\n"
 
     @property
-    def definition(self) -> State:
+    def _definition(self) -> State:
         """The state the task is in, as its lifecycle defines it."""
         return self.lifecycle.states[self.state]
 
     @property
+    def goal(self) -> str:
+        """What the turn in this state is for; empty for the human's or a final state."""
+        return self._definition.goal
+
+    @property
+    def events(self) -> Mapping[str, Event]:
+        """The events that end the turn in this state, by name; none for the human's or a final state."""
+        return self._definition.events
+
+    @property
     def assignee(self) -> str | None:
         """The assignee of the state the task is in: a role, HUMAN, or None once the task is done."""
-        return self.definition.assignee
+        return self._definition.assignee
 
     @property
     def role(self) -> str | None:
@@ -111,7 +122,7 @@ class TaskState:
 
         Whose turn it is isn't checked here. Launch checks it, and pre-push guards the change (ADR 0011).
         """
-        events = self.definition.events
+        events = self._definition.events
         if not events:
             raise TaskStateRefused(f"{self.state} accepts no events")
         if event not in events:
@@ -128,9 +139,10 @@ class TaskState:
             )
         return self._moved(to, note)
 
-    def commit_subject(self, task_id: str, how: str) -> str:
-        """The subject of the commit that moved the task here: where from, where to, and ``how``."""
-        return f"{task_id}: {self.previous} → {self.state} ({how})"
+    def commit_subject(self, task_id: str, cause: str) -> str:
+        """The subject of the commit that moved the task here: where from, where to, and the event or other
+        ``cause``."""
+        return f"{task_id}: {self.previous} → {self.state} ({cause})"
 
     def _moved(self, to: str, note: str) -> "TaskState":
         if not note.strip():
