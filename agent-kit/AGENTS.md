@@ -118,9 +118,9 @@ entries as you go, not at the end.
 ### Taking turns
 
 A task passes from role to role. Each state belongs to one role, except
-`blocked` and `done`, where no role works. You were started because it is your
-turn. `bin/task show` says what your turn is for: your goal, and the events
-that end the turn, each with when to send it.
+terminal states, which no event leaves and no role works on. You were started
+because it is your turn. `bin/task show` says what your turn is for: your goal,
+and the events that end the turn, each with when to send it.
 
 ```bash
 "$AGENT_KIT_DIR/bin/task" show                       # where the task stands: your goal and your events
@@ -267,8 +267,10 @@ it in the conversation, when:
   credentials you don't have;
 - an action would be hard to undo (deleting data, rewriting pushed history,
   changing shared configuration);
-- a hook refuses something and you believe it shouldn't;
 - you have been stuck on the same problem for several attempts.
+
+A refused push leaves work unpushed, so `block` can't succeed after one. Say
+so in the conversation and stop, as "Hooks" says.
 
 Asking early is always better than guessing.
 

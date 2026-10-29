@@ -100,12 +100,7 @@ class TaskState:
         return self._definition.role
 
     @property
-    def terminal(self) -> bool:
-        """Whether no event leaves the state the task is in, such as `blocked` or `done`."""
-        return self._definition.terminal
-
-    @property
-    def standing(self) -> str:
+    def role_sentence(self) -> str:
         """Who works on the task now, as a sentence: its role, or no role in a terminal state."""
         return f"It is assigned to the {self.role}." if self.role else "No role works on it."
 
@@ -116,7 +111,7 @@ class TaskState:
         through event_to (ADR 0011).
         """
         if self.role != role:
-            raise TaskStateRefused(f"The {role} can't send events in {self.state}. {self.standing}")
+            raise TaskStateRefused(f"The {role} can't send events in {self.state}. {self.role_sentence}")
         events = self.events
         if event not in events:
             raise TaskStateRefused(
@@ -133,7 +128,7 @@ class TaskState:
             return leading[0]
         if targets := sorted({event.target for event in self.events.values()}):
             raise TaskStateRefused(f"{self.state} can't go to {state}. Its events lead to {', '.join(targets)}.")
-        raise TaskStateRefused(f"{self.state} can't go to {state}. No event leaves it. {self.standing}")
+        raise TaskStateRefused(f"{self.state} can't go to {state}. No event leaves it. {self.role_sentence}")
 
     def moved(self, to: str, note: str) -> "TaskState":
         """The task state moved by hand to any state of its lifecycle; TaskStateRefused for one it lacks."""

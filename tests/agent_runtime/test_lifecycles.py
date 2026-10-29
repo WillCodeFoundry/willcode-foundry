@@ -30,7 +30,6 @@ def test_feature_is_planned_implemented_reviewed_and_delivered() -> None:
         "blocked": (None, {}),
         "done": (None, {}),
     }
-    assert FEATURE.states["blocked"].terminal and FEATURE.states["done"].terminal
 
 
 def test_bugfix_is_feature_without_planning() -> None:
@@ -48,12 +47,12 @@ def test_every_lifecycle_keeps_the_rules_of_its_form(lifecycle: Lifecycle) -> No
     assert lifecycle.initial in states
     for state in states.values():
         assert all(event.target in states for event in state.events.values())
-        assert (state.role is None) == state.terminal
-        if state.terminal:
-            assert not state.events and not state.goal
+        assert (state.role is None) == (not state.events)
+        if state.role is None:
+            assert not state.goal
         else:
             assert state.goal.strip()
             assert all(event.when.strip() for event in state.events.values())
             assert BLOCK in state.events
             assert set(state.events) != {BLOCK}
-            assert states[state.events[BLOCK].target].terminal
+            assert states[state.events[BLOCK].target].role is None

@@ -47,7 +47,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "run",
         help="start or re-attach to the sandbox of the role whose turn it is",
         description=f"Reads the task's state from {NOTES_BRANCH} and launches the role whose turn it is. "
-        "Refuses a blocked or done task.",
+        "Refuses a task in a terminal state, such as blocked or done.",
     )
     run.add_argument("project_name", metavar="PROJECT", help=_PROJECT_HELP)
     run.add_argument("task_id", metavar="TASK", help=_TASK_HELP)
@@ -127,7 +127,7 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
     move = f"foundry task move {project_name} {task.id}"
     raise FoundryError(
         f"task {task.id} is {task_state.state}, where no role works: {task_state.note or '(no note)'}\n"
-        f"  where it came from: git log origin/{NOTES_BRANCH} -- {task.state_file}\n"
+        f"  where it came from: git log -p origin/{NOTES_BRANCH} -- {task.state_file}\n"
         f"  to move it on: {move} STATE --note …"
     )
 
@@ -245,6 +245,8 @@ def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> tuple[T
     clone.check_out(NOTES_BRANCH)
     old_state = read_state(clone, task)
     moved_state = old_state.moved(to, note)
+    if moved_state == old_state:
+        raise FoundryError(f"task {task.id} is already in {to} with that note, so there is nothing to move.")
     clone.write({task.state_file: moved_state.to_json()})
     clone.commit(commit_subject(task.id, old_state.state, moved_state.state, "moved by hand"))
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])

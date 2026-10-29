@@ -47,7 +47,9 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
 def show(session: contract.Environ, out: TextIO) -> None:
     """Print the task state as origin has it: its role, and that role's goal and events. The same for every role."""
     task_state = _origin_state(session)
-    lines = [f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}. {task_state.standing}"]
+    lines = [
+        f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}. {task_state.role_sentence}"
+    ]
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
     if task_state.events:
         whose = f"The {task_state.role}"

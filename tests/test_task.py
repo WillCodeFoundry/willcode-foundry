@@ -311,6 +311,17 @@ def test_a_task_created_before_task_states_is_refused(origin_dir, git_env) -> No
     )
 
 
+def test_a_move_that_changes_nothing_is_refused_before_committing(origin_dir, git_env) -> None:
+    """Round 6's R70: repeating a move would otherwise fail in git commit, and blame signing."""
+    create(origin_dir, git_env)
+    move_task(scratch_clone(origin_dir, git_env, "first"), Task("T1"), to="implement", note="Write it yourself.")
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+
+    with pytest.raises(FoundryError, match=r"^task t1 is already in implement with that note, so there is nothing to"):
+        move_task(scratch_clone(origin_dir, git_env, "again"), Task("T1"), to="implement", note="Write it yourself.")
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
 def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branch_alone(origin_dir, git_env) -> None:
     create(origin_dir, git_env)
     task_branch = head(origin_dir, git_env, "task/t1")

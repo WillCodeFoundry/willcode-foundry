@@ -71,7 +71,7 @@ def test_an_event_moves_the_task_and_leaves_the_note() -> None:
 def test_block_moves_any_role_state_to_blocked() -> None:
     next_state = in_state("deliver").after("block", "Which base branch?", "dev")
 
-    assert (next_state.state, next_state.role, next_state.terminal) == ("blocked", None, True)
+    assert (next_state.state, next_state.role) == ("blocked", None)
 
 
 @pytest.mark.parametrize(
