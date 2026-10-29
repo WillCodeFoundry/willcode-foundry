@@ -45,8 +45,12 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md` and `REVIEW.md`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/<id>/`: its `TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` and `TURN`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
+
+**Turn**:
+Which role works on a task next, or `human` when it waits for you. The task's `TURN` file holds it, and each role writes the next one when its turn ends.
+_Avoid_: task state, lifecycle
 
 **Code checkout** and **notes checkout**:
 The two working copies of a project inside a sandbox: one on the task branch, one on the notes branch.

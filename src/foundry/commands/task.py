@@ -38,5 +38,5 @@ def create_main(args: argparse.Namespace) -> int:
 def report(project_name: str, new_task: task.Task) -> list[str]:
     return [
         f"created task {new_task.id} in {project_name}",
-        f"run it with: foundry run {project_name} ROLE {new_task.id}",
+        f"run it with: foundry run {project_name} {new_task.id}",
     ]

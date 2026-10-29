@@ -1,4 +1,5 @@
-"""Tasks on a project's repository: what a task's names are, and creating one from the task template.
+"""Tasks on a project's repository: what a task's names are, creating one from the task template, and whose turn
+it is.
 
 Task is the one place a task's names are spelled out. They reach the agent kit as session
 variables (SessionVariables in session.py), so the kit derives none itself, and
@@ -20,6 +21,11 @@ NOTES_BRANCH: Final = "agent-notes"
 NOTES_ROOT: Final = ".agent"
 # The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
+# The notes file that says whose turn it is: a role's name, or HUMAN. The task template starts it; each role writes
+# the next one when its turn ends, as agent-kit/AGENTS.md says.
+TURN_FILE: Final = "TURN"
+# The turn that no role takes: the task waits for you.
+HUMAN: Final = "human"
 
 # A task id becomes the git branch task/<id>, so it must be a valid ref
 # component as well as readable: wcf-0042, fix-login.2. Matched after
@@ -62,6 +68,11 @@ class Task:
         """The task's TASK_FILE on NOTES_BRANCH, relative to the repository root."""
         return f"{self.task_notes_dir}/{TASK_FILE}"
 
+    @property
+    def turn_file(self) -> str:
+        """The task's TURN_FILE on NOTES_BRANCH, relative to the repository root."""
+        return f"{self.task_notes_dir}/{TURN_FILE}"
+
 
 def load_template(template_dir: Path) -> dict[str, str]:
     """Every file directly in ``template_dir``, by name: what a new task's notes dir starts with.
@@ -97,3 +108,18 @@ def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None
     clone.write({f"{task.task_notes_dir}/{name}": text for name, text in template.items()})
     clone.commit(f"Add task {task.id}")
     clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
+
+
+def read_turn(clone: ProjectClone, task: Task) -> str:
+    """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
+
+    FoundryError when the file is missing or empty, saying to name the role instead.
+    """
+    text = clone.read(NOTES_BRANCH, task.turn_file)
+    turn = text.strip() if text is not None else ""
+    if not turn:
+        raise FoundryError(
+            f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
+            "Name the role to run instead."
+        )
+    return turn

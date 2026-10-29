@@ -220,7 +220,7 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 
 
 def test_the_report_says_what_was_created_and_how_to_run_it() -> None:
-    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry run store ROLE t1"]
+    assert report("store", Task("T1")) == ["created task t1 in store", "run it with: foundry run store t1"]
 
 
 def test_create_takes_a_project_and_a_task() -> None:
@@ -237,3 +237,38 @@ def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
     clone = ProjectClone.init(str(tmp_path / "origin.git"), clone_dir, git_env)
     with pytest.raises(AssertionError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])
+
+
+# --- read_turn ------------------------------------------------------------------------
+
+
+def turn_of(origin_dir: Path, git_env: dict[str, str], task_id: str) -> str:
+    scratch_dir = origin_dir.parent / f"turn-{task_id}"
+    scratch_dir.mkdir()
+    return task.read_turn(ProjectClone.init(str(origin_dir), scratch_dir, git_env), Task(task_id))
+
+
+def test_a_new_task_s_turn_is_the_template_s(origin_dir, git_env) -> None:
+    scratch_dir = origin_dir.parent / "scratch-turn"
+    scratch_dir.mkdir()
+    task.create(ProjectClone.init(str(origin_dir), scratch_dir, git_env), Task("T1"), {**TEMPLATE, "TURN": "dev\n"})
+
+    assert turn_of(origin_dir, git_env, "T1") == "dev"
+
+
+@pytest.mark.parametrize("task_id", ["t0", "t9"], ids=["no TURN file", "no notes dir"])
+def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env, task_id: str) -> None:
+    with pytest.raises(FoundryError, match=f"task {task_id} has no turn.*Name the role"):
+        turn_of(origin_dir, git_env, task_id)
+
+
+def test_a_project_without_a_notes_branch_has_no_turn(tmp_path: Path, git_env) -> None:
+    origin_dir = tmp_path / "bare.git"
+    git(git_env, "init", "--quiet", "--bare", str(origin_dir))
+    with pytest.raises(FoundryError, match="has no turn"):
+        turn_of(origin_dir, git_env, "t1")
+
+
+def test_the_task_template_starts_with_the_planner_s_turn() -> None:
+    template = task.load_template(Path(__file__).parents[1] / "config" / "task-template")
+    assert template[task.TURN_FILE].strip() == "planner"

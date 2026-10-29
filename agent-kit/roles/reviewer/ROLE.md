@@ -73,3 +73,6 @@ for another round. Ask the human instead, as "When to stop and ask" in
 
 Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.
+
+Then write `dev` in `TURN`, whatever the verdict. The one exception is asking
+the human after round 3, as above: write `human` in `TURN` instead.

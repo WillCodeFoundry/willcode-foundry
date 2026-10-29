@@ -72,6 +72,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
+| `TURN` | whoever's turn it is | One line: the role whose turn it is, or `human`. See "Taking turns". |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -112,6 +113,17 @@ entries as you go, not at the end.
 **TBD:** the fixed list of tags.
 
 ## 3. Workflow
+
+### Taking turns
+
+A task passes from role to role. `TURN` names whose turn it is, and
+`foundry run` starts that role, unless the human names another.
+
+When your turn ends, write the next role's name in `TURN`, alone on one line,
+then commit and push it with your last notes. Your `ROLE.md` says which role is
+next. When it doesn't, or you are stuck, write `human`.
+
+`PROGRESS.md` is the hand-off: the next role reads it first.
 
 ### Start
 
@@ -162,9 +174,8 @@ The task is done when every acceptance criterion in `TASK.md` is met. Then:
    `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
-6. Your `ROLE.md` says what happens next (review, the pull request);
-   otherwise tell the human the task is ready, summarising what changed and
-   anything they should check.
+6. Hand over the turn, as "Taking turns" says, and tell the human what
+   changed and anything they should check.
 
 If you run out of turns or time, push whatever state you have and make sure
 `PROGRESS.md` → "In progress" says exactly where you stopped.
@@ -229,8 +240,8 @@ uncommitted or unpushed changes.
 
 ## 6. When to stop and ask
 
-Stop, record the question in `PROGRESS.md` → "Blockers", commit, push, and ask
-the human when:
+Stop, record the question in `PROGRESS.md` → "Blockers", write `human` in
+`TURN`, commit, push, and ask the human when:
 
 - `TASK.md` is missing, unclear, or contradicts the code or itself;
 - the work needs something outside the task's scope, new dependencies, or
@@ -262,3 +273,4 @@ Asking early is always better than guessing.
 - [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
 - [ ] Notes committed and pushed on `$AGENT_NOTES_BRANCH`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation
+- [ ] `TURN` names the next role, or `human`, and is pushed

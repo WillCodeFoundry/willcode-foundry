@@ -25,6 +25,9 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - Fix each finding with the smallest change. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   human, as "When to stop and ask" in `AGENTS.md` says.
+- Once the work is done, or every open finding is answered, the turn is the
+  `reviewer`'s.
 - When it says `Verdict: approved`: open the pull request into the default
   branch with `gh pr create`, the title as the `git-conventions` skill says
-  and the body from the `pr` skill. Never before that verdict.
+  and the body from the `pr` skill. Never before that verdict. Put its URL
+  in `PROGRESS.md`; the turn is then the `human`'s.
