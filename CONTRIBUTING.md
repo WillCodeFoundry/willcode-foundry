@@ -5,13 +5,14 @@ How to develop and test the foundry. Read [ARCHITECTURE.md](ARCHITECTURE.md) fir
 ## Development
 
 ```console
-$ uv sync --group dev
-$ uv run pytest                  # the host tier; about 20 seconds
-$ uv run pytest -m docker        # the docker tier; needs a Docker daemon
-$ uv run pytest -m sbx           # the sbx tier, by hand: see below
-$ uv run ruff check . && uv run ruff format --check .
-$ uv run mypy
+$ uv run --group dev pytest                  # the host tier; about 20 seconds
+$ uv run --group dev pytest -m docker        # the docker tier; needs a Docker daemon
+$ uv run --group dev pytest -m sbx           # the sbx tier, by hand: see below
+$ uv run --group dev ruff check . && uv run --group dev ruff format --check .
+$ uv run --group dev mypy
 ```
+
+The dev tools are in the `dev` dependency group, which `uv sync` and `uv run` leave out by default (`default-groups = []` in `pyproject.toml`). So every command that runs them names the group. It installs them when they are missing, in a fresh sandbox or after a plain `uv sync`. `tests/test_docs.py` refuses a doc that runs them without it.
 
 Run the tests as an ordinary user. A run started as root stops before collecting anything, since root can write anything and the permission checks would mean nothing.
 
@@ -21,10 +22,10 @@ Each behaviour is tested once, at the cheapest tier that can catch its bug. A hi
 
 | Tier | Folder | Covers | Runs |
 |---|---|---|---|
-| host | `tests/` (top level) | foundry: config, sessions, tasks, the runtime build, skills, the repo policy, and the docs | every `uv run pytest`; CI |
-| host | `tests/agent_sandbox/` | the sbx calls, against fakes of the host and sbx | every `uv run pytest`; CI |
-| host | `tests/agent_runtime/` | every rule in the runtime, in-process; hardening runs against a modelled machine ([ADR 0009](docs/adr/0009-test-against-a-modelled-machine.md)) | every `uv run pytest`; CI |
-| host | `tests/agent_kit/` | only what the kit as delivered shows: the built runtime, the stubs, the managed settings' commands | every `uv run pytest`; CI |
+| host | `tests/` (top level) | foundry: config, sessions, tasks, the runtime build, skills, the repo policy, and the docs | every `uv run --group dev pytest`; CI |
+| host | `tests/agent_sandbox/` | the sbx calls, against fakes of the host and sbx | every `uv run --group dev pytest`; CI |
+| host | `tests/agent_runtime/` | every rule in the runtime, in-process; hardening runs against a modelled machine ([ADR 0009](docs/adr/0009-test-against-a-modelled-machine.md)) | every `uv run --group dev pytest`; CI |
+| host | `tests/agent_kit/` | only what the kit as delivered shows: the built runtime, the stubs, the managed settings' commands | every `uv run --group dev pytest`; CI |
 | docker | `tests/sandbox_image/` | `session-init` and the git hooks in the template image: real hardening, permissions and read-only mount | `-m docker`; CI's `sandbox-image` job |
 | sbx | `tests/sbx/` | a real sandbox: launch, relaunch, restart | `-m sbx`, by hand |
 

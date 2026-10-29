@@ -1,5 +1,6 @@
 """The docs stay true to the code: their links and anchors resolve, the paths they name exist, the README
-sections messages point to exist, and the command tables list exactly the commands the parsers define.
+sections messages point to exist, the command tables list exactly the commands the parsers define, and every dev
+tool they run names its dependency group.
 
 A rename that strands a doc fails here, in the pull request that made it.
 """
@@ -24,6 +25,8 @@ DOCS = sorted(
 )
 NAMED_PATH = re.compile(r"`((?:src|tests|config|agent-kit|docs)/[^`\s]*)`")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+DEV_TOOL_WITHOUT_GROUP = re.compile(r"\buv run (?!--group dev )(?:pytest|ruff|mypy)\b")
+"""A dev tool run without --group dev, which pyproject.toml's default-groups leaves uninstalled."""
 
 
 def anchors(markdown: str) -> set[str]:
@@ -117,3 +120,21 @@ def test_the_architecture_lists_exactly_the_runtimes_commands() -> None:
     first_words = {command.split()[0] for command in runtime}
     architecture = (REPOSITORY / "ARCHITECTURE.md").read_text()
     assert {command for command in table_commands(architecture) if command.split()[0] in first_words} == runtime
+
+
+def test_every_dev_tool_a_doc_runs_names_the_dev_group(doc: Path) -> None:
+    assert DEV_TOOL_WITHOUT_GROUP.findall(doc.read_text()) == []
+
+
+@pytest.mark.parametrize(
+    ("command", "refused"),
+    [
+        ("uv run pytest -m docker", True),
+        ("uv run ruff check .", True),
+        ("uv run mypy", True),
+        ("uv run --group dev pytest", False),
+        ("uv run foundry run tkt-store wcf-0042", False),
+    ],
+)
+def test_a_dev_tool_is_refused_only_without_the_dev_group(command: str, refused: bool) -> None:
+    assert bool(DEV_TOOL_WITHOUT_GROUP.search(command)) is refused
