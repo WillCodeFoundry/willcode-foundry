@@ -74,7 +74,10 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     notes branch, or when the transition rule refuses the event.
     """
     if problems := unsaved_work(session):
-        raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
+        raise TaskStateRefused(
+            f"Commit and push your work before sending an event: {'; '.join(problems)}. To take back an event you "
+            "already sent, run the restore command it printed."
+        )
     current = _origin_state(session)
     notes_dir, branch = session.agent_notes_dir, session.agent_notes_branch
     notes = Git(notes_dir)
@@ -94,6 +97,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     lines = [
         f"{current.state} → {next_state.state}. Commit and push it to end your turn:",
         f"  {shlex.join([*git_in, 'commit', '--quiet', '--message', subject, '--', path])}",
+        f"  {shlex.join([*git_in, 'pull', '--quiet', '--rebase', 'origin', branch])}",
         f"  {shlex.join([*git_in, 'push', '--quiet', 'origin', branch])}",
         f"To take the event back before committing: {shlex.join([*git_in, 'restore', '--', path])}",
         _assigned_next(next_state),

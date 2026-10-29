@@ -74,7 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
     git_hook.add_argument("name", choices=GIT_HOOKS)
     git_hook.add_argument("args", nargs=argparse.REMAINDER, help="what git passed the hook")
     task = subparsers.add_parser(
-        "task", help="the agent's task state: show it, or end the turn with an event", description=task_command.USAGE
+        "task",
+        help="the agent's task state: show it, or write the next one with an event",
+        description=task_command.USAGE,
     )
     task.add_argument("args", nargs=argparse.REMAINDER, help='show, or EVENT "<hand-off note>"')
     return parser

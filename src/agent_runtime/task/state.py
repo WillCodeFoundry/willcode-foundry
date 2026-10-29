@@ -2,7 +2,7 @@
 
 The file holds exactly three keys: ``lifecycle``, ``state`` and ``note``. Its history is the file's git log on the
 notes branch, which also says which state the task came from. This module only reads, checks and changes task
-states, with no git and no files, and the runtime's ``task`` command and foundry do the git around it.
+states, with no git and no files. The runtime's ``task`` command and foundry do the git around it.
 
 Shared with foundry (ARCHITECTURE.md, design rule 2).
 """

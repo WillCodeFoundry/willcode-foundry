@@ -165,7 +165,7 @@ def _require_own_notes(
         "",
         "If you changed it by hand, put it back.",
         *_put_back(contract.NOTES_DIR, remote_sha, [path], net_changed),
-        f"Only bin/task changes it, when it is your turn: {END_TURN}",
+        f"Only the task command changes it, when it is your turn: {END_TURN}",
     )
     try:
         old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)

@@ -146,6 +146,7 @@ def test_an_event_writes_the_next_task_state_and_prints_how_to_end_the_turn(turn
     assert printed == (
         "implement → review. Commit and push it to end your turn:\n"
         f"  {git_in} commit --quiet --message '{TASK.id}: implement → review (submit)' -- {STATE_PATH}\n"
+        f"  {git_in} pull --quiet --rebase origin {session.agent_notes_branch}\n"
         f"  {git_in} push --quiet origin {session.agent_notes_branch}\n"
         f"To take the event back before committing: {git_in} restore -- {STATE_PATH}\n"
         "Then it is the reviewer's turn. Stop once it is pushed.\n"
@@ -199,7 +200,7 @@ def test_unsaved_work_is_refused_writing_nothing(turn: Checkouts, dirty: str, pr
 
     message = refusal(session, "submit", "done")
 
-    assert message.startswith("commit and push your work before ending your turn:") and problem in message
+    assert message.startswith("Commit and push your work before sending an event:") and problem in message
     assert written_state(notes).state == "implement"
 
 
@@ -264,8 +265,30 @@ def test_the_printed_commands_push_what_the_real_pre_push_accepts(
     use_pre_push(monkeypatch, session, tmp_path, built_kit)
     printed = run(session, event, "Over to you.")
 
-    for command in commands(printed)[:2]:
+    for command in commands(printed)[:3]:
         subprocess.run(["sh", "-c", command], cwd=tmp_path, check=True, capture_output=True)
 
     assert origin_state(session).state == state
     assert git(notes, "log", "-1", "--format=%s").stdout.strip() == f"{TASK.id}: implement → {state} ({event})"
+
+
+def test_the_printed_commands_still_push_after_another_task_pushed(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Other roles push to the notes branch at the same time, so the printed pull --rebase brings theirs in."""
+    session, _, notes = turn
+    printed = run(session, "submit", "All met.")
+    other = tmp_path / "other-role"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
+    (other / ".agent" / "t2").mkdir(parents=True)
+    (other / ".agent" / "t2" / "PROGRESS.md").write_text("theirs\n")
+    git(other, "add", ".agent")
+    git(other, "commit", "-qm", "t2: progress")
+    git(other, "push", "-q", "origin", "HEAD")
+    use_pre_push(monkeypatch, session, tmp_path, built_kit)
+
+    for command in commands(printed)[:3]:
+        subprocess.run(["sh", "-c", command], cwd=tmp_path, check=True, capture_output=True)
+
+    assert origin_state(session).state == "review"

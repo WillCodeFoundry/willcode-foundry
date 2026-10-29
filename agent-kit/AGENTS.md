@@ -46,7 +46,7 @@ The `agent-kit` directory contains:
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/ROLE.md` | your role's identity, method, definition of done and boundaries |
 | `$AGENT_KIT_DIR/roles/$AGENT_ROLE/memory/` | curated knowledge for your role, one file per topic |
 | `$AGENT_KIT_DIR/skills/<name>/SKILL.md` | reusable procedures; when a task matches one, follow it rather than improvising. Your role's skills (`roles/$AGENT_ROLE/skills/`) are loaded as Claude Code skills; `git-conventions` is read by its path |
-| `$AGENT_KIT_DIR/bin/task` | your task command: where the task stands, and ending your turn (see "Taking turns") |
+| `$AGENT_KIT_DIR/bin/task` | your task command: where the task stands, and the event that ends your turn (see "Taking turns") |
 | `$AGENT_KIT_DIR/.build/` | the runtime the hooks and `bin/task` run; not for you to call |
 
 You have no root access and no Docker: `sudo`, `su` and the Docker daemon are
@@ -129,8 +129,8 @@ that end the turn, each with when to send it.
 
 - Run `task show` first, and read its hand-off note: the last turn left it for you.
 - Push your code and notes, then send the event that says what happened. It
-  writes your task state, and your turn ends when you commit and push it, with
-  the commands the task command prints, before anything else.
+  writes your task state. Your turn ends when you commit and push it, with the
+  commands the task command prints. Do nothing else in between.
 - The task command refuses while either checkout has unsaved work, or the notes
   checkout isn't up to date with origin. To take an event back before
   committing, run the `restore` command it prints.
@@ -232,11 +232,11 @@ git push origin "$AGENT_NOTES_BRANCH"
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
   for their own tasks at the same time. The hooks refuse to push changes to anything else.
 - Always `pull --rebase` before pushing. Every agent touches only its own dir,
-  so the only conflict is on `STATE.json`, when the human moved the task after
-  the task command read it. Then run `git rebase --abort` and
-  `git reset --keep origin/$AGENT_NOTES_BRANCH`, which drops only the task
-  state's commit, since you committed nothing after it. Then run `task show`
-  again.
+  so it conflicts only on `STATE.json`. That happens when the human moved the
+  task after the task command read it.
+- If it does, run `git rebase --abort`, then
+  `git reset --keep origin/$AGENT_NOTES_BRANCH`. That drops only the task
+  state's commit, the last one you made. Then run `task show` again.
 
 ### Hooks
 
