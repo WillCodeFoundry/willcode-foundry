@@ -60,10 +60,16 @@ Never edit earlier rounds. In each round, in this order:
 
 1. Any "TASK.md changed by another role" finding.
 2. A verdict on every finding still open from earlier rounds: closed, still
-   open, or accepted as is.
+   open, accepted as is, or deferred, for a Follow-up the dev noted for later.
 3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
-   …), so the dev can answer each by its id.
-4. A last line: `Verdict: changes needed` or `Verdict: approved`.
+   …), so the dev can answer each by its id. Each says whether it is Blocking
+   or a Follow-up.
+4. A last line: `Verdict: approved` when no Blocking finding is open, even
+   with follow-ups open; otherwise `Verdict: changes needed`.
+
+If a Blocking finding is still open after round 3, don't hand the task back
+for another round. Ask the human instead, as "When to stop and ask" in
+`AGENTS.md` says. Name the findings, and say where you and the dev disagree.
 
 Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.
