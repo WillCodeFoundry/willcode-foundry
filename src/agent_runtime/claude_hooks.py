@@ -90,7 +90,7 @@ def session_check(
     reason = (
         f"Cannot stop yet: {'; '.join(problems)}. "
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
-        "If a push was refused, or a pull stopped on a conflict, say so in the conversation and stop."
+        "If a push was refused, say so in the conversation and stop."
     )
     print(json.dumps({"decision": "block", "reason": reason}), file=stdout or sys.stdout)
     return 0

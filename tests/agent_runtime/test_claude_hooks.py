@@ -151,8 +151,25 @@ def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts
     assert "code checkout has uncommitted changes; notes checkout has commits not pushed" in reason
     assert reason.endswith(
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
-        "If a push was refused, or a pull stopped on a conflict, say so in the conversation and stop."
+        "If a push was refused, say so in the conversation and stop."
     )
+
+
+def test_unpushed_commits_are_named_oldest_first_one_per_line_and_at_most_five(checkouts: Checkouts) -> None:
+    """Round 8's R78 and R79. A subject with a semicolon can't pass for a second problem, and a long run of commits
+    can't push the oldest, the one most likely stuck, out of sight."""
+    session, _, notes = checkouts
+    for number in range(7):
+        commit(
+            notes,
+            f"{TASK.task_notes_dir}/n{number}.md",
+            f"{TASK.id}: note {number}; code checkout has uncommitted changes",
+        )
+
+    reason = block_reason(session)
+
+    named = "".join(f"\n    {TASK.id}: note {number}; code checkout has uncommitted changes" for number in range(5))
+    assert f"notes checkout has commits not pushed to origin/agent-notes:{named}\n    and 2 more" in reason
 
 
 def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(checkouts: Checkouts) -> None:

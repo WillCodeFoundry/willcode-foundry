@@ -184,7 +184,7 @@ def test_an_event_the_state_doesnt_accept_is_refused_writing_nothing(turn: Check
     ("dirty", "problem"),
     [
         ("uncommitted code", "code checkout has uncommitted changes"),
-        ("unpushed notes", "notes checkout has commits not pushed to origin/agent-notes: progress"),
+        ("unpushed notes", "notes checkout has commits not pushed to origin/agent-notes:\n    progress"),
     ],
 )
 def test_unsaved_work_is_refused_writing_nothing(turn: Checkouts, dirty: str, problem: str) -> None:
@@ -307,3 +307,34 @@ def test_a_human_move_before_the_push_stops_the_pull_and_loses_no_work(turn: Che
     git(notes, "rebase", "--abort")
     assert git(notes, "rev-parse", "HEAD").stdout == agents_commit
     assert written_state(notes).state == "review"
+
+
+def test_after_a_human_move_overtakes_its_commit_the_agent_drops_it_and_pushes(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round 8's R75, replayed through to a push. The agent's task-state commit is overtaken by two human moves.
+    On the next launch the notes pull conflicts on STATE.json, as AGENTS.md says it can. The agent drops that
+    commit with ordinary git, here by skipping it in the rebase, and its other work pushes."""
+    session, _, notes = turn
+    printed = run(session, "submit", "All met.")
+    commit, pull, push = commands(printed)
+    subprocess.run(["sh", "-c", commit], check=True, capture_output=True)
+    human = tmp_path / "human"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(human))
+    push_state(human, TaskState(lifecycle=FEATURE, state="blocked", note="Wait for me."))
+    push_state(human, TaskState(lifecycle=FEATURE, state="implement", note="Use main, then submit again."))
+    (notes / TASK.task_notes_dir / "PROGRESS.md").write_text("progress\n")
+    git(notes, "add", TASK.task_notes_dir)
+    git(notes, "commit", "-qm", f"{TASK.id}: progress")
+    use_pre_push(monkeypatch, session, tmp_path, built_kit)
+
+    pulled = subprocess.run(["sh", "-c", pull], check=False, capture_output=True, text=True)
+    assert pulled.returncode != 0 and STATE_PATH in pulled.stdout + pulled.stderr
+    git(notes, "rebase", "--skip")
+    subprocess.run(["sh", "-c", push], check=True, capture_output=True)
+
+    assert origin_state(session).note == "Use main, then submit again."
+    assert git(notes, "show", f"origin/{session.agent_notes_branch}:{TASK.task_notes_dir}/PROGRESS.md").stdout == (
+        "progress\n"
+    )

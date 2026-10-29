@@ -36,15 +36,22 @@ def _uncommitted(git: Git, label: str) -> list[str]:
 
 
 def _unpushed(git: Git, branch: str, label: str) -> list[str]:
-    """Commits origin/``branch`` lacks, by subject: on the branch, and at HEAD, which a detached HEAD moves off it.
+    """Commits origin/``branch`` lacks: on the branch, and at HEAD, which a detached HEAD moves off it.
 
-    Naming them lets the agent see which commit is stuck, such as a task state's commit the human's move overtook.
+    The problem names them by subject, oldest first, one per line and at most _NAMED. So the one most likely stuck,
+    a task state's commit the human's move overtook, comes first.
     """
     git.run_captured("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
     for rev in (f"refs/heads/{branch}", "HEAD"):
-        if subjects := _checked(git, "log", "--format=%s", f"origin/{branch}..{rev}").splitlines():
-            return [f"{label} has commits not pushed to origin/{branch}: {'; '.join(subjects)}"]
+        if subjects := _checked(git, "log", "--reverse", "--format=%s", f"origin/{branch}..{rev}").splitlines():
+            named = [f"\n    {subject}" for subject in subjects[:_NAMED]]
+            more = [f"\n    and {len(subjects) - _NAMED} more"] if len(subjects) > _NAMED else []
+            return [f"{label} has commits not pushed to origin/{branch}:{''.join([*named, *more])}"]
     return []
+
+
+_NAMED = 5
+"""How many unpushed commits a problem names."""
 
 
 def _checked(git: Git, *args: str) -> str:

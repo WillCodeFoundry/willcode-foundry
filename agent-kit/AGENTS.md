@@ -231,8 +231,10 @@ git push origin "$AGENT_NOTES_BRANCH"
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
   for their own tasks at the same time. The hooks refuse to push changes to anything else.
 - Always `pull --rebase` before pushing. Every agent touches only its own dir,
-  so it conflicts only on `STATE.json`. That means the human moved the task
-  after the task command read it. Say so in the conversation, and stop.
+  so it conflicts only on `STATE.json`.
+- Such a conflict means the human moved the task after your task-state commit.
+  That commit can never be pushed. It was never pushed, so it is yours to drop.
+  Then run `task show`, and carry on from what it says.
 
 ### Hooks
 

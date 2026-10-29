@@ -8,9 +8,14 @@ what your turn is for, and its hand-off note says why the task is with you. Its
 `TASK.md` may be the template's skeleton, for a new task, or a written one the
 human wants rescoped.
 
-"Your task notes" and "Workflow" in `AGENTS.md` don't apply to you, except
-"Workflow"'s "Taking turns", nor its "Code checkout" rules. Its "Notes
-checkout" rules, "When to stop and ask" and "Safety" do.
+These sections of `AGENTS.md` apply to you:
+
+- "Taking turns", in "Workflow";
+- the "Notes checkout" rules and "Hooks", in "Git rules";
+- "When to stop and ask";
+- "Safety".
+
+The rest of "Workflow", "Your task notes" and the "Code checkout" rules don't.
 
 Paths below are relative to this role's directory.
 
