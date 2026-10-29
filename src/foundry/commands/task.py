@@ -166,33 +166,27 @@ _NONE = "—"
 
 
 @dataclass(frozen=True)
-class Unreadable:
-    """Why a task's state couldn't be read, in the error's own words."""
-
-    reason: str
-
-
-@dataclass(frozen=True)
 class Row:
-    """One task in `foundry task list`: its task state, or why it couldn't be read."""
+    """One task in `foundry task list` whose task state could be read."""
 
     project: str
     task: Task
-    task_state: TaskState | Unreadable
+    task_state: TaskState
 
 
-def read_rows(project_name: str, clone: ProjectClone) -> list[Row]:
-    """A row per task on the project's NOTES_BRANCH, in id order; none if it has no NOTES_BRANCH yet."""
+def read_rows(project_name: str, clone: ProjectClone) -> tuple[list[Row], list[str]]:
+    """A row per task on the project's NOTES_BRANCH whose task state could be read, in id order, and the whole
+    error for each one that couldn't. Neither, if the project has no NOTES_BRANCH yet."""
     if NOTES_BRANCH not in clone.branches():
-        return []
+        return [], []
     clone.check_out(NOTES_BRANCH)
-    rows = []
+    rows, errors = [], []
     for task in map(Task, task_ids(clone)):
         try:
             rows.append(Row(project_name, task, read_state(clone, task)))
         except (FoundryError, TaskStateRefused) as error:
-            rows.append(Row(project_name, task, Unreadable(str(error))))
-    return rows
+            errors.append(f"{project_name} {task.id}: {error}")
+    return rows, errors
 
 
 def table(rows: Sequence[Row], live_sandboxes: set[str]) -> list[str]:
@@ -207,8 +201,6 @@ def table(rows: Sequence[Row], live_sandboxes: set[str]) -> list[str]:
 
 def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
     task_state = row.task_state
-    if isinstance(task_state, Unreadable):
-        return [row.project, row.task.id, _NONE, _NONE, _NONE, _NONE, f"error: {task_state.reason.splitlines()[0]}"]
     role = task_state.role
     if role is None:
         who, sandbox = ("you" if task_state.assigned_to_human else _NONE), _NONE
@@ -221,17 +213,25 @@ def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
 
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: every configured project's tasks, from scratch clones, and this machine's sandboxes.
-    Exits 1 if any task's state couldn't be read, after printing every row."""
+
+    The table shows each task whose state could be read. Then each one that couldn't gets its whole error, on
+    stderr, which says how to fix it, and the command exits 1.
+    """
     foundry_config = config.load(paths.find_foundry_root())
     rows: list[Row] = []
+    errors: list[str] = []
     for project in foundry_config.projects.values():
         with _scratch_clone(project.url) as clone:
-            rows += read_rows(project.name, clone)
-    if not rows:
+            project_rows, project_errors = read_rows(project.name, clone)
+        rows += project_rows
+        errors += project_errors
+    if rows:
+        print("\n".join(table(rows, agent_sandbox.live_sandboxes())))
+    elif not errors:
         print("no tasks")
-        return 0
-    print("\n".join(table(rows, agent_sandbox.live_sandboxes())))
-    return 1 if any(isinstance(row.task_state, Unreadable) for row in rows) else 0
+    for error in errors:
+        print(f"\n{error}", file=sys.stderr)
+    return 1 if errors else 0
 
 
 # --- move -----------------------------------------------------------------------

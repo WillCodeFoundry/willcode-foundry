@@ -12,7 +12,7 @@ from agent_runtime.git import GitError
 from agent_runtime.task.lifecycles import BUGFIX, FEATURE, Lifecycle
 from agent_runtime.task.state import TaskState
 from foundry import cli, task
-from foundry.commands.task import Row, Unreadable, move_task, read_rows, report, table
+from foundry.commands.task import Row, move_task, read_rows, report, table
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.task import Task
@@ -339,20 +339,22 @@ def test_a_refused_move_pushes_nothing(origin_dir, git_env, to: str, note: str, 
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
-def test_list_has_a_row_per_task_an_unreadable_one_showing_its_error(origin_dir, git_env) -> None:
+def test_list_has_a_row_per_readable_task_and_the_whole_error_for_each_other(origin_dir, git_env) -> None:
     create(origin_dir, git_env)
 
-    rows = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
+    rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
 
-    assert [row.task.id for row in rows] == ["t0", "t1"]
-    assert isinstance(rows[0].task_state, Unreadable) and "has no .agent/t0/STATE.json" in rows[0].task_state.reason
-    assert rows[1].task_state == TaskState.new(FEATURE)
+    assert [(row.task.id, row.task_state) for row in rows] == [("t1", TaskState.new(FEATURE))]
+    assert errors[0].startswith("store t0: task t0 has no .agent/t0/STATE.json on agent-notes.")
+    assert "Add it on agent-notes, naming the lifecycle and the state it is in, for example:" in errors[0]
+    assert errors[0].rstrip().endswith('"note": "Started before task states: read PROGRESS.md."\n  }'.rstrip())
+    assert len(errors) == 1
 
 
 def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> None:
     git(git_env, f"--git-dir={origin_dir}", "branch", "--quiet", "-D", task.NOTES_BRANCH)
 
-    assert read_rows("store", scratch_clone(origin_dir, git_env, "list")) == []
+    assert read_rows("store", scratch_clone(origin_dir, git_env, "list")) == ([], [])
 
 
 def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
@@ -364,7 +366,6 @@ def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
         Row("store", Task("t2"), state("review", "Ready.")),
         Row("store", Task("t3"), state("blocked", "Which base?")),
         Row("store", Task("t4"), state("done")),
-        Row("store", Task("t0"), Unreadable("task t0 has no STATE.json\nmore")),
     ]
 
     assert table(rows, live_sandboxes={"reviewer-store-t2"}) == [
@@ -373,5 +374,4 @@ def test_the_list_says_whose_turn_it_is_and_whether_its_sandbox_runs() -> None:
         "store    t2    feature    review     reviewer  running  Ready.",
         "store    t3    feature    blocked    you       —        Which base?",
         "store    t4    feature    done       —         —",
-        "store    t0    —          —          —         —        error: task t0 has no STATE.json",
     ]
