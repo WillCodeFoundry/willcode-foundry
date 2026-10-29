@@ -19,8 +19,12 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 
 - When the latest round says `Verdict: changes needed`: under each open
   finding, add "Fixed in `<commit>`." or "Disagree: <why>.", without editing
-  the reviewer's text. Commit and push it on `$AGENT_NOTES_BRANCH`, with the fixes on
-  the task branch.
+  the reviewer's text. A Follow-up may instead get "Deferred: <why>." Note it
+  under "Next" in `PROGRESS.md`. Commit and push it on `$AGENT_NOTES_BRANCH`,
+  with the fixes on the task branch.
+- Fix each finding with the smallest change. If the only fix you see adds
+  machinery, or instructions that script a recovery, don't make it. Ask the
+  human, as "When to stop and ask" in `AGENTS.md` says.
 - When it says `Verdict: approved`: open the pull request into the default
   branch with `gh pr create`, the title as the `git-conventions` skill says
   and the body from the `pr` skill. Never before that verdict.
