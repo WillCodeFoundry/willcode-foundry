@@ -8,4 +8,4 @@ A task's `TURN` file on `agent-notes` names the role whose turn it is, or `human
 - **Deriving the turn from the notes, such as `REVIEW.md`'s last verdict.** No new file, but every rule would live in foundry, out of sight of the roles that follow it.
 - **Making ROLE required, as before.** You had to know whose turn it was. Naming it still overrides the file.
 
-Source: #22.
+Source: #22, #24.
