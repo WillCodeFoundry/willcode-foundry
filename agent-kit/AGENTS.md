@@ -183,9 +183,8 @@ Your turn's work is done when its goal is met. Then:
 1. Run all project checks one last time.
 2. Make sure the diff against the default branch contains only what the task
    needs: `git diff --stat origin/HEAD...HEAD`
-3. Update `PROGRESS.md`: everything under "Done", with a final line
-   `Status: ready for review`. Tick the criteria you met in your summary, not in
-   `TASK.md`.
+3. Update `PROGRESS.md`: everything under "Done". Tick the criteria you met
+   in your summary, not in `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
 6. End your turn with the event `task show` lists for what happened, and a

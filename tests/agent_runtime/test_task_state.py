@@ -80,9 +80,11 @@ def test_block_hands_any_role_state_to_the_human() -> None:
     assert (after.state, after.assignee) == ("blocked", "human")
 
 
-@pytest.mark.parametrize("state", ["blocked", "done"])
-def test_a_state_without_events_refuses_any(state: str) -> None:
-    assert refusal(lambda: in_state(state).after("submit", "note")) == f"{state} accepts no events"
+@pytest.mark.parametrize(("state", "assignee"), [("blocked", "the human"), ("done", "no one")])
+def test_a_state_without_events_refuses_any_and_says_to_stop(state: str, assignee: str) -> None:
+    assert refusal(lambda: in_state(state).after("submit", "note")) == (
+        f"{state} accepts no events. The task is assigned to {assignee}, so stop here."
+    )
 
 
 def test_an_event_the_state_doesnt_accept_is_refused_listing_those_it_does() -> None:

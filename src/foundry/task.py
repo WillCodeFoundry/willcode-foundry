@@ -87,7 +87,7 @@ def load_template(template_dir: Path) -> dict[str, str]:
 
 
 def create(clone: ProjectClone, task: Task, template: Mapping[str, str], lifecycle: Lifecycle) -> None:
-    """Create the task's branch from the default branch, copy ``template`` into its notes dir, and start its task
+    """Create the task's branch from the default branch, copy ``template`` into its task notes dir, and start its task
     state in ``lifecycle``'s initial state.
 
     Both branches are pushed at once, so either both change or neither does. Refuses if the task

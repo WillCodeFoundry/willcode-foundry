@@ -124,7 +124,9 @@ class TaskState:
         """
         events = self._definition.events
         if not events:
-            raise TaskStateRefused(f"{self.state} accepts no events")
+            raise TaskStateRefused(
+                f"{self.state} accepts no events. The task is assigned to {self.assignee_named}, so stop here."
+            )
         if event not in events:
             raise TaskStateRefused(
                 f"{self.state} doesn't accept {event!r}. Send one of {', '.join(events)} (see {TASK_COMMAND} show)."

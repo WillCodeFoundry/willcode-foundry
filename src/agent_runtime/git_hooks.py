@@ -130,7 +130,7 @@ def _require_no_notes(session: contract.Environ, touched: Sequence[str]) -> None
 def _require_own_notes(
     session: contract.Environ, git: Git, touched: Sequence[str], remote_sha: str, local_sha: str
 ) -> None:
-    """Refuse a change to the notes branch outside this task's notes dir, and a change to its STATE.json that
+    """Refuse a change to the notes branch outside this task's task notes dir, and a change to its STATE.json that
     isn't a legal transition for this role."""
     if refused := [path for path in touched if not path.startswith(f"{session.agent_task_notes_dir}/")]:
         raise _refusal(
