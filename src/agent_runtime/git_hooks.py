@@ -22,7 +22,7 @@ from typing import Final
 from agent_runtime import contract
 from agent_runtime.git import Git
 from agent_runtime.task.committed import committed_state
-from agent_runtime.task.state import END_TURN, TaskStateRefused, require_legal_transition, state_path
+from agent_runtime.task.state import END_TURN, TaskStateRefused, state_path
 
 REFUSING: Final = ": refusing"
 """What follows a hook's name at the start of each of its refusals."""
@@ -168,10 +168,14 @@ def _require_own_notes(
         f"Only the task command changes it, when it is your turn: {END_TURN}",
     )
     try:
-        old, new = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
-        if old is None or new is None:
-            raise TaskStateRefused(f"It can't be {'created' if old is None else 'deleted'} in the sandbox.")
-        require_legal_transition(old, new, session.agent_role)
+        old_state, new_state = committed_state(git, remote_sha, path), committed_state(git, local_sha, path)
+        if old_state is None or new_state is None:
+            raise TaskStateRefused(f"It can't be {'created' if old_state is None else 'deleted'} in the sandbox.")
+        # The push carries the new task state, not the event. So send the event leading to it, by the same rule
+        # as the task command.
+        sent_state = old_state.after(old_state.event_to(new_state.state), new_state.note, session.agent_role)
+        if sent_state.lifecycle != new_state.lifecycle:
+            raise TaskStateRefused(f"The lifecycle can't change. It is {old_state.lifecycle.name}.")
     except TaskStateRefused as error:
         raise _refusal(PRE_PUSH, f"{path} can't change this way.", *str(error).splitlines(), *undo) from None
 

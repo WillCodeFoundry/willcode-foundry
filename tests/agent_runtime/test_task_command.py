@@ -164,13 +164,15 @@ def test_block_hands_the_task_to_the_human(turn: Checkouts) -> None:
     )
 
 
-@pytest.mark.parametrize("event", ["approve", "submit", "block"])
-def test_an_event_off_the_roles_turn_is_refused_whatever_the_event(turn: Checkouts, event: str) -> None:
+def test_an_event_off_the_roles_turn_is_refused_by_the_transition_rule(turn: Checkouts) -> None:
+    """The rule in TaskState.after is the command's only check of the turn. approve is an event review accepts,
+    so only the rule's assignee check refuses it."""
     session, _, notes = turn
     push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
 
     assert (
-        refusal(session, event, "Looks good.") == "The task is assigned to the reviewer, not the dev. It is in review."
+        refusal(session, "approve", "Looks good.")
+        == "The task is assigned to the reviewer, not the dev. It is in review."
     )
     assert git(notes, "status", "--porcelain").stdout == ""
 

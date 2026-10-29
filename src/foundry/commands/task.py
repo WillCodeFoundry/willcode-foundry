@@ -244,12 +244,12 @@ def move_task(clone: ProjectClone, task: Task, *, to: str, note: str) -> tuple[T
     Nothing is committed if the move is refused.
     """
     clone.check_out(NOTES_BRANCH)
-    old = read_state(clone, task)
-    moved = old.moved(to, note)
-    clone.write({task.state_file: moved.to_json()})
-    clone.commit(commit_subject(task.id, old.state, moved.state, "moved by hand"))
+    old_state = read_state(clone, task)
+    moved_state = old_state.moved(to, note)
+    clone.write({task.state_file: moved_state.to_json()})
+    clone.commit(commit_subject(task.id, old_state.state, moved_state.state, "moved by hand"))
     clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
-    return old, moved
+    return old_state, moved_state
 
 
 def move_main(args: argparse.Namespace) -> int:
@@ -257,8 +257,8 @@ def move_main(args: argparse.Namespace) -> int:
     project = config.load(paths.find_foundry_root()).project(args.project_name)
     task = Task(args.task_id)
     with _scratch_clone(project.url) as clone:
-        old, moved = move_task(clone, task, to=args.state, note=args.note)
-    print(f"moved task {task.id} from {old.state} to {moved.state}")
-    if moved.role:
+        old_state, moved_state = move_task(clone, task, to=args.state, note=args.note)
+    print(f"moved task {task.id} from {old_state.state} to {moved_state.state}")
+    if moved_state.role:
         print(f"run it with: foundry task run {project.name} {task.id}")
     return 0

@@ -53,30 +53,31 @@ class TaskState:
     def parse(cls, text: str, where: str) -> "TaskState":
         """Read a STATE.json's text; TaskStateRefused naming ``where`` if it isn't a task state."""
         try:
-            raw = json.loads(text)
+            fields = json.loads(text)
         except json.JSONDecodeError as error:
             raise TaskStateRefused(f"{where} is not valid JSON: {error}") from None
-        if not isinstance(raw, dict) or set(raw) != set(_KEYS):
+        if not isinstance(fields, dict) or set(fields) != set(_KEYS):
             raise TaskStateRefused(f"{where} is not a task state. It must hold exactly {', '.join(_KEYS)}.")
-        lifecycle = LIFECYCLES.get(raw["lifecycle"]) if isinstance(raw["lifecycle"], str) else None
+        lifecycle = LIFECYCLES.get(fields["lifecycle"]) if isinstance(fields["lifecycle"], str) else None
         if lifecycle is None:
             raise TaskStateRefused(
-                f"{where} names no known lifecycle, {raw['lifecycle']!r}. The lifecycles are {', '.join(LIFECYCLES)}."
+                f"{where} names no known lifecycle, {fields['lifecycle']!r}. "
+                f"The lifecycles are {', '.join(LIFECYCLES)}."
             )
-        if not isinstance(raw["state"], str) or raw["state"] not in lifecycle.states:
-            raise TaskStateRefused(f"{where}: state {raw['state']!r} is not a state of {lifecycle.name}")
-        if not isinstance(raw["note"], str):
+        if not isinstance(fields["state"], str) or fields["state"] not in lifecycle.states:
+            raise TaskStateRefused(f"{where}: state {fields['state']!r} is not a state of {lifecycle.name}")
+        if not isinstance(fields["note"], str):
             raise TaskStateRefused(f"{where}: note must be text")
-        return cls(lifecycle=lifecycle, state=raw["state"], note=raw["note"])
+        return cls(lifecycle=lifecycle, state=fields["state"], note=fields["note"])
 
     def to_json(self) -> str:
         """The STATE.json text: the three keys in order, two-space indented, ending with a newline."""
-        raw: dict[str, Any] = {
+        fields: dict[str, Any] = {
             "lifecycle": self.lifecycle.name,
             "state": self.state,
             "note": self.note,
         }
-        return json.dumps(raw, indent=2, ensure_ascii=False) + "\n"
+        return json.dumps(fields, indent=2, ensure_ascii=False) + "\n"
 
     @property
     def _definition(self) -> State:
@@ -113,18 +114,35 @@ class TaskState:
         """The assignee as a sentence names it: "the dev", "the human", or "no one"."""
         return "no one" if self.assignee is None else f"the {self.assignee}"
 
-    def after(self, event: str, note: str) -> "TaskState":
-        """The task state once ``event`` is sent with a hand-off note; TaskStateRefused saying why not."""
-        events = self.events
-        if not events:
+    def after(self, event: str, note: str, role: str) -> "TaskState":
+        """The task state once ``role`` sends ``event`` with a hand-off note; TaskStateRefused saying why not.
+
+        This is the transition rule. The task command applies it to an event, and pre-push to what a push changes,
+        through event_to (ADR 0011).
+        """
+        if self.assignee != role:
             raise TaskStateRefused(
-                f"{self.state} accepts no events. The task is assigned to {self.assignee_named}, so stop here."
+                f"The task is assigned to {self.assignee_named}, not the {role}. It is in {self.state}."
             )
+        events = self.events
         if event not in events:
             raise TaskStateRefused(
                 f"{self.state} doesn't accept {event!r}. Send one of {', '.join(events)} (see {TASK_COMMAND} show)."
             )
         return self._moved(events[event].target, note)
+
+    def event_to(self, state: str) -> str:
+        """The event that leads from this state to ``state``; TaskStateRefused when none does.
+
+        Two events leading to one state give the same task state, so either will do.
+        """
+        if leading := [name for name, event in self.events.items() if event.target == state]:
+            return leading[0]
+        if targets := sorted({event.target for event in self.events.values()}):
+            raise TaskStateRefused(f"{self.state} can't go to {state}. Its events lead to {', '.join(targets)}.")
+        raise TaskStateRefused(
+            f"{self.state} can't go to {state}. It is assigned to {self.assignee_named}, and accepts no events."
+        )
 
     def moved(self, to: str, note: str) -> "TaskState":
         """The task state moved by hand to any state of its lifecycle; TaskStateRefused for one it lacks."""
@@ -140,33 +158,7 @@ class TaskState:
         return replace(self, state=to, note=note.strip())
 
 
-def require_assignee(task_state: TaskState, role: str) -> None:
-    """Refuse unless the task state is assigned to ``role``: TaskStateRefused saying whose it is."""
-    if task_state.assignee != role:
-        raise TaskStateRefused(
-            f"The task is assigned to {task_state.assignee_named}, not the {role}. It is in {task_state.state}."
-        )
-
-
-def require_legal_transition(old: TaskState, new: TaskState, role: str) -> None:
-    """Refuse a change from ``old`` to ``new`` that isn't a legal transition for ``role``: TaskStateRefused saying
-    why. Whether ``new`` came from an event or a hand edit doesn't matter (ADR 0011).
-
-    The task command applies this rule before it writes the next task state, and pre-push to what a push changes.
-    """
-    require_assignee(old, role)
-    if new.lifecycle != old.lifecycle:
-        raise TaskStateRefused(f"The lifecycle can't change. It is {old.lifecycle.name}.")
-    targets = sorted({event.target for event in old.events.values()})
-    if new.state not in targets:
-        raise TaskStateRefused(f"{old.state} can't go to {new.state}. Its events lead to {', '.join(targets)}.")
-    if not new.note.strip():
-        raise TaskStateRefused(_NO_NOTE)
-
-
-def commit_subject(task_id: str, old: str, new: str, cause: str) -> str:
-    """The subject of the commit that moves a task from state ``old`` to ``new``, and the event or other ``cause``.
-
-    The file's history reads as these subjects.
-    """
-    return f"{task_id}: {old} → {new} ({cause})"
+def commit_subject(task_id: str, from_state: str, to_state: str, cause: str) -> str:
+    """The subject of the commit that moves a task from ``from_state`` to ``to_state``, and the event or other
+    ``cause``. The file's history reads as these subjects."""
+    return f"{task_id}: {from_state} → {to_state} ({cause})"

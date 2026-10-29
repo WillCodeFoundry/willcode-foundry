@@ -24,8 +24,6 @@ from agent_runtime.task.state import (
     TaskState,
     TaskStateRefused,
     commit_subject,
-    require_assignee,
-    require_legal_transition,
     state_path,
 )
 
@@ -40,7 +38,7 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
         case [] | ["show"]:
             show(session, out)
         case [event, note]:
-            end_turn(event, note, session, out)
+            send_event(event, note, session, out)
         case _:
             raise TaskStateRefused(USAGE)
     return 0
@@ -67,7 +65,7 @@ def show(session: contract.Environ, out: TextIO) -> None:
     print("\n".join(lines), file=out)
 
 
-def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
+def send_event(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
     """Write the task state ``event`` leads to, and print the commands that commit and push it.
 
     Refuses, writing nothing, while either checkout has unsaved work, while the notes checkout isn't at origin's
@@ -78,7 +76,7 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
             f"Commit and push your work before sending an event: {'; '.join(problems)}. To take back an event you "
             "already sent, run the restore command it printed."
         )
-    current = _origin_state(session)
+    current_state = _origin_state(session)
     notes_dir, branch = session.agent_notes_dir, session.agent_notes_branch
     notes = Git(notes_dir)
     at_origin = notes.output("rev-parse", "HEAD") == notes.output("rev-parse", f"origin/{branch}")
@@ -87,15 +85,13 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
             f"The notes checkout isn't on origin/{branch}. "
             f"Run git switch {branch} and git pull --rebase in $AGENT_NOTES_DIR, then this command again."
         )
-    require_assignee(current, session.agent_role)
-    next_state = current.after(event, note)
-    require_legal_transition(current, next_state, session.agent_role)
+    next_state = current_state.after(event, note, session.agent_role)
     path = state_path(session.agent_task_notes_dir)
     (notes_dir / path).write_text(next_state.to_json())
     git_in = ["git", "-C", str(notes_dir)]
-    subject = commit_subject(session.agent_task, current.state, next_state.state, event)
+    subject = commit_subject(session.agent_task, current_state.state, next_state.state, event)
     lines = [
-        f"{current.state} → {next_state.state}. Commit and push it to end your turn:",
+        f"{current_state.state} → {next_state.state}. Commit and push it to end your turn:",
         f"  {shlex.join([*git_in, 'commit', '--quiet', '--message', subject, '--', path])}",
         f"  {shlex.join([*git_in, 'pull', '--quiet', '--rebase', 'origin', branch])}",
         f"  {shlex.join([*git_in, 'push', '--quiet', 'origin', branch])}",

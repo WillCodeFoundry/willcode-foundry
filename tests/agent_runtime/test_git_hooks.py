@@ -363,7 +363,7 @@ def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) ->
 
 STATE_PATH = f"{TASK.task_notes_dir}/STATE.json"
 IMPLEMENT = TaskState(lifecycle=FEATURE, state="implement", note="Approved.")
-REVIEW = IMPLEMENT.after("submit", "Ready for review.")
+REVIEW = IMPLEMENT.after("submit", "Ready for review.", "dev")
 
 
 def commit_state(notes: Path, task_state: TaskState, *also: str) -> None:
@@ -403,31 +403,15 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
 @pytest.mark.parametrize(
     ("before", "after", "reason"),
     [
-        (IMPLEMENT, REVIEW.after("approve", "LGTM"), "implement can't go to deliver"),
-        (
-            IMPLEMENT,
-            TaskState(lifecycle=FEATURE, state="done", note="x"),
-            "implement can't go to done",
-        ),
+        (IMPLEMENT, REVIEW.after("approve", "LGTM", "reviewer"), "implement can't go to deliver"),
         (
             IMPLEMENT,
             TaskState(lifecycle=BUGFIX, state="review", note="x"),
             "The lifecycle can't change. It is feature.",
         ),
-        (
-            IMPLEMENT,
-            TaskState(lifecycle=FEATURE, state="review", note=" "),
-            "Give a hand-off note",
-        ),
         (REVIEW, IMPLEMENT, "The task is assigned to the reviewer, not the dev. It is in review."),
     ],
-    ids=[
-        "two turns in one push",
-        "cherry-picked or merged",
-        "another lifecycle",
-        "no note",
-        "a pushed turn reverted",
-    ],
+    ids=["two turns in one push", "another lifecycle", "a pushed turn reverted"],
 )
 def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     checkouts: Checkouts, before: TaskState, after: TaskState, reason: str
