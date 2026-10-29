@@ -56,7 +56,7 @@ def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
     with pytest.raises(git_hooks.GitHookRefused) as refused:
         git_hooks.pre_push(refs, ENVIRON)
 
-    assert str(refused.value) == (  # what was wrong, then what to do instead
+    assert str(refused.value) == (  # what is wrong, then the rule it breaks
         "pre-push: refusing\n\n"
         f"  You may only push task/t1 and notes, not {named}.\n"
         "  Code goes on task/t1. Notes go on notes.\n"
@@ -338,8 +338,13 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
             "The lifecycle can't change. It is feature.",
         ),
         (REVIEW, IMPLEMENT, "The task is assigned to the reviewer, not the dev. It is in review."),
+        (
+            IMPLEMENT,
+            TaskState(lifecycle=FEATURE, state="review", note="  Ready. "),
+            "It must read exactly as submit leaves it, with no space around the note.",
+        ),
     ],
-    ids=["two turns in one push", "another lifecycle", "a pushed turn reverted"],
+    ids=["two turns in one push", "another lifecycle", "a pushed turn reverted", "a note the command wouldn't write"],
 )
 def test_an_illegal_change_is_refused_saying_why_and_which_rule_it_breaks(
     checkouts: Checkouts, before: TaskState, after: TaskState, reason: str

@@ -33,7 +33,7 @@ _NO_NOTE: Final = "Give a hand-off note. Say what the next assignee should read 
 
 
 class TaskStateRefused(Exception):
-    """A task state can't be read or changed as asked; the message says why, and what to do instead."""
+    """A task state can't be read or changed as asked. The message says what is wrong and which rule it breaks."""
 
 
 @dataclass(frozen=True, kw_only=True)

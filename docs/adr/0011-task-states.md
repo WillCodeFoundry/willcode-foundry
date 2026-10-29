@@ -4,7 +4,7 @@ A task's `STATE.json` on `agent-notes` says which state of its lifecycle it is i
 
 The turn is decided once, by `foundry task run` on your machine. The task command only writes `STATE.json`. The agent commits and pushes it like any other note.
 
-One transition rule, in `TaskState.after`, judges every change to it. The task command applies it to an event, and `pre-push` to what a push changes.
+One transition rule, in `TaskState.after`, judges every change to `STATE.json`. The task command applies it to an event, and `pre-push` to what a push changes.
 
 ## Considered options
 

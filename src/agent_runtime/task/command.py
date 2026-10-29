@@ -80,7 +80,7 @@ def send_event(event: str, note: str, session: contract.Environ, out: TextIO) ->
         raise TaskStateRefused(f"The notes checkout isn't on {branch}, so a task state written there can't be pushed.")
     if notes.output("rev-parse", "HEAD") != notes.output("rev-parse", f"origin/{branch}"):
         raise TaskStateRefused(
-            f"The notes checkout is behind origin/{branch}, so the task state would be written from an old one."
+            f"The notes checkout is behind origin/{branch}. It must be up to date with origin before an event."
         )
     next_state = current_state.after(event, note, session.agent_role)
     path = state_path(session.agent_task_notes_dir)

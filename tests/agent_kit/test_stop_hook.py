@@ -91,5 +91,5 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     assert "notes checkout has commits not pushed" in decision["reason"]
     assert decision["reason"].endswith(
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
-        "If a push was refused, say so in the conversation and stop."
+        "If a push was refused, or a pull stopped on a conflict, say so in the conversation and stop."
     )

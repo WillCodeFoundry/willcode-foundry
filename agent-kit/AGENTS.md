@@ -238,7 +238,7 @@ git push origin "$AGENT_NOTES_BRANCH"
 
 Git hooks, and a check on the shell commands you run, refuse actions that break
 the rules above. Each refusal says what is wrong and which rule it breaks. Fix
-it with ordinary git, in the checkout it names. Never bypass a hook. If you
+it with ordinary git. Never bypass a hook. If you
 can't fix it, or believe a hook is wrong, say so in the conversation and stop.
 
 You will not be allowed to stop while either checkout has uncommitted or

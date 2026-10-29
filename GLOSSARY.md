@@ -160,7 +160,7 @@ _Avoid_: boundary, security (for a guardrail)
 `guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs each time the agent stops.
 
 **Refusal**:
-What a hook, a hardening mode or the task command says when it stops something: what is wrong, and the rule it breaks or what to do instead.
+What a hook, a hardening mode or the task command says when it stops something: what is wrong, and which rule it breaks.
 
 ### Testing
 

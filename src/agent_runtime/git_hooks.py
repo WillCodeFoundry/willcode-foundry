@@ -163,9 +163,11 @@ def _require_own_notes(
             raise TaskStateRefused(f"It can't be {'created' if old_state is None else 'deleted'} in the sandbox.")
         # The push carries the new task state, not the event. So send the event leading to it, by the same rule
         # as the task command.
-        sent_state = old_state.after(old_state.event_to(new_state.state), new_state.note, session.agent_role)
-        if sent_state.lifecycle != new_state.lifecycle:
+        if new_state.lifecycle != old_state.lifecycle:
             raise TaskStateRefused(f"The lifecycle can't change. It is {old_state.lifecycle.name}.")
+        event = old_state.event_to(new_state.state)
+        if old_state.after(event, new_state.note, session.agent_role) != new_state:
+            raise TaskStateRefused(f"It must read exactly as {event} leaves it, with no space around the note.")
     except TaskStateRefused as error:
         raise _refusal(PRE_PUSH, f"{path} can't change this way.", *str(error).splitlines(), rule) from None
 

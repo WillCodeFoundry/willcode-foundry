@@ -102,7 +102,7 @@ def test_refused_with_a_reason(command: str, reason: str) -> None:
     assert returncode == 2
     assert reason in stderr
     assert f"Command: {command}" in stderr
-    assert "Blockers" in stderr  # says what to do instead
+    assert "say so\n  in the conversation and stop" in stderr  # says what to do instead
 
 
 @pytest.mark.parametrize("raw_input", ["not json", "[]", '{"tool_input": "x"}', '{"tool_input": {"command": 3}}'])
@@ -151,7 +151,7 @@ def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts
     assert "code checkout has uncommitted changes; notes checkout has commits not pushed" in reason
     assert reason.endswith(
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
-        "If a push was refused, say so in the conversation and stop."
+        "If a push was refused, or a pull stopped on a conflict, say so in the conversation and stop."
     )
 
 

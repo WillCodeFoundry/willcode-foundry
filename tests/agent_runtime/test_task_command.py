@@ -227,8 +227,8 @@ def test_an_event_is_refused_while_the_notes_checkout_is_behind_origin(turn: Che
     message = refusal(session, "submit", "PR: https://example.com/pr/1")
 
     assert message == (
-        f"The notes checkout is behind origin/{session.agent_notes_branch}, "
-        "so the task state would be written from an old one."
+        f"The notes checkout is behind origin/{session.agent_notes_branch}. "
+        "It must be up to date with origin before an event."
     )
     assert git(notes, "status", "--porcelain").stdout == ""
 

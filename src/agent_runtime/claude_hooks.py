@@ -67,8 +67,8 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
         return 0
     print(
         f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
-        "  Fix the cause instead. If you believe this is wrong, record it under\n"
-        "  Blockers in PROGRESS.md and ask.",
+        "  Fix the cause instead. If you can't, or believe this is wrong, say so\n"
+        "  in the conversation and stop.",
         file=stderr or sys.stderr,
     )
     return _BLOCK
@@ -90,7 +90,7 @@ def session_check(
     reason = (
         f"Cannot stop yet: {'; '.join(problems)}. "
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish. '
-        "If a push was refused, say so in the conversation and stop."
+        "If a push was refused, or a pull stopped on a conflict, say so in the conversation and stop."
     )
     print(json.dumps({"decision": "block", "reason": reason}), file=stdout or sys.stdout)
     return 0
