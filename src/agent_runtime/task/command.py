@@ -18,6 +18,7 @@ from typing import Final, TextIO
 from agent_runtime import contract
 from agent_runtime.checkouts import unsaved_work
 from agent_runtime.git import Git
+from agent_runtime.git_hooks import REFUSING
 from agent_runtime.task.committed import committed_state
 from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, state_path
 
@@ -77,10 +78,9 @@ def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> N
     subject = next_state.commit_subject(session.agent_task, event)
     if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, next_state, subject):
         notes.output("reset", "--quiet", "--hard", start_head)
+        next_step = "Stop here." if f"pre-push{REFUSING}" in failure else "If another push landed first, run it again."
         raise TaskStateRefused(
-            f"couldn't {failure}\n"
-            "Your turn has not ended, and the notes checkout is as it was. "
-            "If another push landed first, run the same command again."
+            f"couldn't {failure}\nYour turn has not ended, and the notes checkout is as it was. {next_step}"
         )
     print(f"{subject}\n{_assigned_now(next_state)}", file=out)
 

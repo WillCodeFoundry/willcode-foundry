@@ -192,7 +192,7 @@ def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Che
 
     message = refusal(session, "submit", "All met.")
 
-    assert "another push landed first" in message and "run the same command again" in message
+    assert "another push landed first" in message and message.endswith("run it again.")
     assert git(notes, "rev-parse", "HEAD").stdout == head
     assert git(notes, "status", "--porcelain").stdout == ""
 
@@ -264,6 +264,7 @@ def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes
 
     message = refusal(session, "approve", "Looks good to me.")
 
-    assert "The task is assigned to the reviewer, not the dev." in message and "Your turn has not ended" in message
+    assert "The task is assigned to the reviewer, not the dev." in message
+    assert message.endswith("Your turn has not ended, and the notes checkout is as it was. Stop here.")
     assert git(notes, "rev-parse", "HEAD").stdout == head
     assert origin_state(session).state == "review"
