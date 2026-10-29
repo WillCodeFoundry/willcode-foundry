@@ -302,13 +302,13 @@ def test_reading_a_task_that_doesnt_exist_is_refused(origin_dir, git_env) -> Non
         task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T9"))
 
 
-def test_a_task_created_before_task_states_is_refused_saying_what_to_add(origin_dir, git_env) -> None:
+def test_a_task_created_before_task_states_is_refused(origin_dir, git_env) -> None:
     with pytest.raises(FoundryError) as refused:
         task.read_state(notes_clone(origin_dir, git_env, "read"), Task("T0"))
 
-    message = str(refused.value)
-    assert message.startswith("task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states.")
-    assert '  "lifecycle": "feature",' in message
+    assert (
+        str(refused.value) == "task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states."
+    )
 
 
 def test_a_move_by_hand_commits_the_task_state_signed_and_pushes_the_notes_branch_alone(origin_dir, git_env) -> None:
@@ -347,9 +347,9 @@ def test_list_has_a_row_per_readable_task_and_the_whole_error_for_each_other(ori
     rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
 
     assert [(row.task.id, row.task_state) for row in rows] == [("t1", TaskState.new(FEATURE))]
-    assert errors[0].startswith("store t0: task t0 has no .agent/t0/STATE.json on agent-notes.")
-    assert "Add it on agent-notes, naming the lifecycle and the state it is in, for example:" in errors[0]
-    assert errors[0].rstrip().endswith('"note": "Started before task states: read PROGRESS.md."\n  }'.rstrip())
+    assert (
+        errors[0] == "store t0: task t0 has no .agent/t0/STATE.json on agent-notes. It was created before task states."
+    )
     assert len(errors) == 1
 
 

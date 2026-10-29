@@ -7,13 +7,12 @@ tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 
 import re
-import textwrap
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from agent_runtime.task.lifecycles import FEATURE, Lifecycle
+from agent_runtime.task.lifecycles import Lifecycle
 from agent_runtime.task.state import TaskState, state_path
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
@@ -110,12 +109,6 @@ def create(clone: ProjectClone, task: Task, template: Mapping[str, str], lifecyc
     clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
 
 
-_EXAMPLE_STATE: Final = TaskState(
-    lifecycle=FEATURE, state="implement", note="Started before task states: read PROGRESS.md."
-)
-"""What read_state suggests adding to a task created before task states."""
-
-
 def task_ids(clone: ProjectClone) -> list[str]:
     """Every task's id on NOTES_BRANCH, sorted, from ``clone`` with it checked out."""
     return clone.dirs(NOTES_ROOT)
@@ -135,8 +128,6 @@ def read_state(clone: ProjectClone, task: Task) -> TaskState:
         raise FoundryError(f"{error}, on {NOTES_BRANCH}. Fix it there.") from None
     if text is None:
         raise FoundryError(
-            f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}. It was created before task states. "
-            f"Add it on {NOTES_BRANCH}, naming the lifecycle and the state it is in, for example:\n"
-            + textwrap.indent(_EXAMPLE_STATE.to_json(), "  ")
+            f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}. It was created before task states."
         )
     return TaskState.parse(text, where)
