@@ -28,7 +28,7 @@ The foundry runs coding agents on your projects. Each agent works in its own Doc
 $ uv sync
 $ uv run foundry task create tkt-store wcf-0042   # create the task: its branch, its notes and its task state
 $ uv run foundry task run tkt-store wcf-0042      # start whoever's turn it is on the task, or re-attach to it
-$ uv run foundry task list                        # every task: its state, its assignee, its hand-off note
+$ uv run foundry task list                        # every task: its state, its role, its hand-off note
 ```
 
 Task ids are lowercased: `WCF-0042` is task `wcf-0042`. A new `feature` task starts with the planner, which drafts its `TASK.md` with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
@@ -37,7 +37,7 @@ Task ids are lowercased: `WCF-0042` is task `wcf-0042`. A new `feature` task sta
 |---|---|
 | `foundry task create PROJECT TASK [--lifecycle NAME]` | Creates a task: its branch, and its notes and task state on `agent-notes`. |
 | `foundry task run PROJECT TASK` | Starts the sandbox of the role whose turn it is, or re-attaches to it. |
-| `foundry task list` | Lists every task of every project: its state, its assignee, whether a role's sandbox runs for it, and its hand-off note. |
+| `foundry task list` | Lists every task of every project: its state, its role, whether that role's sandbox runs, and its hand-off note. |
 | `foundry task move PROJECT TASK STATE --note NOTE` | Moves a task by hand to any state of its lifecycle. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry task run` does this too. |
@@ -47,9 +47,11 @@ foundry approves each sandbox's plan for you (`--auto-approve`). Each plan mount
 
 ## Task states
 
-A task passes from role to role along its lifecycle. Its task state, `.agent/<task>/STATE.json` on `agent-notes`, says which state it is in, who that assigns it to, and the hand-off note the last turn left. The lifecycles are in `src/agent_runtime/task/lifecycles.py`; [ADR 0011](docs/adr/0011-task-states.md) says why they are code.
+A task passes from role to role along its lifecycle. Its task state, `.agent/<task>/STATE.json` on `agent-notes`, says which state it is in, and so which role's turn it is, and the hand-off note the last turn left. The lifecycles are in `src/agent_runtime/task/lifecycles.py`; [ADR 0011](docs/adr/0011-task-states.md) says why they are code.
 
-`feature`, the default, is planned with you, implemented, reviewed in rounds, then delivered as a pull request. `bugfix` is the same without planning: write its `TASK.md` yourself, before its first run. Every role can also `block`, handing the task to you with a question as its note.
+`feature`, the default, is planned with you, implemented, reviewed in rounds, then delivered as a pull request. `bugfix` is the same without planning: write its `TASK.md` yourself, before its first run.
+
+Every role can also `block`, which moves the task to `blocked` with a question for you as its note. No event leaves `blocked` or `done`, and no role is launched on them.
 
 Agents end their turns with `agent-kit/bin/task`, then a push. A push that changes `STATE.json` must make a legal transition for that role, or `pre-push` refuses it. `foundry task run` launches only the role whose turn it is.
 

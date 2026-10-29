@@ -47,14 +47,14 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "run",
         help="start or re-attach to the sandbox of the role whose turn it is",
         description=f"Reads the task's state from {NOTES_BRANCH} and launches the role whose turn it is. "
-        "Refuses a task that is waiting for you, or done.",
+        "Refuses a blocked or done task.",
     )
     run.add_argument("project_name", metavar="PROJECT", help=_PROJECT_HELP)
     run.add_argument("task_id", metavar="TASK", help=_TASK_HELP)
     run.set_defaults(func=run_main)
 
     listing = actions.add_parser(
-        "list", help="every task of every project: its state, its assignee, its sandbox and its hand-off note"
+        "list", help="every task of every project: its state, its role, its sandbox and its hand-off note"
     )
     listing.set_defaults(func=list_main)
 
@@ -66,7 +66,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     move.add_argument("project_name", metavar="PROJECT", help=_PROJECT_HELP)
     move.add_argument("task_id", metavar="TASK", help=_TASK_HELP)
     move.add_argument("state", metavar="STATE", help="a state of the task's lifecycle")
-    move.add_argument("--note", required=True, help="the hand-off note: what the next assignee should read first")
+    move.add_argument("--note", required=True, help="the hand-off note: what whoever is next should read first")
     move.set_defaults(func=move_main)
 
 
@@ -121,14 +121,15 @@ def run_main(args: argparse.Namespace) -> NoReturn:
 
 
 def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
-    """The role to launch; FoundryError, saying what to do, when the task is yours or done."""
+    """The role to launch; FoundryError, saying what to do, when the task is in a terminal state."""
     if task_state.role:
         return task_state.role
     move = f"foundry task move {project_name} {task.id}"
-    if task_state.assigned_to_human:
+    if task_state.blocked:
         raise FoundryError(
-            f"task {task.id} is waiting for you, in {task_state.state}: {task_state.note or '(no note)'}\n"
-            f"  once you've answered, hand it on: {move} STATE --note …"
+            f"task {task.id} is blocked, waiting for you: {task_state.note or '(no note)'}\n"
+            f"  where it came from: git log origin/{NOTES_BRANCH} -- {task.state_file}\n"
+            f"  once you've answered: {move} STATE --note …"
         )
     raise FoundryError(f"task {task.id} is {task_state.state}. To reopen it, run {move} STATE --note …")
 
@@ -160,7 +161,7 @@ def prepare_launch(
 
 # --- list -----------------------------------------------------------------------
 
-_COLUMNS = ("PROJECT", "TASK", "LIFECYCLE", "STATE", "ASSIGNEE", "SANDBOX", "NOTE")
+_COLUMNS = ("PROJECT", "TASK", "LIFECYCLE", "STATE", "ROLE", "SANDBOX", "NOTE")
 _NONE = "—"
 
 
@@ -203,7 +204,7 @@ def _cells(row: Row, live_sandboxes: set[str]) -> list[str]:
     task_state = row.task_state
     role = task_state.role
     if role is None:
-        who, sandbox = ("you" if task_state.assigned_to_human else _NONE), _NONE
+        who, sandbox = _NONE, _NONE
     else:
         name = session.sandbox_name(role_name=role, project_name=row.project, task=row.task)
         who, sandbox = role, ("running" if name in live_sandboxes else _NONE)

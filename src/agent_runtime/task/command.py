@@ -1,6 +1,6 @@
 """The agent's ``task`` command, which agent-kit/bin/task runs: where the task stands, and the next task state.
 
-    task show                       the task state as origin has it: its assignee, the goal, the events
+    task show                       the task state as origin has it: its role, the goal, the events
     task EVENT "<hand-off note>"    write the next task state, and print how to commit and push it
 
 Both read the task state as origin has it, freshly fetched. An event writes the next task state, and the agent's
@@ -45,15 +45,12 @@ def task(args: Sequence[str], session: contract.Environ | None = None, out: Text
 
 
 def show(session: contract.Environ, out: TextIO) -> None:
-    """Print the task state as origin has it: its assignee, and their goal and events. The same for every role."""
+    """Print the task state as origin has it: its role, and that role's goal and events. The same for every role."""
     task_state = _origin_state(session)
-    assignee = task_state.assignee_named
-    lines = [
-        f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}, assigned to {assignee}."
-    ]
+    lines = [f"Task {session.agent_task} ({task_state.lifecycle.name}) is in {task_state.state}. {task_state.standing}"]
     lines += ["", "Hand-off note:", *(f"  {line}" for line in (task_state.note or "(none)").splitlines()), ""]
     if task_state.events:
-        whose = f"{assignee[0].upper()}{assignee[1:]}"
+        whose = f"The {task_state.role}"
         lines += [
             f"{whose}'s goal: {task_state.goal}",
             "",
@@ -92,20 +89,18 @@ def send_event(event: str, note: str, session: contract.Environ, out: TextIO) ->
         f"  {shlex.join([*git_in, 'commit', '--quiet', '--message', subject, '--', path])}",
         f"  {shlex.join([*git_in, 'pull', '--quiet', '--rebase', 'origin', branch])}",
         f"  {shlex.join([*git_in, 'push', '--quiet', 'origin', branch])}",
-        _assigned_next(next_state),
+        _then(next_state),
     ]
     print("\n".join(lines), file=out)
 
 
-def _assigned_next(task_state: TaskState) -> str:
+def _then(task_state: TaskState) -> str:
+    """What follows once the next task state is pushed."""
     if task_state.role:
         return f"Then it is the {task_state.role}'s turn. Stop once it is pushed."
-    if task_state.assigned_to_human:
-        return (
-            "Then the task is assigned to the human. Once it is pushed, stop, and ask your question in the "
-            "conversation."
-        )
-    return f"Then the task is {task_state.state}, assigned to no one. Stop once it is pushed."
+    if task_state.blocked:
+        return "Then the task is blocked. Once it is pushed, stop, and ask your question in the conversation."
+    return f"Then the task is {task_state.state}. Stop once it is pushed."
 
 
 def _origin_state(session: contract.Environ) -> TaskState:

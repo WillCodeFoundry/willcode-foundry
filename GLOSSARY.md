@@ -61,16 +61,16 @@ The state machine one kind of task follows, such as `feature` or `bugfix`. Defin
 _Avoid_: workflow, pipeline
 
 **State**:
-One named step of a lifecycle, such as `review`, with its assignee, its goal and its events.
+One named step of a lifecycle, such as `review`, with its role, its goal and its events. A terminal state, such as `blocked` or `done`, has none of them.
 _Avoid_: stage, status
 
 **Task state**:
 A task's `STATE.json`: its lifecycle, the state it is in, and the hand-off note. Its history is the file's history on the notes branch. "The task is in `review`."
 _Avoid_: ticket
 
-**Assignee**:
-The role a state belongs to, or `human`. A final state, such as `done`, has none.
-_Avoid_: owner
+**Terminal state**:
+A state no event leaves, and which belongs to no role. Only a human, moving the task by hand, takes it elsewhere. `blocked` is one that waits for a human, and `done` is another.
+_Avoid_: final state, the human's state
 
 **Turn**:
 The time a task is in a state assigned to a role. Only that role is launched on the task. A turn can span several agent runs.
@@ -84,7 +84,7 @@ _Avoid_: action, command
 An event applied to a task state, or a move by hand with `foundry task move`.
 
 **Hand-off note**:
-The note a transition leaves for the next assignee, who reads it first.
+The note a transition leaves for whoever is next, who reads it first. In `blocked`, it is the question for the human.
 
 ### Sandboxes and sessions
 
@@ -171,7 +171,7 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 
 - A **project** has many **tasks**; a **task** has one **task branch** and one **task notes dir** on the project's **notes branch**.
 - A **task** has one **task state**, which names one **lifecycle** and one of its **states**.
-- A **turn** spans one or more **agent runs** of its state's **assignee**.
+- A **turn** spans one or more **agent runs** of its state's **role**.
 - A **sandbox** runs one **role** on one **task** of one **project**, and has one **session**.
 - A **sandbox** sees one **agent kit**, read-only; the **runtime** in it does the **hardening** and runs the **hooks**.
 - A **sandbox** has many **launches** and **agent runs** over its life; its **session variables** stay the same for all of them.

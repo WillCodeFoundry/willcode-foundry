@@ -65,13 +65,13 @@ def test_an_event_moves_the_task_and_leaves_the_note() -> None:
     next_state = in_state("review", note="ready").after("reject", "  R3 is open.  ", "reviewer")
 
     assert next_state == in_state("implement", note="R3 is open.")
-    assert next_state.assignee == "dev"
+    assert next_state.role == "dev"
 
 
-def test_block_hands_any_role_state_to_the_human() -> None:
+def test_block_moves_any_role_state_to_blocked() -> None:
     next_state = in_state("deliver").after("block", "Which base branch?", "dev")
 
-    assert (next_state.state, next_state.assignee) == ("blocked", "human")
+    assert (next_state.state, next_state.role, next_state.blocked) == ("blocked", None, True)
 
 
 @pytest.mark.parametrize(
@@ -79,10 +79,10 @@ def test_block_hands_any_role_state_to_the_human() -> None:
     [
         ("review", "approve", "The dev can't send events in review. It is assigned to the reviewer."),
         ("review", "submit", "The dev can't send events in review. It is assigned to the reviewer."),
-        ("blocked", "submit", "The dev can't send events in blocked. It is assigned to the human."),
-        ("done", "submit", "The dev can't send events in done. It is assigned to no one."),
+        ("blocked", "submit", "The dev can't send events in blocked. It waits for a human."),
+        ("done", "submit", "The dev can't send events in done. No role works on it."),
     ],
-    ids=["another role's event", "an event its state lacks", "the human's", "done"],
+    ids=["another role's event", "an event its state lacks", "blocked", "done"],
 )
 def test_an_event_off_the_roles_turn_is_refused_whatever_the_event(state: str, event: str, refusal_given: str) -> None:
     assert refusal(lambda: in_state(state).after(event, "note", "dev")) == refusal_given
@@ -108,7 +108,11 @@ def test_the_event_to_a_state_is_the_one_leading_there(to: str, event: str) -> N
     ("state", "to", "refusal_given"),
     [
         ("review", "done", "review can't go to done. Its events lead to blocked, deliver, implement."),
-        ("blocked", "implement", "blocked can't go to implement. It is assigned to the human, and accepts no events."),
+        (
+            "blocked",
+            "implement",
+            "blocked can't go to implement. No event leaves it. It waits for a human.",
+        ),
     ],
 )
 def test_no_event_to_a_state_is_refused_saying_where_the_events_lead(state: str, to: str, refusal_given: str) -> None:

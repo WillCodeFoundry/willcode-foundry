@@ -64,12 +64,12 @@ def refusal(session: contract.Environ, *args: str) -> str:
 # --- show ---------------------------------------------------------------------
 
 
-def test_show_names_the_assignee_their_goal_their_events_and_the_note(turn: Checkouts) -> None:
+def test_show_names_the_role_its_goal_its_events_and_the_note(turn: Checkouts) -> None:
     session, _, _ = turn
 
     shown = run(session, "show")
 
-    assert f"Task {TASK.id} (feature) is in implement, assigned to the dev." in shown
+    assert f"Task {TASK.id} (feature) is in implement. It is assigned to the dev." in shown
     assert "came from" not in shown
     assert "  TASK.md is approved." in shown
     assert "The dev's goal: Implement TASK.md" in shown
@@ -86,19 +86,19 @@ def test_show_says_the_same_whichever_role_runs_it(turn: Checkouts) -> None:
 
     shown = run(session, "show")
 
-    assert "is in review, assigned to the reviewer." in shown
+    assert "is in review. It is assigned to the reviewer." in shown
     assert "The reviewer's goal: Review the task branch" in shown
     assert "The reviewer ends the turn with one of these events" in shown and "  approve → deliver" in shown
     assert "your" not in shown.lower()
 
 
-def test_show_lists_no_events_for_the_human(turn: Checkouts) -> None:
+def test_show_lists_no_events_in_a_blocked_state(turn: Checkouts) -> None:
     session, _, notes = turn
     push_state(notes, TaskState(lifecycle=FEATURE, state="blocked", note="Which base?"))
 
     shown = run(session, "show")
 
-    assert "is in blocked, assigned to the human." in shown and "goal" not in shown
+    assert "is in blocked. It waits for a human." in shown and "goal" not in shown
 
 
 def test_a_task_without_a_task_state_is_refused(checkouts: Checkouts) -> None:
@@ -148,20 +148,20 @@ def test_an_event_writes_the_next_task_state_and_prints_how_to_end_the_turn(turn
     )
 
 
-def test_block_hands_the_task_to_the_human(turn: Checkouts) -> None:
+def test_block_moves_the_task_to_blocked(turn: Checkouts) -> None:
     session, _, notes = turn
 
     printed = run(session, "block", "Should retries be configurable?")
 
-    assert written_state(notes).assignee == "human"
+    assert written_state(notes).blocked
     assert printed.endswith(
-        "Then the task is assigned to the human. Once it is pushed, stop, and ask your question in the conversation.\n"
+        "Then the task is blocked. Once it is pushed, stop, and ask your question in the conversation.\n"
     )
 
 
 def test_an_event_off_the_roles_turn_is_refused_by_the_transition_rule(turn: Checkouts) -> None:
     """The rule in TaskState.after is the command's only check of the turn. approve is an event review accepts,
-    so only the rule's assignee check refuses it."""
+    so only the rule's role check refuses it."""
     session, _, notes = turn
     push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
 

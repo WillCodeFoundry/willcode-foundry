@@ -7,16 +7,15 @@ from agent_runtime.task.lifecycles import (
     BLOCK,
     BUGFIX,
     FEATURE,
-    HUMAN,
     LIFECYCLES,
     Lifecycle,
 )
 
 
 def flow(lifecycle: Lifecycle) -> dict[str, tuple[str | None, dict[str, str]]]:
-    """Each state's assignee and where each of its events leads."""
+    """Each state's role and where each of its events leads."""
     return {
-        name: (state.assignee, {event: transition.target for event, transition in state.events.items()})
+        name: (state.role, {event: transition.target for event, transition in state.events.items()})
         for name, state in lifecycle.states.items()
     }
 
@@ -28,9 +27,11 @@ def test_feature_is_planned_implemented_reviewed_and_delivered() -> None:
         "implement": ("dev", {"submit": "review", "block": "blocked"}),
         "review": ("reviewer", {"approve": "deliver", "reject": "implement", "block": "blocked"}),
         "deliver": ("dev", {"submit": "done", "block": "blocked"}),
-        "blocked": (HUMAN, {}),
+        "blocked": (None, {}),
         "done": (None, {}),
     }
+    assert (FEATURE.states["blocked"].terminal, FEATURE.states["blocked"].blocked) == (True, True)
+    assert (FEATURE.states["done"].terminal, FEATURE.states["done"].blocked) == (True, False)
 
 
 def test_bugfix_is_feature_without_planning() -> None:
@@ -48,11 +49,13 @@ def test_every_lifecycle_keeps_the_rules_of_its_form(lifecycle: Lifecycle) -> No
     assert lifecycle.initial in states
     for state in states.values():
         assert all(event.target in states for event in state.events.values())
-        if state.assignee in (None, HUMAN):
-            assert not state.events
+        assert (state.role is None) == state.terminal
+        assert not state.blocked or state.terminal
+        if state.terminal:
+            assert not state.events and not state.goal
         else:
             assert state.goal.strip()
             assert all(event.when.strip() for event in state.events.values())
             assert BLOCK in state.events
             assert set(state.events) != {BLOCK}
-            assert states[state.events[BLOCK].target].assignee == HUMAN
+            assert states[state.events[BLOCK].target].blocked

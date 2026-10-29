@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from agent_runtime.agent_kit import TASK_COMMAND
-from agent_runtime.task.lifecycles import HUMAN, LIFECYCLES, Event, Lifecycle, State
+from agent_runtime.task.lifecycles import LIFECYCLES, Event, Lifecycle, State
 
 STATE_FILE: Final = "STATE.json"
 """A task's task state, in its task notes dir. Spelled here only; state_path builds on it."""
@@ -29,7 +29,7 @@ END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
 
 _KEYS: Final = ("lifecycle", "state", "note")
 
-_NO_NOTE: Final = "Give a hand-off note. Say what the next assignee should read first."
+_NO_NOTE: Final = "Give a hand-off note. Say what whoever is next should read first."
 
 
 class TaskStateRefused(Exception):
@@ -86,33 +86,35 @@ class TaskState:
 
     @property
     def goal(self) -> str:
-        """What the turn in this state is for; empty for the human's or a final state."""
+        """What the turn in this state is for; empty for a terminal state."""
         return self._definition.goal
 
     @property
     def events(self) -> Mapping[str, Event]:
-        """The events that end the turn in this state, by name; none for the human's or a final state."""
+        """The events that end the turn in this state, by name; none for a terminal state."""
         return self._definition.events
 
     @property
-    def assignee(self) -> str | None:
-        """The assignee of the state the task is in: a role, HUMAN, or None once the task is done."""
-        return self._definition.assignee
-
-    @property
     def role(self) -> str | None:
-        """The role whose turn it is. None when the task is assigned to the human, or to no one once it is done."""
-        return None if self.assignee in (None, HUMAN) else self.assignee
+        """The role whose turn it is; None in a terminal state."""
+        return self._definition.role
 
     @property
-    def assigned_to_human(self) -> bool:
-        """Whether the task waits for the human, as blocked does."""
-        return self.assignee == HUMAN
+    def terminal(self) -> bool:
+        """Whether no event leaves the state the task is in, such as blocked or done."""
+        return self._definition.terminal
 
     @property
-    def assignee_named(self) -> str:
-        """The assignee as a sentence names it: "the dev", "the human", or "no one"."""
-        return "no one" if self.assignee is None else f"the {self.assignee}"
+    def blocked(self) -> bool:
+        """Whether the task waits for a human to answer its note and move it on."""
+        return self._definition.blocked
+
+    @property
+    def standing(self) -> str:
+        """Who works on the task now, as a sentence: its role, a human, or no one."""
+        if self.role:
+            return f"It is assigned to the {self.role}."
+        return "It waits for a human." if self.blocked else "No role works on it."
 
     def after(self, event: str, note: str, role: str) -> "TaskState":
         """The task state once ``role`` sends ``event`` with a hand-off note; TaskStateRefused saying why not.
@@ -120,10 +122,8 @@ class TaskState:
         This is the transition rule. The task command applies it to an event, and pre-push to what a push changes,
         through event_to (ADR 0011).
         """
-        if self.assignee != role:
-            raise TaskStateRefused(
-                f"The {role} can't send events in {self.state}. It is assigned to {self.assignee_named}."
-            )
+        if self.role != role:
+            raise TaskStateRefused(f"The {role} can't send events in {self.state}. {self.standing}")
         events = self.events
         if event not in events:
             raise TaskStateRefused(
@@ -140,9 +140,7 @@ class TaskState:
             return leading[0]
         if targets := sorted({event.target for event in self.events.values()}):
             raise TaskStateRefused(f"{self.state} can't go to {state}. Its events lead to {', '.join(targets)}.")
-        raise TaskStateRefused(
-            f"{self.state} can't go to {state}. It is assigned to {self.assignee_named}, and accepts no events."
-        )
+        raise TaskStateRefused(f"{self.state} can't go to {state}. No event leaves it. {self.standing}")
 
     def moved(self, to: str, note: str) -> "TaskState":
         """The task state moved by hand to any state of its lifecycle; TaskStateRefused for one it lacks."""

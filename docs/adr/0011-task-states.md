@@ -18,6 +18,7 @@ One transition rule, in `TaskState.after`, judges every change to `STATE.json`. 
 - **Checking a lifecycle's rules when it is defined.** The lifecycles are constants the tests import, so a test catches a broken one as early, without an exception type and a rule engine.
 - **Recording the state a task came from in `STATE.json`.** It repeated the last entry of the file's history, and `pre-push` had to keep it consistent.
 - **Refusals that script how to undo a change.** Each recipe broke on a checkout it didn't foresee. A refusal says what is wrong and which rule it breaks, and the agent fixes it with git.
+- **A `human` assignee for `blocked`, and none for `done`.** A sentinel role stood for two different things. Flags on a lifecycle's state say instead what it is: `terminal` when no event leaves it, and `blocked` when a human is needed.
 - **Counting review rounds, with a limit and a fallback state.** A field, a reset flag and a rule, for what one sentence in the reviewer's `ROLE.md` does.
 - **A Stop-hook check that the turn was ended.** It would fire at every question the planner asks while grilling, and a paused turn is normal. `foundry task list` shows a turn whose sandbox isn't running instead.
 

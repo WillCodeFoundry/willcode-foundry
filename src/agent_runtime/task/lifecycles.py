@@ -1,8 +1,8 @@
 """The lifecycles: the state machine each kind of task follows, written once, as data in Python.
 
-A lifecycle's states each name their assignee: a role, HUMAN, or None for a final state. A role's state also
-names its goal and its events, each with the state it leads to and when to send it. Every role's state accepts
-BLOCK, which hands the task to the human. Skills are not named here: an agent picks among its role's skills.
+Each state of a lifecycle names its role, goal and events, each event with where it leads and when to send it. A
+terminal state has no role and no events, and a blocked one waits for a human. Every role's state accepts BLOCK,
+which leads to a blocked state, and an agent picks among its role's skills, so states name none.
 
 Shared with foundry, which reads lifecycles to launch whoever's turn it is (ARCHITECTURE.md, design rule 2).
 """
@@ -11,11 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Final
 
-HUMAN: Final = "human"
-"""The assignee of a state that is yours: you move the task on with `foundry task move`."""
-
 BLOCK: Final = "block"
-"""The event every role's state accepts: hand the task to the human with a question."""
+"""The event every role's state accepts. It leads to a blocked state, with a question for the human as its note."""
 
 
 @dataclass(frozen=True)
@@ -28,12 +25,16 @@ class Event:
 
 @dataclass(frozen=True)
 class State:
-    """One step of a lifecycle. A role's state has a goal and events; a human or final state has neither."""
+    """One step of a lifecycle. A role's state has a goal and events. A terminal state has neither, and no role."""
 
-    assignee: str | None
-    """A role, HUMAN, or None for a final state."""
+    role: str | None
+    """The role whose turn it is; None for a terminal state."""
     goal: str = ""
     events: Mapping[str, Event] = field(default_factory=dict)
+    terminal: bool = False
+    """No event leaves it. Only a human, moving the task by hand, takes it elsewhere."""
+    blocked: bool = False
+    """A terminal state that waits for a human. They answer the question in the note, then move the task on."""
 
 
 @dataclass(frozen=True)
@@ -50,9 +51,9 @@ _BLOCKED: Final = "blocked"
 _BLOCK_EVENT: Final = Event(_BLOCKED, "you need the human to decide something: put the question in the note")
 
 
-def _role_state(assignee: str, goal: str, **events: Event) -> State:
+def _role_state(role: str, goal: str, **events: Event) -> State:
     """A role's state: its own events, then BLOCK."""
-    return State(assignee, goal, {**events, BLOCK: _BLOCK_EVENT})
+    return State(role, goal, {**events, BLOCK: _BLOCK_EVENT})
 
 
 _IMPLEMENT: Final = _role_state(
@@ -73,7 +74,7 @@ _DELIVER: Final = _role_state(
     "Open the pull request for the approved branch.",
     submit=Event("done", "the pull request is open: put its URL in the note"),
 )
-_ENDS: Final = {_BLOCKED: State(HUMAN), "done": State(None)}
+_ENDS: Final = {_BLOCKED: State(None, terminal=True, blocked=True), "done": State(None, terminal=True)}
 
 FEATURE: Final = Lifecycle(
     name="feature",

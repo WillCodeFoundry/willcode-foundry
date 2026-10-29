@@ -109,13 +109,14 @@ def test_the_role_launched_is_the_one_whose_turn_it_is(state: str, role: str) ->
     assert whose_turn(in_state(state), project_name="store", task=Task("t1")) == role
 
 
-def test_a_task_waiting_for_you_is_refused_with_its_note_and_how_to_hand_it_back() -> None:
+def test_a_blocked_task_is_refused_with_its_note_where_it_came_from_and_how_to_move_it_on() -> None:
     with pytest.raises(FoundryError) as refused:
         whose_turn(in_state("blocked", "Is R4 in scope?"), project_name="store", task=Task("t1"))
 
     assert str(refused.value) == (
-        "task t1 is waiting for you, in blocked: Is R4 in scope?\n"
-        "  once you've answered, hand it on: foundry task move store t1 STATE --note …"
+        "task t1 is blocked, waiting for you: Is R4 in scope?\n"
+        "  where it came from: git log origin/agent-notes -- .agent/t1/STATE.json\n"
+        "  once you've answered: foundry task move store t1 STATE --note …"
     )
 
 

@@ -73,7 +73,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
-| `STATE.json` | the task command | The task state: who it is assigned to, and the hand-off note from the last turn. Only the task command, or the human, changes it. **Never edit it.** `pre-push` refuses a change that isn't a legal transition for your role. |
+| `STATE.json` | the task command | The task state: the state the task is in, and the hand-off note from the last turn. Only the task command, or the human, changes it. **Never edit it.** `pre-push` refuses a change that isn't a legal transition for your role. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -117,8 +117,8 @@ entries as you go, not at the end.
 
 ### Taking turns
 
-A task passes from role to role, and sometimes to the human. Each state is
-assigned to one role, or the human, and you were started because it is your
+A task passes from role to role. Each state belongs to one role, except
+`blocked` and `done`, where no role works. You were started because it is your
 turn. `bin/task show` says what your turn is for: your goal, and the events
 that end the turn, each with when to send it.
 
