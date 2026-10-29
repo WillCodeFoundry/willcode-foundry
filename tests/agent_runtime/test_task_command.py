@@ -167,7 +167,7 @@ def test_an_event_off_the_roles_turn_is_refused_by_the_transition_rule(turn: Che
 
     assert (
         refusal(session, "approve", "Looks good.")
-        == "The task is assigned to the reviewer, not the dev. It is in review."
+        == "The dev can't send events in review. It is assigned to the reviewer."
     )
     assert git(notes, "status", "--porcelain").stdout == ""
 

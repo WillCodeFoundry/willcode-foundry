@@ -77,10 +77,10 @@ def test_block_hands_any_role_state_to_the_human() -> None:
 @pytest.mark.parametrize(
     ("state", "event", "refusal_given"),
     [
-        ("review", "approve", "The task is assigned to the reviewer, not the dev. It is in review."),
-        ("review", "submit", "The task is assigned to the reviewer, not the dev. It is in review."),
-        ("blocked", "submit", "The task is assigned to the human, not the dev. It is in blocked."),
-        ("done", "submit", "The task is assigned to no one, not the dev. It is in done."),
+        ("review", "approve", "The dev can't send events in review. It is assigned to the reviewer."),
+        ("review", "submit", "The dev can't send events in review. It is assigned to the reviewer."),
+        ("blocked", "submit", "The dev can't send events in blocked. It is assigned to the human."),
+        ("done", "submit", "The dev can't send events in done. It is assigned to no one."),
     ],
     ids=["another role's event", "an event its state lacks", "the human's", "done"],
 )

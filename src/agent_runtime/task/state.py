@@ -122,7 +122,7 @@ class TaskState:
         """
         if self.assignee != role:
             raise TaskStateRefused(
-                f"The task is assigned to {self.assignee_named}, not the {role}. It is in {self.state}."
+                f"The {role} can't send events in {self.state}. It is assigned to {self.assignee_named}."
             )
         events = self.events
         if event not in events:

@@ -337,7 +337,7 @@ def test_a_push_that_leaves_the_task_state_as_it_was_is_accepted(checkouts: Chec
             TaskState(lifecycle=BUGFIX, state="review", note="x"),
             "The lifecycle can't change. It is feature.",
         ),
-        (REVIEW, IMPLEMENT, "The task is assigned to the reviewer, not the dev. It is in review."),
+        (REVIEW, IMPLEMENT, "The dev can't send events in review. It is assigned to the reviewer."),
         (
             IMPLEMENT,
             TaskState(lifecycle=FEATURE, state="review", note="  Ready. "),
