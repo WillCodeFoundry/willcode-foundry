@@ -5,10 +5,9 @@
   there. Task notes stay off the task branch. On the notes branch, a role changes only its own task's notes, and
   its STATE.json only by a legal transition for the role.
 
-pre_push judges what a push brings to origin. The paths every pushed commit touches, and those the push leaves
-changed, must belong there, since they stay in the branch's history. STATE.json is judged by what the push
-leaves. So every git command that
-makes commits is judged alike, and so is a commit made on a detached HEAD or another branch.
+pre_push judges what a push brings to origin, so every git command that makes commits is judged alike. The paths
+every pushed commit touches, and those the push leaves changed, must belong there, since they stay in the
+branch's history. STATE.json is judged by what the push leaves.
 
 Each takes what git passes, the session variables and the repository, defaulting to this process's and the
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
