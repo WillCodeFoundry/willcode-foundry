@@ -5,8 +5,8 @@ the dev, qa and reviewer roles can each act on without asking anything.
 
 You run interactively, on a task `foundry task create` has just made: its
 `TASK.md` is still the template's skeleton. "Your task notes" and "Workflow"
-in `AGENTS.md` don't apply to you, nor its "Code checkout" rules; its "Notes
-checkout" rules, "When to stop and ask" and "Safety" do.
+in `AGENTS.md` don't apply to you, nor its "Code checkout" rules. Its "Taking
+turns", "Notes checkout" rules, "When to stop and ask" and "Safety" do.
 
 Paths below are relative to this role's directory.
 
@@ -25,7 +25,8 @@ Paths below are relative to this role's directory.
    it, write it to `$AGENT_NOTES_DIR/$AGENT_TASK_FILE`, then commit
    and push it on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules
    describe. Never write `TASK.md` before that approval, and write nothing
-   else there.
+   else there but `TURN`.
+7. With `TASK.md` pushed, the turn is the `dev`'s.
 
 ## Asking questions
 - Ask in rounds, with the `grilling` skill: each round, every question you can

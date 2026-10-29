@@ -1,15 +1,17 @@
-"""foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path."""
+"""foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path, and whose
+turn it launches."""
 
 from pathlib import Path
 
 import pytest
 
 from agent_runtime.agent_kit import AgentKit
+from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch
+from foundry.commands.run import prepare_launch, role_for_turn
 from foundry.errors import FoundryError
 from foundry.session import SessionVariables
-from foundry.task import Task
+from foundry.task import HUMAN, Task
 
 CONFIG = """\
 name: test
@@ -87,3 +89,25 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task("t1"))
+
+
+# --- whose turn -----------------------------------------------------------------------
+
+
+def test_a_role_s_turn_launches_that_role() -> None:
+    assert role_for_turn("reviewer", project_name="tkt-store", task=Task("t1")) == "reviewer"
+
+
+def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None:
+    with pytest.raises(FoundryError, match=r"t1 is waiting for you.*foundry run tkt-store ROLE t1"):
+        role_for_turn(HUMAN, project_name="tkt-store", task=Task("t1"))
+
+
+@pytest.mark.parametrize(
+    ("argv", "role_name"),
+    [(["run", "tkt-store", "t1"], None), (["run", "tkt-store", "dev", "t1"], "dev")],
+    ids=["without ROLE", "with ROLE"],
+)
+def test_run_takes_an_optional_role_between_the_project_and_the_task(argv: list[str], role_name) -> None:
+    args = cli.build_parser().parse_args(argv)
+    assert (args.project_name, args.role_name, args.task_id) == ("tkt-store", role_name, "t1")
