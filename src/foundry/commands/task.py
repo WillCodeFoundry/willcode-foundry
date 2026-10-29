@@ -125,13 +125,11 @@ def whose_turn(task_state: TaskState, *, project_name: str, task: Task) -> str:
     if task_state.role:
         return task_state.role
     move = f"foundry task move {project_name} {task.id}"
-    if task_state.blocked:
-        raise FoundryError(
-            f"task {task.id} is blocked, waiting for you: {task_state.note or '(no note)'}\n"
-            f"  where it came from: git log origin/{NOTES_BRANCH} -- {task.state_file}\n"
-            f"  once you've answered: {move} STATE --note …"
-        )
-    raise FoundryError(f"task {task.id} is {task_state.state}. To reopen it, run {move} STATE --note …")
+    raise FoundryError(
+        f"task {task.id} is {task_state.state}, where no role works: {task_state.note or '(no note)'}\n"
+        f"  where it came from: git log origin/{NOTES_BRANCH} -- {task.state_file}\n"
+        f"  to move it on: {move} STATE --note …"
+    )
 
 
 @dataclass(frozen=True)

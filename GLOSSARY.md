@@ -69,7 +69,7 @@ A task's `STATE.json`: its lifecycle, the state it is in, and the hand-off note.
 _Avoid_: ticket
 
 **Terminal state**:
-A state no event leaves, and which belongs to no role. Only a human, moving the task by hand, takes it elsewhere. `blocked` is one that waits for a human, and `done` is another.
+A state no event leaves, and which belongs to no role. Only a human, moving the task by hand, takes it elsewhere. `blocked`, where a question waits for a human, and `done` are terminal.
 _Avoid_: final state, the human's state
 
 **Turn**:

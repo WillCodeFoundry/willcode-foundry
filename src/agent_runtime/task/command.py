@@ -98,9 +98,10 @@ def _then(task_state: TaskState) -> str:
     """What follows once the next task state is pushed."""
     if task_state.role:
         return f"Then it is the {task_state.role}'s turn. Stop once it is pushed."
-    if task_state.blocked:
-        return "Then the task is blocked. Once it is pushed, stop, and ask your question in the conversation."
-    return f"Then the task is {task_state.state}. Stop once it is pushed."
+    return (
+        f"Then the task is {task_state.state}, where no role works. Stop once it is pushed, and ask any question your "
+        "note holds in the conversation."
+    )
 
 
 def _origin_state(session: contract.Environ) -> TaskState:

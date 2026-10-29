@@ -109,19 +109,15 @@ def test_the_role_launched_is_the_one_whose_turn_it_is(state: str, role: str) ->
     assert whose_turn(in_state(state), project_name="store", task=Task("t1")) == role
 
 
-def test_a_blocked_task_is_refused_with_its_note_where_it_came_from_and_how_to_move_it_on() -> None:
+@pytest.mark.parametrize(("state", "note"), [("blocked", "Is R4 in scope?"), ("done", "PR: https://example.com/pr/1")])
+def test_a_terminal_task_is_refused_with_its_note_where_it_came_from_and_how_to_move_it_on(
+    state: str, note: str
+) -> None:
     with pytest.raises(FoundryError) as refused:
-        whose_turn(in_state("blocked", "Is R4 in scope?"), project_name="store", task=Task("t1"))
+        whose_turn(in_state(state, note), project_name="store", task=Task("t1"))
 
     assert str(refused.value) == (
-        "task t1 is blocked, waiting for you: Is R4 in scope?\n"
+        f"task t1 is {state}, where no role works: {note}\n"
         "  where it came from: git log origin/agent-notes -- .agent/t1/STATE.json\n"
-        "  once you've answered: foundry task move store t1 STATE --note …"
+        "  to move it on: foundry task move store t1 STATE --note …"
     )
-
-
-def test_a_done_task_is_refused_saying_how_to_reopen_it() -> None:
-    with pytest.raises(
-        FoundryError, match=r"^task t1 is done\. To reopen it, run foundry task move store t1 STATE --note …$"
-    ):
-        whose_turn(in_state("done"), project_name="store", task=Task("t1"))

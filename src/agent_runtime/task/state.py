@@ -101,20 +101,13 @@ class TaskState:
 
     @property
     def terminal(self) -> bool:
-        """Whether no event leaves the state the task is in, such as blocked or done."""
+        """Whether no event leaves the state the task is in, such as `blocked` or `done`."""
         return self._definition.terminal
 
     @property
-    def blocked(self) -> bool:
-        """Whether the task waits for a human to answer its note and move it on."""
-        return self._definition.blocked
-
-    @property
     def standing(self) -> str:
-        """Who works on the task now, as a sentence: its role, a human, or no one."""
-        if self.role:
-            return f"It is assigned to the {self.role}."
-        return "It waits for a human." if self.blocked else "No role works on it."
+        """Who works on the task now, as a sentence: its role, or no role in a terminal state."""
+        return f"It is assigned to the {self.role}." if self.role else "No role works on it."
 
     def after(self, event: str, note: str, role: str) -> "TaskState":
         """The task state once ``role`` sends ``event`` with a hand-off note; TaskStateRefused saying why not.

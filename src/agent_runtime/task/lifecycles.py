@@ -1,8 +1,8 @@
 """The lifecycles: the state machine each kind of task follows, written once, as data in Python.
 
 Each state of a lifecycle names its role, goal and events, each event with where it leads and when to send it. A
-terminal state has no role and no events, and a blocked one waits for a human. Every role's state accepts BLOCK,
-which leads to a blocked state, and an agent picks among its role's skills, so states name none.
+terminal state has no role and no events. Every role's state accepts BLOCK, which leads to the terminal state
+`blocked`, and an agent picks among its role's skills, so states name none.
 
 Shared with foundry, which reads lifecycles to launch whoever's turn it is (ARCHITECTURE.md, design rule 2).
 """
@@ -33,8 +33,6 @@ class State:
     events: Mapping[str, Event] = field(default_factory=dict)
     terminal: bool = False
     """No event leaves it. Only a human, moving the task by hand, takes it elsewhere."""
-    blocked: bool = False
-    """A terminal state that waits for a human. They answer the question in the note, then move the task on."""
 
 
 @dataclass(frozen=True)
@@ -74,7 +72,7 @@ _DELIVER: Final = _role_state(
     "Open the pull request for the approved branch.",
     submit=Event("done", "the pull request is open: put its URL in the note"),
 )
-_ENDS: Final = {_BLOCKED: State(None, terminal=True, blocked=True), "done": State(None, terminal=True)}
+_ENDS: Final = {_BLOCKED: State(None, terminal=True), "done": State(None, terminal=True)}
 
 FEATURE: Final = Lifecycle(
     name="feature",

@@ -71,7 +71,7 @@ def test_an_event_moves_the_task_and_leaves_the_note() -> None:
 def test_block_moves_any_role_state_to_blocked() -> None:
     next_state = in_state("deliver").after("block", "Which base branch?", "dev")
 
-    assert (next_state.state, next_state.role, next_state.blocked) == ("blocked", None, True)
+    assert (next_state.state, next_state.role, next_state.terminal) == ("blocked", None, True)
 
 
 @pytest.mark.parametrize(
@@ -79,7 +79,7 @@ def test_block_moves_any_role_state_to_blocked() -> None:
     [
         ("review", "approve", "The dev can't send events in review. It is assigned to the reviewer."),
         ("review", "submit", "The dev can't send events in review. It is assigned to the reviewer."),
-        ("blocked", "submit", "The dev can't send events in blocked. It waits for a human."),
+        ("blocked", "submit", "The dev can't send events in blocked. No role works on it."),
         ("done", "submit", "The dev can't send events in done. No role works on it."),
     ],
     ids=["another role's event", "an event its state lacks", "blocked", "done"],
@@ -111,7 +111,7 @@ def test_the_event_to_a_state_is_the_one_leading_there(to: str, event: str) -> N
         (
             "blocked",
             "implement",
-            "blocked can't go to implement. No event leaves it. It waits for a human.",
+            "blocked can't go to implement. No event leaves it. No role works on it.",
         ),
     ],
 )

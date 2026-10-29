@@ -98,7 +98,7 @@ def test_show_lists_no_events_in_a_blocked_state(turn: Checkouts) -> None:
 
     shown = run(session, "show")
 
-    assert "is in blocked. It waits for a human." in shown and "goal" not in shown
+    assert "is in blocked. No role works on it." in shown and "goal" not in shown
 
 
 def test_a_task_without_a_task_state_is_refused(checkouts: Checkouts) -> None:
@@ -153,9 +153,10 @@ def test_block_moves_the_task_to_blocked(turn: Checkouts) -> None:
 
     printed = run(session, "block", "Should retries be configurable?")
 
-    assert written_state(notes).blocked
+    assert written_state(notes).state == "blocked"
     assert printed.endswith(
-        "Then the task is blocked. Once it is pushed, stop, and ask your question in the conversation.\n"
+        "Then the task is blocked, where no role works. Stop once it is pushed, and ask any question your note holds "
+        "in the conversation.\n"
     )
 
 
