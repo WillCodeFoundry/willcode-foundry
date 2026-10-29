@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Final
 
 from agent_runtime.task.lifecycles import FEATURE, Lifecycle
-from agent_runtime.task.state import TaskState, TaskStateRefused, state_path
+from agent_runtime.task.state import TaskState, state_path
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 
@@ -131,8 +131,8 @@ def read_state(clone: ProjectClone, task: Task) -> TaskState:
     where = f"{task.state_file} on {NOTES_BRANCH}"
     try:
         text = clone.read(task.state_file)
-    except UnicodeDecodeError:
-        raise TaskStateRefused(f"{where} is not UTF-8 text. Fix it on {NOTES_BRANCH}.") from None
+    except FoundryError as error:
+        raise FoundryError(f"{error}, on {NOTES_BRANCH}. Fix it there.") from None
     if text is None:
         raise FoundryError(
             f"task {task.id} has no {task.state_file} on {NOTES_BRANCH}. It was created before task states. "

@@ -28,6 +28,7 @@ REFUSING: Final = ": refusing"
 """What follows a hook's name at the start of each of its refusals."""
 
 PRE_PUSH: Final = "pre-push"
+"""The hook that judges every push, as git names it."""
 
 PUSH_REFUSED: Final = f"{PRE_PUSH}{REFUSING}"
 """How every pre-push refusal starts, so the task command can tell one from another failed push."""
@@ -165,8 +166,8 @@ def _require_own_notes(
         return
     undo = (
         "",
-        "If you changed it by hand, put it back as it was, then commit, pull --rebase and push again:",
-        f'    git -C "${contract.NOTES_DIR}" restore --source={remote_sha} --staged --worktree -- {shlex.quote(path)}',
+        "If you changed it by hand, put it back.",
+        *_put_back(contract.NOTES_DIR, remote_sha, [path], net_changed),
         f"Only bin/task changes it, when it is your turn: {END_TURN}",
     )
     # The push carries the new state, not the event. So send the event leading to that state, and it must give

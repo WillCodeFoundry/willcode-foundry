@@ -4,8 +4,8 @@
     task EVENT "<hand-off note>"    end your turn: apply EVENT, then commit and push STATE.json alone
 
 Both read the task state as origin has it, freshly fetched. Ending a turn needs both checkouts clean and pushed
-first, as session-check does. A refused event or failed git step leaves the notes checkout as it was, and it never
-retries (ARCHITECTURE.md, design rule 6).
+first, as session-check does. A refused event or failed git step leaves the notes checkout as it was, and the command
+never retries (ARCHITECTURE.md, design rule 6).
 
 Runs only in the sandbox: foundry never imports it.
 """
@@ -54,7 +54,7 @@ def show(session: contract.Environ, out: TextIO) -> None:
         lines += [
             f"{whose}'s goal: {task_state.goal}",
             "",
-            f"{whose} ends the turn with one of these events, once its work is pushed:",
+            f"{whose} ends the turn with one of these events, once the work is pushed:",
             *(f"  {name} → {event.target}: when {event.when}" for name, event in task_state.events.items()),
             "",
             f"  {END_TURN}",

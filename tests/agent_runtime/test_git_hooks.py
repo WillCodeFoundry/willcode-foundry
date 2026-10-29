@@ -449,7 +449,33 @@ def test_an_illegal_change_is_refused_saying_why_and_how_to_undo_it(
     assert f"{STATE_PATH} can't change this way." in refusal and reason in refusal
     origin_sha = git(notes, "rev-parse", f"origin/{session.agent_notes_branch}").stdout.strip()
     restore = f"--source={origin_sha} --staged --worktree -- {STATE_PATH}"
-    assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal and "reset --soft" not in refusal
+    assert f'git -C "$AGENT_NOTES_DIR" reset --soft {origin_sha}' in refusal
+    assert f'git -C "$AGENT_NOTES_DIR" restore {restore}' in refusal
+
+
+def test_the_task_state_advice_still_works_after_the_human_moves_it(checkouts: Checkouts, tmp_path: Path) -> None:
+    """A hand edit is refused. Then the human moves the task on origin, and following the advice pulls that in
+    without a conflict."""
+    session, _, notes = checkouts
+    commit_state(notes, IMPLEMENT)
+    pushed(notes)
+    commit_state(notes, IMPLEMENT.moved("done", "Skip it."), f"{TASK.task_notes_dir}/PROGRESS.md")
+    advice = refusal_of(lambda: push_check(session, notes)).splitlines()
+    human = tmp_path / "human"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(human))
+    commit_state(human, IMPLEMENT.moved("blocked", "Wait for me."))
+    pushed(human)
+    git(notes, "fetch", "-q", "origin")
+
+    for command in (line.strip() for line in advice if line.strip().startswith("git -C")):
+        environ = {**os.environ, "AGENT_NOTES_DIR": str(notes)}
+        subprocess.run(["sh", "-c", command], cwd=notes, env=environ, check=True, capture_output=True)
+    commit_unchecked(notes, "progress")
+    git(notes, "-c", "core.hooksPath=/dev/null", "pull", "-q", "--rebase", "origin", session.agent_notes_branch)
+
+    push_check(session, notes)
+    assert TaskState.parse((notes / STATE_PATH).read_text(), STATE_PATH).state == "blocked"
 
 
 def test_creating_the_task_state_is_refused(checkouts: Checkouts) -> None:

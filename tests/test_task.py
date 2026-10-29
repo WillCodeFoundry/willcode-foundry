@@ -351,8 +351,9 @@ def test_list_has_a_row_per_readable_task_and_the_whole_error_for_each_other(ori
     assert len(errors) == 1
 
 
-def test_a_bad_task_id_or_a_state_that_isnt_text_is_that_tasks_own_error(origin_dir, git_env, tmp_path) -> None:
-    """Round 4's R51 and R52: neither stops the list."""
+def test_a_bad_task_id_or_a_state_that_isnt_a_text_file_is_that_tasks_own_error(origin_dir, git_env, tmp_path) -> None:
+    """Round 4's R51 and R52, and a STATE.json that is a folder or a link: none stops the list, and a link is
+    never followed out of the clone."""
     create(origin_dir, git_env)
     notes_dir = tmp_path / "notes"
     git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(notes_dir))
@@ -360,6 +361,10 @@ def test_a_bad_task_id_or_a_state_that_isnt_text_is_that_tasks_own_error(origin_
     (notes_dir / ".agent" / "Old Notes" / "TASK.md").write_text("old\n")
     (notes_dir / ".agent" / "t2").mkdir()
     (notes_dir / ".agent" / "t2" / "STATE.json").write_bytes(b"\xff\xfe")
+    (notes_dir / ".agent" / "t3" / "STATE.json").mkdir(parents=True)
+    (notes_dir / ".agent" / "t3" / "STATE.json" / "x").write_text("x\n")
+    (notes_dir / ".agent" / "t4").mkdir()
+    (notes_dir / ".agent" / "t4" / "STATE.json").symlink_to("/etc/hostname")
     git(git_env, "-C", str(notes_dir), "add", ".agent")
     git(git_env, "-C", str(notes_dir), "commit", "--quiet", "--no-gpg-sign", "-m", "odd tasks")
     git(git_env, "-C", str(notes_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
@@ -367,8 +372,19 @@ def test_a_bad_task_id_or_a_state_that_isnt_text_is_that_tasks_own_error(origin_
     rows, errors = read_rows("store", scratch_clone(origin_dir, git_env, "list"))
 
     assert [row.task.id for row in rows] == ["t1"]
-    assert [error.split(":")[0] for error in errors] == ["store Old Notes", "store t0", "store t2"]
-    assert errors[2] == "store t2: .agent/t2/STATE.json on agent-notes is not UTF-8 text. Fix it on agent-notes."
+    assert [error.split(":")[0] for error in errors] == [
+        "store Old Notes",
+        "store t0",
+        "store t2",
+        "store t3",
+        "store t4",
+    ]
+    assert errors[2] == "store t2: .agent/t2/STATE.json is not UTF-8 text, on agent-notes. Fix it there."
+    assert (
+        errors[3]
+        == errors[4].replace("t4", "t3")
+        == ("store t3: .agent/t3/STATE.json is not a plain file, on agent-notes. Fix it there.")
+    )
 
 
 def test_a_project_without_a_notes_branch_has_no_rows(origin_dir, git_env) -> None:
