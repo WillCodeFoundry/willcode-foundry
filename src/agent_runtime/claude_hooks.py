@@ -1,7 +1,7 @@
 """Claude Code's hooks, as managed settings run them: the tool call or event as JSON on stdin.
 
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
-``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
+``session_check`` (Stop) refuses to end the agent run while either checkout has uncommitted or unpushed work,
 or can't be checked.
 Both are guardrails against mistakes, not boundaries: see docs/security-model.md. Both trust the
 environment Claude Code gives them, which a settings file the agent writes can change: session-check reads the
@@ -88,7 +88,7 @@ def session_check(
     if not problems:
         return 0
     reason = (
-        f"Cannot end the session yet: {'; '.join(problems)}. "
+        f"Cannot stop yet: {'; '.join(problems)}. "
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish.'
     )
     print(json.dumps({"decision": "block", "reason": reason}), file=stdout or sys.stdout)

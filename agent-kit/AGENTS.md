@@ -73,7 +73,7 @@ exist, before doing anything else.
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
-| `STATE.json` | `bin/task` | The task state: who it is assigned to, and the hand-off note from the last turn. **Never edit it.** `bin/task` changes it; the hooks refuse any other change that isn't a legal transition. |
+| `STATE.json` | the task command | The task state: who it is assigned to, and the hand-off note from the last turn. Only the task command, or the human, changes it. **Never edit it.** `pre-push` refuses a change that isn't a legal transition for your role. |
 
 These files are how work survives between sessions: the sandbox can be removed
 at any time, and the next agent (possibly you, with no memory of this session,
@@ -124,12 +124,16 @@ that end the turn, each with when to send it.
 
 ```bash
 "$AGENT_KIT_DIR/bin/task" show                       # where the task stands: your goal and your events
-"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"  # end your turn
+"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"  # write the next task state
 ```
 
 - Run `task show` first, and read its hand-off note: the last turn left it for you.
-- Push your code and notes, then end your turn with the event that says what
-  happened. It refuses while either checkout has uncommitted or unpushed work.
+- Push your code and notes, then send the event that says what happened. It
+  writes your task state, and your turn ends when you commit and push it, with
+  the commands the task command prints, before anything else.
+- The task command refuses while either checkout has unsaved work, or the notes
+  checkout isn't up to date with origin. To take an event back before
+  committing, run the `restore` command it prints.
 - When you are stuck, end your turn with `block`, the question as its note
   (see "When to stop and ask").
 - Once your turn has passed, push nothing more, and stop.
@@ -187,10 +191,11 @@ Your turn's work is done when its goal is met. Then:
    in your summary, not in `TASK.md`.
 4. Add any final learnings.
 5. Commit and push both checkouts.
-6. End your turn with the event `task show` lists for what happened, and a
-   hand-off note: `"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"`.
+6. Send the event `task show` lists for what happened, with a hand-off note:
+   `"$AGENT_KIT_DIR/bin/task" <event> "<hand-off note>"`. Your turn ends when
+   you commit and push the task state it writes, with the commands it prints.
 
-If you run out of turns or time, push whatever state you have and make sure
+If you run out of time, push whatever state you have and make sure
 `PROGRESS.md` → "In progress" says exactly where you stopped.
 
 ## 4. Git rules
@@ -226,8 +231,12 @@ git push origin "$AGENT_NOTES_BRANCH"
 
 - Only change files inside `$AGENT_TASK_NOTES_DIR/`. Other agents use this branch
   for their own tasks at the same time. The hooks refuse to push changes to anything else.
-- Always `pull --rebase` before pushing. Because every agent touches only its
-  own dir, this never conflicts.
+- Always `pull --rebase` before pushing. Every agent touches only its own dir,
+  so the only conflict is on `STATE.json`, when the human moved the task after
+  the task command read it. Then run `git rebase --abort` and
+  `git reset --keep origin/$AGENT_NOTES_BRANCH`, which drops only the task
+  state's commit, since you committed nothing after it. Then run `task show`
+  again.
 
 ### Hooks
 
@@ -236,8 +245,8 @@ the rules above. If one refuses an action, read its message:
 it says what was wrong and what to do instead. Never bypass a hook. If you
 believe a hook is wrong, record the case under "Blockers" and ask.
 
-You will not be allowed to end the session while either checkout has
-uncommitted or unpushed changes.
+You will not be allowed to stop while either checkout has uncommitted or
+unpushed changes.
 
 ## 5. Sharing what you learn
 
@@ -287,4 +296,4 @@ Asking early is always better than guessing.
 - [ ] Code committed and pushed on `$AGENT_TASK_BRANCH`
 - [ ] Notes committed and pushed on `$AGENT_NOTES_BRANCH`
 - [ ] Questions for the human are in "Blockers" and asked in the conversation
-- [ ] Your turn ended with `bin/task <event>`, unless you stopped part-way
+- [ ] Your turn ended with `bin/task <event>` and a push of the task state it wrote, unless you stopped part-way

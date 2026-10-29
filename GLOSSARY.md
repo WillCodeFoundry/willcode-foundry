@@ -77,7 +77,7 @@ The time a task is in a state assigned to a role. Only that role is launched on 
 _Avoid_: session (that is the foundry's record of a sandbox)
 
 **Event**:
-What an agent sends to end its turn. The lifecycle names each state's events, and which state each leads to.
+What an agent sends with the task command to end its turn. The lifecycle names each state's events, and which state each leads to. The turn ends when the task state it writes is pushed.
 _Avoid_: action, command
 
 **Transition**:
@@ -157,10 +157,10 @@ _Avoid_: boundary, security (for a guardrail)
 `prepare-commit-msg` and `pre-push`, which git runs in both checkouts.
 
 **Claude hooks**:
-`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.
+`guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs each time the agent stops.
 
 **Refusal**:
-What a hook or a hardening mode says when it stops something: what was wrong, and what to do instead.
+What a hook, a hardening mode or the task command says when it stops something: what was wrong, and what to do instead.
 
 ### Testing
 

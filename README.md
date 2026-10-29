@@ -51,7 +51,7 @@ A task passes from role to role along its lifecycle. Its task state, `.agent/<ta
 
 `feature`, the default, is planned with you, implemented, reviewed in rounds, then delivered as a pull request. `bugfix` is the same without planning: write its `TASK.md` yourself, before its first run. Every role can also `block`, handing the task to you with a question as its note.
 
-Agents end their turns with `agent-kit/bin/task`. A push that changes `STATE.json` must make a legal transition for that role, or `pre-push` refuses it. `foundry task run` launches only the role whose turn it is.
+Agents end their turns with `agent-kit/bin/task`, then a push. A push that changes `STATE.json` must make a legal transition for that role, or `pre-push` refuses it. `foundry task run` launches only the role whose turn it is.
 
 Move a task by hand with `foundry task move PROJECT TASK STATE --note "…"`. It commits the task state as you, signed, and pushes `agent-notes`. The usual moves:
 

@@ -1,11 +1,12 @@
 """agent_runtime.task.command, in-process, against real checkouts session_setup made from a local origin.
 
-The git hooks are off here, except at the end, where the command's own push goes through the built runtime's
-pre-push. tests/agent_runtime/test_git_hooks.py tests the STATE.json rule itself, and
+The git hooks are off here, except at the end, where the commands an event prints push through the built
+runtime's pre-push. tests/agent_runtime/test_git_hooks.py tests pre-push itself, and
 tests/agent_kit/test_task_command.py the stub that runs this command.
 """
 
 import io
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,61 +113,72 @@ def test_anything_but_show_or_an_event_and_a_note_is_refused_with_the_usage(turn
     assert refusal(session, "submit") == 'usage: task show | task EVENT "<hand-off note>"'
 
 
-# --- ending a turn ------------------------------------------------------------
+# --- an event -----------------------------------------------------------------
 
 
-def test_an_event_commits_and_pushes_the_task_state_alone(turn: Checkouts) -> None:
+def written_state(notes: Path) -> TaskState:
+    return TaskState.parse((notes / STATE_PATH).read_text(), STATE_PATH)
+
+
+def nothing_written(session: contract.Environ, notes: Path) -> bool:
+    return git(notes, "status", "--porcelain").stdout == "" and origin_state(session).state == "implement"
+
+
+def commands(printed: str) -> list[str]:
+    """The git commands an event prints, as the agent would copy them."""
+    return [
+        line.strip().removeprefix("To take the event back before committing: ")
+        for line in printed.splitlines()
+        if "git -C " in line
+    ]
+
+
+def test_an_event_writes_the_next_task_state_and_prints_how_to_end_the_turn(turn: Checkouts) -> None:
     session, _, notes = turn
 
     printed = run(session, "submit", "All criteria met. Start with parser.py.")
 
-    assert origin_state(session) == TaskState(
+    assert written_state(notes) == TaskState(
         lifecycle=FEATURE, state="review", note="All criteria met. Start with parser.py."
     )
-    assert printed == f"{TASK.id}: implement → review (submit)\nIt is the reviewer's turn now. Stop here.\n"
-    assert git(notes, "show", "--name-only", "--format=", "HEAD").stdout.split() == [STATE_PATH]
-    assert git(notes, "log", "-1", "--format=%B").stdout == f"{TASK.id}: implement → review (submit)\n\n"
+    assert origin_state(session).state == "implement"
+    git_in = f"git -C {notes}"
+    assert printed == (
+        "implement → review. Commit and push it to end your turn:\n"
+        f"  {git_in} commit --quiet --message '{TASK.id}: implement → review (submit)' -- {STATE_PATH}\n"
+        f"  {git_in} push --quiet origin {session.agent_notes_branch}\n"
+        f"To take the event back before committing: {git_in} restore -- {STATE_PATH}\n"
+        "Then it is the reviewer's turn. Stop once it is pushed.\n"
+    )
 
 
 def test_block_hands_the_task_to_the_human(turn: Checkouts) -> None:
-    session, _, _ = turn
+    session, _, notes = turn
 
     printed = run(session, "block", "Should retries be configurable?")
 
-    assert origin_state(session).assignee == "human"
-    assert "The task is assigned to the human now. Stop here, and ask your question in the conversation." in printed
-
-
-def test_a_move_on_origin_is_picked_up_before_the_event(turn: Checkouts, tmp_path: Path) -> None:
-    """The human moved the task back to this role from elsewhere: the notes checkout is behind origin."""
-    session, _, notes = turn
-    other = tmp_path / "elsewhere"
-    git(
-        tmp_path,
-        "clone",
-        "-q",
-        "-b",
-        session.agent_notes_branch,
-        git(notes, "remote", "get-url", "origin").stdout.strip(),
-        str(other),
+    assert written_state(notes).assignee == "human"
+    assert printed.endswith(
+        "Then the task is assigned to the human. Once it is pushed, stop, and ask your question in the conversation.\n"
     )
-    push_state(other, TaskState(lifecycle=FEATURE, state="deliver", note="Use main."))
-
-    run(session, "submit", "PR: https://example.com/pr/1")
-
-    assert origin_state(session).state == "done"
 
 
-def test_a_refused_event_leaves_the_notes_checkout_behind_origin_as_it_was(turn: Checkouts, tmp_path: Path) -> None:
+@pytest.mark.parametrize("event", ["approve", "submit", "block"])
+def test_an_event_off_the_roles_turn_is_refused_whatever_the_event(turn: Checkouts, event: str) -> None:
     session, _, notes = turn
-    other = tmp_path / "elsewhere"
-    url = git(notes, "remote", "get-url", "origin").stdout.strip()
-    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
-    push_state(other, TaskState(lifecycle=FEATURE, state="implement", note="Use main."))
-    head = git(notes, "rev-parse", "HEAD").stdout
+    push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
+
+    assert (
+        refusal(session, event, "Looks good.") == "The task is assigned to the reviewer, not the dev. It is in review."
+    )
+    assert git(notes, "status", "--porcelain").stdout == ""
+
+
+def test_an_event_the_state_doesnt_accept_is_refused_writing_nothing(turn: Checkouts) -> None:
+    session, _, notes = turn
 
     assert "implement doesn't accept 'approve'" in refusal(session, "approve", "Looks good.")
-    assert git(notes, "rev-parse", "HEAD").stdout == head
+    assert nothing_written(session, notes)
 
 
 @pytest.mark.parametrize(
@@ -176,7 +188,7 @@ def test_a_refused_event_leaves_the_notes_checkout_behind_origin_as_it_was(turn:
         ("unpushed notes", "notes checkout has commits not pushed"),
     ],
 )
-def test_unsaved_work_is_refused_and_nothing_changes(turn: Checkouts, dirty: str, problem: str) -> None:
+def test_unsaved_work_is_refused_writing_nothing(turn: Checkouts, dirty: str, problem: str) -> None:
     session, code, notes = turn
     if dirty == "uncommitted code":
         (code / "new.py").write_text("x\n")
@@ -188,7 +200,7 @@ def test_unsaved_work_is_refused_and_nothing_changes(turn: Checkouts, dirty: str
     message = refusal(session, "submit", "done")
 
     assert message.startswith("commit and push your work before ending your turn:") and problem in message
-    assert origin_state(session).state == "implement"
+    assert written_state(notes).state == "implement"
 
 
 @pytest.mark.parametrize("checkout", [("switch", "-q", "--detach"), ("switch", "-q", "-c", "elsewhere")])
@@ -197,98 +209,63 @@ def test_an_event_is_refused_while_the_notes_checkout_is_off_its_branch(
 ) -> None:
     session, _, notes = turn
     git(notes, *checkout)
-    head = git(notes, "rev-parse", "HEAD").stdout
 
     message = refusal(session, "submit", "All met.")
 
-    assert message.startswith(f"the notes checkout isn't on {session.agent_notes_branch}")
-    assert git(notes, "rev-parse", "HEAD").stdout == head
-    assert origin_state(session).state == "implement"
+    assert message.startswith(f"The notes checkout isn't on origin/{session.agent_notes_branch}.")
+    assert nothing_written(session, notes)
 
 
-def test_a_rejected_push_drops_the_commit_so_the_command_can_run_again(turn: Checkouts) -> None:
+def test_an_event_is_refused_while_the_notes_checkout_is_behind_origin(turn: Checkouts, tmp_path: Path) -> None:
+    """The human moved the task from elsewhere. Written on the old checkout, the task state wouldn't reach origin."""
     session, _, notes = turn
-    origin = Path(git(notes, "remote", "get-url", "origin").stdout.strip().removeprefix("file://"))
-    hook = origin / "hooks" / "pre-receive"
-    hook.write_text("#!/bin/sh\necho 'another push landed first' >&2\nexit 1\n")
-    hook.chmod(0o755)
-    head = git(notes, "rev-parse", "HEAD").stdout
+    other = tmp_path / "elsewhere"
+    url = git(notes, "remote", "get-url", "origin").stdout.strip()
+    git(tmp_path, "clone", "-q", "-b", session.agent_notes_branch, url, str(other))
+    push_state(other, TaskState(lifecycle=FEATURE, state="deliver", note="Use main."))
 
-    message = refusal(session, "submit", "All met.")
+    message = refusal(session, "submit", "PR: https://example.com/pr/1")
 
-    assert "another push landed first" in message and message.endswith("run it again.")
-    assert git(notes, "rev-parse", "HEAD").stdout == head
+    assert message.startswith(f"The notes checkout isn't on origin/{session.agent_notes_branch}.")
     assert git(notes, "status", "--porcelain").stdout == ""
 
-    hook.unlink()
-    run(session, "submit", "All met.")
-    assert origin_state(session).state == "review"
+
+def test_the_printed_restore_puts_the_notes_checkout_back(turn: Checkouts) -> None:
+    session, _, notes = turn
+    printed = run(session, "submit", "All met.")
+
+    subprocess.run(["sh", "-c", commands(printed)[-1]], check=True, capture_output=True)
+
+    assert git(notes, "status", "--porcelain").stdout == ""
+    run(session, "block", "Which base branch?")
 
 
-# --- through the real hooks ----------------------------------------------------
+# --- through the real pre-push ----------------------------------------------------
 
 
-def hooks_dir(tmp_path: Path, built_kit: Path, pre_commit: str | None = None) -> Path:
-    """A hooks dir whose pre-push runs the built runtime's, as the kit's stub does through its link. ``pre_commit``
-    adds a pre-commit of the test's own, to make the command's commit fail."""
+def use_pre_push(monkeypatch: pytest.MonkeyPatch, session: contract.Environ, tmp_path: Path, built_kit: Path) -> None:
+    """Point the checkouts' git at a pre-push that runs the built runtime's, as the kit's stub does through its
+    link, with the session variables a hook reads set as the sandbox sets them."""
     hooks = tmp_path / "hooks"
     hooks.mkdir()
-    scripts = {
-        "pre-push": f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook pre-push "$@"\n'
-    }
-    if pre_commit:
-        scripts["pre-commit"] = pre_commit
-    for hook, script in scripts.items():
-        (hooks / hook).write_text(script)
-        (hooks / hook).chmod(0o755)
-    return hooks
-
-
-def use_hooks(monkeypatch: pytest.MonkeyPatch, session: contract.Environ, hooks: Path) -> None:
-    """Point the checkouts' git at ``hooks``, with the session variables a hook reads set as the sandbox sets them."""
+    pre_push = hooks / "pre-push"
+    pre_push.write_text(f'#!/bin/sh\nexec {sys.executable} -IS {AgentKit(built_kit).runtime} git-hook pre-push "$@"\n')
+    pre_push.chmod(0o755)
     monkeypatch.setenv("GIT_CONFIG_VALUE_1", str(hooks))
     for name in contract.NAMES:
         monkeypatch.setenv(name, str(getattr(session, name.lower())))
 
 
-def test_the_commands_own_push_passes_the_real_guard(
-    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    session, _, _ = turn
-    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit))
-
-    run(session, "block", "Which base branch?")
-
-    assert origin_state(session).state == "blocked"
-
-
-def test_a_refused_commit_leaves_the_notes_checkout_as_it_was(
-    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(("event", "state"), [("submit", "review"), ("block", "blocked")])
+def test_the_printed_commands_push_what_the_real_pre_push_accepts(
+    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: str, state: str
 ) -> None:
     session, _, notes = turn
-    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit, "#!/bin/sh\necho 'signing failed' >&2\nexit 1\n"))
-    head = git(notes, "rev-parse", "HEAD").stdout
+    use_pre_push(monkeypatch, session, tmp_path, built_kit)
+    printed = run(session, event, "Over to you.")
 
-    message = refusal(session, "submit", "All met.")
+    for command in commands(printed)[:2]:
+        subprocess.run(["sh", "-c", command], cwd=tmp_path, check=True, capture_output=True)
 
-    assert message.startswith("couldn't commit STATE.json: signing failed")
-    assert git(notes, "rev-parse", "HEAD").stdout == head
-    assert git(notes, "status", "--porcelain").stdout == ""
-    assert origin_state(session).state == "implement"
-
-
-def test_an_event_off_the_roles_turn_is_refused_by_the_guard_and_nothing_changes(
-    turn: Checkouts, built_kit: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The command doesn't check the turn itself: pre-push refuses the change, and the command resets."""
-    session, _, notes = turn
-    push_state(notes, TaskState(lifecycle=FEATURE, state="review", note="Ready."))
-    use_hooks(monkeypatch, session, hooks_dir(tmp_path, built_kit))
-    head = git(notes, "rev-parse", "HEAD").stdout
-
-    message = refusal(session, "approve", "Looks good to me.")
-
-    assert "The task is assigned to the reviewer, not the dev." in message
-    assert message.endswith("Your turn has not ended, and the notes checkout is as it was. Stop here.")
-    assert git(notes, "rev-parse", "HEAD").stdout == head
-    assert origin_state(session).state == "review"
+    assert origin_state(session).state == state
+    assert git(notes, "log", "-1", "--format=%s").stdout.strip() == f"{TASK.id}: implement → {state} ({event})"

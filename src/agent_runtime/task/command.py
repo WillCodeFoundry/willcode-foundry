@@ -1,26 +1,33 @@
-"""The agent's ``task`` command, which agent-kit/bin/task runs: where the task stands, and ending a turn.
+"""The agent's ``task`` command, which agent-kit/bin/task runs: where the task stands, and the next task state.
 
     task show                       the task state as origin has it: its assignee, the goal, the events
-    task EVENT "<hand-off note>"    end your turn: apply EVENT, then commit and push STATE.json alone
+    task EVENT "<hand-off note>"    write the next task state, and print how to commit and push it
 
-Both read the task state as origin has it, freshly fetched. Ending a turn needs both checkouts clean and pushed
-first, as session-check does. A refused event or failed git step leaves the notes checkout as it was, and the command
-never retries (ARCHITECTURE.md, design rule 6).
+Both read the task state as origin has it, freshly fetched. An event writes the next task state, and the agent's
+push of it ends the turn. A refused event writes nothing, and the command runs no git that changes anything.
 
 Runs only in the sandbox: foundry never imports it.
 """
 
+import shlex
 import sys
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Final, TextIO
 
 from agent_runtime import contract
 from agent_runtime.checkouts import unsaved_work
 from agent_runtime.git import Git
-from agent_runtime.git_hooks import PUSH_REFUSED
 from agent_runtime.task.committed import committed_state
-from agent_runtime.task.state import END_TURN, STATE_FILE, TaskState, TaskStateRefused, commit_subject, state_path
+from agent_runtime.task.state import (
+    END_TURN,
+    STATE_FILE,
+    TaskState,
+    TaskStateRefused,
+    commit_subject,
+    require_assignee,
+    require_legal_transition,
+    state_path,
+)
 
 USAGE: Final = 'usage: task show | task EVENT "<hand-off note>"'
 
@@ -61,58 +68,48 @@ def show(session: contract.Environ, out: TextIO) -> None:
 
 
 def end_turn(event: str, note: str, session: contract.Environ, out: TextIO) -> None:
-    """Apply ``event``, then commit STATE.json alone and push it."""
-    notes, branch, path = (
-        Git(session.agent_notes_dir),
-        session.agent_notes_branch,
-        state_path(session.agent_task_notes_dir),
-    )
-    if notes.current_branch() != branch:
-        raise TaskStateRefused(
-            f"the notes checkout isn't on {branch}, so ending your turn would push nothing. "
-            f"Run git switch {branch} in $AGENT_NOTES_DIR, then this command again."
-        )
+    """Write the task state ``event`` leads to, and print the commands that commit and push it.
+
+    Refuses, writing nothing, while either checkout has unsaved work, while the notes checkout isn't at origin's
+    notes branch, or when the transition rule refuses the event.
+    """
     if problems := unsaved_work(session):
         raise TaskStateRefused(f"commit and push your work before ending your turn: {'; '.join(problems)}")
-    start_head = notes.output("rev-parse", "HEAD").strip()
     current = _origin_state(session)
-    next_state = current.after(event, note)
-    subject = commit_subject(session.agent_task, current.state, next_state.state, event)
-    if failure := _commit_and_push(notes, branch, session.agent_notes_dir / path, next_state, subject):
-        notes.output("reset", "--quiet", "--hard", start_head)
-        next_step = "Stop here." if PUSH_REFUSED in failure else "If another push landed first, run it again."
+    notes_dir, branch = session.agent_notes_dir, session.agent_notes_branch
+    notes = Git(notes_dir)
+    at_origin = notes.output("rev-parse", "HEAD") == notes.output("rev-parse", f"origin/{branch}")
+    if notes.current_branch() != branch or not at_origin:
         raise TaskStateRefused(
-            f"couldn't {failure}\nYour turn has not ended, and the notes checkout is as it was. {next_step}"
+            f"The notes checkout isn't on origin/{branch}. "
+            f"Run git switch {branch} and git pull --rebase in $AGENT_NOTES_DIR, then this command again."
         )
-    print(f"{subject}\n{_assigned_now(next_state)}", file=out)
-
-
-def _commit_and_push(notes: Git, branch: str, state_file: Path, next_state: TaskState, subject: str) -> str | None:
-    """Bring in origin's notes, then commit ``next_state`` alone and push it; the step that failed and why, or None.
-
-    Run only once ``next_state`` is known to be allowed, so a refused event never moves the checkout.
-    """
-    merged = notes.run_captured("merge", "--ff-only", "--quiet", f"origin/{branch}")
-    if merged.returncode != 0:
-        return f"bring in origin/{branch}: {(merged.stderr or merged.stdout).strip()}"
-    state_file.write_text(next_state.to_json())
-    steps = [
-        ("commit STATE.json", ("commit", "--quiet", "--message", subject, "--", str(state_file))),
-        (f"push {branch}", ("push", "--quiet", "origin", branch)),
+    require_assignee(current, session.agent_role)
+    next_state = current.after(event, note)
+    require_legal_transition(current, next_state, session.agent_role)
+    path = state_path(session.agent_task_notes_dir)
+    (notes_dir / path).write_text(next_state.to_json())
+    git_in = ["git", "-C", str(notes_dir)]
+    subject = commit_subject(session.agent_task, current.state, next_state.state, event)
+    lines = [
+        f"{current.state} → {next_state.state}. Commit and push it to end your turn:",
+        f"  {shlex.join([*git_in, 'commit', '--quiet', '--message', subject, '--', path])}",
+        f"  {shlex.join([*git_in, 'push', '--quiet', 'origin', branch])}",
+        f"To take the event back before committing: {shlex.join([*git_in, 'restore', '--', path])}",
+        _assigned_next(next_state),
     ]
-    for step, args in steps:
-        result = notes.run_captured(*args)
-        if result.returncode != 0:
-            return f"{step}: {(result.stderr or result.stdout).strip()}"
-    return None
+    print("\n".join(lines), file=out)
 
 
-def _assigned_now(task_state: TaskState) -> str:
+def _assigned_next(task_state: TaskState) -> str:
     if task_state.role:
-        return f"It is the {task_state.role}'s turn now. Stop here."
+        return f"Then it is the {task_state.role}'s turn. Stop once it is pushed."
     if task_state.assigned_to_human:
-        return "The task is assigned to the human now. Stop here, and ask your question in the conversation."
-    return f"The task is {task_state.state}, assigned to no one. Stop here."
+        return (
+            "Then the task is assigned to the human. Once it is pushed, stop, and ask your question in the "
+            "conversation."
+        )
+    return f"Then the task is {task_state.state}, assigned to no one. Stop once it is pushed."
 
 
 def _origin_state(session: contract.Environ) -> TaskState:

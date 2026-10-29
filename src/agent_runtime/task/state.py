@@ -25,7 +25,7 @@ def state_path(task_notes_dir: str) -> str:
 
 
 END_TURN: Final = f'{TASK_COMMAND} <event> "<hand-off note>"'
-"""How an agent ends its turn, as every message that tells it to spells it."""
+"""How an agent sends the event that writes its next task state, as every message that tells it to spells it."""
 
 _KEYS: Final = ("lifecycle", "state", "note")
 

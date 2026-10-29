@@ -30,9 +30,6 @@ REFUSING: Final = ": refusing"
 PRE_PUSH: Final = "pre-push"
 """The hook that judges every push, as git names it."""
 
-PUSH_REFUSED: Final = f"{PRE_PUSH}{REFUSING}"
-"""How every pre-push refusal starts, so the task command can tell one from another failed push."""
-
 _ZERO = "0" * 40
 """The sha git passes for a ref that doesn't exist on one side of a push."""
 
