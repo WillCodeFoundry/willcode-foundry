@@ -49,7 +49,7 @@ One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task a
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Open task**, **Closed task**:
-A task is open when its notes dir is under `.agent/tasks/open/`, and closed when it is under `.agent/tasks/closed/`. `foundry task close` and `foundry task reopen` move the dir between the two. `foundry run` refuses a closed task.
+A task is open when its notes dir is under `.agent/tasks/open/`, and closed when it is under `.agent/tasks/closed/`. `foundry task close` and `foundry task reopen` move the dir between the two. `foundry run` refuses a closed task. Whether a task is open or closed is its status, named `Status` in the code.
 
 **Turn**:
 Which role works on a task next, or `human` when it waits for you. The task's `TURN` file holds it, and each role writes the next one when its turn ends.

@@ -1,14 +1,22 @@
-"""ProjectTasks: the tasks of one project's repository: creating, closing and reopening them, and reading their turn.
+"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, and reading
+their turn.
 
-The repository decides a task's status, by which dir under NOTES_ROOT holds its notes. The Task a caller passes is
-its expectation, so each operation checks the repository and refuses when it differs.
+The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
+every other operation goes through it. Callers pass task ids, and get Tasks back.
 """
 
-from collections.abc import Mapping
+import tempfile
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.task import NOTES_BRANCH, Status, Task
+
+
+class TaskNotFoundError(FoundryError):
+    """The task's notes dir is on neither side: it isn't open and it isn't closed."""
 
 
 class ProjectTasks:
@@ -17,56 +25,90 @@ class ProjectTasks:
     def __init__(self, clone: ProjectClone) -> None:
         self._clone = clone
 
-    def create(self, task: Task, template: Mapping[str, str]) -> None:
+    @classmethod
+    @contextmanager
+    def in_scratch_clone(cls, url: str, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
+        """The tasks of the repository at ``url``, through a clone in a temporary folder removed afterwards.
+
+        ``env`` is the environment git runs in, as for ProjectClone.
+        """
+        with tempfile.TemporaryDirectory(prefix="foundry-clone-") as scratch_dir:
+            yield cls(ProjectClone.init(url, Path(scratch_dir), env))
+
+    def get_task_by_id(self, task_id: str) -> Task:
+        """The task named ``task_id``, with the status of the dir on NOTES_BRANCH that holds its notes.
+
+        Checks out NOTES_BRANCH. TaskNotFoundError when neither dir exists; FoundryError when both do.
+        """
+        clone = self._clone
+        clone.check_out(NOTES_BRANCH)
+        opened, closed = Task.as_open(task_id), Task.as_closed(task_id)
+        is_open, is_closed = clone.exists(opened.task_notes_dir), clone.exists(closed.task_notes_dir)
+        if is_open and is_closed:
+            raise FoundryError(
+                f"task {opened.id} is both open and closed: {NOTES_BRANCH} has {opened.task_notes_dir}/ "
+                f"and {closed.task_notes_dir}/"
+            )
+        if not is_open and not is_closed:
+            raise TaskNotFoundError(
+                f"task {opened.id} doesn't exist: {NOTES_BRANCH} has neither {opened.task_notes_dir}/ "
+                f"nor {closed.task_notes_dir}/"
+            )
+        return opened if is_open else closed
+
+    def create_task(self, task_id: str, template: Mapping[str, str]) -> Task:
         """Create the task's branch from the default branch, and copy ``template`` into its open notes dir.
 
-        Both branches are pushed at once, so either both change or neither does. Refuses if the task
-        exists, open or closed. NOTES_BRANCH is created for the first task, as an orphan branch: it shares no
-        history with the code.
+        Both branches are pushed at once, so either both change or neither does. Refuses if the task exists, open
+        or closed, or its branch does. NOTES_BRANCH is created for the first task, as an orphan branch: it shares
+        no history with the code.
         """
-        assert task.status is Status.OPEN, "a new task is open"  # a programming error
+        try:
+            found = self.get_task_by_id(task_id)
+        except TaskNotFoundError:
+            pass  # the id is free; get_task_by_id has checked out NOTES_BRANCH, or started it with no history
+        else:
+            raise FoundryError(f"task {found.id} already exists: {NOTES_BRANCH} has {found.task_notes_dir}/")
         clone = self._clone
+        new_task = Task.as_open(task_id)
         default_branch = clone.default_branch()
         branches = clone.branches()
-        if task.branch in branches:
-            raise FoundryError(f"task {task.id} already exists: there is a {task.branch} branch")
+        if new_task.branch in branches:
+            raise FoundryError(f"task {new_task.id} already exists: there is a {new_task.branch} branch")
         if default_branch is None or default_branch not in branches:  # a repository with no commits yet
-            raise FoundryError(f"the repository has no commits to branch {task.branch} from")
+            raise FoundryError(f"the repository has no commits to branch {new_task.branch} from")
 
-        clone.check_out(NOTES_BRANCH)  # started with no history if it doesn't exist: the first task creates it
-        for status in Status:
-            existing = Task(task.id, status).task_notes_dir
-            if clone.exists(existing):
-                raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {existing}/")
-        clone.write({f"{task.task_notes_dir}/{name}": text for name, text in template.items()})
-        clone.commit(f"Add task {task.id}")
-        clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
+        clone.write({f"{new_task.task_notes_dir}/{name}": text for name, text in template.items()})
+        clone.commit(f"Add task {new_task.id}")
+        clone.push_atomic(from_remote={new_task.branch: default_branch}, from_local=[NOTES_BRANCH])
+        return new_task
 
-    def close(self, task: Task) -> None:
+    def close_task(self, task_id: str) -> Task:
         """Move the open task's notes dir to the closed ones, in one commit pushed to NOTES_BRANCH.
 
-        Refuses a task that is already closed, or in neither.
+        Refuses a task that is already closed, or doesn't exist.
         """
-        assert task.status is Status.OPEN, "close takes an open task"  # a programming error
-        self._move(task, Task.as_closed(task.id), commit=f"Close task {task.id}")
+        task = self.get_task_by_id(task_id)
+        if task.status is Status.CLOSED:
+            raise FoundryError(f"task {task.id} is already closed")
+        return self._move(task, Task.as_closed(task.id), commit=f"Close task {task.id}")
 
-    def reopen(self, task: Task) -> None:
+    def reopen_task(self, task_id: str) -> Task:
         """Move the closed task's notes dir back to the open ones, in one commit pushed to NOTES_BRANCH.
 
-        Refuses a task that is already open, or in neither.
+        Refuses a task that is already open, or doesn't exist.
         """
-        assert task.status is Status.CLOSED, "reopen takes a closed task"  # a programming error
-        self._move(task, Task.as_open(task.id), commit=f"Reopen task {task.id}")
+        task = self.get_task_by_id(task_id)
+        if task.status is Status.OPEN:
+            raise FoundryError(f"task {task.id} is already open")
+        return self._move(task, Task.as_open(task.id), commit=f"Reopen task {task.id}")
 
-    def is_closed(self, task: Task) -> bool:
-        """Whether NOTES_BRANCH holds the task's TASK_FILE under the closed dir."""
-        return self._clone.read(NOTES_BRANCH, Task.as_closed(task.id).task_file) is not None
-
-    def read_turn(self, task: Task) -> str:
+    def read_task_turn(self, task_id: str) -> str:
         """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
 
         FoundryError when the file is missing or empty, saying to name the role instead.
         """
+        task = self.get_task_by_id(task_id)
         text = self._clone.read(NOTES_BRANCH, task.turn_file)
         turn = text.strip() if text is not None else ""
         if not turn:
@@ -76,14 +118,9 @@ class ProjectTasks:
             )
         return turn
 
-    def _move(self, task: Task, destination: Task, *, commit: str) -> None:
+    def _move(self, task: Task, destination: Task, *, commit: str) -> Task:
         clone = self._clone
-        clone.check_out(NOTES_BRANCH)
-        # The two dirs are checked in the order the refusals go: the task's own status is the likelier mistake.
-        if clone.exists(destination.task_notes_dir):
-            raise FoundryError(f"task {task.id} is already {destination.status.name.lower()}")
-        if not clone.exists(task.task_notes_dir):
-            raise FoundryError(f"task {task.id} doesn't exist: {NOTES_BRANCH} has no {task.task_notes_dir}/")
         clone.move_dir(task.task_notes_dir, destination.task_notes_dir)
         clone.commit(commit)
         clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
+        return destination

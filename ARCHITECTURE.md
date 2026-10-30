@@ -12,7 +12,7 @@ Three programs share this repository:
 
 A launch, end to end:
 
-1. `foundry run PROJECT [ROLE] TASK` reads the config, opens or creates the session, and builds the runtime into the kit. Without ROLE, it first reads the task's `TURN` file from `agent-notes`.
+1. `foundry run PROJECT [ROLE] TASK` reads the config, finds the task on `agent-notes`, opens or creates the session, and builds the runtime into the kit. It refuses a closed task, or one that doesn't exist. Without ROLE, it reads the task's `TURN` file too.
 2. `foundry.agent_sandbox` prunes stale ssh-agents, starts this sandbox's own, and creates the sandbox if it doesn't exist. It allows SSH to GitHub, has sbx read the role's token from its file, and checks the sandbox sees exactly the role's key.
 3. The runtime's `session-init` runs in the sandbox: setup as the agent, hardening as root on the first launch, then the check as the agent.
 4. foundry replaces itself with `sbx run --name`, which attaches the agent and sends it the opening prompt. Only `sbx run` passes arguments to the agent; `sbx env run` reads them as more paths. foundry never learns how the agent run ended.
@@ -27,7 +27,7 @@ A launch, end to end:
 | `commands/` | One module per subcommand: `run`, `task`, `repo`, `prune`, `skills`. Each builds its real dependencies in a composition root and passes them to the code that uses them, so the tests can pass fakes instead (design rule 7). |
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches (`SessionVariables`). |
 | `task.py` | `Task` and its `Status`: the one place a task's names are spelled, open and closed paths included. |
-| `project_tasks.py` | `ProjectTasks`: creating, closing and reopening a project's tasks, and reading a task's turn. |
+| `project_tasks.py` | `ProjectTasks`: finding a project's tasks by id, with the status their notes dir gives them; creating, closing and reopening them; reading a task's turn. |
 | `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task` commits and pushes from. |
 | `runtime_build.py` | Builds the runtime into the kit, replacing it only when it changed. |
 | `repo_policy.py`, `github.py` | `foundry repo check`: compares each project's repository with the repo policy, through `gh`. |

@@ -23,7 +23,7 @@ from foundry import paths
 from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, valid_sandbox_name
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
-from foundry.task import NOTES_BRANCH, NOTES_ROOT, Status, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 
 _UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
 """What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
@@ -56,7 +56,6 @@ class SessionVariables:
 
     def to_env(self) -> dict[str, str]:
         """The variables, by name, as the sandbox definition carries them."""
-        assert self.task.status is Status.OPEN, "sessions are built for open tasks"  # a programming error
         return {
             contract.ROLE: self.role_name,
             contract.TASK: self.task.id,

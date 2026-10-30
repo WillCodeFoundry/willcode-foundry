@@ -2,6 +2,7 @@
 turn it launches."""
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -9,10 +10,9 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch, require_open, role_for_turn
+from foundry.commands.run import prepare_launch, role_for_turn, role_to_launch
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
-from foundry.project_tasks import ProjectTasks
+from foundry.project_tasks import ProjectTasks, TaskNotFoundError
 from foundry.session import SessionVariables
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
@@ -126,19 +126,37 @@ def test_run_takes_an_optional_role_between_the_project_and_the_task(argv: list[
     assert (args.project_name, args.role_name, args.task_id) == ("tkt-store", role_name, "t1")
 
 
-def test_a_closed_task_is_refused_saying_how_to_reopen_it(tmp_path: Path, origin: Path) -> None:
+@pytest.fixture
+def tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
+    """The tasks of a repository whose agent-notes holds open t1, whose turn is the reviewer's, and closed t2."""
     seed = tmp_path / "seed"
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    closed = Task.as_closed("t1")
-    (seed / closed.task_notes_dir).mkdir(parents=True)
-    (seed / closed.task_file).write_text("# Task\n")
-    git(seed, "add", closed.task_notes_dir)
-    git(seed, "commit", "-qm", "closed")
+    for a_task in (Task.as_open("t1"), Task.as_closed("t2")):
+        (seed / a_task.task_notes_dir).mkdir(parents=True)
+        (seed / a_task.task_file).write_text("# Task\n")
+        (seed / a_task.turn_file).write_text("reviewer\n")
+    git(seed, "add", ".agent")
+    git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    tasks = ProjectTasks(ProjectClone.init(str(origin), scratch, os.environ))
+    with ProjectTasks.in_scratch_clone(str(origin), os.environ) as tasks:
+        yield tasks
 
-    with pytest.raises(FoundryError, match=r"task t1 is closed.*foundry task reopen tkt-store t1"):
-        require_open(tasks, project_name="tkt-store", task=Task.as_open("t1"))
-    require_open(tasks, project_name="tkt-store", task=Task.as_open("t2"))  # not closed: no refusal
+
+@pytest.mark.parametrize("role_name, launched", [(None, "reviewer"), ("dev", "dev")], ids=["without ROLE", "with ROLE"])
+def test_an_open_task_launches_the_role_named_or_else_the_turn_s(tasks: ProjectTasks, role_name, launched) -> None:
+    assert role_to_launch(tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES) == (
+        launched,
+        Task.as_open("t1"),
+    )
+
+
+@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
+def test_a_closed_task_is_refused_saying_how_to_reopen_it(tasks: ProjectTasks, role_name) -> None:
+    with pytest.raises(FoundryError, match=r"^task t2 is closed: reopen it with `foundry task reopen tkt-store t2`$"):
+        role_to_launch(tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES)
+
+
+@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
+def test_a_task_that_doesn_t_exist_is_refused(tasks: ProjectTasks, role_name) -> None:
+    with pytest.raises(TaskNotFoundError, match=r"^task t9 doesn't exist"):
+        role_to_launch(tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES)

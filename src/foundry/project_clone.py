@@ -88,13 +88,14 @@ class ProjectClone:
     def move_dir(self, src: str, dst: str) -> None:
         """Move the folder ``src``, with everything in it, to ``dst``, both relative to the repository root.
 
-        Creates ``dst``'s parents. Raises FileExistsError if ``dst`` exists. Nothing is staged or committed.
+        Creates ``dst``'s parents. Raises FileExistsError if ``dst`` exists. The move is staged, not committed.
+        git moves the files it tracks as they are, so your excludes and line-ending settings can't drop or change one.
         """
         target = self._work_dir / dst
         if target.exists():
             raise FileExistsError(f"{dst} already exists")
         target.parent.mkdir(parents=True, exist_ok=True)
-        (self._work_dir / src).rename(target)
+        self._git.output("mv", src, dst)
 
     def commit(self, message: str) -> None:
         """Commit everything changed in the checked-out files, signed with your signing key."""
