@@ -33,3 +33,32 @@ No findings. Every refusal is raised before `move_dir`, `commit` and `push_atomi
 Summary: Standards 2 findings, Spec 3, Behaviour 0. None blocks.
 
 Verdict: approved
+
+## Round 2 (reviewing 2585b62)
+
+The branch has not moved since round 1. This round settles what round 1 could not check. The code and the three axis reports stand.
+
+### TASK.md changed by another role
+None. The last allowed change is still `1aeba97`, signed by the architect identity that the planner shares.
+
+### Earlier findings
+- **R1** (Follow-up, `run.py` turn sentinel): still open, deferred.
+- **R2** (Follow-up, duplicated `close_main` and `reopen_main`): accepted as is.
+- **R3** (Follow-up, no test through `run.main`): still open, deferred.
+- **R4** (Follow-up, `is_closed` checks `TASK.md`): accepted as is.
+
+### Checks, run now
+Round 1 could not run them, because the dev group was not installed. I ran them in a throwaway clone at 2585b62 after `uv sync --group dev`:
+- `uv run pytest` (host tier): all passed.
+- `uv run ruff check .` and `ruff format --check .`: clean (146 files already formatted).
+- `uv run mypy`: no issues in 98 source files.
+
+This meets the last acceptance criterion.
+
+### PR description
+The migration snippet, as pasted by the owner from the PR description, meets the criterion. It moves each `.agent/<id>/` to `.agent/tasks/closed/<id>/`, skips `tasks`, signs the commit (`-S`) and pushes without force. I checked it against the current `agent-notes` layout (`.agent/wcf-0025`, `wcf-0026`, `wcf-0027`). I did not run it.
+- **R5 (Follow-up)** The snippet moves every task under `.agent/`, including `wcf-0027` while it is in progress. The owner runs it after merging, and that task is then closed. Accept as is, or let the owner reopen it with the new command.
+
+Summary: no new Blocking findings. One new Follow-up (R5).
+
+Verdict: approved
