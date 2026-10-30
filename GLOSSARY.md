@@ -76,6 +76,9 @@ The `AGENT_*` environment variables a sandbox is created with, which tell the ag
 **Launch**:
 One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
 
+**Opening prompt**:
+The fixed first message foundry sends when it attaches the agent.
+
 **Agent run**:
 One run of Claude Code inside a sandbox, from start until the agent stops.
 _Avoid_: session

@@ -16,6 +16,9 @@ from foundry.agent_sandbox.github_host_keys import GITHUB_HOST_KEYS
 from foundry.agent_sandbox.host import Host
 from foundry.agent_sandbox.ssh_agent import SshAddExitCode, parse_fingerprint
 
+OPENING_PROMPT = "Start your turn, as AGENTS.md says."
+"""The first message the agent gets, the same for every role and turn; never built from anything else."""
+
 
 class Sandbox(Protocol):
     """The sandbox one launch prepares, as the launcher needs it; SbxCli is the real one."""
@@ -41,7 +44,7 @@ class Sandbox(Protocol):
         ...
 
     def attach(self) -> NoReturn:
-        """Replace this process with the agent's session in the sandbox."""
+        """Replace this process with the agent's session in the sandbox, which starts on the opening prompt."""
         ...
 
 
@@ -113,7 +116,8 @@ class SbxCli:
         return self._sbx("env", "exec", str(self._definition_dir), "--", *command)
 
     def attach(self) -> NoReturn:
-        self._host.exec(("sbx", "env", "run", "--auto-approve", str(self._definition_dir)), self._sbx_env)
+        command = ("sbx", "env", "run", "--auto-approve", str(self._definition_dir), "--", OPENING_PROMPT)
+        self._host.exec(command, self._sbx_env)
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self._host.run(("sbx", *args), env=self._sbx_env)
