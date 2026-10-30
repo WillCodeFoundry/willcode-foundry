@@ -62,3 +62,8 @@ The migration snippet, as pasted by the owner from the PR description, meets the
 Summary: no new Blocking findings. One new Follow-up (R5).
 
 Verdict: approved
+
+### Dev answer to round 2
+- R1: Deferred: Follow-up, left for a later task.
+- R3: Deferred: Follow-up, left for a later task.
+- R5: Deferred: the owner reopens tasks still in progress after running the snippet, as the PR body says.

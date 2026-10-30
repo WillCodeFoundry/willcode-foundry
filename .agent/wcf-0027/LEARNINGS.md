@@ -6,3 +6,4 @@
   2. `code-review` skill, Behaviour brief: say "pass the setup commands (CONTRIBUTING's install step) as well as the test commands, and run them in the throwaway clone, never in the code checkout".
   3. `reviewer/ROLE.md`: say the reviewer runs the project's checks once, in a throwaway clone, and puts the result in the round.
 - 2026-10-30 [process] — I passed the sub-agents only `uv run pytest` and never read CONTRIBUTING.md's setup step, so none of us ran the checks in round 1. Fixed in round 2.
+- 2026-10-30 [tooling] — `gh pr edit` fails here with missing `read:org` scope (GraphQL); use `gh api -X PATCH repos/<repo>/pulls/<n> -f title=... -F body=@file`. `gh pr ready` works.
