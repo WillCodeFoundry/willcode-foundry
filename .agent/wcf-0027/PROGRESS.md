@@ -14,19 +14,19 @@
 - PR description rewritten (2026-10-30 15:22 UTC) for the updated `pr` skill: Task section is one line plus a "For you to do" exception, Summary as diffs, Evidence names the failing test. Title unchanged. No code commits since round 2.
 
 - Fresh review round 1 (changes needed) and the architect's DESIGN.md answers (85a2016) arrived. Merged origin/HEAD (12da10e, clean); checks pass. PR #34 back to draft.
+- Fresh review round 1 answered against DESIGN.md (85a2016) in `50180d1`: every finding, R1–R13, says how in REVIEW.md. R5 fixed in the PR description only. CI green on `50180d1`.
+  - API now takes ids: `ProjectTasks.get_task_by_id`, `create_task`, `close_task`, `reopen_task`, `read_task_turn`, `in_scratch_clone`; `TaskNotFoundError`. `run.role_to_launch` replaces `require_open` and the role logic in `main`.
+  - Beyond TASK.md, by DESIGN.md: `foundry run` refuses a missing task too.
+- No merge conflicts this turn (12da10e merged clean).
+- PR #34 is a draft again: it had been marked ready after the old round-2 approval.
+
+Status: ready for review
 
 ## In progress
-- Answering review round 1 against the new DESIGN.md.
 
 ## Next
-1. R4: `ProjectClone.move_dir` stages the move with `git mv` (keeps every blob and mode under global excludes and `core.autocrlf`); test it.
-2. R1, R13, R11: `task.py`: `Status` a plain enum mapped to dirs, no `isinstance`, `from_id_and_status`.
-3. R1, R3, R12: `project_tasks.py`: id-in API (`get_task_by_id`, `create_task`, `close_task`, `reopen_task`, `read_task_turn`), `TaskNotFoundError`, `in_scratch_clone`; `create_task` checks the dirs before the branch; no asserts.
-4. R6, R9: `commands/task.py`: shared arguments, `in_scratch_clone`, shared close/reopen body.
-5. R7, R8: `commands/run.py`: one role-picking function, tested against a real repo with and without ROLE; refuse missing tasks too. `session.py` drops its assert.
-6. R10: tidy the test helpers.
-7. R2: ARCHITECTURE.md launch line and codemap; GLOSSARY "Status" sentence.
-8. R5: fix the PR's Blast Radius.
-9. Answer each finding in REVIEW.md, CI green, turn to reviewer.
+- Reviewer: round 2, against DESIGN.md at 85a2016. Branch head `50180d1`.
+- Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
+- This sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; the new layout applies to sandboxes created after merge.
 
 ## Blockers

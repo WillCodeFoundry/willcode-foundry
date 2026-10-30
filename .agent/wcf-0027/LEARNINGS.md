@@ -49,3 +49,5 @@
      6. When the design stands, write "R<n>: design stands, because <why>" under "In progress" in `PROGRESS.md`.
      7. Commit and push. The turn is the `dev`'s either way. Never edit `REVIEW.md`.
   3. **Boundaries:** allow the "design stands" lines under "In progress" in `PROGRESS.md`, beside `DESIGN.md`, `TURN` and "Blockers".
+- 2026-10-30 [git] — Moving files on disk then `git add --all` re-reads them through your git config: a tracked file matching `core.excludesFile` is dropped, and `core.autocrlf=input` rewrites CRLF blobs. `git mv` moves index entries as they are, and a later `add --all` keeps them. Tested on git 2.53.
+- 2026-10-30 [decision] — The three `foundry task` reports go through one `report(action, ...)` keyed by the action, like `repo.py`'s `report`. Kept `close_main`/`reopen_main` separate: a shared body would need a switch on the action.

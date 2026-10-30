@@ -89,6 +89,7 @@ Why it's a design question, quoting DESIGN.md:
 Who it costs: the next developer adding an operation that depends on the status, such as the list command TASK.md leaves out. They have to pick one of the three lookups or write a fourth, and remember that `task.status` may be wrong.
 
 The question for the architect: should a `Task`'s status be a fact rather than a guess, and should a task's location be found in one place?
+Fixed in `50180d1`. As DESIGN.md (85a2016) answers it: `ProjectTasks.get_task_by_id` is the one lookup, and builds the `Task` from the dir that exists. Every public method takes an id and returns a `Task`; the commands build none. The asserts and `is_closed` are gone. GLOSSARY.md's "Open task, Closed task" names `Status`.
 
 #### R13: DESIGN.md asks for a type guard that goes against ARCHITECTURE.md rule 6
 - **Rule 6** (`ARCHITECTURE.md:80`): "Fail fast, with a message; don't program defensively … Handle only the failures that have happened or that the design expects."
@@ -101,9 +102,11 @@ The rule lets the design name the failures it expects, and DESIGN.md does name t
 - Every other `isinstance` check in `src/` validates outside data: config YAML, frontmatter, rulesets, GitHub's API, settings JSON. This is the only one that re-checks a typed argument.
 
 The question for the architect: does the design expect this failure? R1's answer may settle this too, since it decides how a `Task` gets its status.
+Fixed in `50180d1`. DESIGN.md now drops the guard: `Task.__post_init__` validates the id only, and its `TypeError` test is gone.
 
 ### Standards
 - **R2 (Follow-up), stale launch description.** `ARCHITECTURE.md:15` says `foundry run` reads `agent-notes` only "Without ROLE". Since `src/foundry/commands/run.py:40-45`, it always clones, to refuse a closed task. Who hits it: someone working out why `foundry run PROJECT ROLE TASK` now needs access to the repository.
+Fixed in `50180d1`. `ARCHITECTURE.md:15` says `run` finds the task on `agent-notes` and refuses a closed or missing one; the `project_tasks.py` codemap row names `get_task_by_id`.
 
 Found clean:
 - ADR 0012 supersedes ADR 0006's notes layout without editing it, and its row is added to `docs/adr/README.md`.
@@ -122,11 +125,13 @@ R1 and R13 are above.
   - The test at `tests/test_task.py:194-204` passes only because its closed fixture `c0` has no `task/c0` branch.
 
   Who hits it: the owner reusing a closed task's id.
+  Fixed in `50180d1`. `create_task` looks the task up before the branch check. `test_a_closed_task_that_kept_its_branch_is_refused_naming_its_notes_folder` covers it.
 - **R8 (Follow-up, waits for the design), criterion 10 is shown only by reading `run.main`.** The criterion: "`foundry run PROJECT [ROLE] TASK` refuses a closed task, with or without ROLE, before creating or attaching any sandbox."
   - `tests/test_run.py:129-144` tests `require_open` on its own.
   - No test checks that `main` calls it before `prepare_launch` (`src/foundry/commands/run.py:44` before `:50`), on either path.
 
   The code is right today. Any change to `main`, from R1 or R7, could reorder it without a test failing.
+  Fixed in `50180d1`. `main` now calls `role_to_launch` inside the scratch clone, then `prepare_launch`. `tests/test_run.py` runs `role_to_launch` against a real repository, with and without ROLE, for an open, a closed and a missing task.
 
 Criteria met, with the evidence for each:
 
@@ -157,6 +162,7 @@ No scope creep.
   - The commit is still signed and pushed, with no message. This breaks "every file unchanged".
 
   Reproduced with the `tests/test_task.py` pattern: a real bare repo, a stand-in signer, an open task `t0` holding `TASK.md`, `run.log`, a CRLF file and an executable `sub/x.sh`, and `*.log` in a global excludes file. After `close`, `closed/t0/` had no `run.log`, and the CRLF file's blob had changed. The executable mode was kept. Who hits it: the owner, on a close or reopen, when their global excludes match a file an agent left in the notes. When it happens, the loss is silent.
+Fixed in `50180d1`. `move_dir` stages the move with `git mv`, which keeps each blob and mode. `test_a_move_keeps_files_your_git_config_would_ignore_or_convert` reproduces your case (global `*.log` excludes, `core.autocrlf=input`, a CRLF file); it fails with the old `rename`. The old `move_dir` happy-path test is removed: `git mv` needs tracked files, and the close test covers a nested move.
 
 Found sound:
 - Every refusal raises before the commit and the push.
@@ -174,19 +180,25 @@ Who hits these: the next developer changing this code.
   - `assert role_name is not None` (`:49`), there only for mypy.
 
   `role_name` means "the ROLE given, or None" until `:47`, and "the role to launch" after it. At `d8669a6` this was a single `if role_name is None:` block. Anyone changing how the role is picked has to keep three statements in step.
+  Fixed in `50180d1`. `role_to_launch` decides it once: `if role_name is None:` reads the turn. `require_open` is folded into it.
 - **R6 (Blocking, waits for the design), duplicated composition roots.**
   - `close_main` (`src/foundry/commands/task.py:56-64`) and `reopen_main` (`:67-75`) are copies of each other. They differ only in the factory, the operation called and the lines printed.
   - The scratch-clone setup, `TemporaryDirectory` and then `ProjectTasks(ProjectClone.init(url, Path(scratch_dir), os.environ))`, appears at `commands/task.py:50-51`, `:60-61`, `:71-72` and `run.py:42-43`. Changing how a clone is built means four edits.
   - `create_main` prints through `report()` (`:78`), while `close_main` and `reopen_main` print inline.
+  Fixed in `50180d1`. All four roots use `ProjectTasks.in_scratch_clone`. All three task commands print through one `report(action, project, task)`. `close_main` and `reopen_main` stay separate, five lines each, since sharing a body would need a switch on the action.
 - **R9 (Blocking, independent), duplicated arguments in `add_parser`.** In `src/foundry/commands/task.py`, the PROJECT and TASK arguments are defined at `:23-24` for `create`, and again in the loop at `:38-41` for `close` and `reopen`. The loop variable `parser_` is named only to avoid clashing with the outer `parser`. Someone changing TASK's help can update one copy and miss the other.
+Fixed in `50180d1`. PROJECT and TASK are defined once, in an argparse parent parser all three actions take.
 - **R10 (Blocking, waits for the design), duplicated helpers and a misleading line in `tests/test_task.py`.**
   - `create()` (`:74-78`) and `tasks_of()` (`:305-308`) build the same scratch `ProjectTasks`.
   - The `ProjectClone` setup repeats in the `move_dir` tests (`:270-272`, `:280-282`, `:293-295`).
   - The signature assertion repeats at `:169-170`, `:372-373` and `:385-386`.
   - Close and reopen are picked by an `action` string twice (`:403-406`, `:417`).
   - `seed_notes` calls `tasks_of` for nothing at `:348`, and its comment ("clones nothing yet; the push below does the work") misleads.
+  Fixed in `50180d1`. One `tasks_of` and one `clone_in` helper; `assert_notes_signed_with_your_key`; the refusal tests are parametrized by the `ProjectTasks` method; `seed_notes` became `push_notes(files)`, without the stray call.
 - **R11 (Follow-up, waits for the design), `Status` values are paths.** At `src/foundry/task.py:40-41`, the members' values are dirs, so `self.status.value` at `:87` reads like a status but holds a path. `destination.status.name.lower()` at `src/foundry/project_tasks.py:84` uses the member name as message text, so renaming a member changes a user-facing message.
+Fixed in `50180d1`. `Status` members are `auto()`; `task.py` maps each to its dir in `_STATUS_DIRS`. Messages spell "closed" and "open" themselves.
 - **R12 (Follow-up, waits for the design), `existing` names a path not yet known to exist.** At `src/foundry/project_tasks.py:38`, so `:39` reads `if clone.exists(existing)`.
+Fixed in `50180d1`. The loop is gone; `create_task` names the dir of the task `get_task_by_id` found.
 
 Coverage. Each cell is `-` for checked with nothing found, or a finding id. MN is Mysterious Name, DC Duplicated Code, FE Feature Envy, DCl Data Clumps, PO Primitive Obsession, RS Repeated Switches, SS Shotgun Surgery, DvC Divergent Change, SG Speculative Generality, MC Message Chains, MM Middle Man, RB Refused Bequest.
 
@@ -226,6 +238,7 @@ Coverage. Each cell is `-` for checked with nothing found, or a finding id. MN i
 ### PR description
 PR #34 follows the updated `pr` skill. The title has the `git-conventions` form, the Task section has the paths and one "For you to do" line, the Summary is two diffs, the Evidence names tests that exist, and the merge is a one-way door.
 - **R5 (Follow-up, independent), Blast Radius overstates what `run` refuses.** The PR says that until the snippet runs, "`foundry run` and `close` refuse" every existing task. But `run` without ROLE fails with "has no turn". With ROLE, it starts a sandbox whose notes dir doesn't exist.
+Fixed in the PR description. With `50180d1`, `run` refuses a missing task with or without ROLE, so Blast Radius now says `run`, `close` and `reopen` refuse each existing task as not existing until the snippet runs.
 
 ### Summary
 
