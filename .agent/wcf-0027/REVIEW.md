@@ -1,102 +1,108 @@
 # Review: wcf-0027
 
+The owner asked for a fresh review with the updated `code-review` skill. This file was rewritten from scratch, and the earlier rounds are in the notes branch's history. Finding ids start again at R1.
+
 ## Round 1 (reviewing 2585b62)
 
-TASK.md reviewed: the version written by `1aeba97` ("task drafted and approved"), signed `G` by the architect identity. That identity is shared with the planner, so I cannot tell the two apart. The earlier commit `a137f7d` ("Add task wcf-0027") is the human's, signed. No other commit changed TASK.md.
+The diff is `d8669a6...2585b62`, the merge-base with `origin/main`. It has two commits:
+- `7d64b15` feat(task): close and reopen tasks, with notes split into open and closed
+- `2585b62` docs(task): record the open and closed notes layout
 
 ### TASK.md changed by another role
-None.
+None. This round reviews TASK.md as of `1aeba97`. That commit is signed by the architect identity, which the planner shares, so the two can't be told apart. The only commit before it is `a137f7d`, `Add task wcf-0027`, made by the owner. This round also reviews against DESIGN.md, from `b1caefd`.
 
-### Earlier findings
-None (first round).
+### Checks
+The Spec and Behaviour reviewers ran these in throwaway clones at 2585b62, after `uv sync --group dev`:
+
+| Check | Result |
+|---|---|
+| `uv run pytest` (host tier) | 590 passed, 27 deselected |
+| `uv run ruff check .` and `ruff format --check .` | clean, 146 files |
+| `uv run mypy` | no issues in 98 files |
+| `tests/test_docs.py` | passes |
 
 ### Standards
-No hard violations. Rules 1, 3 and 6 of ARCHITECTURE.md hold. ADR 0012 supersedes only the layout in ADR 0006 and leaves 0006 unedited. GLOSSARY.md is followed.
+- **R1 (Follow-up), possible Mysterious Name: `Task.status`.** At `src/foundry/task.py:46-54`, `status` holds the caller's expectation, not the task's real status. The uses read as fact:
+  - `src/foundry/commands/run.py:38` builds `Task.as_open(args.task_id)` before line 44 checks whether the task is open.
+  - `tests/test_run.py:143` gets "t1 is closed" from `require_open(..., task=Task.as_open("t1"))`.
 
-- **R1 (Follow-up)** `src/foundry/commands/run.py:45-49`: `turn` is `None` when a role was given, and `assert role_name is not None` is there only for mypy. Nest the `role_for_turn` call in the `with` block's `if role_name is None:` branch and drop the assert.
-- **R2 (Follow-up)** `src/foundry/commands/task.py`, `close_main` and `reopen_main`: near-duplicate composition roots (mild Duplicated Code). They follow `create_main`, as the task asks. Accept as is.
+  "Status" is also not in `GLOSSARY.md`, and AGENTS.md ("Docs") says to add a term you introduce. Downgraded from Blocking: DESIGN.md decides `Task(id, status)` and that "a task's status is the caller's expectation", and both docstrings say so. Who hits it: a later dev who reads `task.status` as fact. Direction: add "status" to the glossary as the expected notes location. Renaming is a design question for the owner.
+- **R2 (Follow-up), stale launch description.** `ARCHITECTURE.md:15` says `foundry run` reads `agent-notes` only "Without ROLE". Since `src/foundry/commands/run.py:40-45`, it always clones, to refuse a closed task. Who hits it: someone working out why `foundry run PROJECT ROLE TASK` now needs access to the repository. Direction: mention the closed-task check in step 1.
+
+Dropped, because DESIGN.md decides them:
+- The `isinstance(self.status, Status)` → `TypeError` guard (`task.py:57-58`), flagged under design rule 6. DESIGN.md: "a non-`Status` is a `TypeError`".
+- `is_closed` testing for `TASK.md` while `create` and `_move` test for the dir, flagged as Duplicated Code. DESIGN.md: "`is_closed` reads the closed task's `TASK.md`".
+
+Found clean:
+- ADR 0012 supersedes ADR 0006's notes layout without editing it, and its row is added to `docs/adr/README.md`.
+- The paths are spelled once, in `task.py` (design rule 1).
+- `move_dir` stays inside `ProjectClone` (design rule 3).
+- The glossary entries match the "Terms and decisions" section of TASK.md.
+- Nothing is Speculative Generality.
 
 ### Spec
-Every acceptance criterion has code and a test; none is missing, and there is no scope creep.
+- **R3 (Blocking), `create` on a closed task's id doesn't name the dir.**
+  - The criterion: "`foundry task create` refuses … when `.agent/tasks/open/<id>/` or `.agent/tasks/closed/<id>/` exists. The message names the existing dir."
+  - `src/foundry/project_tasks.py:31-32` refuses on an existing `task/<id>` branch before the notes dirs are checked (lines 37-40).
+  - `close` keeps `task/<id>`, as the task requires, so a closed task normally still has its branch.
+  - A reproduction, closing `t5` and then running `create` on `t5`, gave `task t5 already exists: there is a task/t5 branch`. That message names neither dir and doesn't say the task is closed.
+  - The test at `tests/test_task.py:194-204` passes only because its closed fixture `c0` has no `task/c0` branch.
 
-- **R3 (Follow-up)** `tests/test_run.py:129`: the closed-task refusal is tested through `require_open`, not through `main`. The code is correct (`require_open` at `run.py:44` runs before `prepare_launch` at `run.py:50`, on both the with-ROLE and no-ROLE paths), but a reordering would go unnoticed. Accept as is, or add a `main` test.
-- **R4 (Follow-up)** `src/foundry/project_tasks.py:61-63`: `is_closed` tests for the closed `TASK.md`, while `close` and `reopen` test the dir. Only a hand-edited branch can make them disagree. Accept as is.
-- **Noted, accepted:** `tests/test_task.py` was not split as DESIGN.md says. The Task and `ProjectTasks` tests share the repository fixtures, so one file is fine.
+  Who hits it: the owner reusing a closed task's id. That's rare, but it is the case the criterion describes. Direction: test a closed task that still has its branch, then make the refusal name the dir.
+
+Criteria met, with the evidence for each:
+
+| Criterion | Evidence |
+|---|---|
+| 1. `create` writes to `open/` | `project_tasks.py:41`; the create test in `tests/test_task.py` |
+| 2. `create` refuses on an existing dir | partial, see R3 |
+| 3. Session variables | `Task.task_notes_dir`; `tests/test_session.py`, `tests/test_task_contract.py`; `AGENT_NOTES_ROOT` stays `.agent` |
+| 4. `close` moves the dir unchanged, in one signed commit | `tests/test_task.py:359`: the files, the title, one commit, the signature, branches unchanged. But see R4 |
+| 5. `reopen` makes the reverse move | `tests/test_task.py:377` |
+| 6, 7. The four refusals push nothing | `tests/test_task.py:398` |
+| 8. No confirmation, `TURN`, PR check, branch, sandbox or `sessions/` | read in `_move`, `close_main` and `reopen_main`; branches unchanged in the test at `:359` |
+| 9. No signing key | `tests/test_task.py:411`, the same pattern as `create`'s test at `:178` |
+| 10. `run` refuses a closed task, with or without ROLE | `require_open` at `run.py:44` runs before `prepare_launch` at `:50`. It is tested at `tests/test_run.py:129`, and its order in `main` was checked only by reading |
+| 11. `run` reads `open/<id>/TURN` | `run.py:45`; `tests/test_run.py` |
+| 12. README table and `agent-notes` row | `tests/test_docs.py` passes |
+| 13. GLOSSARY.md and ADR 0012 | they match "Terms and decisions", including the "Projects and tasks" row |
+| 14. The migration snippet in the PR | present in PR #34. It was run without `-S` on a toy bare repo: one commit, every move a 100% rename, pushed. A second run stops at `commit` with nothing to commit, which does no harm |
+| 15. Host tier, ruff, mypy | pass, see Checks |
+
+No scope creep. The `ARCHITECTURE.md` codemap rows and the assertion in `session.py` are asked for in DESIGN.md.
 
 ### Behaviour
-No findings. Every refusal is raised before `move_dir`, `commit` and `push_atomic`. A dir present under both `open/` and `closed/` is refused by `close`, `reopen` and `run`, and nothing is pushed. A signing failure happens before the push, and the push is never forced. Bad ids are a `FoundryError` before any git call. An old-layout task is reported as "doesn't exist", as the task says.
+- **R4 (Blocking), `close` and `reopen` can silently drop or rewrite notes files.**
+  - `src/foundry/project_tasks.py:87-88` moves the dir in the checked-out files (`ProjectClone.move_dir`, `src/foundry/project_clone.py:88-97`). Then `commit` re-stages everything with `git add --all` (`project_clone.py:101`).
+  - That add runs under the owner's own git config, which `ProjectClone` is given so that commits are signed.
+  - A tracked notes file that matches the owner's global excludes (`core.excludesFile`) is deleted at the old path and never added at the new one.
+  - With `core.autocrlf=input`, a file with CRLF line endings is rewritten.
+  - The commit is still signed and pushed, with no message. This breaks "every file unchanged".
 
-### Not checked by me
-- The PR #34 description (the migration snippet): `gh` returns HTTP 401 in this sandbox. The dev's PROGRESS.md says it is there.
-- pytest, ruff and mypy: none is installed in this sandbox, and `uv run pytest` failed to spawn for the Behaviour reviewer. I rely on the dev's report and on CI being green. The dev should confirm both the PR body and the checks in the answer.
+  Reproduced with the `tests/test_task.py` pattern: a real bare repo, a stand-in signer, an open task `t0` holding `TASK.md`, `run.log`, a CRLF file and an executable `sub/x.sh`, and `*.log` in a global excludes file. After `close`, `closed/t0/` had no `run.log`, and the CRLF file's blob had changed (`c30dea8` became `422c2b7`). The executable mode was kept.
 
-Summary: Standards 2 findings, Spec 3, Behaviour 0. None blocks.
+  Who hits it: the owner, on any close or reopen, when their global excludes match a file an agent left in the notes. Excludes like `*.log`, `.env*` and `*.swp` are common. Notes are mostly `.md`, so the match is the uncommon part. When it happens, the loss is silent. Direction: move the files in git's index, so that ignore rules and line-ending filters never apply. Test first, with an ignored file and a CRLF file, and check that the blobs and modes are identical after the move.
 
-Verdict: approved
+Found sound:
+- Every refusal raises before the commit and the push: already closed, already open, doesn't exist, no signing key, and no `agent-notes` branch.
+- `run` refuses a closed task, with or without ROLE, before `prepare_launch`.
+- With no `agent-notes` branch, `is_closed` returns false.
+- Upper-case ids are lowercased.
+- `move_dir`'s `FileExistsError` can't be reached.
 
-## Round 2 (reviewing 2585b62)
-
-The branch has not moved since round 1. This round settles what round 1 could not check. The code and the three axis reports stand.
-
-### TASK.md changed by another role
-None. The last allowed change is still `1aeba97`, signed by the architect identity that the planner shares.
-
-### Earlier findings
-- **R1** (Follow-up, `run.py` turn sentinel): still open, deferred.
-- **R2** (Follow-up, duplicated `close_main` and `reopen_main`): accepted as is.
-- **R3** (Follow-up, no test through `run.main`): still open, deferred.
-- **R4** (Follow-up, `is_closed` checks `TASK.md`): accepted as is.
-
-### Checks, run now
-Round 1 could not run them, because the dev group was not installed. I ran them in a throwaway clone at 2585b62 after `uv sync --group dev`:
-- `uv run pytest` (host tier): all passed.
-- `uv run ruff check .` and `ruff format --check .`: clean (146 files already formatted).
-- `uv run mypy`: no issues in 98 source files.
-
-This meets the last acceptance criterion.
+Left alone, as out of scope: tasks still in the old `.agent/<id>/` layout, and closing a task while its session is still pushing notes.
 
 ### PR description
-The migration snippet, as pasted by the owner from the PR description, meets the criterion. It moves each `.agent/<id>/` to `.agent/tasks/closed/<id>/`, skips `tasks`, signs the commit (`-S`) and pushes without force. I checked it against the current `agent-notes` layout (`.agent/wcf-0025`, `wcf-0026`, `wcf-0027`). I did not run it.
-- **R5 (Follow-up)** The snippet moves every task under `.agent/`, including `wcf-0027` while it is in progress. The owner runs it after merging, and that task is then closed. Accept as is, or let the owner reopen it with the new command.
+PR #34 follows the updated `pr` skill. The title has the `git-conventions` form, the Task section has the paths and one "For you to do" line, the Summary is two diffs, the Evidence names tests that exist, and the merge is a one-way door. The extra "Migration" section is needed for criterion 14.
+- **R5 (Follow-up), Blast Radius overstates what `run` refuses.** The PR says that until the snippet runs, "`foundry run` and `close` refuse" every existing task. But `run` without ROLE fails in `read_turn` with "has no turn". With ROLE it starts a sandbox whose `AGENT_TASK_NOTES_DIR` doesn't exist on `agent-notes`. Who hits it: the owner merging and then running `foundry run` before the snippet. Direction: say so, and say to run the snippet before any `foundry run`.
 
-Summary: no new Blocking findings. One new Follow-up (R5).
+Summary:
 
-Verdict: approved
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| Standards | 2 | 0 | R1, `Task.status` reads as fact |
+| Spec | 1 | 1 | R3, `create` on a closed id doesn't name the dir |
+| Behaviour | 1 | 1 | R4, a move can silently drop ignored files or rewrite CRLF ones |
+| PR description | 1 | 0 | R5 |
 
-### Dev answer to round 2
-- R1: Deferred: Follow-up, left for a later task.
-- R3: Deferred: Follow-up, left for a later task.
-- R5: Deferred: the owner reopens tasks still in progress after running the snippet, as the PR body says.
-
-## Round 3 (reviewing 2585b62)
-
-The branch has not moved since round 1. This round checks only the PR #34 description that the dev rewrote for the updated `pr` skill (updated 2026-10-30 15:22 UTC). I read it through the public API, since `gh` gets HTTP 401 here.
-
-### TASK.md changed by another role
-None. The last allowed change is still `1aeba97`, signed by the architect identity that the planner shares.
-
-### Earlier findings
-- **R1** (Follow-up, `run.py` turn sentinel): deferred.
-- **R2**: accepted as is (round 2).
-- **R3** (Follow-up, no test through `run.main`): deferred.
-- **R4**: accepted as is (round 2).
-- **R5** (Follow-up, the snippet closes `wcf-0027` too): deferred. The PR's "For you to do" line now tells the owner to reopen tasks still in progress, so this is covered.
-
-### PR description against the `pr` skill
-- Title `[wcf-0027] feat(task): close and reopen tasks`: matches the `git-conventions` form.
-- Task: both paths are written out. "All 15 acceptance criteria" matches TASK.md, which has 15. There is one exception line, "For you to do", and no criteria are listed as met. It agrees with the Out of scope items: the owner runs the migration and deletes old sandboxes.
-- Summary: two diffs, one for the `agent-notes` layout and one for the files. Both are small and say what matters.
-- Evidence: names a test that exists (`tests/test_task.py:359`, and `:398` for the refusals), then gives the round 2 check results and says CI is green. The skill asks for the test as pseudocode, and this names and describes it in prose. That is clear enough, so I accept it.
-- Merge Danger: the door is one-way and the reason is right: once the migration runs, the data has to be moved back by hand. The blast radius is one word.
-- The extra "Migration" section is not in the template, but TASK.md requires the snippet to be in the description. I accept it. I ran the snippet's `mkdir` and `git mv` loop on a throwaway repo with two old-layout dirs. Both moved under `.agent/tasks/closed/` and `tasks` was skipped. I did not run the commit or the push.
-
-### New findings
-- **R6 (Follow-up)** Merge Danger, Blast Radius: "Until the snippet runs, foundry reports every existing task as not existing, so `foundry run` and `close` refuse them." This is only partly true for `foundry run`:
-  - Without ROLE, `run` fails in `read_turn` with "has no turn … Name the role to run instead". That message does not say the task doesn't exist.
-  - With ROLE, `require_open` passes, because `is_closed` is false, and `run` creates a sandbox whose `AGENT_TASK_NOTES_DIR` (`.agent/tasks/open/<id>`) does not exist on `agent-notes`.
-
-  Suggested wording: "Until the snippet runs, `close` and `reopen` report every existing task as not existing, `foundry run` without ROLE finds no turn, and `foundry run` with ROLE starts a sandbox whose notes dir doesn't exist. Run the snippet before any `foundry run`." The code is as TASK.md asks: refusing unmigrated tasks is out of scope. Only the description is wrong.
-
-Summary: the description follows the `pr` skill. One new Follow-up (R6), and no Blocking findings.
-
-Verdict: approved
+Verdict: changes needed
