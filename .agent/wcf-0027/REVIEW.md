@@ -589,13 +589,13 @@ The practices it checks:
 
 ruff doesn't select pep8-naming (`N`) or flake8-builtins (`A`), so none of this is tool-checked. GLOSSARY.md and DESIGN.md override generic practice, and a name DESIGN.md fixes would be a design question.
 
-**Owner's ruling:** the naming problems block. After this round was first written with R21–R25 as Follow-ups, the owner ruled that they block, overriding the Standards bar for names in this task. This round was relabelled in place before the dev's turn. The owner made this call after round 3, so the turn goes to the dev, as the owner directed, not to `human`.
+**Owner's ruling:** the naming problems block. After this round was first written with R21–R25 as Follow-ups, and before R26 was added at the owner's request, the owner ruled that they block, overriding the Standards bar for names in this task. This round was relabelled in place before the dev's turn. The owner made this call after round 3, so the turn goes to the dev, as the owner directed, not to `human`.
 
 ### Who reads what
 
 | Role | Read | Then |
 |---|---|---|
-| **Dev** | R21–R25, all Blocking by the owner's ruling | Fix each one test-first, and answer it by id |
+| **Dev** | R21–R26, all Blocking by the owner's ruling | Fix each one test-first, and answer it by id |
 | **Owner** | R16 from round 2 | Say whether R16 should block |
 
 There are no design questions this round.
@@ -642,16 +642,25 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
 
   Who hits it: a reader of `main` looking for where a closed task is refused. Direction: name it for the check as well as the result.
 
+- **R26 (Blocking), `if_open` and `if_closed` are one letter from `is_open` and `is_closed`.**
+  - `src/foundry/project_tasks.py:45` defines `if_open, if_closed`, and `:46` defines `is_open, is_closed` from them. All four are used together through `:57`, for example `return if_open if is_open else if_closed`.
+  - Names in one scope that differ by one character are easy to misread and mistype, as `if if_open:` against `if is_open:`.
+  - They hold `Task`s, but `if_` reads like the start of a condition, or a boolean.
+  - The "doesn't exist" message at `:53-54` builds its text from `if_open`, which names a task that is in neither place.
+  - R17 (round 2) led to this rename, and round 3 closed R17 on the names reading as "where the task could be". Round 4's brief listed them as settled, so they weren't judged fresh. R17 stays closed, since `opened` and `closed` are gone. This is a new finding about the names that replaced them.
+
+  Who hits it: anyone editing `get_task_by_id`, every time they read `:45-57`. Direction: name them for the tasks they hold, in words that don't differ from `is_open` and `is_closed` by a letter.
+
 Checked and not raised:
 - **Names DESIGN.md fixes:** `get_task_by_id` (its `get_` hides a checkout and raises domain errors), `as_open` and `as_closed`, `OPEN_DIR` and `CLOSED_DIR`, `from_id_and_status`, `in_scratch_clone`, `move_dir`, `ProjectTasks`, `TaskNotFoundError` and `Status`. They would be design questions, and none misleads enough to raise one.
 - **Shadowing:** `task` and `new_task` locals in `project_tasks.py` shadow nothing, since it imports names, not the `task` module. `commands/task.py` uses `created`, `closed`, `reopened` and `changed`, and the tests use `a_task`, to avoid shadowing the `task` module. The `tasks` fixture's same-named local is the pytest idiom.
 - **Predicates:** `is_open` and `is_closed`.
 - **Other names:** `found`, `tree`, `work` and `task_arguments` are local, or explained where they are used.
-- **Settled earlier:** `if_open` and `if_closed`, `_STATUS_DIRS`, the `CLOSED` outcome, `Outcome.next_command` and `moved`.
+- **Settled earlier:** `_STATUS_DIRS`, the `CLOSED` outcome, `Outcome.next_command` and `moved`.
 
-Coverage: every module, class, function and method the branch adds or renames was checked. Each is `-` except `_move` (R23), `Outcome.done` (R24), `role_to_launch` (R25), and the test names listed under R22.
+Coverage: every module, class, function and method the branch adds or renames was checked. Each is `-` except `_move` (R23), `Outcome.done` (R24), `role_to_launch` (R25), `get_task_by_id`'s `if_open` and `if_closed` (R26), and the test names listed under R22.
 
 ### Summary
-Names: 4 new findings, R22–R25, and R21 from round 3. All five block, by the owner's ruling. The worst is R22, the glossary-avoided "notes folder" in nine test names. R16 still waits on the owner.
+Names: 5 new findings, R22–R26, and R21 from round 3. All six block, by the owner's ruling. The worst is R22, the glossary-avoided "notes folder" in nine test names. R16 still waits on the owner.
 
 Verdict: changes needed
