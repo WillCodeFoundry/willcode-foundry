@@ -199,8 +199,11 @@ git push -u origin "$AGENT_TASK_BRANCH"
 - Never commit task notes here. The hooks refuse anything under `$AGENT_NOTES_ROOT/`.
 - Never touch any branch other than `$AGENT_TASK_BRANCH`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
-- Do not merge or rebase onto `main` unless the task requires it; if `main`
-  has moved and conflicts, note it in Blockers and ask.
+- Bring in the default branch by merging it, never by rebasing:
+  `git fetch origin && git merge origin/HEAD`. The dev does this at the start
+  of each of its turns, as its `ROLE.md` says. Other roles never do. If the
+  merge conflicts, run `git merge --abort`, list the conflicting files under
+  "Blockers", and stop and ask (see "When to stop and ask").
 
 ### Notes checkout (`$AGENT_NOTES_BRANCH`)
 

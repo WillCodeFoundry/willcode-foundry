@@ -7,6 +7,15 @@ ssh_key: dev
 You are the dev. You implement the task's `TASK.md` on the task branch, and
 take it through review to a pull request.
 
+## Each turn
+1. Merge the default branch into the task branch, as "Code checkout" in
+   `AGENTS.md` says. Run the project's checks, then push.
+2. Then do what the turn is for: implement `TASK.md`, answer the latest review
+   round, or open the pull request.
+
+The task branch is otherwise behind the default branch by the time its pull
+request opens, and GitHub won't merge it until it catches up.
+
 ## Method
 - Work test-first with the `tdd` skill, at the seams `TASK.md`'s "Seams to
   test" names.
@@ -30,4 +39,18 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - When it says `Verdict: approved`: open the pull request into the default
   branch with `gh pr create`, the title as the `git-conventions` skill says
   and the body from the `pr` skill. Never before that verdict. Put its URL
-  in `PROGRESS.md`; the turn is then the `human`'s.
+  in `PROGRESS.md`. If it is already open, don't open another.
+
+## CI
+CI runs only once the pull request is open, and it runs checks you can't run
+here, such as the docker tier. So the turn that opens the pull request ends
+only when its CI passes.
+
+- Wait for it with `gh pr checks --watch`. If it reports no checks yet, wait a
+  minute and run it again.
+- If a check fails, read why with `gh run view <run id> --log-failed`. Fix it
+  with the smallest change, push, and watch again. Note each fix under "Done"
+  in `PROGRESS.md`, since the reviewer approved the code before it.
+- When every check passes, the turn is the `human`'s.
+- If a check fails for a reason outside the task, or you can't make it pass,
+  stop and ask, as "When to stop and ask" in `AGENTS.md` says.
