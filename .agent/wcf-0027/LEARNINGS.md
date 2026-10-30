@@ -28,3 +28,8 @@
 
      When a round has a design question still open, the reviewer writes `human` in `TURN`, not `dev`. The owner then sends it to the architect or accepts the code as is. Findings fixable inside the current design stay with the dev.
   3. **Matching change to `reviewer/ROLE.md`:** add this case beside the round 3 exception for writing `human`.
+- 2026-10-30 [proposal] — Design questions found in review: routing them back to the architect, agreed with the owner. The flow is reviewer → human → architect → dev → reviewer. The architect's change to DESIGN.md is approved by the human, so it needs no review turn of its own. Round 2 checks it together with the code. Proposed changes:
+  1. **`architect/ROLE.md`, Method:** when the turn comes from a review rather than the planner, start from REVIEW.md's "Design questions" and "Waits for the design" in the latest round, not from TASK.md alone. Answer each question by changing DESIGN.md, or by agreeing with the human that the design stands.
+  2. **`architect/ROLE.md`, step 6:** "With `DESIGN.md` pushed, or once you and the human agree it stands, the turn is the `dev`'s." When the design stands, say so for each question under "In progress" in PROGRESS.md, since the architect can't write REVIEW.md.
+  3. **`reviewer/ROLE.md`:** check DESIGN.md's history as TASK.md's is checked. Each change must be signed by the architect's identity. Report any other change at the top of the round.
+  4. **`reviewer/ROLE.md` / `code-review`:** in the round after an architect turn, settle each design question (closed, or accepted as is). Re-judge every "Waits for the design" finding against the new DESIGN.md, and treat the DESIGN.md diff as part of the fix diff.
