@@ -11,7 +11,7 @@ import pytest
 
 from agent_runtime.git import GitError
 from foundry import cli, task
-from foundry.commands.task import report
+from foundry.commands.task import CLOSED, CREATED, REOPENED, Outcome, report
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError
@@ -263,15 +263,15 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "action, changed, lines",
+    "outcome, changed, lines",
     [
-        ("create", Task.as_open("t1"), ["created task t1 in store", "run it with: foundry run store t1"]),
-        ("close", Task.as_closed("t1"), ["closed task t1 in store", "reopen it with: foundry task reopen store t1"]),
-        ("reopen", Task.as_open("t1"), ["reopened task t1 in store", "run it with: foundry run store t1"]),
+        (CREATED, Task.as_open("t1"), ["created task t1 in store", "run it with: foundry run store t1"]),
+        (CLOSED, Task.as_closed("t1"), ["closed task t1 in store", "reopen it with: foundry task reopen store t1"]),
+        (REOPENED, Task.as_open("t1"), ["reopened task t1 in store", "run it with: foundry run store t1"]),
     ],
 )
-def test_the_report_says_what_was_done_and_what_comes_next(action: str, changed: Task, lines: list[str]) -> None:
-    assert report(action, "store", changed) == lines
+def test_the_report_says_what_was_done_and_what_comes_next(outcome: Outcome, changed: Task, lines: list[str]) -> None:
+    assert report(outcome, "store", changed) == lines
 
 
 def test_create_takes_a_project_and_a_task() -> None:

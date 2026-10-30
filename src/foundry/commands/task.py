@@ -2,6 +2,7 @@
 
 import argparse
 import os
+from typing import NamedTuple
 
 from foundry import config, paths, task
 from foundry.project_tasks import ProjectTasks
@@ -50,7 +51,7 @@ def create_main(args: argparse.Namespace) -> int:
     template = task.load_template(paths.task_template_dir(foundry_root))
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
         created = tasks.create_task(args.task_id, template)
-    print("\n".join(report("create", project.name, created)))
+    print("\n".join(report(CREATED, project.name, created)))
     return 0
 
 
@@ -59,7 +60,7 @@ def close_main(args: argparse.Namespace) -> int:
     project = config.load(paths.find_foundry_root()).project(args.project_name)
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
         closed = tasks.close_task(args.task_id)
-    print("\n".join(report("close", project.name, closed)))
+    print("\n".join(report(CLOSED, project.name, closed)))
     return 0
 
 
@@ -68,18 +69,24 @@ def reopen_main(args: argparse.Namespace) -> int:
     project = config.load(paths.find_foundry_root()).project(args.project_name)
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
         reopened = tasks.reopen_task(args.task_id)
-    print("\n".join(report("reopen", project.name, reopened)))
+    print("\n".join(report(REOPENED, project.name, reopened)))
     return 0
 
 
-# By action: what it did to the task, and what you do next.
-_REPORTS = {
-    "create": ("created", "run it with: foundry run"),
-    "close": ("closed", "reopen it with: foundry task reopen"),
-    "reopen": ("reopened", "run it with: foundry run"),
-}
+class Outcome(NamedTuple):
+    """What an action did to the task, and what you do next."""
+
+    done: str
+    next_command: str
 
 
-def report(action: str, project_name: str, changed: task.Task) -> list[str]:
-    done, next_command = _REPORTS[action]
-    return [f"{done} task {changed.id} in {project_name}", f"{next_command} {project_name} {changed.id}"]
+CREATED = Outcome("created", "run it with: foundry run")
+CLOSED = Outcome("closed", "reopen it with: foundry task reopen")
+REOPENED = Outcome("reopened", "run it with: foundry run")
+
+
+def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]:
+    return [
+        f"{outcome.done} task {changed.id} in {project_name}",
+        f"{outcome.next_command} {project_name} {changed.id}",
+    ]
