@@ -15,7 +15,7 @@ metadata:
 
 Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
-**Who writes what.** Only the planner talks with the human, so the challenges below happen in planner sessions, and what they settle goes into the task's `TASK.md`, under "Terms and decisions", not into the project's files. The dev writes to the project's `GLOSSARY.md` and `docs/adr/`, on the task branch, exactly what that section lists, and nothing else. Any other term or decision a role thinks deserves recording goes in `LEARNINGS.md` as a `[proposal]` entry; a question that blocks the work follows "When to stop and ask" in `AGENTS.md`.
+**Who writes what.** Only the planner and the architect talk with the human, so the challenges below happen in their sessions. What they settle goes into the task's notes, not into the project's files: the planner's into `TASK.md`, under "Terms and decisions", and the architect's into `DESIGN.md`, under "Design rules and ADRs". The dev writes to the project's `GLOSSARY.md` and `docs/adr/`, on the task branch, exactly what those sections list, and nothing else. Any other term or decision a role thinks deserves recording goes in `LEARNINGS.md` as a `[proposal]` entry; a question that blocks the work follows "When to stop and ask" in `AGENTS.md`.
 
 ## File structure
 
@@ -85,4 +85,4 @@ Only offer an ADR when all three are true:
 
 If any of the three is missing, skip the ADR.
 
-The planner offers it to the human; once they agree, it goes under "Terms and decisions" in the `TASK.md` draft as a decision to record as an ADR, with its context, the decision and the alternatives rejected. The dev writes each ADR that section lists into `docs/adr/`, in the format in [ADR-FORMAT.md](./ADR-FORMAT.md). Any other decision you think meets all three goes in `LEARNINGS.md` as a `[proposal]` entry.
+The planner or the architect offers it to the human. Once they agree, it goes in the draft as a decision to record as an ADR, with its context, the decision and the alternatives rejected: under "Terms and decisions" in `TASK.md`, or "Design rules and ADRs" in `DESIGN.md`. The dev writes each ADR those sections list into `docs/adr/`, in the format in [ADR-FORMAT.md](./ADR-FORMAT.md). Any other decision you think meets all three goes in `LEARNINGS.md` as a `[proposal]` entry.
