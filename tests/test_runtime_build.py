@@ -21,7 +21,7 @@ def kit_dir(tmp_path: Path) -> Path:
 
 
 def files_in(archive: Path) -> list[str]:
-    """The archive's files, without the entries zipapp adds for folders."""
+    """The archive's files, without the entries for its folders."""
     return [name for name in zipfile.ZipFile(archive).namelist() if not name.endswith("/")]
 
 
@@ -67,6 +67,25 @@ def test_a_rebuild_of_unchanged_source_leaves_the_file_alone(kit_dir: Path) -> N
     inode = build_runtime(kit_dir).stat().st_ino
 
     assert build_runtime(kit_dir).stat().st_ino == inode
+
+
+def test_the_same_files_build_the_same_bytes_whatever_order_and_time_they_were_written_in(tmp_path: Path) -> None:
+    """Otherwise a rebuild of unchanged source replaces the file under a sandbox that is starting. CI saw it once
+    on Python 3.11, whose zipapp adds files in the order the file system lists them, with their times."""
+    built = []
+    for name, order, written_at in (
+        ("first", ("a.py", "b.py", "__main__.py"), 1_600_000_000),
+        ("second", ("__main__.py", "b.py", "a.py"), 1_700_000_000),
+    ):
+        source, kit = tmp_path / f"source-{name}", tmp_path / f"kit-{name}"
+        source.mkdir()
+        kit.mkdir()
+        for file in order:
+            (source / file).write_text(f"# {file}\n")
+            os.utime(source / file, (written_at, written_at))
+        built.append(build_runtime(kit, source=source).read_bytes())
+
+    assert built[0] == built[1]
 
 
 def test_every_python_file_of_the_package_is_built_in_its_folders_too(kit_dir: Path, tmp_path: Path) -> None:
