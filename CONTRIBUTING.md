@@ -4,8 +4,19 @@ How to develop and test the foundry. Read [ARCHITECTURE.md](ARCHITECTURE.md) fir
 
 ## Development
 
+### Set up the development environment
+
+Install the dev dependencies (pytest, ruff, mypy) before running any check:
+
 ```console
 $ uv sync --group dev
+```
+
+They aren't installed by default, since `pyproject.toml` sets `default-groups = []`. A plain `uv sync` removes them again, so run this one after it.
+
+### Run the tests and checks
+
+```console
 $ uv run pytest                  # the host tier; about 20 seconds
 $ uv run pytest -m docker        # the docker tier; needs a Docker daemon
 $ uv run pytest -m sbx           # the sbx tier, by hand: see below
