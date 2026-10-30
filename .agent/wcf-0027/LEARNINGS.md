@@ -18,3 +18,13 @@
   6. **The aggregator drops a smell that DESIGN.md decides, silently.** → Keep it as "design question for the owner", named in the round, not dropped. The owner decides, and the architect changes DESIGN.md if so.
   7. **A criterion shown only by reading is not raised as a finding.** The Spec brief says it is partial, but the reviewer listed it in the table and moved on. → Spec brief: "Every partial criterion is a finding."
   - Matching change to `reviewer/ROLE.md` and `dev/ROLE.md`: the dev may defer a Design Follow-up only with the owner's say in REVIEW.md, not on their own.
+- 2026-10-30 [proposal] — Amends the `code-review` proposal above, agreed with the owner:
+  1. **Name the fourth reviewer "Smells", not "Design".** "Design" reads as checking against DESIGN.md, which is Spec's job.
+  2. **Design questions go to the owner.** A finding is a "design question" when any of these holds:
+     - its fix would change a decision in DESIGN.md (an interface, a module boundary or a type);
+     - DESIGN.md asks for something a project rule forbids (here: the `TypeError` guard against ARCHITECTURE.md rule 6);
+     - one smell recurs from one decision;
+     - no honest local fix exists.
+
+     When a round has a design question still open, the reviewer writes `human` in `TURN`, not `dev`. The owner then sends it to the architect or accepts the code as is. Findings fixable inside the current design stay with the dev.
+  3. **Matching change to `reviewer/ROLE.md`:** add this case beside the round 3 exception for writing `human`.
