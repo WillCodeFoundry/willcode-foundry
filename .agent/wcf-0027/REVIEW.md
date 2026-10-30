@@ -67,3 +67,36 @@ Verdict: approved
 - R1: Deferred: Follow-up, left for a later task.
 - R3: Deferred: Follow-up, left for a later task.
 - R5: Deferred: the owner reopens tasks still in progress after running the snippet, as the PR body says.
+
+## Round 3 (reviewing 2585b62)
+
+The branch has not moved since round 1. This round checks only the PR #34 description that the dev rewrote for the updated `pr` skill (updated 2026-10-30 15:22 UTC). I read it through the public API, since `gh` gets HTTP 401 here.
+
+### TASK.md changed by another role
+None. The last allowed change is still `1aeba97`, signed by the architect identity that the planner shares.
+
+### Earlier findings
+- **R1** (Follow-up, `run.py` turn sentinel): deferred.
+- **R2**: accepted as is (round 2).
+- **R3** (Follow-up, no test through `run.main`): deferred.
+- **R4**: accepted as is (round 2).
+- **R5** (Follow-up, the snippet closes `wcf-0027` too): deferred. The PR's "For you to do" line now tells the owner to reopen tasks still in progress, so this is covered.
+
+### PR description against the `pr` skill
+- Title `[wcf-0027] feat(task): close and reopen tasks`: matches the `git-conventions` form.
+- Task: both paths are written out. "All 15 acceptance criteria" matches TASK.md, which has 15. There is one exception line, "For you to do", and no criteria are listed as met. It agrees with the Out of scope items: the owner runs the migration and deletes old sandboxes.
+- Summary: two diffs, one for the `agent-notes` layout and one for the files. Both are small and say what matters.
+- Evidence: names a test that exists (`tests/test_task.py:359`, and `:398` for the refusals), then gives the round 2 check results and says CI is green. The skill asks for the test as pseudocode, and this names and describes it in prose. That is clear enough, so I accept it.
+- Merge Danger: the door is one-way and the reason is right: once the migration runs, the data has to be moved back by hand. The blast radius is one word.
+- The extra "Migration" section is not in the template, but TASK.md requires the snippet to be in the description. I accept it. I ran the snippet's `mkdir` and `git mv` loop on a throwaway repo with two old-layout dirs. Both moved under `.agent/tasks/closed/` and `tasks` was skipped. I did not run the commit or the push.
+
+### New findings
+- **R6 (Follow-up)** Merge Danger, Blast Radius: "Until the snippet runs, foundry reports every existing task as not existing, so `foundry run` and `close` refuse them." This is only partly true for `foundry run`:
+  - Without ROLE, `run` fails in `read_turn` with "has no turn … Name the role to run instead". That message does not say the task doesn't exist.
+  - With ROLE, `require_open` passes, because `is_closed` is false, and `run` creates a sandbox whose `AGENT_TASK_NOTES_DIR` (`.agent/tasks/open/<id>`) does not exist on `agent-notes`.
+
+  Suggested wording: "Until the snippet runs, `close` and `reopen` report every existing task as not existing, `foundry run` without ROLE finds no turn, and `foundry run` with ROLE starts a sandbox whose notes dir doesn't exist. Run the snippet before any `foundry run`." The code is as TASK.md asks: refusing unmigrated tasks is out of scope. Only the description is wrong.
+
+Summary: the description follows the `pr` skill. One new Follow-up (R6), and no Blocking findings.
+
+Verdict: approved
