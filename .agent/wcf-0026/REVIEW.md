@@ -83,3 +83,49 @@ No new findings. d8b387d changes only a comment, so it had nothing to run. b3a53
 Standards 0, Spec 0, Behaviour 0 new findings; 0 Blocking. Open follow-ups: R3 and R5 (deferred).
 
 Verdict: approved
+
+## Round 4 (reviewing d0f1788)
+
+The human asked for this round after the dev's post-approval CI fix. TASK.md is unchanged. The last allowed version is still `c283670`, signed by the shared architect/planner identity (the known limit in ROLE.md applies), and no other commit touched it.
+
+This round reviews the fix diff `d8b387d...d0f1788`. That is one commit, test-only: the `commit_locally` helper in `tests/agent_runtime/test_session_setup.py`.
+
+Checks at d0f1788 were run CI-style, with every `AGENT_*` variable and `SSH_AUTH_SOCK` unset. The full `uv run --group dev pytest` suite passes, and so do `ruff check .`, `ruff format --check .` and `mypy`.
+
+Note for the human: this sandbox started with the code checkout 1 commit behind origin (missing d0f1788). That is the same wcf-0025 symptom as in round 3, and it persists until PR #28 merges. I fast-forwarded it by hand before reviewing.
+
+### Open findings from earlier rounds
+- **R1**: closed (unchanged).
+- **R2**: accepted as is (unchanged).
+- **R3**: deferred, Follow-up (unchanged).
+- **R4**: accepted as is (unchanged).
+- **R5**: deferred, Follow-up (unchanged).
+- **R6**: closed (unchanged).
+
+### Standards
+- **R7 (Follow-up, judgement call): Duplicated Code at `tests/agent_runtime/test_session_setup.py:231`.**
+  - What: `commit_locally` is the third module-local copy of "commit with the kit's hooks off". The other two are `commit_unchecked` (`tests/agent_runtime/test_git_hooks.py:78`) and `commit` (`tests/agent_runtime/test_claude_hooks.py:131`).
+  - Standard: CONTRIBUTING.md:31 says "Shared helpers live in `tests/support/`".
+  - Naming: the new name stresses that the commit is unpushed, while `commit_unchecked` stresses that the hooks are skipped. The name reads correctly at its call sites, so it doesn't mislead.
+  - Who hits it: a developer who later changes how tests get past the hooks would edit three files. That is rare.
+  - Direction: accept as is for this task. Moving one shared helper into `tests/support/` is an optional follow-up.
+- Otherwise: the three call-site hunks (lines 318, 353, 392) breach no standard, and the docstring follows AGENTS.md's writing rules.
+
+### Spec
+No new findings and no scope creep. The three edited tests still check their criteria:
+- **Ahead left as is:** lines 317-323 still make a real unpushed commit in each checkout and assert both tips are unchanged.
+- **Diverged refusal lists local subjects:** with hooks off, nothing rewrites the message, so line 362 still checks the exact subject committed at line 353.
+- **No change after a refusal:** `snapshot()` is still taken after the local commit, and it compares the same state.
+
+The criterion "`uv run pytest` … pass" now holds CI-style, not only in an agent sandbox.
+
+### Behaviour
+No new findings.
+- **The fix is what makes CI pass:** in a throwaway clone with d8b387d's version of the test file, `test_unpushed_commits_are_left_as_they_are`, `test_a_diverged_branch_is_refused_naming_the_local_commits` and `test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was` fail CI-style. At d0f1788, all 25 tests in the file pass both CI-style and with the sandbox environment.
+- **No other test git call runs the kit's hooks:** `push_to_origin` commits in a separate clone that doesn't share the checkout's hook config, and turns signing off. The fixture's seed commit runs before `session_setup`. The other git calls on set-up checkouts run none of the kit's three hooks (`pre-commit`, `pre-push`, `prepare-commit-msg`).
+- **The `-c` override doesn't leak:** it applies to one git process only and is never written to config. No snapshot compares config.
+
+### Summary
+Standards 1 new finding (R7, Follow-up), Spec 0, Behaviour 0; 0 Blocking. Worst per axis: Standards, the hook-skipping commit helper duplicated across three test modules (R7). Open follow-ups: R3, R5 (deferred) and R7.
+
+Verdict: approved
