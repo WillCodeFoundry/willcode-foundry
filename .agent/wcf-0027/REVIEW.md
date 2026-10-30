@@ -573,3 +573,83 @@ Coverage. Each cell is `-` for checked with nothing found, or a finding id. The 
 | Design questions | 0 | - | - |
 
 Verdict: approved
+
+## Round 4 (reviewing 55c7583)
+
+The owner asked for this round: a review of names only, judged against Python best practice and this repo's standards. `HEAD` hasn't moved since round 3. So instead of a fix diff, this round covers every Python identifier the branch adds or renames: `git diff 80f4b9a...HEAD -- src tests`.
+
+The practices it checks:
+- PEP 8 case and leading underscores.
+- Shadowing of builtins and imported modules.
+- Verbs for functions, nouns for values, predicates for booleans.
+- A `get_` prefix that hides work.
+- Names that say what a value is, not its type, and avoid vague words.
+- One name per concept.
+- Names that promise more or less than the code does.
+
+ruff doesn't select pep8-naming (`N`) or flake8-builtins (`A`), so none of this is tool-checked. GLOSSARY.md and DESIGN.md override generic practice, and a name DESIGN.md fixes would be a design question.
+
+### Who reads what
+
+| Role | Read | Then |
+|---|---|---|
+| **Dev** | R21–R25, all Follow-ups | Fix them, or ask the owner to defer them |
+| **Owner** | R22's label, and R16 from round 2 | Say whether R22 should block (see its note), and whether R16 should |
+
+There are no design questions this round.
+
+### TASK.md changed by another role
+None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the architect identity, which the planner shares), and is reviewed as of `1aeba97`. DESIGN.md was changed only by `b1caefd` and `85a2016`, both architect-signed, and is reviewed as of `85a2016`.
+
+### Earlier findings
+
+| Id | Verdict |
+|---|---|
+| R1–R15, R17, R18 | closed |
+| R16 | deferred, waiting on the owner |
+| R19, R20 | deferred, accepted as is |
+| R21 | still open (Follow-up). The code hasn't changed since round 3 |
+
+### Names
+- **R22 (Follow-up), test names say "notes folder", a term GLOSSARY.md avoids.**
+  - GLOSSARY.md:49, under "Task notes dir", says: _Avoid_: notes folder.
+  - The branch adds or renames nine test names that use it in `tests/test_task.py`, at :106, :118, :202, :214, :323 and :401. Three more at :342, :346 and :361 say "folder" for the open or closed dir. Examples:
+    - `test_a_closed_task_s_notes_folder_is_under_closed`
+    - `test_close_moves_the_notes_folder_unchanged_in_one_signed_commit`
+  - The code they test says `task_notes_dir`, so grepping `tests/` for that name misses them.
+  - The habit is older than this task: three names at `80f4b9a` already used "notes folder", and one remains, at :146.
+
+  Who hits it: anyone searching the tests for `task_notes_dir` coverage, or reading `pytest -v`. Direction: use the glossary's term, "task notes dir", in the names the branch adds. Leave the older one at :146 to a follow-up of its own.
+
+  _Label:_ the naming reviewer marked this Blocking, as a breach of the glossary. I downgraded it. The test names don't mislead anyone into a wrong action, since "notes folder" can't be mistaken for anything else. The bar asks for that, not for every glossary breach. If you want glossary breaches in names to block, say so here.
+- **R23 (Follow-up), `_move`'s `commit` parameter holds a commit message.**
+  - It is defined at `src/foundry/project_tasks.py:121`, and passed as `commit=f"Close task {task.id}"` at :94 and as `commit=f"Reopen task …"` at :104.
+  - At :129 it is used as `clone.commit(commit)`.
+  - Inside `_move`, "commit" means three things: the `ProjectClone.commit` method, this string, and a git commit, in the docstring at :124-125.
+
+  Who hits it: someone editing `_move`, who may take it for a ref. Direction: name it for the message it holds.
+- **R24 (Follow-up), `Outcome.done` is a string that reads like a boolean.**
+  - It is defined at `src/foundry/commands/task.py:79` and used as `f"{outcome.done} task …"` at :90.
+  - `done` reads as a predicate, so `if outcome.done:` would look natural, and it is always true.
+
+  Who hits it: a developer adding a fourth outcome, which is rare. Direction: name it for the past-tense verb it holds, or accept as is.
+- **R25 (Follow-up), `role_to_launch` names half of what it does.**
+  - It is defined at `src/foundry/commands/run.py:52` and called at :39 as `role_name, task = role_to_launch(...)`.
+  - It returns the `Task` too, and it is where `foundry run` refuses a closed or missing task (criterion 10). The docstring at :55-57 says so, but the call site gives no hint.
+  - DESIGN.md doesn't fix this name.
+
+  Who hits it: a reader of `main` looking for where a closed task is refused. Direction: name it for the check as well as the result, or accept as is, since it follows `role_for_turn`'s style.
+
+Checked and not raised:
+- **Names DESIGN.md fixes:** `get_task_by_id` (its `get_` hides a checkout and raises domain errors), `as_open` and `as_closed`, `OPEN_DIR` and `CLOSED_DIR`, `from_id_and_status`, `in_scratch_clone`, `move_dir`, `ProjectTasks`, `TaskNotFoundError` and `Status`. They would be design questions, and none misleads enough to raise one.
+- **Shadowing:** `task` and `new_task` locals in `project_tasks.py` shadow nothing, since it imports names, not the `task` module. `commands/task.py` uses `created`, `closed`, `reopened` and `changed`, and the tests use `a_task`, to avoid shadowing the `task` module. The `tasks` fixture's same-named local is the pytest idiom.
+- **Predicates:** `is_open` and `is_closed`.
+- **Other names:** `found`, `tree`, `work` and `task_arguments` are local, or explained where they are used.
+- **Settled earlier:** `if_open` and `if_closed`, `_STATUS_DIRS`, the `CLOSED` outcome, `Outcome.next_command` and `moved`.
+
+Coverage: every module, class, function and method the branch adds or renames was checked. Each is `-` except `_move` (R23), `Outcome.done` (R24), `role_to_launch` (R25), and the test names listed under R22.
+
+### Summary
+Names: 4 findings, R22–R25, none blocking. The worst is R22, glossary-avoided "notes folder" in nine test names. R21 is still open. R16 still waits on the owner.
+
+Verdict: approved
