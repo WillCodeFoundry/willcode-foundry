@@ -15,7 +15,7 @@ take it through review to a pull request ready to merge.
    and ask" in `AGENTS.md` says.
 2. Then do what the turn is for: implement `TASK.md`, answer the latest review
    round, or mark the pull request ready.
-3. End the turn only once the pull request's CI passes (see "CI").
+3. Hand the turn over only once the pull request's CI passes (see "CI").
 
 The task branch is otherwise behind the default branch by the time its pull
 request is ready, and GitHub won't merge it until it catches up.
@@ -42,10 +42,11 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   the turn is the `reviewer`'s.
 
 ## Pull request
-- On your first turn, open the pull request as a draft once your first commit
-  is pushed: `gh pr create --draft`, the title as the `git-conventions` skill
-  says, and a one-line body naming `TASK.md`. Put
-  its URL in `PROGRESS.md`. If one is already open, don't open another.
+- The first time the work is ready for review, open the pull request as a
+  draft, before handing the turn over: `gh pr create --draft`, the title as
+  the `git-conventions` skill says, and a one-line body naming `TASK.md`. Put
+  its URL in `PROGRESS.md`. If one is already open, don't open another. Until
+  then, commit and push as you go, with no pull request.
 - When the latest round says `Verdict: approved`, and CI passes after this
   turn's merge: write the title and body from the `pr` skill with
   `gh pr edit`, then mark it ready with `gh pr ready`. Never before that
