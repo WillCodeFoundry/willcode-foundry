@@ -125,6 +125,9 @@ next. When it doesn't, or you are stuck, write `human`.
 
 `PROGRESS.md` is the hand-off: the next role reads it first.
 
+Your first message is foundry's opening prompt, sent when it attaches you. The
+human may type the next.
+
 ### Start
 
 1. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
