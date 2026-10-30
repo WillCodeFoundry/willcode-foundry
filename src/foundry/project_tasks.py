@@ -42,19 +42,18 @@ class ProjectTasks:
         """
         clone = self._clone
         clone.check_out(NOTES_BRANCH)
-        if_open, if_closed = Task.as_open(task_id), Task.as_closed(task_id)
-        is_open, is_closed = clone.exists(if_open.task_notes_dir), clone.exists(if_closed.task_notes_dir)
+        open_candidate, closed_candidate = Task.as_open(task_id), Task.as_closed(task_id)
+        open_dir, closed_dir = open_candidate.task_notes_dir, closed_candidate.task_notes_dir
+        is_open, is_closed = clone.exists(open_dir), clone.exists(closed_dir)
         if is_open and is_closed:
             raise FoundryError(
-                f"task {if_open.id} is both open and closed: {NOTES_BRANCH} has {if_open.task_notes_dir}/ "
-                f"and {if_closed.task_notes_dir}/"
+                f"task {open_candidate.id} is both open and closed: {NOTES_BRANCH} has {open_dir}/ and {closed_dir}/"
             )
         if not is_open and not is_closed:
             raise TaskNotFoundError(
-                f"task {if_open.id} doesn't exist: {NOTES_BRANCH} has neither {if_open.task_notes_dir}/ "
-                f"nor {if_closed.task_notes_dir}/"
+                f"task {open_candidate.id} doesn't exist: {NOTES_BRANCH} has neither {open_dir}/ nor {closed_dir}/"
             )
-        return if_open if is_open else if_closed
+        return open_candidate if is_open else closed_candidate
 
     def create_task(self, task_id: str, template: Mapping[str, str]) -> Task:
         """Create the task's branch from the default branch, and copy ``template`` into its open notes dir.
