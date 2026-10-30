@@ -69,7 +69,8 @@ def _prepare_checkouts(session: contract.Environ, agent_kit: AgentKit) -> None:
     _require_task_on_origin(project, session)
     _switch_to_task_branch(project, session)
     _require_notes_on_branch(session)
-    # Every refusal comes before any checkout moves, so a refusal leaves both exactly as they were.
+    # Every refusal comes before any checkout moves, so a refusal leaves both exactly as they were. The one
+    # exception is the switch above, when the code checkout started on another branch.
     _require_fast_forward(project, session.agent_project_dir, session.agent_task_branch, "code")
     _require_fast_forward(project, session.agent_notes_dir, session.agent_notes_branch, "notes")
     _fast_forward(project, session.agent_task_branch)
