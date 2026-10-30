@@ -11,7 +11,7 @@ from foundry.task import Task
 
 
 def test_the_variables_a_session_sets_are_read_back(session_variables: Callable[[Task], SessionVariables]) -> None:
-    variables = session_variables(Task("t1"))
+    variables = session_variables(Task.as_open("t1"))
 
     environ = contract.read_environ(variables.to_env())
 

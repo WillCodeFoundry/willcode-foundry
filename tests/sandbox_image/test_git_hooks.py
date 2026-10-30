@@ -76,7 +76,7 @@ def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts:
 
     assert checkouts.git(checkouts.code, "push", "-q", "origin", TASK.branch).returncode == 0
     assert checkouts.git(checkouts.notes, "push", "-q", "origin", NOTES_BRANCH).returncode == 0
-    for target in ("HEAD:refs/heads/other", f"HEAD:refs/heads/{Task('T2').branch}", "HEAD:refs/tags/v1"):
+    for target in ("HEAD:refs/heads/other", f"HEAD:refs/heads/{Task.as_open('T2').branch}", "HEAD:refs/tags/v1"):
         refused = checkouts.git(checkouts.code, "push", "origin", target)
         assert refused.returncode != 0 and "pre-push: refusing" in refused.stderr, target
 

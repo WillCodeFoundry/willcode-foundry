@@ -85,6 +85,17 @@ class ProjectClone:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(text)
 
+    def move_dir(self, src: str, dst: str) -> None:
+        """Move the folder ``src``, with everything in it, to ``dst``, both relative to the repository root.
+
+        Creates ``dst``'s parents. Raises FileExistsError if ``dst`` exists. Nothing is staged or committed.
+        """
+        target = self._work_dir / dst
+        if target.exists():
+            raise FileExistsError(f"{dst} already exists")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        (self._work_dir / src).rename(target)
+
     def commit(self, message: str) -> None:
         """Commit everything changed in the checked-out files, signed with your signing key."""
         self._git.output("add", "--all")

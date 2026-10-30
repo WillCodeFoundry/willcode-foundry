@@ -12,8 +12,9 @@ from typing import NoReturn
 from foundry import agent_sandbox, config, paths, session
 from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
+from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
-from foundry.task import HUMAN, NOTES_BRANCH, Task, read_turn
+from foundry.task import HUMAN, NOTES_BRANCH, Task
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -34,19 +35,28 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 def main(args: argparse.Namespace) -> NoReturn:
     """Composition root: find the role, prepare the launch from this foundry, say what it created, then hand over."""
     foundry_root = paths.find_foundry_root()
-    task = Task(args.task_id)
+    task = Task.as_open(args.task_id)
     role_name = args.role_name
-    if role_name is None:
-        foundry_config = config.load(foundry_root)
-        url = foundry_config.project(args.project_name).url
-        with tempfile.TemporaryDirectory(prefix="foundry-run-") as scratch_dir:
-            turn = read_turn(ProjectClone.init(url, Path(scratch_dir), os.environ), task)
+    foundry_config = config.load(foundry_root)
+    url = foundry_config.project(args.project_name).url
+    with tempfile.TemporaryDirectory(prefix="foundry-run-") as scratch_dir:
+        tasks = ProjectTasks(ProjectClone.init(url, Path(scratch_dir), os.environ))
+        require_open(tasks, project_name=args.project_name, task=task)
+        turn = tasks.read_turn(task) if role_name is None else None
+    if turn is not None:
         role_name = role_for_turn(turn, foundry_config.roles, project_name=args.project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
+    assert role_name is not None
     launch = prepare_launch(foundry_root, project_name=args.project_name, role_name=role_name, task=task)
     if launch.created:
         print(f"==> session:   {launch.request.definition_dir} (new)", file=sys.stderr)
     agent_sandbox.launch(launch.request)
+
+
+def require_open(tasks: ProjectTasks, *, project_name: str, task: Task) -> None:
+    """Raise FoundryError, saying how to reopen it, when the task is closed: no sandbox is made for one."""
+    if tasks.is_closed(task):
+        raise FoundryError(f"task {task.id} is closed: reopen it with `foundry task reopen {project_name} {task.id}`")
 
 
 def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
