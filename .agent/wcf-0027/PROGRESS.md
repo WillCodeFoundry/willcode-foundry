@@ -13,14 +13,20 @@
 
 - PR description rewritten (2026-10-30 15:22 UTC) for the updated `pr` skill: Task section is one line plus a "For you to do" exception, Summary as diffs, Evidence names the failing test. Title unchanged. No code commits since round 2.
 
-Status: ready for review
+- Fresh review round 1 (changes needed) and the architect's DESIGN.md answers (85a2016) arrived. Merged origin/HEAD (12da10e, clean); checks pass. PR #34 back to draft.
 
 ## In progress
+- Answering review round 1 against the new DESIGN.md.
 
 ## Next
-- Reviewer: check the rewritten PR #34 description against the updated `pr` skill (round 3). Only the description changed; the branch is still `2585b62`.
-- Follow-ups deferred (R1 `run.py` assert, R3 test through `run.main`, R5 migration snippet moves wcf-0027 too): owner to reopen wcf-0027 if needed after running the snippet.
-- Reviewer: note I kept the Task and ProjectTasks tests in `tests/test_task.py` (shared git fixtures) rather than splitting the file as DESIGN.md says.
-- Follow-up (not done): this sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; new layout applies to sandboxes created after merge.
+1. R4: `ProjectClone.move_dir` stages the move with `git mv` (keeps every blob and mode under global excludes and `core.autocrlf`); test it.
+2. R1, R13, R11: `task.py`: `Status` a plain enum mapped to dirs, no `isinstance`, `from_id_and_status`.
+3. R1, R3, R12: `project_tasks.py`: id-in API (`get_task_by_id`, `create_task`, `close_task`, `reopen_task`, `read_task_turn`), `TaskNotFoundError`, `in_scratch_clone`; `create_task` checks the dirs before the branch; no asserts.
+4. R6, R9: `commands/task.py`: shared arguments, `in_scratch_clone`, shared close/reopen body.
+5. R7, R8: `commands/run.py`: one role-picking function, tested against a real repo with and without ROLE; refuse missing tasks too. `session.py` drops its assert.
+6. R10: tidy the test helpers.
+7. R2: ARCHITECTURE.md launch line and codemap; GLOSSARY "Status" sentence.
+8. R5: fix the PR's Blast Radius.
+9. Answer each finding in REVIEW.md, CI green, turn to reviewer.
 
 ## Blockers
