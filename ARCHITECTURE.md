@@ -26,8 +26,9 @@ A launch, end to end:
 | `cli.py` | The `foundry` command; it prints the errors foundry's code raises. |
 | `commands/` | One module per subcommand: `run`, `task`, `repo`, `prune`, `skills`. Each builds its real dependencies in a composition root and passes them to the code that uses them, so the tests can pass fakes instead. |
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches (`SessionVariables`). |
-| `task.py` | `Task`: the one place a task's names are spelled, and creating a task. |
-| `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task create` commits and pushes from. |
+| `task.py` | `Task` and its `Status`: the one place a task's names are spelled, open and closed paths included. |
+| `project_tasks.py` | `ProjectTasks`: creating, closing and reopening a project's tasks, and reading a task's turn. |
+| `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task` commits and pushes from. |
 | `runtime_build.py` | Builds the runtime into the kit, replacing it only when it changed. |
 | `repo_policy.py`, `github.py` | `foundry repo check`: compares each project's repository with the repo policy, through `gh`. |
 | `skills.py` | `foundry skills update`: merges upstream's changes into the copied skills. |
