@@ -33,3 +33,19 @@
   2. **`architect/ROLE.md`, step 6:** "With `DESIGN.md` pushed, or once you and the human agree it stands, the turn is the `dev`'s." When the design stands, say so for each question under "In progress" in PROGRESS.md, since the architect can't write REVIEW.md.
   3. **`reviewer/ROLE.md`:** check DESIGN.md's history as TASK.md's is checked. Each change must be signed by the architect's identity. Report any other change at the top of the round.
   4. **`reviewer/ROLE.md` / `code-review`:** in the round after an architect turn, settle each design question (closed, or accepted as is). Re-judge every "Waits for the design" finding against the new DESIGN.md, and treat the DESIGN.md diff as part of the fix diff.
+- 2026-10-30 [proposal] — `architect/ROLE.md` changes for turns that come from a review, agreed with the owner. This replaces item 1 of the previous entry.
+  1. **Method, opening paragraph:** replace "Answer it by reading `TASK.md`, then telling the human which design questions you will review with them" with:
+     > Your session starts on foundry's opening prompt, before the human has said anything. First, find where this turn comes from:
+     > - **From a review:** `REVIEW.md` exists in your task's notes, and its latest round has a "Design questions" section. Follow "When the turn comes from a review".
+     > - **From the planner:** otherwise. Read `TASK.md`, then tell the human which design questions you will review with them, and follow the steps below.
+
+     Why the notes are the signal: only the reviewer writes design questions, and only its next round settles them. Rejected: putting the reason in `TURN` (ADR 0011 makes it one line naming a role), relying on the human to say it, and a reviewer note in `PROGRESS.md` (not the reviewer's file). Edge case: when the planner rescopes after a review, the architect takes the review path. That's acceptable, since the questions are still open.
+  2. **A new section, "When the turn comes from a review":**
+     1. Read the latest round of `REVIEW.md`: "Who reads what", then "Design questions".
+     2. Read the findings it lists as "Waits for the design". Don't solve them; make the design leave the dev a clear way to fix them. Skip the independent ones.
+     3. Read the `DESIGN.md` decisions each question quotes, then `TASK.md`, then the cited code on `$AGENT_TASK_BRANCH`.
+     4. Work through each question with the human in rounds, as in "Asking questions": change `DESIGN.md`, or agree the design stands.
+     5. Draft any change to `DESIGN.md` and get approval before writing it, as in Method. Under "Decisions", write "Answers R<n>." and name any decision it reverses.
+     6. When the design stands, write "R<n>: design stands, because <why>" under "In progress" in `PROGRESS.md`.
+     7. Commit and push. The turn is the `dev`'s either way. Never edit `REVIEW.md`.
+  3. **Boundaries:** allow the "design stands" lines under "In progress" in `PROGRESS.md`, beside `DESIGN.md`, `TURN` and "Blockers".
