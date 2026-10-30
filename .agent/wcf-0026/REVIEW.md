@@ -32,10 +32,13 @@ Check results at 75b822f: `ruff check` passes, `ruff format --check` passes, `my
 
 ### Open findings from round 1
 - **R1** (comment at `session_setup.py:72` overclaims; shares a cause with R3): still open, Follow-up.
+  - Fixed in `d8b387d`.
 - **R2** (data clump): accepted as is.
 - **R3** (code checkout starting on another branch is switched before a later refusal; out of scope in TASK.md): deferred, Follow-up.
+  - Deferred: TASK.md puts changing `_switch_to_task_branch` out of scope; the R1 comment now names the exception.
 - **R4** (wrong-branch refusal doesn't say whether work exists): accepted as is.
 - **R5** (non-checkout notes dir reported as "detached"): still open, Follow-up.
+  - Deferred: rare, and setup still refuses changing nothing; telling "not a checkout" from "detached" needs its own wording and test. Noted as a follow-up.
 
 ### New findings
 - **R6 (Blocking) — six of the new tests fail on any machine that has no signing key in an agent.**
@@ -44,6 +47,7 @@ Check results at 75b822f: `ruff check` passes, `ruff format --check` passes, `my
   - Who hits it: anyone running `uv run pytest` where the role signing key isn't loaded: CI, the human's machine, and this reviewer sandbox. It reproduces here every run.
   - Evidence the code itself is fine: in a throwaway clone, with only the `push_to_origin` commit made `UNSIGNED`, all 25 tests in the file pass.
   - Violates the criterion "`uv run pytest` ... pass" and leaves the other criteria untested. Direction: make `push_to_origin`'s commit unsigned the way the repo's other tests do; the dev's own run should be unaffected by whether a key is present.
+  - Fixed in `b3a530d`: the commit now passes `-c commit.gpgsign=false`, as the file's other test commits do. Verified with `env -u SSH_AUTH_SOCK uv run pytest`: all pass.
 
 ### Summary
 New findings this round: 1 (Blocking), in tests. Round 1's findings stand as Follow-ups. Worst issue: R6, six failing tests that hide the criteria they exist to check.

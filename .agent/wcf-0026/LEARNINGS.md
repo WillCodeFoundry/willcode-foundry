@@ -1,3 +1,5 @@
 # Learnings
 - 2026-10-29 [decision] — Dirty-conflict detection uses `git read-tree -m -u -n <local> <origin>` (dry run): gives git's own reason without touching the tree, so both checkouts can be vetted before either moves. Rejected `merge --ff-only` on code first: a later notes refusal would leave code moved.
 - 2026-10-29 [testing] — A refusal still runs `fetch`, so origin-tracking refs move; tests snapshot HEAD, status, stash and `refs/heads` only.
+- 2026-10-30 [testing] — My earlier green run hid R6: an SSH agent with a key was loaded, so commits under the role gitconfig's `commit.gpgsign=true` succeeded. Run `env -u SSH_AUTH_SOCK uv run pytest` to see what CI sees. Any test commit made after `session_setup` needs `-c commit.gpgsign=false` (or `UNSIGNED`).
+- 2026-10-30 [process] — On relaunch this session started with the notes checkout 2 commits behind (no `REVIEW.md`, `TURN` = reviewer): the wcf-0026 bug itself, since the fix isn't merged yet. Pulled by hand.
