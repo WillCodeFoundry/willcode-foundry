@@ -255,12 +255,21 @@ Verdict: changes needed
 
 ## Round 2 (reviewing 50180d1)
 
-This round reviews the fix diff `12da10e..50180d1`. `12da10e` is a clean merge of `origin/main`, so `50180d1` is the only fix commit. It also reviews the DESIGN.md change `b1caefd..85a2016`. It uses the three axes of the installed `code-review` skill, with the smell baseline inside Standards. Finding ids continue from R13.
+This round reviews the fix diff `12da10e..50180d1`. `12da10e` is a clean merge of `origin/main`, so `50180d1` is the only fix commit. It also reviews the DESIGN.md change `b1caefd..85a2016`, as part of the fix.
+
+It follows the proposed form, as round 1 did, with all four axes: Standards, Spec, Behaviour and Smells. Smells returns a coverage table. A smell the fix introduces blocks when its fix is local. Every partial criterion is a finding. A first pass at this round used only three axes and approved. It was replaced before the dev's turn, at the owner's request. Finding ids continue from R13.
+
+### Who reads what
+
+| Role | Read | Then |
+|---|---|---|
+| **Dev** | R14 and R15, both Blocking | Fix them. The Follow-ups are yours to fix or to answer |
+| **Owner** | The verdict, and R16 | Say whether R16, a rare line-ending rewrite on a move, should block |
+
+There are no design questions this round.
 
 ### TASK.md changed by another role
-None. The commits that changed TASK.md are still `a137f7d` (`Add task wcf-0027`, by the owner) and `1aeba97` (signed by the architect identity, which the planner shares). This round reviews TASK.md as of `1aeba97`.
-
-DESIGN.md is reviewed as of `85a2016`, signed by the architect identity, like `b1caefd` before it.
+None. The commits that changed TASK.md are still `a137f7d` (`Add task wcf-0027`, by the owner) and `1aeba97` (signed by the architect identity, which the planner shares). This round reviews TASK.md as of `1aeba97`. DESIGN.md is reviewed as of `85a2016`, also signed by the architect identity.
 
 ### Round 1 findings
 
@@ -271,11 +280,11 @@ DESIGN.md is reviewed as of `85a2016`, signed by the architect identity, like `b
 | R3 | closed | `create_task` looks the task up (`project_tasks.py:66-71`) before the branch check. `tests/test_task.py:214` uses a closed task with a real `task/c0` branch |
 | R4 | closed | Rerun of the round 1 case (global `*.log`, `*.sh` and `sub/` excludes, `autocrlf=input`, CRLF and executable files, a nested dir): close made 5 pure renames and nothing else. Reopen restored the tree exactly. Also holds with a global `* text=auto` attribute. See R16 for a rarer variant |
 | R5 | closed | PR #34's Blast Radius now matches `get_task_by_id` |
-| R6 | closed | All four roots use `in_scratch_clone`, and all three task commands print through `report`. See R14 |
-| R7 | closed | "Was a ROLE given?" is decided once, in `role_to_launch` (`src/foundry/commands/run.py:62`) |
-| R8 | closed | `tests/test_run.py:146`, `:154` and `:160` run `role_to_launch` against a real repository, with and without ROLE, for open, closed and missing tasks |
-| R9 | closed | PROJECT and TASK are defined once, in the parent parser |
-| R10 | closed | The test helpers are deduplicated, and the refusal tests are parametrized by method |
+| R6 | closed | All four roots use `in_scratch_clone`: `run.py:38`, `commands/task.py:51`, `:60` and `:69`. All three task commands print through `report`. R14 is a new smell in that shared `report`, not R6 reopened |
+| R7 | closed | `role_to_launch` decides "was a ROLE given?" once (`src/foundry/commands/run.py:62`) |
+| R8 | closed | `tests/test_run.py:146`, `:154` and `:160` run `role_to_launch` against a real repository, with and without ROLE, for open, closed and missing tasks. See R19 for what remains shown only by reading |
+| R9 | closed | One `task_arguments` parent parser (`commands/task.py:14-18`) |
+| R10 | closed | One `tasks_of` and `clone_in` (`tests/test_task.py:75`, `:80`), `assert_notes_signed_with_your_key` (`:98`), refusal tests parametrized by method (`:447-472`), and `push_notes` (`:376`) |
 | R11 | closed | `Status` uses `auto()`, and `_STATUS_DIRS` maps each status to its dir (`src/foundry/task.py:40-45`) |
 | R12 | closed | The loop is gone |
 | R13 | closed | The `isinstance` guard and its test are gone |
@@ -291,39 +300,46 @@ The Spec and Behaviour reviewers ran these in throwaway clones at `50180d1`, aft
 | `tests/test_docs.py` | passes |
 
 ### Standards
-- **R14 (Follow-up), `report` switches on an action string.**
-  - In `src/foundry/commands/task.py:76-85`, `_REPORTS[action]` is called with the literals `"create"`, `"close"` and `"reopen"`.
-  - mypy can't catch a mistyped action, so the mistake would surface as a `KeyError` after the push.
-  - The report test catches it today.
+No new findings of its own. Standards also flagged R14 and R15, as smells; they are under Smells.
 
-  Who hits it: a developer adding another task command, rarely. Direction: pass something mypy checks instead of a free string, or accept as is.
-- **R15 (Follow-up), `_move` depends unstated on `get_task_by_id` having checked out `agent-notes`.**
-  - `get_task_by_id` does the checkout (`src/foundry/project_tasks.py:44`). DESIGN.md designs that side effect.
-  - `create_task` says it relies on the checkout, in a comment at `:69`.
-  - `_move` (`:121-126`) moves files in that checkout and says nothing.
-
-  Who hits it: a developer who changes the lookup to read without a checkout. Close and reopen would then move files on whatever branch is checked out. Direction: name the dependency where `_move` relies on it, or accept as is.
-
-A design note for the owner, not a dev finding. `ProjectTasks.in_scratch_clone` (`project_tasks.py:28-36`) builds the clone and its temporary folder. ARCHITECTURE.md rule 7 gives that job to a command's `main`. DESIGN.md (85a2016) chose this explicitly to answer R6, so the code is within the design.
-
-Checked clean: rule 1 (paths spelled only in `task.py`), rule 3 (`move_dir` goes through `ProjectClone`), and rule 6 (`TaskNotFoundError` caught only where DESIGN.md says). There is no Speculative Generality: every new name is in DESIGN.md.
+Checked clean:
+- **Rule 1:** the paths are spelled only in `task.py`.
+- **Rule 3:** `move_dir` goes through `ProjectClone`.
+- **Rule 6:** `TaskNotFoundError` is caught only where DESIGN.md says.
+- **Names:** the GLOSSARY.md and ARCHITECTURE.md codemap rows match the code.
+- **Rule 7:** `ProjectTasks.in_scratch_clone` (`project_tasks.py:28-36`) builds the temporary clone, a job rule 7 gives to a command's `main`. DESIGN.md chose it to answer R6. Each `main` still builds the clone by calling it, and decides nothing, so this isn't a design question.
 
 ### Spec
-No new findings. All 15 criteria hold at HEAD:
+- **R19 (Follow-up), criterion 10's "before creating or attaching any sandbox" is shown only by reading.**
+  - The criterion: "`foundry run PROJECT [ROLE] TASK` refuses a closed task, with or without ROLE, before creating or attaching any sandbox."
+  - The tests show that `role_to_launch` refuses (`tests/test_run.py:154`).
+  - No test shows that `main` calls it (`src/foundry/commands/run.py:39`) before `prepare_launch` (`:46`).
+  - DESIGN.md names `role_to_launch` as this criterion's seam, so it is not Blocking.
+
+  Who hits it: a developer reordering `main`, rarely. Direction: accept as is, under DESIGN.md's seam. Testing `main` would need fakes for config, paths and sandbox, which is new machinery.
+- **R20 (Follow-up), most of criterion 8 is shown only by reading.**
+  - The criterion: "Neither `close` nor `reopen` asks for confirmation, reads `TURN`, checks the pull request, or touches `task/<id>`, sandboxes or `sessions/`."
+  - Tested: branches are unchanged, and only the moved paths change (`tests/test_task.py:404`, `:409`, `:414`).
+  - Shown only by reading: no prompt, no `TURN` read and no PR check (`commands/task.py` `close_main` and `reopen_main`; `project_tasks.py:86-125`).
+  - Sandboxes and `sessions/` are out of reach by construction, since `ProjectTasks` holds only a `ProjectClone`.
+
+  Who hits it: a developer adding a prompt or a `TURN` check to close later. Direction: accept as is, or add a test that runs `close_main` with no stdin.
+
+The other criteria are met:
 
 | # | Evidence |
 |---|---|
 | 1 | `project_tasks.py:73,81`; `tests/test_task.py:146` |
 | 2 | `project_tasks.py:71`; `test_task.py:201`, `:214`; both dirs: `:361` |
-| 3 | `Task.task_notes_dir`; `test_task.py:106`, `:118`; `test_session.py` and `test_task_contract.py` |
+| 3 | `Task.task_notes_dir`; `tests/test_session.py:47-49` |
 | 4, 5 | `project_tasks.py:86-104`, `:121-126`; `test_task.py:396`, `:417`, `:428` |
 | 6, 7 | `test_task.py:447-461`, each case checking nothing was pushed |
-| 8 | `close_task`, `reopen_task` and `_move` read no TURN, check no PR and ask nothing; branches unchanged in `test_task.py:396` |
+| 8 | partial, see R20 |
 | 9 | `test_task.py:464-473` |
-| 10 | `run.py:61`, before `prepare_launch` at `:46`; `test_run.py:154` |
+| 10 | partial, see R19 |
 | 11 | `run.py:63`; `test_run.py:146` |
-| 12 | `test_docs.py` passes |
-| 13 | GLOSSARY.md and ADR 0012 match "Terms and decisions" |
+| 12 | `tests/test_docs.py:110` checks the command table. The `agent-notes` row (`README.md:56`) was grepped for the new layout |
+| 13 | `GLOSSARY.md:48` and `:52`, `docs/adr/README.md:11` and ADR 0012 match "Terms and decisions" (grepped) |
 | 14 | The snippet is in PR #34. Rerun on a toy bare repo: one commit, all 100% renames |
 | 15 | See Checks |
 
@@ -339,14 +355,106 @@ There is no scope creep. `run` refusing a missing task, and the both-dirs error,
 
   Who hits it: an owner with an explicit, non-auto `text` attribute in their global gitattributes. That is rare. Direction: commit only what the move staged, or accept as is and correct the docstring.
 
-Found sound: the first create with no `agent-notes` branch; a repository with no commits; close, reopen and `read_task_turn` with no `agent-notes`; a task in both dirs (refused, nothing pushed); upper-case ids; a missing `closed/` parent; `in_scratch_clone` cleanup when the clone fails; and `role_to_launch` refusing before `prepare_launch`.
+Found sound:
+- the first create with no `agent-notes` branch;
+- a repository with no commits;
+- close, reopen and `read_task_turn` with no `agent-notes`;
+- a task in both dirs (refused, nothing pushed);
+- upper-case ids;
+- a missing `closed/` parent;
+- `in_scratch_clone` cleanup when the clone fails;
+- `role_to_launch` refusing before `prepare_launch`.
+
+### Smells
+Who hits these: the next developer changing this code.
+
+- **R14 (Blocking), Primitive Obsession and Repeated Switches: `report` decodes an action string.**
+  - In `src/foundry/commands/task.py:76-85`, `report(action: str, ...)` looks up `_REPORTS[action]`.
+  - Its callers pass the literals `"create"`, `"close"` and `"reopen"` (`:53`, `:62`, `:71`). Each `*_main` knows its action, encodes it as a string, and `report` decodes it again.
+  - mypy can't check the string.
+  - Because the literal sits in a composition root, no test checks that `close_main` passes `"close"` (rule 7). The test at `tests/test_task.py:273` checks the table only.
+  - A mismatch raises a bare `KeyError` after `push_atomic` has succeeded: the task is closed, and you see a traceback.
+  - At `2585b62` there was no switch; this was introduced by the fix, and the fix is local.
+
+  Who hits it: a developer adding or renaming a task command, who edits `_REPORTS` and a literal in another function. Direction: pass `report` something mypy checks instead of a key.
+- **R15 (Blocking), hidden temporal coupling: `_move` relies on a checkout it doesn't do or name.**
+  - At `2585b62`, `_move` checked out `agent-notes` itself. The fix removed that line.
+  - `_move` (`src/foundry/project_tasks.py:121-126`) now moves, commits and pushes on whatever is checked out. It works only because `close_task` and `reopen_task` call `get_task_by_id` first, which checks out at `:44`.
+  - `create_task` names that same dependency in a comment (`:69`). `_move` doesn't.
+
+  Who hits it: a developer who makes `get_task_by_id` read without a checkout, as `read_task_turn` (`:112`) already does with `ProjectClone.read`. Close and reopen would then `git mv` on the default branch's checkout, failing with git's error and no hint why. Direction: make the dependency visible where `_move` relies on it.
+- **R17 (Follow-up), Mysterious Name: `opened` and `closed` in `get_task_by_id`.**
+  - `src/foundry/project_tasks.py:45` holds candidates, where the task would be. They aren't tasks found in that state.
+  - The booleans `is_open` and `is_closed` sit beside them (`:46`).
+  - The "doesn't exist" message at `:53-54` is built from `opened.id`.
+
+  Who hits it: someone editing the lookup, at a low cost, since it is 15 lines. Direction: name them as candidates, or accept as is.
+- **R18 (Follow-up), Duplicated Code: three copies of the expected tree after a move.**
+  - `tests/test_task.py:442-444` adds a third copy of the comprehension at `:408` and `:422`.
+
+  Who hits it: someone changing how a move's expected tree is computed. Direction: one helper, or accept as is.
+
+Checked and not raised:
+- **`close_task` and `reopen_task` (`:86-104`):** these mirror each other, but the shared part is already in `_move`.
+- **`print("\n".join(report(...)))`:** this matches `commands/prune.py:22` and `commands/repo.py:48`.
+- **`in_scratch_clone`:** a DESIGN.md decision, covered under Standards.
+- **`from_id_and_status`:** DESIGN.md asks for it.
+
+Coverage. Each cell is `-` for checked with nothing found, or a finding id. LF is Long Function, MN Mysterious Name, DC Duplicated Code, FE Feature Envy, DCl Data Clumps, PO Primitive Obsession, RS Repeated Switches, SS Shotgun Surgery, DvC Divergent Change, SG Speculative Generality, MC Message Chains, MM Middle Man, RB Refused Bequest. R15 sits under FE as its closest smell.
+
+| Item (file:line at HEAD) | LF | MN | DC | FE | DCl | PO | RS | SS | DvC | SG | MC | MM | RB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| task.py:20-22 `OPEN_DIR`/`CLOSED_DIR` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:37 `Status` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:45 `_STATUS_DIRS` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:49 `Task` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:59 `__post_init__` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:67 `from_id_and_status` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:73 `as_open` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:77 `as_closed` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| task.py:86 `task_notes_dir` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:18 `TaskNotFoundError` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:22 `ProjectTasks` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:30 `in_scratch_clone` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:38 `get_task_by_id` | - | R17 | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:59 `create_task` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:86 `close_task` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:96 `reopen_task` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:106 `read_task_turn` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| project_tasks.py:121 `_move` | - | - | - | R15 | - | - | - | - | - | - | - | - | - |
+| project_clone.py:88 `move_dir` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| session.py:57 `to_env` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| commands/task.py:10 `add_parser` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| commands/task.py:46 `create_main` | - | - | - | - | - | R14 | - | - | - | - | - | - | - |
+| commands/task.py:57 `close_main` | - | - | - | - | - | R14 | - | - | - | - | - | - | - |
+| commands/task.py:66 `reopen_main` | - | - | - | - | - | R14 | - | - | - | - | - | - | - |
+| commands/task.py:76 `_REPORTS` | - | - | - | - | - | R14 | R14 | - | - | - | - | - | - |
+| commands/task.py:83 `report` | - | - | - | - | - | R14 | R14 | - | - | - | - | - | - |
+| commands/run.py:33 `main` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| commands/run.py:52 `role_to_launch` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_run.py:130 `tasks` fixture | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_run.py:146, :154, :160 `role_to_launch` tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:75 `clone_in`, :80 `tasks_of`, :85 `create` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:98 `assert_notes_signed_with_your_key` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:146-229 create tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:273 report test | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:283-297 parsing and `ProjectClone` tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:308-328 `turn_of` and turn tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:342-361 lookup tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:376 `push_notes`, :388 `tree` | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:396 close move | - | - | R18 | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:417 reopen move | - | - | R18 | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:428 move keeps files | - | - | R18 | - | - | - | - | - | - | - | - | - | - |
+| test_task.py:456, :467 refusal and signing tests | - | - | - | - | - | - | - | - | - | - | - | - | - |
 
 ### Summary
 
 | Axis | Findings | Blocking | Worst |
 |---|---|---|---|
-| Standards | 2 | 0 | R15, `_move` relies on a checkout it doesn't name |
-| Spec | 0 | 0 | none |
+| Standards | 0 | 0 | none (R14 and R15 shared with Smells) |
+| Spec | 2 | 0 | R19, criterion 10's ordering shown only by reading |
 | Behaviour | 1 | 0 | R16, a forced `text` attribute rewrites CRLF files on a move |
+| Smells | 4 | 2 | R14, `report` decodes an action string |
+| Design questions | 0 | - | - |
 
-Verdict: approved
+Verdict: changes needed
