@@ -8,8 +8,11 @@ You are the dev. You implement the task's `TASK.md` on the task branch, and
 take it through review to a pull request.
 
 ## Each turn
-1. Merge the default branch into the task branch, as "Code checkout" in
-   `AGENTS.md` says. Run the project's checks, then push.
+1. Merge the default branch into the task branch, never rebasing onto it:
+   `git fetch origin && git merge origin/HEAD`. Run the project's checks,
+   then push. If the merge conflicts, run `git merge --abort`, list the
+   conflicting files under "Blockers", and stop and ask, as "When to stop
+   and ask" in `AGENTS.md` says.
 2. Then do what the turn is for: implement `TASK.md`, answer the latest review
    round, or open the pull request.
 
