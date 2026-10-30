@@ -119,6 +119,11 @@ class ProjectTasks:
         return turn
 
     def _move(self, task: Task, destination: Task, *, commit: str) -> Task:
+        """Move ``task``'s notes dir to ``destination``'s, then commit and push NOTES_BRANCH.
+
+        Relies on get_task_by_id having found ``task``: it checked out NOTES_BRANCH, so the move is made on the commit
+        the task was found on.
+        """
         clone = self._clone
         clone.move_dir(task.task_notes_dir, destination.task_notes_dir)
         clone.commit(commit)
