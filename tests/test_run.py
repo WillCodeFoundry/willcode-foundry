@@ -10,7 +10,7 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch, role_for_turn, role_to_launch
+from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
 from foundry.errors import FoundryError
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError
 from foundry.session import SessionVariables
@@ -144,19 +144,18 @@ def tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
 
 @pytest.mark.parametrize("role_name, launched", [(None, "reviewer"), ("dev", "dev")], ids=["without ROLE", "with ROLE"])
 def test_an_open_task_launches_the_role_named_or_else_the_turn_s(tasks: ProjectTasks, role_name, launched) -> None:
-    assert role_to_launch(tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES) == (
-        launched,
-        Task.as_open("t1"),
-    )
+    assert require_open_task_and_role(
+        tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES
+    ) == (Task.as_open("t1"), launched)
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
 def test_a_closed_task_is_refused_saying_how_to_reopen_it(tasks: ProjectTasks, role_name) -> None:
     with pytest.raises(FoundryError, match=r"^task t2 is closed: reopen it with `foundry task reopen tkt-store t2`$"):
-        role_to_launch(tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES)
+        require_open_task_and_role(tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES)
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
 def test_a_task_that_doesn_t_exist_is_refused(tasks: ProjectTasks, role_name) -> None:
     with pytest.raises(TaskNotFoundError, match=r"^task t9 doesn't exist"):
-        role_to_launch(tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES)
+        require_open_task_and_role(tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES)

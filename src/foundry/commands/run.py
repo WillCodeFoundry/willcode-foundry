@@ -36,7 +36,7 @@ def main(args: argparse.Namespace) -> NoReturn:
     foundry_config = config.load(foundry_root)
     url = foundry_config.project(args.project_name).url
     with ProjectTasks.in_scratch_clone(url, os.environ) as tasks:
-        role_name, task = role_to_launch(
+        task, role_name = require_open_task_and_role(
             tasks,
             project_name=args.project_name,
             task_id=args.task_id,
@@ -49,10 +49,10 @@ def main(args: argparse.Namespace) -> NoReturn:
     agent_sandbox.launch(launch.request)
 
 
-def role_to_launch(
+def require_open_task_and_role(
     tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str | None, roles: Collection[str]
-) -> tuple[str, Task]:
-    """The role to launch on the task, and the task: ``role_name``, or the turn's when it is None.
+) -> tuple[Task, str]:
+    """The open task, and the role to launch on it: ``role_name``, or the turn's when it is None.
 
     FoundryError, before any sandbox is made, when the task doesn't exist, or is closed (saying how to reopen it).
     """
@@ -62,7 +62,7 @@ def role_to_launch(
     if role_name is None:
         role_name = role_for_turn(tasks.read_task_turn(task.id), roles, project_name=project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
-    return role_name, task
+    return task, role_name
 
 
 def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
