@@ -45,10 +45,6 @@ code the task extends was replaced.
   rules and ADRs" list, with the `domain-modeling` skill: the terms in the
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
-- Keep the project's docs true in the same change. Before you hand over,
-  update every doc your change makes untrue, such as the README,
-  `ARCHITECTURE.md` or the project's `AGENTS.md`, even one the task doesn't
-  name. A new decision or term still goes only through the lists above.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
