@@ -67,8 +67,9 @@ On top of whatever the repo documents, the Standards axis always carries the **s
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
 - **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation. Like any standard here, skip anything tooling already enforces.
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
+Each smell reads *what it is* → *how to fix*. Match it against the diff, reading each function a hunk lands in whole, as it stands at `HEAD`:
 
+- **Long Function**: a function that does several things at different levels of detail, such as building what it needs and also deciding what to do with it. A function that grows a few lines per change never looks long in one diff, so judge it whole. Flag it when you can name two or more steps in it that would read better as functions of their own, with honest names, and name the function's problem, not only a symptom such as a stray variable. → extract those steps, so each can be tested on its own.
 - **Mysterious Name**: a name that doesn't let a reader predict, where it is used, what it holds or does. Judge each name at its uses, read together with the names around it, not at its definition alone. Flag a use that misleads or only makes sense once the definition is read, and a name that means two things in one scope. → rename it, quoting a use before and after; if no honest name comes, the design's murky.
 - **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
@@ -97,7 +98,7 @@ Every brief also carries these rules, word for word:
 
 The bar for Blocking, each brief carrying its own axis's:
 
-- **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a name that misleads where it is used, or a contradicted ADR.
+- **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a name that misleads where it is used, a contradicted ADR, or a broken design rule.
 - **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out or departs from a decision in `DESIGN.md`.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
 
@@ -119,8 +120,8 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Behaviour sub-agent prompt** should include:
 
 - The diff command and commit list.
-- How the project runs its tests, from its `AGENTS.md` or `CONTRIBUTING.md`.
-- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Before building a situation, say who causes it and how often. Skip anything that needs a deliberate bypass, or two actors within the same few seconds. Under 400 words."
+- How the project sets up its environment and runs its tests, from its `AGENTS.md` or `CONTRIBUTING.md`: the setup commands as well as the test commands, since a fresh clone has neither its dependencies nor its tools.
+- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Run the project's setup commands in that clone before its tests. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Before building a situation, say who causes it and how often. Skip anything that needs a deliberate bypass, or two actors within the same few seconds. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour sub-agent and say so.
 
