@@ -31,7 +31,7 @@
   - R22 fixed in `89eaaf2`: test names say "task notes dir", not "notes folder".
   - R23 fixed in `edd1e43` (`_move`'s `message`); R24 in `32209e3` (`Outcome.past_tense`); R26 in `bb703d4` (`open_candidate`/`closed_candidate`, plus `open_dir`/`closed_dir`).
   - R16: the owner accepted it as is (noted under R16 in REVIEW.md).
-  - CI green on `1f880c0`.
+  - CI green on `f8f53b5`.
   - R25 fixed in `1f880c0`: `require_open_task_and_role`, which now returns `(task, role_name)` to match its name.
 
 Status: ready for review
