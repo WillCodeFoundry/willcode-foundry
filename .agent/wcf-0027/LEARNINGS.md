@@ -7,3 +7,4 @@
   3. `reviewer/ROLE.md`: say the reviewer runs the project's checks once, in a throwaway clone, and puts the result in the round.
 - 2026-10-30 [process] — I passed the sub-agents only `uv run pytest` and never read CONTRIBUTING.md's setup step, so none of us ran the checks in round 1. Fixed in round 2.
 - 2026-10-30 [tooling] — `gh pr edit` fails here with missing `read:org` scope (GraphQL); use `gh api -X PATCH repos/<repo>/pulls/<n> -f title=... -F body=@file`. `gh pr ready` works.
+- 2026-10-30 [tooling] — Reviewer: `gh` gets HTTP 401 (bad GH_TOKEN) in the reviewer sandbox, but the repo is public, so `env -u GH_TOKEN curl -s https://api.github.com/repos/WillCodeFoundry/willcode-foundry/pulls/<n>` reads the PR title and body.
