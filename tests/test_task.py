@@ -103,7 +103,7 @@ def assert_notes_signed_with_your_key(origin_dir: Path, git_env: dict[str, str])
 # --- Task -----------------------------------------------------------------------
 
 
-def test_an_open_task_is_its_lowercased_id_its_branch_and_its_notes_folder_under_open() -> None:
+def test_an_open_task_is_its_lowercased_id_its_branch_and_its_task_notes_dir_under_open() -> None:
     a_task = Task.as_open("WCF-0042")
     assert (a_task.id, a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file) == (
         "wcf-0042",
@@ -115,7 +115,7 @@ def test_an_open_task_is_its_lowercased_id_its_branch_and_its_notes_folder_under
     assert a_task == Task("wcf-0042", Status.OPEN)
 
 
-def test_a_closed_task_s_notes_folder_is_under_closed() -> None:
+def test_a_closed_task_s_task_notes_dir_is_under_closed() -> None:
     a_task = Task.as_closed("WCF-0042")
     assert (a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file) == (
         "task/wcf-0042",
@@ -143,7 +143,9 @@ def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> N
 # --- create ---------------------------------------------------------------------
 
 
-def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_notes_folder(origin_dir, git_env) -> None:
+def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_task_notes_dir(
+    origin_dir, git_env
+) -> None:
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     assert create(origin_dir, git_env) == Task.as_open("t1")
@@ -199,7 +201,7 @@ def test_an_existing_task_branch_is_refused_and_nothing_is_written(origin_dir, g
 
 
 @pytest.mark.parametrize("task_id, found", [("T0", "open/t0"), ("C0", "closed/c0")])
-def test_an_existing_notes_folder_open_or_closed_is_refused_and_nothing_is_pushed(
+def test_an_existing_task_notes_dir_open_or_closed_is_refused_and_nothing_is_pushed(
     origin_dir, git_env, task_id: str, found: str
 ) -> None:
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
@@ -211,7 +213,7 @@ def test_an_existing_notes_folder_open_or_closed_is_refused_and_nothing_is_pushe
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
-def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_notes_folder(origin_dir, git_env) -> None:
+def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_task_notes_dir(origin_dir, git_env) -> None:
     git(git_env, f"--git-dir={origin_dir}", "branch", "task/c0", "main")
 
     with pytest.raises(FoundryError, match=r"^task c0 already exists: agent-notes has .agent/tasks/closed/c0/$"):
@@ -320,7 +322,7 @@ def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env) -> Non
         turn_of(origin_dir, git_env, "t0")
 
 
-def test_a_closed_task_s_turn_is_read_from_its_closed_notes_folder(origin_dir, git_env) -> None:
+def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(origin_dir, git_env) -> None:
     with pytest.raises(FoundryError, match=r"task c0 has no turn: agent-notes has no .agent/tasks/closed/c0/TURN"):
         turn_of(origin_dir, git_env, "c0")
 
@@ -339,11 +341,11 @@ def test_the_task_template_starts_with_the_planner_s_turn() -> None:
 
 
 @pytest.mark.parametrize("task_id, found", [("T0", Task.as_open("t0")), ("c0", Task.as_closed("c0"))])
-def test_a_task_has_the_status_of_the_folder_holding_its_notes(origin_dir, git_env, task_id: str, found) -> None:
+def test_a_task_has_the_status_of_the_dir_holding_its_notes(origin_dir, git_env, task_id: str, found) -> None:
     assert tasks_of(origin_dir, git_env).get_task_by_id(task_id) == found
 
 
-def test_a_task_in_neither_folder_is_not_found_naming_both(origin_dir, git_env) -> None:
+def test_a_task_in_neither_dir_is_not_found_naming_both(origin_dir, git_env) -> None:
     with pytest.raises(
         TaskNotFoundError,
         match=r"^task t9 doesn't exist: agent-notes has neither .agent/tasks/open/t9/ nor .agent/tasks/closed/t9/$",
@@ -358,7 +360,7 @@ def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_en
         tasks_of(origin_dir, git_env).get_task_by_id("t1")
 
 
-def test_a_task_in_both_folders_is_refused_naming_both(origin_dir, git_env) -> None:
+def test_a_task_in_both_dirs_is_refused_naming_both(origin_dir, git_env) -> None:
     push_notes(origin_dir, git_env, {".agent/tasks/closed/t0/TASK.md": "t0\n"})
 
     with pytest.raises(FoundryError, match=r"^task t0 is both open and closed: .*open/t0/ and .*closed/t0/$") as error:
@@ -400,7 +402,7 @@ def moved(files: dict[str, str], src: str, dst: str) -> dict[str, str]:
     }
 
 
-def test_close_moves_the_notes_folder_unchanged_in_one_signed_commit(origin_dir, git_env) -> None:
+def test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit(origin_dir, git_env) -> None:
     push_notes(
         origin_dir,
         git_env,
