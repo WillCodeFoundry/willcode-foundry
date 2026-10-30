@@ -71,6 +71,7 @@ exist, before doing anything else.
 | `TASK.md` | the human; drafted by the planner | The goal and acceptance criteria. Only the planner changes it, and only after the human approves the draft. Every other role: **never edit it.** |
 | `PROGRESS.md` | you | Current state of the work. Rewrite it as things change. |
 | `LEARNINGS.md` | you | Append-only log of what you found out and decided. |
+| `DESIGN.md` | the architect, agreed with the human | How the task fits the code's structure, when the task had an architect turn. Only the architect changes it. Every other role: **never edit it**, and follow it as you follow `TASK.md`. |
 | `REVIEW.md` | the reviewer | Review rounds; the dev answers under each finding, never editing the reviewer's text. |
 | `TURN` | whoever's turn it is | One line: the role whose turn it is, or `human`. See "Taking turns". |
 
@@ -130,8 +131,9 @@ human may type the next.
 
 ### Start
 
-1. Read `TASK.md`. If it is missing, empty, contradictory, or you cannot tell
-   what "done" means: **stop and ask**. Do not guess at scope.
+1. Read `TASK.md`, and `DESIGN.md` if the task has one. If `TASK.md` is
+   missing, empty, contradictory, or you cannot tell what "done" means:
+   **stop and ask**. Do not guess at scope.
 2. Read `PROGRESS.md` and `LEARNINGS.md`. If there is previous progress,
    continue from "In progress" / "Next" rather than starting over.
 3. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your

@@ -38,7 +38,8 @@ git -C "$AGENT_NOTES_DIR" show <commit> -- "$AGENT_TASK_FILE"
 ```
 
 Then review against the last version of `TASK.md` written by an allowed
-commit, and say which one that is.
+commit, and say which one that is. When the task has a `DESIGN.md`, review
+against it too.
 
 Known limit: the planner currently shares the architect's identity (see the
 comment in `$AGENT_KIT_DIR/git/allowed_signers`), so a change by the architect

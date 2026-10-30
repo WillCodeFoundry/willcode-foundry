@@ -36,6 +36,9 @@ default branch's change means `TASK.md` no longer holds. For example, the
 code the task extends was replaced.
 
 ## Method
+- Follow `DESIGN.md` when the task has one. If the code shows one of its
+  decisions won't work, stop and ask, as "When to stop and ask" in
+  `AGENTS.md` says, rather than design around it.
 - Work test-first with the `tdd` skill, at the seams `TASK.md`'s "Seams to
   test" names.
 - Apply what `TASK.md`'s "Terms and decisions" lists, with the
