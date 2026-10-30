@@ -39,7 +39,7 @@ Status: ready for review
 ## In progress
 
 ## Next
-- Reviewer: round 5, fix diff `55c7583..1f880c0`.
+- Reviewer: round 5, fix diff `55c7583..HEAD`. It includes, beyond the round 4 findings, the owner's rename of `ProjectTasks` instances from `tasks` to `project_tasks` (and the `tasks_of` test helper to `project_tasks_of`), asked for directly by the owner.
 - Deferred follow-ups: R19 (`run.main` calls `role_to_launch` before `prepare_launch`, shown only by reading) and R20 (close/reopen don't prompt, read TURN or check the PR, shown only by reading). Each needs fakes for config, paths and the sandbox to test.
 - Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
 - This sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; the new layout applies to sandboxes created after merge.
