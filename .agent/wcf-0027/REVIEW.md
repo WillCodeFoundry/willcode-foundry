@@ -589,12 +589,14 @@ The practices it checks:
 
 ruff doesn't select pep8-naming (`N`) or flake8-builtins (`A`), so none of this is tool-checked. GLOSSARY.md and DESIGN.md override generic practice, and a name DESIGN.md fixes would be a design question.
 
+**Owner's ruling:** the naming problems block. After this round was first written with R21–R25 as Follow-ups, the owner ruled that they block, overriding the Standards bar for names in this task. This round was relabelled in place before the dev's turn. The owner made this call after round 3, so the turn goes to the dev, as the owner directed, not to `human`.
+
 ### Who reads what
 
 | Role | Read | Then |
 |---|---|---|
-| **Dev** | R21–R25, all Follow-ups | Fix them, or ask the owner to defer them |
-| **Owner** | R22's label, and R16 from round 2 | Say whether R22 should block (see its note), and whether R16 should |
+| **Dev** | R21–R25, all Blocking by the owner's ruling | Fix each one test-first, and answer it by id |
+| **Owner** | R16 from round 2 | Say whether R16 should block |
 
 There are no design questions this round.
 
@@ -608,10 +610,10 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
 | R1–R15, R17, R18 | closed |
 | R16 | deferred, waiting on the owner |
 | R19, R20 | deferred, accepted as is |
-| R21 | still open (Follow-up). The code hasn't changed since round 3 |
+| R21 | still open, and now **Blocking** by the owner's ruling (a name that misleads: `moved`'s docstring promises a prefix match). The code hasn't changed since round 3. Direction: match `src` as a path prefix, as the docstring says |
 
 ### Names
-- **R22 (Follow-up), test names say "notes folder", a term GLOSSARY.md avoids.**
+- **R22 (Blocking), test names say "notes folder", a term GLOSSARY.md avoids.**
   - GLOSSARY.md:49, under "Task notes dir", says: _Avoid_: notes folder.
   - The branch adds or renames nine test names that use it in `tests/test_task.py`, at :106, :118, :202, :214, :323 and :401. Three more at :342, :346 and :361 say "folder" for the open or closed dir. Examples:
     - `test_a_closed_task_s_notes_folder_is_under_closed`
@@ -619,26 +621,26 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
   - The code they test says `task_notes_dir`, so grepping `tests/` for that name misses them.
   - The habit is older than this task: three names at `80f4b9a` already used "notes folder", and one remains, at :146.
 
-  Who hits it: anyone searching the tests for `task_notes_dir` coverage, or reading `pytest -v`. Direction: use the glossary's term, "task notes dir", in the names the branch adds. Leave the older one at :146 to a follow-up of its own.
+  Who hits it: anyone searching the tests for `task_notes_dir` coverage, or reading `pytest -v`. Direction: use the glossary's term, "task notes dir", in the names the branch adds. Rename the older one at :146 too, so the file uses one term.
 
-  _Label:_ the naming reviewer marked this Blocking, as a breach of the glossary. I downgraded it. The test names don't mislead anyone into a wrong action, since "notes folder" can't be mistaken for anything else. The bar asks for that, not for every glossary breach. If you want glossary breaches in names to block, say so here.
-- **R23 (Follow-up), `_move`'s `commit` parameter holds a commit message.**
+  _Label:_ the naming reviewer marked this Blocking, as a breach of the glossary. I first downgraded it to a Follow-up, and the owner's ruling makes it Blocking again.
+- **R23 (Blocking), `_move`'s `commit` parameter holds a commit message.**
   - It is defined at `src/foundry/project_tasks.py:121`, and passed as `commit=f"Close task {task.id}"` at :94 and as `commit=f"Reopen task …"` at :104.
   - At :129 it is used as `clone.commit(commit)`.
   - Inside `_move`, "commit" means three things: the `ProjectClone.commit` method, this string, and a git commit, in the docstring at :124-125.
 
   Who hits it: someone editing `_move`, who may take it for a ref. Direction: name it for the message it holds.
-- **R24 (Follow-up), `Outcome.done` is a string that reads like a boolean.**
+- **R24 (Blocking), `Outcome.done` is a string that reads like a boolean.**
   - It is defined at `src/foundry/commands/task.py:79` and used as `f"{outcome.done} task …"` at :90.
   - `done` reads as a predicate, so `if outcome.done:` would look natural, and it is always true.
 
-  Who hits it: a developer adding a fourth outcome, which is rare. Direction: name it for the past-tense verb it holds, or accept as is.
-- **R25 (Follow-up), `role_to_launch` names half of what it does.**
+  Who hits it: a developer adding a fourth outcome, which is rare. Direction: name it for the past-tense verb it holds.
+- **R25 (Blocking), `role_to_launch` names half of what it does.**
   - It is defined at `src/foundry/commands/run.py:52` and called at :39 as `role_name, task = role_to_launch(...)`.
   - It returns the `Task` too, and it is where `foundry run` refuses a closed or missing task (criterion 10). The docstring at :55-57 says so, but the call site gives no hint.
   - DESIGN.md doesn't fix this name.
 
-  Who hits it: a reader of `main` looking for where a closed task is refused. Direction: name it for the check as well as the result, or accept as is, since it follows `role_for_turn`'s style.
+  Who hits it: a reader of `main` looking for where a closed task is refused. Direction: name it for the check as well as the result.
 
 Checked and not raised:
 - **Names DESIGN.md fixes:** `get_task_by_id` (its `get_` hides a checkout and raises domain errors), `as_open` and `as_closed`, `OPEN_DIR` and `CLOSED_DIR`, `from_id_and_status`, `in_scratch_clone`, `move_dir`, `ProjectTasks`, `TaskNotFoundError` and `Status`. They would be design questions, and none misleads enough to raise one.
@@ -650,6 +652,6 @@ Checked and not raised:
 Coverage: every module, class, function and method the branch adds or renames was checked. Each is `-` except `_move` (R23), `Outcome.done` (R24), `role_to_launch` (R25), and the test names listed under R22.
 
 ### Summary
-Names: 4 findings, R22–R25, none blocking. The worst is R22, glossary-avoided "notes folder" in nine test names. R21 is still open. R16 still waits on the owner.
+Names: 4 new findings, R22–R25, and R21 from round 3. All five block, by the owner's ruling. The worst is R22, the glossary-avoided "notes folder" in nine test names. R16 still waits on the owner.
 
-Verdict: approved
+Verdict: changes needed
