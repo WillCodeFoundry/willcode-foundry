@@ -35,6 +35,13 @@ The Spec and Behaviour reviewers ran these in throwaway clones at 2585b62, after
 
   Who hits it: the next dev who changes how foundry reaches a project, for example a new prefix or env, and has to edit four places. Direction: extract the scratch `ProjectTasks` once and share it, or accept as is, since DESIGN.md asks for "the same composition-root shape as `create_main`".
 
+- **R7 (Follow-up), possible Mysterious Name: `turn` and `role_name` in `run.main`.** The reviewer added this one too. In `src/foundry/commands/run.py:39-49`, one decision ("was a ROLE given?") is now encoded three times:
+  - `turn = tasks.read_turn(task) if role_name is None else None` (`:45`);
+  - `if turn is not None:` (`:46`), which tests the same condition through the sentinel;
+  - `assert role_name is not None` (`:49`), which exists only because the flow no longer shows mypy that the role is set.
+
+  So `role_name` means "the ROLE given, or None" until line 47, and "the role to launch" after it. `turn` means "the TURN file, or not read". Before this change, it was one `if role_name is None:` block. Who hits it: the next dev who edits the launch order, who has to trace three statements to know a role is set. Direction: decide the role in one branch inside the clone block, so the sentinel and the assert go away.
+
 Dropped, because DESIGN.md decides them:
 - The `isinstance(self.status, Status)` → `TypeError` guard (`task.py:57-58`), flagged under design rule 6. DESIGN.md: "a non-`Status` is a `TypeError`".
 - `is_closed` testing for `TASK.md` while `create` and `_move` test for the dir, flagged as Duplicated Code. DESIGN.md: "`is_closed` reads the closed task's `TASK.md`".
@@ -55,6 +62,11 @@ Found clean:
   - The test at `tests/test_task.py:194-204` passes only because its closed fixture `c0` has no `task/c0` branch.
 
   Who hits it: the owner reusing a closed task's id. That's rare, but it is the case the criterion describes. Direction: test a closed task that still has its branch, then make the refusal name the dir.
+- **R8 (Follow-up), criterion 10 is shown only by reading `run.main`.** The reviewer added this one. The criterion: "`foundry run PROJECT [ROLE] TASK` refuses a closed task, with or without ROLE, before creating or attaching any sandbox."
+  - `tests/test_run.py:129-144` tests `require_open` on its own.
+  - That `main` calls it before `prepare_launch` (`src/foundry/commands/run.py:44` before `:50`), on both paths, is checked by no test.
+
+  The code is right today. By the skill's rule, though, the criterion is partial: there's code but no test. A reordering, such as the one R7 invites, would go unnoticed. Direction: test `main` against the host and sbx fakes the host tier already has, for a closed task with and without ROLE. Or accept as is, if testing the composition root costs too much.
 
 Criteria met, with the evidence for each:
 
@@ -68,7 +80,7 @@ Criteria met, with the evidence for each:
 | 6, 7. The four refusals push nothing | `tests/test_task.py:398` |
 | 8. No confirmation, `TURN`, PR check, branch, sandbox or `sessions/` | read in `_move`, `close_main` and `reopen_main`; branches unchanged in the test at `:359` |
 | 9. No signing key | `tests/test_task.py:411`, the same pattern as `create`'s test at `:178` |
-| 10. `run` refuses a closed task, with or without ROLE | `require_open` at `run.py:44` runs before `prepare_launch` at `:50`. It is tested at `tests/test_run.py:129`, and its order in `main` was checked only by reading |
+| 10. `run` refuses a closed task, with or without ROLE | partial, see R8: `require_open` is tested at `tests/test_run.py:129`, and its order in `main` was checked only by reading |
 | 11. `run` reads `open/<id>/TURN` | `run.py:45`; `tests/test_run.py` |
 | 12. README table and `agent-notes` row | `tests/test_docs.py` passes |
 | 13. GLOSSARY.md and ADR 0012 | they match "Terms and decisions", including the "Projects and tasks" row |
@@ -106,8 +118,8 @@ Summary:
 
 | Axis | Findings | Blocking | Worst |
 |---|---|---|---|
-| Standards | 3 | 0 | R1, `Task.status` reads as fact |
-| Spec | 1 | 1 | R3, `create` on a closed id doesn't name the dir |
+| Standards | 4 | 0 | R1, `Task.status` reads as fact |
+| Spec | 2 | 1 | R3, `create` on a closed id doesn't name the dir |
 | Behaviour | 1 | 1 | R4, a move can silently drop ignored files or rewrite CRLF ones |
 | PR description | 1 | 0 | R5 |
 
