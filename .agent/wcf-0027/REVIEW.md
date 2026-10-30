@@ -361,6 +361,8 @@ There is no scope creep. `run` refusing a missing task, and the both-dirs error,
 
   Docstring corrected in `55c7583`: it now names the `text` attribute that can still rewrite a file. Deferred: whether `commit` should stop running `add --all` after a move is the owner's call, as "Who reads what" says. It changes `ProjectClone.commit`'s contract, which `create_task` also relies on. Noted under Next in PROGRESS.md.
 
+  Owner's decision (2026-10-30, in the dev's session): accepted as is. The edge case is ignored; the docstring from `55c7583` stays.
+
 Found sound:
 - the first create with no `agent-notes` branch;
 - a repository with no commits;

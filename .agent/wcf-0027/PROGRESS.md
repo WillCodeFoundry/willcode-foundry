@@ -30,6 +30,8 @@
   - R21 fixed in `32deef7`: `moved` matches a path prefix; the close test has a `t01` beside `t0`.
   - R22 fixed in `89eaaf2`: test names say "task notes dir", not "notes folder".
   - R23 fixed in `edd1e43` (`_move`'s `message`); R24 in `32209e3` (`Outcome.past_tense`); R26 in `bb703d4` (`open_candidate`/`closed_candidate`, plus `open_dir`/`closed_dir`).
+  - R16: the owner accepted it as is (noted under R16 in REVIEW.md).
+  - CI green on `1f880c0`.
   - R25 fixed in `1f880c0`: `require_open_task_and_role`, which now returns `(task, role_name)` to match its name.
 
 Status: ready for review
@@ -38,7 +40,6 @@ Status: ready for review
 
 ## Next
 - Reviewer: round 5, fix diff `55c7583..1f880c0`.
-- Owner: say whether R16 blocks, meaning `ProjectClone.commit` stops running `add --all` after a move, so a forced global `text` attribute can't rewrite a moved CRLF file.
 - Deferred follow-ups: R19 (`run.main` calls `role_to_launch` before `prepare_launch`, shown only by reading) and R20 (close/reopen don't prompt, read TURN or check the PR, shown only by reading). Each needs fakes for config, paths and the sandbox to test.
 - Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
 - This sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; the new layout applies to sandboxes created after merge.
