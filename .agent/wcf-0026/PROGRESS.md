@@ -9,8 +9,9 @@
 - PR opened: https://github.com/WillCodeFoundry/willcode-foundry/pull/28
 - CI failed on #28: three tests' local setup commits ran the kit's git hooks, which need the `AGENT_*` variables CI lacks. Fixed in `d0f1788` (those commits skip the hooks, as `test_git_hooks`' `commit_unchecked` does); CI green. Test-only change made after approval.
 - Review round 4 (on `d0f1788`): `Verdict: approved`. R7 deferred. PR #28 CI green at `d0f1788`.
+- Merged `main` (PR #27, #29) into the task branch in `b978941`, a clean merge after approval, the one exception ROLE.md allows. Checks pass CI-style, and PR #28 CI is green at `b978941`.
 
-Status: approved; PR #28 open, waiting on the human
+Status: approved; PR #28 ready, waiting on the human
 
 ## In progress
 

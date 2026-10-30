@@ -8,3 +8,4 @@
 - 2026-10-30 [tools] — The guard-bash hook refuses any shell command whose text contains `core.hooksPath`, even a heredoc that only edits a test or notes file. Use the Edit tool for those.
 - 2026-10-30 [proposal] — The dev ROLE (or AGENTS.md "Finish") could say: before handing off, run the project's tests with the agent's own session variables and SSH agent unset, since CI has neither.
 - 2026-10-30 [process] — Third relaunch, same stale-notes symptom (notes 1 commit behind, round 4 missing, `TURN` = reviewer). Pulled by hand.
+- 2026-10-30 [process] — Turn returned to the dev only so the task branch could catch up with `main` (new ROLE rule from PR #29). Merge was clean, so no new review round was needed.
