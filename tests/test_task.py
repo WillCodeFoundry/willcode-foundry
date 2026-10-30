@@ -395,14 +395,20 @@ def tree(origin_dir: Path, git_env: dict[str, str]) -> dict[str, str]:
 
 def moved(files: dict[str, str], src: str, dst: str) -> dict[str, str]:
     """``files``, by path, with the ones under the notes dir ``src`` now under ``dst``."""
-    return {path.replace(src, dst): entry for path, entry in files.items()}
+    return {
+        dst + path.removeprefix(src) if path.startswith(f"{src}/") else path: entry for path, entry in files.items()
+    }
 
 
 def test_close_moves_the_notes_folder_unchanged_in_one_signed_commit(origin_dir, git_env) -> None:
     push_notes(
         origin_dir,
         git_env,
-        {".agent/tasks/open/t0/sub/NOTE.md": "n\n", ".agent/tasks/open/t0/PROGRESS.md": "p\n"},
+        {
+            ".agent/tasks/open/t0/sub/NOTE.md": "n\n",
+            ".agent/tasks/open/t0/PROGRESS.md": "p\n",
+            ".agent/tasks/open/t01/TASK.md": "t01\n",
+        },
     )
     before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     commits_before = len(notes_commits(origin_dir, git_env))
@@ -410,9 +416,10 @@ def test_close_moves_the_notes_folder_unchanged_in_one_signed_commit(origin_dir,
 
     assert tasks_of(origin_dir, git_env).close_task("T0") == Task.as_closed("t0")
 
-    expected = moved(before, "tasks/open/t0", "tasks/closed/t0")
+    expected = moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
     assert ".agent/tasks/closed/t0/sub/NOTE.md" in expected
+    assert ".agent/tasks/open/t01/TASK.md" in expected
     assert notes_commits(origin_dir, git_env)[0] == "Close task t0"
     assert len(notes_commits(origin_dir, git_env)) == commits_before + 1
     assert_notes_signed_with_your_key(origin_dir, git_env)
@@ -424,7 +431,7 @@ def test_reopen_makes_the_reverse_move_in_one_signed_commit(origin_dir, git_env)
 
     assert tasks_of(origin_dir, git_env).reopen_task("C0") == Task.as_open("c0")
 
-    expected = moved(before, "tasks/closed/c0", "tasks/open/c0")
+    expected = moved(before, ".agent/tasks/closed/c0", ".agent/tasks/open/c0")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
     assert notes_commits(origin_dir, git_env)[0] == "Reopen task c0"
     assert_notes_signed_with_your_key(origin_dir, git_env)
@@ -444,7 +451,7 @@ def test_a_move_keeps_files_your_git_config_would_ignore_or_convert(origin_dir, 
 
     tasks_of(origin_dir, git_env).close_task("t0")
 
-    assert tree(origin_dir, git_env) == moved(before, "tasks/open/t0", "tasks/closed/t0")
+    assert tree(origin_dir, git_env) == moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
 
 
 @pytest.mark.parametrize(
