@@ -20,12 +20,20 @@
 - No merge conflicts this turn (12da10e merged clean).
 - PR #34 is a draft again: it had been marked ready after the old round-2 approval.
 
+- Review round 2 (changes needed) answered in REVIEW.md. Merged origin/HEAD first (already up to date, no conflicts). CI green on `55c7583`.
+  - R14 fixed in `02c1903`: `report` takes a typed `Outcome` constant, not an action key.
+  - R15 fixed in `fa0fd7b`: `_move`'s docstring names its reliance on `get_task_by_id`'s checkout.
+  - R17 fixed in `4672f41` (`if_open`/`if_closed`); R18 fixed in `d70a68a` (`moved` test helper).
+  - R16: `move_dir` docstring corrected in `55c7583`; the real fix is deferred to the owner. R19, R20 accepted as is (deferred).
+
 Status: ready for review
 
 ## In progress
 
 ## Next
-- Reviewer: round 2, against DESIGN.md at 85a2016. Branch head `50180d1`.
+- Reviewer: round 3, fix diff `50180d1..55c7583`.
+- Owner: say whether R16 blocks, meaning `ProjectClone.commit` stops running `add --all` after a move, so a forced global `text` attribute can't rewrite a moved CRLF file.
+- Deferred follow-ups: R19 (`run.main` calls `role_to_launch` before `prepare_launch`, shown only by reading) and R20 (close/reopen don't prompt, read TURN or check the PR, shown only by reading). Each needs fakes for config, paths and the sandbox to test.
 - Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
 - This sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; the new layout applies to sandboxes created after merge.
 

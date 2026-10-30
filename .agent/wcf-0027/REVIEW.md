@@ -317,6 +317,8 @@ Checked clean:
   - DESIGN.md names `role_to_launch` as this criterion's seam, so it is not Blocking.
 
   Who hits it: a developer reordering `main`, rarely. Direction: accept as is, under DESIGN.md's seam. Testing `main` would need fakes for config, paths and sandbox, which is new machinery.
+
+  Deferred: accepted as is, as the direction says. A test of `main` needs fakes for config, paths and the sandbox, which is the machinery DESIGN.md's seam avoids. Noted under Next in PROGRESS.md.
 - **R20 (Follow-up), most of criterion 8 is shown only by reading.**
   - The criterion: "Neither `close` nor `reopen` asks for confirmation, reads `TURN`, checks the pull request, or touches `task/<id>`, sandboxes or `sessions/`."
   - Tested: branches are unchanged, and only the moved paths change (`tests/test_task.py:404`, `:409`, `:414`).
@@ -324,6 +326,8 @@ Checked clean:
   - Sandboxes and `sessions/` are out of reach by construction, since `ProjectTasks` holds only a `ProjectClone`.
 
   Who hits it: a developer adding a prompt or a `TURN` check to close later. Direction: accept as is, or add a test that runs `close_main` with no stdin.
+
+  Deferred: accepted as is. `close_main` reads config and the foundry root, so a test of it needs the same fakes as R19. Noted under Next in PROGRESS.md.
 
 The other criteria are met:
 
@@ -355,6 +359,8 @@ There is no scope creep. `run` refusing a missing task, and the both-dirs error,
 
   Who hits it: an owner with an explicit, non-auto `text` attribute in their global gitattributes. That is rare. Direction: commit only what the move staged, or accept as is and correct the docstring.
 
+  Docstring corrected in `55c7583`: it now names the `text` attribute that can still rewrite a file. Deferred: whether `commit` should stop running `add --all` after a move is the owner's call, as "Who reads what" says. It changes `ProjectClone.commit`'s contract, which `create_task` also relies on. Noted under Next in PROGRESS.md.
+
 Found sound:
 - the first create with no `agent-notes` branch;
 - a repository with no commits;
@@ -377,22 +383,30 @@ Who hits these: the next developer changing this code.
   - At `2585b62` there was no switch; this was introduced by the fix, and the fix is local.
 
   Who hits it: a developer adding or renaming a task command, who edits `_REPORTS` and a literal in another function. Direction: pass `report` something mypy checks instead of a key.
+
+  Fixed in `02c1903`. `report` takes an `Outcome` (a `NamedTuple`), and each `*_main` passes its constant: `CREATED`, `CLOSED` or `REOPENED`. mypy checks the name, and no lookup is left to fail after the push.
 - **R15 (Blocking), hidden temporal coupling: `_move` relies on a checkout it doesn't do or name.**
   - At `2585b62`, `_move` checked out `agent-notes` itself. The fix removed that line.
   - `_move` (`src/foundry/project_tasks.py:121-126`) now moves, commits and pushes on whatever is checked out. It works only because `close_task` and `reopen_task` call `get_task_by_id` first, which checks out at `:44`.
   - `create_task` names that same dependency in a comment (`:69`). `_move` doesn't.
 
   Who hits it: a developer who makes `get_task_by_id` read without a checkout, as `read_task_turn` (`:112`) already does with `ProjectClone.read`. Close and reopen would then `git mv` on the default branch's checkout, failing with git's error and no hint why. Direction: make the dependency visible where `_move` relies on it.
+
+  Fixed in `fa0fd7b`. `_move`'s docstring says it relies on `get_task_by_id` having checked out NOTES_BRANCH, so the move is made on the commit the task was found on. I kept it out of `_move`'s code: a second `check_out` would fetch again, and could move a task on a newer commit than the one it was found on.
 - **R17 (Follow-up), Mysterious Name: `opened` and `closed` in `get_task_by_id`.**
   - `src/foundry/project_tasks.py:45` holds candidates, where the task would be. They aren't tasks found in that state.
   - The booleans `is_open` and `is_closed` sit beside them (`:46`).
   - The "doesn't exist" message at `:53-54` is built from `opened.id`.
 
   Who hits it: someone editing the lookup, at a low cost, since it is 15 lines. Direction: name them as candidates, or accept as is.
+
+  Fixed in `4672f41`: `if_open` and `if_closed`.
 - **R18 (Follow-up), Duplicated Code: three copies of the expected tree after a move.**
   - `tests/test_task.py:442-444` adds a third copy of the comprehension at `:408` and `:422`.
 
   Who hits it: someone changing how a move's expected tree is computed. Direction: one helper, or accept as is.
+
+  Fixed in `d70a68a`: `moved(files, src, dst)`, used by all three tests.
 
 Checked and not raised:
 - **`close_task` and `reopen_task` (`:86-104`):** these mirror each other, but the shared part is already in `_move`.
