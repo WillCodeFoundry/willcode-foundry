@@ -252,3 +252,101 @@ Fixed in the PR description. With `50180d1`, `run` refuses a missing task with o
 | PR description | 1 | 0 | R5 |
 
 Verdict: changes needed
+
+## Round 2 (reviewing 50180d1)
+
+This round reviews the fix diff `12da10e..50180d1`. `12da10e` is a clean merge of `origin/main`, so `50180d1` is the only fix commit. It also reviews the DESIGN.md change `b1caefd..85a2016`. It uses the three axes of the installed `code-review` skill, with the smell baseline inside Standards. Finding ids continue from R13.
+
+### TASK.md changed by another role
+None. The commits that changed TASK.md are still `a137f7d` (`Add task wcf-0027`, by the owner) and `1aeba97` (signed by the architect identity, which the planner shares). This round reviews TASK.md as of `1aeba97`.
+
+DESIGN.md is reviewed as of `85a2016`, signed by the architect identity, like `b1caefd` before it.
+
+### Round 1 findings
+
+| Id | Verdict | Evidence at HEAD |
+|---|---|---|
+| R1 | closed | `get_task_by_id` (`src/foundry/project_tasks.py:38`) is the one lookup. Every public method takes an id. `is_closed` and the status asserts are gone. GLOSSARY.md names `Status` |
+| R2 | closed | `ARCHITECTURE.md:15` matches `run.main`'s order |
+| R3 | closed | `create_task` looks the task up (`project_tasks.py:66-71`) before the branch check. `tests/test_task.py:214` uses a closed task with a real `task/c0` branch |
+| R4 | closed | Rerun of the round 1 case (global `*.log`, `*.sh` and `sub/` excludes, `autocrlf=input`, CRLF and executable files, a nested dir): close made 5 pure renames and nothing else. Reopen restored the tree exactly. Also holds with a global `* text=auto` attribute. See R16 for a rarer variant |
+| R5 | closed | PR #34's Blast Radius now matches `get_task_by_id` |
+| R6 | closed | All four roots use `in_scratch_clone`, and all three task commands print through `report`. See R14 |
+| R7 | closed | "Was a ROLE given?" is decided once, in `role_to_launch` (`src/foundry/commands/run.py:62`) |
+| R8 | closed | `tests/test_run.py:146`, `:154` and `:160` run `role_to_launch` against a real repository, with and without ROLE, for open, closed and missing tasks |
+| R9 | closed | PROJECT and TASK are defined once, in the parent parser |
+| R10 | closed | The test helpers are deduplicated, and the refusal tests are parametrized by method |
+| R11 | closed | `Status` uses `auto()`, and `_STATUS_DIRS` maps each status to its dir (`src/foundry/task.py:40-45`) |
+| R12 | closed | The loop is gone |
+| R13 | closed | The `isinstance` guard and its test are gone |
+
+### Checks
+The Spec and Behaviour reviewers ran these in throwaway clones at `50180d1`, after `uv sync --group dev`:
+
+| Check | Result |
+|---|---|
+| `uv run pytest` (host tier) | 601 passed, 27 deselected |
+| `uv run ruff check .` and `ruff format --check .` | clean, 146 files |
+| `uv run mypy` | no issues in 98 files |
+| `tests/test_docs.py` | passes |
+
+### Standards
+- **R14 (Follow-up), `report` switches on an action string.**
+  - In `src/foundry/commands/task.py:76-85`, `_REPORTS[action]` is called with the literals `"create"`, `"close"` and `"reopen"`.
+  - mypy can't catch a mistyped action, so the mistake would surface as a `KeyError` after the push.
+  - The report test catches it today.
+
+  Who hits it: a developer adding another task command, rarely. Direction: pass something mypy checks instead of a free string, or accept as is.
+- **R15 (Follow-up), `_move` depends unstated on `get_task_by_id` having checked out `agent-notes`.**
+  - `get_task_by_id` does the checkout (`src/foundry/project_tasks.py:44`). DESIGN.md designs that side effect.
+  - `create_task` says it relies on the checkout, in a comment at `:69`.
+  - `_move` (`:121-126`) moves files in that checkout and says nothing.
+
+  Who hits it: a developer who changes the lookup to read without a checkout. Close and reopen would then move files on whatever branch is checked out. Direction: name the dependency where `_move` relies on it, or accept as is.
+
+A design note for the owner, not a dev finding. `ProjectTasks.in_scratch_clone` (`project_tasks.py:28-36`) builds the clone and its temporary folder. ARCHITECTURE.md rule 7 gives that job to a command's `main`. DESIGN.md (85a2016) chose this explicitly to answer R6, so the code is within the design.
+
+Checked clean: rule 1 (paths spelled only in `task.py`), rule 3 (`move_dir` goes through `ProjectClone`), and rule 6 (`TaskNotFoundError` caught only where DESIGN.md says). There is no Speculative Generality: every new name is in DESIGN.md.
+
+### Spec
+No new findings. All 15 criteria hold at HEAD:
+
+| # | Evidence |
+|---|---|
+| 1 | `project_tasks.py:73,81`; `tests/test_task.py:146` |
+| 2 | `project_tasks.py:71`; `test_task.py:201`, `:214`; both dirs: `:361` |
+| 3 | `Task.task_notes_dir`; `test_task.py:106`, `:118`; `test_session.py` and `test_task_contract.py` |
+| 4, 5 | `project_tasks.py:86-104`, `:121-126`; `test_task.py:396`, `:417`, `:428` |
+| 6, 7 | `test_task.py:447-461`, each case checking nothing was pushed |
+| 8 | `close_task`, `reopen_task` and `_move` read no TURN, check no PR and ask nothing; branches unchanged in `test_task.py:396` |
+| 9 | `test_task.py:464-473` |
+| 10 | `run.py:61`, before `prepare_launch` at `:46`; `test_run.py:154` |
+| 11 | `run.py:63`; `test_run.py:146` |
+| 12 | `test_docs.py` passes |
+| 13 | GLOSSARY.md and ADR 0012 match "Terms and decisions" |
+| 14 | The snippet is in PR #34. Rerun on a toy bare repo: one commit, all 100% renames |
+| 15 | See Checks |
+
+There is no scope creep. `run` refusing a missing task, and the both-dirs error, are in DESIGN.md (85a2016).
+
+### Behaviour
+- **R16 (Follow-up), a move still rewrites CRLF files when your global gitattributes force text conversion.**
+  - `move_dir` stages with `git mv` (`src/foundry/project_clone.py:98`).
+  - `commit` then runs `git add --all` (`:102`). The checkout and the move fall within the same second, so git re-reads the moved files under your global attributes.
+  - Reproduced 3 of 3 times. With a global `core.attributesFile` holding `* text eol=lf`, closing `t0` changed the blobs of a CRLF `.md` and `sub/run.sh` to LF.
+  - This breaks "every file unchanged". `move_dir`'s docstring (`:92`) says your line-ending settings can't change a file.
+  - The common `text=auto` forms are safe.
+
+  Who hits it: an owner with an explicit, non-auto `text` attribute in their global gitattributes. That is rare. Direction: commit only what the move staged, or accept as is and correct the docstring.
+
+Found sound: the first create with no `agent-notes` branch; a repository with no commits; close, reopen and `read_task_turn` with no `agent-notes`; a task in both dirs (refused, nothing pushed); upper-case ids; a missing `closed/` parent; `in_scratch_clone` cleanup when the clone fails; and `role_to_launch` refusing before `prepare_launch`.
+
+### Summary
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| Standards | 2 | 0 | R15, `_move` relies on a checkout it doesn't name |
+| Spec | 0 | 0 | none |
+| Behaviour | 1 | 0 | R16, a forced `text` attribute rewrites CRLF files on a move |
+
+Verdict: approved
