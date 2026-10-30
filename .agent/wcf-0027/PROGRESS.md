@@ -34,12 +34,15 @@
   - CI green on `f8f53b5`.
   - R25 fixed in `1f880c0`: `require_open_task_and_role`, which now returns `(task, role_name)` to match its name.
 
-Status: ready for review
+- Owner's rename (`f8f53b5`): `ProjectTasks` instances are `project_tasks`, and the `tasks_of` test helper is `project_tasks_of`. CI green on `f8f53b5`.
+- Owner skipped review round 5 and asked for the PR to be ready to merge. Merged origin/HEAD (already up to date, no conflicts). PR description updated with the `pr` skill (round 4 answered and unreviewed, R16/R19/R20 exceptions, checks at `f8f53b5`); PR #34 marked ready. Merge state: blocked only on the required GitHub approval, which is the owner's.
+
+Status: ready to merge
 
 ## In progress
 
 ## Next
-- Reviewer: round 5, fix diff `55c7583..HEAD`. It includes, beyond the round 4 findings, the owner's rename of `ProjectTasks` instances from `tasks` to `project_tasks` (and the `tasks_of` test helper to `project_tasks_of`), asked for directly by the owner.
+- Owner: approve PR #34 on GitHub (the `main` ruleset needs one code-owner approval) and merge it, then run the migration snippet from its description on each project's `agent-notes`.
 - Deferred follow-ups: R19 (`run.main` calls `role_to_launch` before `prepare_launch`, shown only by reading) and R20 (close/reopen don't prompt, read TURN or check the PR, shown only by reading). Each needs fakes for config, paths and the sandbox to test.
 - Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
 - This sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; the new layout applies to sandboxes created after merge.
