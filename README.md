@@ -32,7 +32,7 @@ $ uv run foundry run tkt-store wcf-0042           # start the role whose turn it
 
 Task ids are lowercased: `WCF-0042` is task `wcf-0042`. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
-A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question in its `PROGRESS.md`. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, write `dev` in `TURN` too, or the planner starts.
+A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question in its `PROGRESS.md`. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, write `dev` in `TURN` too, or the planner starts.
 
 | Command | What it does |
 |---|---|
@@ -51,7 +51,7 @@ Agents write nothing to this repository. Their work goes to the project's reposi
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task>/`: `TASK.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | every role, each only in its own task's dir |
+| `agent-notes` | `.agent/<task>/`: `TASK.md`, `DESIGN.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | every role, each only in its own task's dir |
 
 `TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create` always signs the commit that creates the task, with your key, and refuses to create the task if it can't:
 

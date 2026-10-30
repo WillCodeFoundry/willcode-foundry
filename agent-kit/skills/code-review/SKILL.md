@@ -52,6 +52,8 @@ git -C "$AGENT_NOTES_DIR" show "<commit>:$AGENT_TASK_FILE"
 
 If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spec available".
 
+When the task has a `DESIGN.md`, the architect's design agreed with the human, it is part of the spec too. Read it from the notes checkout, beside `TASK.md`.
+
 ### 3. Identify the standards sources
 
 In this order: the project's own `AGENTS.md` at the repository root first, since it wins for anything about the code (as `AGENTS.md` in the agent kit says); then the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`; then `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Each counts only if present. Where they disagree, the earlier one wins.
@@ -96,7 +98,7 @@ Every brief also carries these rules, word for word:
 The bar for Blocking, each brief carrying its own axis's:
 
 - **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a name that misleads where it is used, or a contradicted ADR.
-- **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out.
+- **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out or departs from a decision in `DESIGN.md`.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
 
 From round 2 on, every brief also carries the fix diff command, the open findings to judge, and the settled list, with this rule: "Don't raise a settled finding again. Look for new problems only in the lines the fix diff touches."
@@ -111,7 +113,7 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Spec sub-agent prompt** should include:
 
 - The diff command and commit list.
-- The text of `TASK.md` from step 2, and the commit it came from.
+- The text of `TASK.md` from step 2, and the commit it came from, and the text of `DESIGN.md` when the task has one.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. A requirement is met only when you can name the code and the test, or the check you ran, that shows it; code that merely looks like it does the job is partial. Under 400 words."
 
 **Behaviour sub-agent prompt** should include:
