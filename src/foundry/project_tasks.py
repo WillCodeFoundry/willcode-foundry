@@ -91,7 +91,7 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)
         if task.status is Status.CLOSED:
             raise FoundryError(f"task {task.id} is already closed")
-        return self._move(task, Task.as_closed(task.id), commit=f"Close task {task.id}")
+        return self._move(task, Task.as_closed(task.id), message=f"Close task {task.id}")
 
     def reopen_task(self, task_id: str) -> Task:
         """Move the closed task's notes dir back to the open ones, in one commit pushed to NOTES_BRANCH.
@@ -101,7 +101,7 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)
         if task.status is Status.OPEN:
             raise FoundryError(f"task {task.id} is already open")
-        return self._move(task, Task.as_open(task.id), commit=f"Reopen task {task.id}")
+        return self._move(task, Task.as_open(task.id), message=f"Reopen task {task.id}")
 
     def read_task_turn(self, task_id: str) -> str:
         """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
@@ -118,14 +118,14 @@ class ProjectTasks:
             )
         return turn
 
-    def _move(self, task: Task, destination: Task, *, commit: str) -> Task:
-        """Move ``task``'s notes dir to ``destination``'s, then commit and push NOTES_BRANCH.
+    def _move(self, task: Task, destination: Task, *, message: str) -> Task:
+        """Move ``task``'s notes dir to ``destination``'s, commit it with ``message``, and push NOTES_BRANCH.
 
         Relies on get_task_by_id having found ``task``: it checked out NOTES_BRANCH, so the move is made on the commit
         the task was found on.
         """
         clone = self._clone
         clone.move_dir(task.task_notes_dir, destination.task_notes_dir)
-        clone.commit(commit)
+        clone.commit(message)
         clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
         return destination
