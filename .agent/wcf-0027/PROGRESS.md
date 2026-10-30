@@ -11,11 +11,14 @@
 
 - Round 2 approved. Merged origin/HEAD (already up to date), CI green, PR body and title written with the `pr` skill (via `gh api`; `gh pr edit` fails on missing `read:org` scope), PR marked ready. No commits after the approval.
 
+- PR description rewritten (2026-10-30 15:22 UTC) for the updated `pr` skill: Task section is one line plus a "For you to do" exception, Summary as diffs, Evidence names the failing test. Title unchanged. No code commits since round 2.
+
 Status: ready for review
 
 ## In progress
 
 ## Next
+- Reviewer: check the rewritten PR #34 description against the updated `pr` skill (round 3). Only the description changed; the branch is still `2585b62`.
 - Follow-ups deferred (R1 `run.py` assert, R3 test through `run.main`, R5 migration snippet moves wcf-0027 too): owner to reopen wcf-0027 if needed after running the snippet.
 - Reviewer: note I kept the Task and ProjectTasks tests in `tests/test_task.py` (shared git fixtures) rather than splitting the file as DESIGN.md says.
 - Follow-up (not done): this sandbox's own `AGENT_TASK_NOTES_DIR` is the old `.agent/wcf-0027`; new layout applies to sandboxes created after merge.
