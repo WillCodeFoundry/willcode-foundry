@@ -472,3 +472,54 @@ Coverage. Each cell is `-` for checked with nothing found, or a finding id. LF i
 | Design questions | 0 | - | - |
 
 Verdict: changes needed
+
+## Round 3 (reviewing 55c7583)
+
+This round reviews the fix diff `50180d1..55c7583`: `02c1903`, `fa0fd7b`, `4672f41`, `d70a68a` and `55c7583`. It uses the three axes of the current `code-review` skill: Standards, Spec and Behaviour. No ids are new this round, so the sequence continues from R20 next time.
+
+### TASK.md changed by another role
+None. The commits that changed TASK.md are still `a137f7d` (`Add task wcf-0027`, by the owner) and `1aeba97` (signed by the architect identity, which the planner shares). This round reviews TASK.md as of `1aeba97`, and DESIGN.md as of `85a2016`, also signed by the architect identity.
+
+### Earlier findings
+
+| Id | Verdict | Evidence at HEAD |
+|---|---|---|
+| R1–R13 | closed in round 2 | — |
+| R14 | closed | `report` takes an `Outcome` (`src/foundry/commands/task.py:76`, `:88`). The callers pass `CREATED`, `CLOSED` and `REOPENED` (`:54`, `:63`, `:72`), which mypy checks. No lookup can fail after the push. The output text is unchanged (`tests/test_task.py:265-274`) |
+| R15 | closed | `_move`'s docstring (`src/foundry/project_tasks.py:122-126`) names its reliance on `get_task_by_id`'s checkout. The direction was to make the dependency visible, and the reason given for not checking out again (a second fetch could move the task on a newer commit) is sound |
+| R16 | deferred | The `move_dir` docstring (`src/foundry/project_clone.py:92-93`) now says what is true. Spec reproduced it: `* text` turns CRLF into LF on a move, while `* -text` and `* text=auto` keep CRLF. Whether `commit` should stop running `add --all` after a move is still the owner's call |
+| R17 | closed | `if_open` and `if_closed` (`project_tasks.py:45`) read correctly at `:57`, beside `is_open` and `is_closed` |
+| R18 | closed | `moved()` (`tests/test_task.py:396`) is used at `:413`, `:427` and `:447` |
+| R19 | deferred | accepted as is, as round 2 says |
+| R20 | deferred | accepted as is, as round 2 says |
+
+### Checks
+The Spec and Behaviour reviewers each ran these in a throwaway clone at `55c7583`, after `uv sync --group dev`:
+
+| Check | Result |
+|---|---|
+| `uv run pytest` (host tier) | 601 passed, 27 deselected |
+| `tests/test_docs.py` | 50 passed |
+| `uv run ruff check .` and `ruff format --check .` | clean, 146 files |
+| `uv run mypy` | no issues in 98 files |
+
+### Standards
+No new findings. Checked and not raised:
+- `tests/test_task.py:397` says "notes dir", a term GLOSSARY.md lists under _Avoid_. The glossary's own "Open task" entry says "its notes dir" too, and the meaning is clear in a test helper.
+- `moved()` replaces `src` anywhere in a path, not only as a prefix. No test data can trip on it.
+- The module-level `CLOSED` sits beside `Status.CLOSED` and `task.CLOSED_DIR`. Each is qualified where it is used, so they don't get mixed up.
+
+### Spec
+No new findings. The fix diff adds no behaviour and changes no criterion's evidence. The round 2 table still holds, with criteria 8 and 10 partial, under the deferred R20 and R19. The new `move_dir` docstring is accurate against criterion 4, apart from R16. "Other than `auto`" also covers `-text`, which is harmless, so this wasn't raised.
+
+### Behaviour
+No new findings. These were found sound:
+- `CREATED`, `CLOSED` and `REOPENED` hold the same text as the old `_REPORTS`. `report` in `prune.py` and `repo.py` is a separate function and isn't affected.
+- The rename in `get_task_by_id` keeps both error messages and the return value.
+- `_move` has no callers besides `close_task` and `reopen_task`, and both look the task up first.
+- `moved()` computes the same trees as the three inline copies did.
+
+### Summary
+Standards 0, Spec 0, Behaviour 0: no new findings and none blocking. R16, R19 and R20 stay deferred. R16 is still waiting on the owner.
+
+Verdict: approved
