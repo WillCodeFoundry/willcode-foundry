@@ -127,7 +127,7 @@ def test_run_takes_an_optional_role_between_the_project_and_the_task(argv: list[
 
 
 @pytest.fixture
-def tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
+def project_tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
     """The tasks of a repository whose agent-notes holds open t1, whose turn is the reviewer's, and closed t2."""
     seed = tmp_path / "seed"
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
@@ -138,24 +138,30 @@ def tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
     git(seed, "add", ".agent")
     git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
-    with ProjectTasks.in_scratch_clone(str(origin), os.environ) as tasks:
-        yield tasks
+    with ProjectTasks.in_scratch_clone(str(origin), os.environ) as project_tasks:
+        yield project_tasks
 
 
 @pytest.mark.parametrize("role_name, launched", [(None, "reviewer"), ("dev", "dev")], ids=["without ROLE", "with ROLE"])
-def test_an_open_task_launches_the_role_named_or_else_the_turn_s(tasks: ProjectTasks, role_name, launched) -> None:
+def test_an_open_task_launches_the_role_named_or_else_the_turn_s(
+    project_tasks: ProjectTasks, role_name, launched
+) -> None:
     assert require_open_task_and_role(
-        tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES
+        project_tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES
     ) == (Task.as_open("t1"), launched)
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_a_closed_task_is_refused_saying_how_to_reopen_it(tasks: ProjectTasks, role_name) -> None:
+def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: ProjectTasks, role_name) -> None:
     with pytest.raises(FoundryError, match=r"^task t2 is closed: reopen it with `foundry task reopen tkt-store t2`$"):
-        require_open_task_and_role(tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES)
+        require_open_task_and_role(
+            project_tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES
+        )
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_a_task_that_doesn_t_exist_is_refused(tasks: ProjectTasks, role_name) -> None:
+def test_a_task_that_doesn_t_exist_is_refused(project_tasks: ProjectTasks, role_name) -> None:
     with pytest.raises(TaskNotFoundError, match=r"^task t9 doesn't exist"):
-        require_open_task_and_role(tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES)
+        require_open_task_and_role(
+            project_tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES
+        )

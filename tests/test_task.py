@@ -77,13 +77,13 @@ def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClon
     return ProjectClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
 
 
-def tasks_of(origin_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
+def project_tasks_of(origin_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
     """The tasks of ``origin_dir``, through a clone of their own, so each sees the repository as it is now."""
     return ProjectTasks(clone_in(origin_dir.parent, git_env, str(origin_dir)))
 
 
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> Task:
-    return tasks_of(origin_dir, git_env).create_task(task_id, TEMPLATE)
+    return project_tasks_of(origin_dir, git_env).create_task(task_id, TEMPLATE)
 
 
 def branch_files(origin_dir: Path, git_env: dict[str, str], branch: str) -> dict[str, str]:
@@ -308,11 +308,11 @@ def test_move_dir_refuses_an_existing_destination(tmp_path: Path, git_env) -> No
 
 
 def turn_of(origin_dir: Path, git_env: dict[str, str], task_id: str) -> str:
-    return tasks_of(origin_dir, git_env).read_task_turn(task_id)
+    return project_tasks_of(origin_dir, git_env).read_task_turn(task_id)
 
 
 def test_a_new_task_s_turn_is_the_template_s(origin_dir, git_env) -> None:
-    tasks_of(origin_dir, git_env).create_task("T1", {**TEMPLATE, "TURN": "dev\n"})
+    project_tasks_of(origin_dir, git_env).create_task("T1", {**TEMPLATE, "TURN": "dev\n"})
 
     assert turn_of(origin_dir, git_env, "T1") == "dev"
 
@@ -342,7 +342,7 @@ def test_the_task_template_starts_with_the_planner_s_turn() -> None:
 
 @pytest.mark.parametrize("task_id, found", [("T0", Task.as_open("t0")), ("c0", Task.as_closed("c0"))])
 def test_a_task_has_the_status_of_the_dir_holding_its_notes(origin_dir, git_env, task_id: str, found) -> None:
-    assert tasks_of(origin_dir, git_env).get_task_by_id(task_id) == found
+    assert project_tasks_of(origin_dir, git_env).get_task_by_id(task_id) == found
 
 
 def test_a_task_in_neither_dir_is_not_found_naming_both(origin_dir, git_env) -> None:
@@ -350,21 +350,21 @@ def test_a_task_in_neither_dir_is_not_found_naming_both(origin_dir, git_env) -> 
         TaskNotFoundError,
         match=r"^task t9 doesn't exist: agent-notes has neither .agent/tasks/open/t9/ nor .agent/tasks/closed/t9/$",
     ):
-        tasks_of(origin_dir, git_env).get_task_by_id("t9")
+        project_tasks_of(origin_dir, git_env).get_task_by_id("t9")
 
 
 def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_env) -> None:
     origin_dir = tmp_path / "bare.git"
     git(git_env, "init", "--quiet", "--bare", str(origin_dir))
     with pytest.raises(TaskNotFoundError):
-        tasks_of(origin_dir, git_env).get_task_by_id("t1")
+        project_tasks_of(origin_dir, git_env).get_task_by_id("t1")
 
 
 def test_a_task_in_both_dirs_is_refused_naming_both(origin_dir, git_env) -> None:
     push_notes(origin_dir, git_env, {".agent/tasks/closed/t0/TASK.md": "t0\n"})
 
     with pytest.raises(FoundryError, match=r"^task t0 is both open and closed: .*open/t0/ and .*closed/t0/$") as error:
-        tasks_of(origin_dir, git_env).get_task_by_id("t0")
+        project_tasks_of(origin_dir, git_env).get_task_by_id("t0")
     assert not isinstance(error.value, TaskNotFoundError)
 
 
@@ -416,7 +416,7 @@ def test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit(origin_di
     commits_before = len(notes_commits(origin_dir, git_env))
     branches_before = git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
 
-    assert tasks_of(origin_dir, git_env).close_task("T0") == Task.as_closed("t0")
+    assert project_tasks_of(origin_dir, git_env).close_task("T0") == Task.as_closed("t0")
 
     expected = moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
@@ -431,7 +431,7 @@ def test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit(origin_di
 def test_reopen_makes_the_reverse_move_in_one_signed_commit(origin_dir, git_env) -> None:
     before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
 
-    assert tasks_of(origin_dir, git_env).reopen_task("C0") == Task.as_open("c0")
+    assert project_tasks_of(origin_dir, git_env).reopen_task("C0") == Task.as_open("c0")
 
     expected = moved(before, ".agent/tasks/closed/c0", ".agent/tasks/open/c0")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
@@ -451,7 +451,7 @@ def test_a_move_keeps_files_your_git_config_would_ignore_or_convert(origin_dir, 
         gitconfig.write(f"[core]\n\texcludesFile = {home_dir / 'excludes'}\n\tautocrlf = input\n")
     before = tree(origin_dir, git_env)
 
-    tasks_of(origin_dir, git_env).close_task("t0")
+    project_tasks_of(origin_dir, git_env).close_task("t0")
 
     assert tree(origin_dir, git_env) == moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
 
@@ -469,7 +469,7 @@ def test_close_and_reopen_refuse_and_push_nothing(origin_dir, git_env, operation
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     with pytest.raises(FoundryError, match=message):
-        operation(tasks_of(origin_dir, git_env), task_id)
+        operation(project_tasks_of(origin_dir, git_env), task_id)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
@@ -481,5 +481,5 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
-        operation(tasks_of(origin_dir, git_env), task_id)
+        operation(project_tasks_of(origin_dir, git_env), task_id)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before

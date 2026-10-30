@@ -49,8 +49,8 @@ def create_main(args: argparse.Namespace) -> int:
     foundry_root = paths.find_foundry_root()
     project = config.load(foundry_root).project(args.project_name)
     template = task.load_template(paths.task_template_dir(foundry_root))
-    with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
-        created = tasks.create_task(args.task_id, template)
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        created = project_tasks.create_task(args.task_id, template)
     print("\n".join(report(CREATED, project.name, created)))
     return 0
 
@@ -58,8 +58,8 @@ def create_main(args: argparse.Namespace) -> int:
 def close_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
     project = config.load(paths.find_foundry_root()).project(args.project_name)
-    with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
-        closed = tasks.close_task(args.task_id)
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        closed = project_tasks.close_task(args.task_id)
     print("\n".join(report(CLOSED, project.name, closed)))
     return 0
 
@@ -67,8 +67,8 @@ def close_main(args: argparse.Namespace) -> int:
 def reopen_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
     project = config.load(paths.find_foundry_root()).project(args.project_name)
-    with ProjectTasks.in_scratch_clone(project.url, os.environ) as tasks:
-        reopened = tasks.reopen_task(args.task_id)
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        reopened = project_tasks.reopen_task(args.task_id)
     print("\n".join(report(REOPENED, project.name, reopened)))
     return 0
 

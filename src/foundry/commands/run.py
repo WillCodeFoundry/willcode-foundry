@@ -35,9 +35,9 @@ def main(args: argparse.Namespace) -> NoReturn:
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
     url = foundry_config.project(args.project_name).url
-    with ProjectTasks.in_scratch_clone(url, os.environ) as tasks:
+    with ProjectTasks.in_scratch_clone(url, os.environ) as project_tasks:
         task, role_name = require_open_task_and_role(
-            tasks,
+            project_tasks,
             project_name=args.project_name,
             task_id=args.task_id,
             role_name=args.role_name,
@@ -50,17 +50,17 @@ def main(args: argparse.Namespace) -> NoReturn:
 
 
 def require_open_task_and_role(
-    tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str | None, roles: Collection[str]
+    project_tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str | None, roles: Collection[str]
 ) -> tuple[Task, str]:
     """The open task, and the role to launch on it: ``role_name``, or the turn's when it is None.
 
     FoundryError, before any sandbox is made, when the task doesn't exist, or is closed (saying how to reopen it).
     """
-    task = tasks.get_task_by_id(task_id)
+    task = project_tasks.get_task_by_id(task_id)
     if task.status is Status.CLOSED:
         raise FoundryError(f"task {task.id} is closed: reopen it with `foundry task reopen {project_name} {task.id}`")
     if role_name is None:
-        role_name = role_for_turn(tasks.read_task_turn(task.id), roles, project_name=project_name, task=task)
+        role_name = role_for_turn(project_tasks.read_task_turn(task.id), roles, project_name=project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
     return task, role_name
 
