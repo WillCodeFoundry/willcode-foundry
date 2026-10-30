@@ -612,6 +612,8 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
 | R19, R20 | deferred, accepted as is |
 | R21 | still open, and now **Blocking** by the owner's ruling (a name that misleads: `moved`'s docstring promises a prefix match). The code hasn't changed since round 3. Direction: match `src` as a path prefix, as the docstring says |
 
+R21: Fixed in `32deef7`. `moved` matches `src` as a path prefix, and callers pass the full dir. The close test now has a task `t01` beside `t0`, which failed against the old substring replace.
+
 ### Names
 - **R22 (Blocking), test names say "notes folder", a term GLOSSARY.md avoids.**
   - GLOSSARY.md:49, under "Task notes dir", says: _Avoid_: notes folder.
@@ -624,23 +626,32 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
   Who hits it: anyone searching the tests for `task_notes_dir` coverage, or reading `pytest -v`. Direction: use the glossary's term, "task notes dir", in the names the branch adds. Rename the older one at :146 too, so the file uses one term.
 
   _Label:_ the naming reviewer marked this Blocking, as a breach of the glossary. I first downgraded it to a Follow-up, and the owner's ruling makes it Blocking again.
+
+  Fixed in `89eaaf2`. All ten names say "task notes dir", or "dir" for the open or closed one, including the older one at :146. "folder" remains only for the template folder and the scratch clone, which aren't task notes dirs.
 - **R23 (Blocking), `_move`'s `commit` parameter holds a commit message.**
   - It is defined at `src/foundry/project_tasks.py:121`, and passed as `commit=f"Close task {task.id}"` at :94 and as `commit=f"Reopen task …"` at :104.
   - At :129 it is used as `clone.commit(commit)`.
   - Inside `_move`, "commit" means three things: the `ProjectClone.commit` method, this string, and a git commit, in the docstring at :124-125.
 
   Who hits it: someone editing `_move`, who may take it for a ref. Direction: name it for the message it holds.
+
+  Fixed in `edd1e43`: `message`, and the docstring says what it is for.
 - **R24 (Blocking), `Outcome.done` is a string that reads like a boolean.**
   - It is defined at `src/foundry/commands/task.py:79` and used as `f"{outcome.done} task …"` at :90.
   - `done` reads as a predicate, so `if outcome.done:` would look natural, and it is always true.
 
   Who hits it: a developer adding a fourth outcome, which is rare. Direction: name it for the past-tense verb it holds.
+
+  Fixed in `32209e3`: `Outcome.past_tense`.
+
 - **R25 (Blocking), `role_to_launch` names half of what it does.**
   - It is defined at `src/foundry/commands/run.py:52` and called at :39 as `role_name, task = role_to_launch(...)`.
   - It returns the `Task` too, and it is where `foundry run` refuses a closed or missing task (criterion 10). The docstring at :55-57 says so, but the call site gives no hint.
   - DESIGN.md doesn't fix this name.
 
   Who hits it: a reader of `main` looking for where a closed task is refused. Direction: name it for the check as well as the result.
+
+  Fixed in `1f880c0`: `require_open_task_and_role`. It now returns `(task, role_name)`, in the order its name gives; its test says so first.
 
 - **R26 (Blocking), `if_open` and `if_closed` are one letter from `is_open` and `is_closed`.**
   - `src/foundry/project_tasks.py:45` defines `if_open, if_closed`, and `:46` defines `is_open, is_closed` from them. All four are used together through `:57`, for example `return if_open if is_open else if_closed`.
@@ -650,6 +661,8 @@ None. TASK.md was changed only by `a137f7d` (the owner) and `1aeba97` (the archi
   - R17 (round 2) led to this rename, and round 3 closed R17 on the names reading as "where the task could be". Round 4's brief listed them as settled, so they weren't judged fresh. R17 stays closed, since `opened` and `closed` are gone. This is a new finding about the names that replaced them.
 
   Who hits it: anyone editing `get_task_by_id`, every time they read `:45-57`. Direction: name them for the tasks they hold, in words that don't differ from `is_open` and `is_closed` by a letter.
+
+  Fixed in `bb703d4`: `open_candidate` and `closed_candidate`, the task as it would be if open or closed, so the "doesn't exist" message reads as naming a candidate. Their dirs are named once, as `open_dir` and `closed_dir`, which keeps the messages within the line length.
 
 Checked and not raised:
 - **Names DESIGN.md fixes:** `get_task_by_id` (its `get_` hides a checkout and raises domain errors), `as_open` and `as_closed`, `OPEN_DIR` and `CLOSED_DIR`, `from_id_and_status`, `in_scratch_clone`, `move_dir`, `ProjectTasks`, `TaskNotFoundError` and `Status`. They would be design questions, and none misleads enough to raise one.

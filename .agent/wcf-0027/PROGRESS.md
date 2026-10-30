@@ -26,12 +26,18 @@
   - R17 fixed in `4672f41` (`if_open`/`if_closed`); R18 fixed in `d70a68a` (`moved` test helper).
   - R16: `move_dir` docstring corrected in `55c7583`; the real fix is deferred to the owner. R19, R20 accepted as is (deferred).
 
+- Review round 4 (names, changes needed by the owner's ruling) answered in REVIEW.md. Merged origin/HEAD first (already up to date, no conflicts). Checks pass: 601 passed, ruff, ruff format, mypy.
+  - R21 fixed in `32deef7`: `moved` matches a path prefix; the close test has a `t01` beside `t0`.
+  - R22 fixed in `89eaaf2`: test names say "task notes dir", not "notes folder".
+  - R23 fixed in `edd1e43` (`_move`'s `message`); R24 in `32209e3` (`Outcome.past_tense`); R26 in `bb703d4` (`open_candidate`/`closed_candidate`, plus `open_dir`/`closed_dir`).
+  - R25 fixed in `1f880c0`: `require_open_task_and_role`, which now returns `(task, role_name)` to match its name.
+
 Status: ready for review
 
 ## In progress
 
 ## Next
-- Reviewer: round 3, fix diff `50180d1..55c7583`.
+- Reviewer: round 5, fix diff `55c7583..1f880c0`.
 - Owner: say whether R16 blocks, meaning `ProjectClone.commit` stops running `add --all` after a move, so a forced global `text` attribute can't rewrite a moved CRLF file.
 - Deferred follow-ups: R19 (`run.main` calls `role_to_launch` before `prepare_launch`, shown only by reading) and R20 (close/reopen don't prompt, read TURN or check the PR, shown only by reading). Each needs fakes for config, paths and the sandbox to test.
 - Kept from before: Task and ProjectTasks tests share `tests/test_task.py` (shared git fixtures), not split as an earlier DESIGN.md said.
