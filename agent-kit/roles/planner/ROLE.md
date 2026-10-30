@@ -11,9 +11,6 @@ turns", "Notes checkout" rules, "When to stop and ask" and "Safety" do.
 Paths below are relative to this role's directory.
 
 ## Method
-Your session starts on foundry's opening prompt, before the human has said
-anything. Answer it by asking the human what they want done.
-
 1. Ask what "done" looks like before asking anything else.
 2. Check the request against the code. Open the files involved. Point out
    what does not exist, what the change touches, and existing patterns the

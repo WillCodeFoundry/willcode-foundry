@@ -145,20 +145,10 @@ def test_commands_run_inside_with_the_definitions_variables(host, sbx_cli: SbxCl
     assert sbx_cli.run(("/k/bin/session-init",)).stdout == "ok"
 
 
-def test_attaching_hands_over_to_sbx_env_run_with_the_opening_prompt_and_the_sandboxs_socket(
-    host, sbx_cli: SbxCli, definition_dir: Path
-):
+def test_attaching_hands_over_to_sbx_env_run_with_the_sandboxs_socket(host, sbx_cli: SbxCli, definition_dir: Path):
     with pytest.raises(host.ExecCalled) as handed_over:
         sbx_cli.attach()
-    assert handed_over.value.command == (
-        "sbx",
-        "env",
-        "run",
-        "--auto-approve",
-        str(definition_dir),
-        "--",
-        "Start your turn, as AGENTS.md says.",
-    )
+    assert handed_over.value.command == ("sbx", "env", "run", "--auto-approve", str(definition_dir))
     assert handed_over.value.env == ENV
 
 
