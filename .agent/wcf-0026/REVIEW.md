@@ -53,3 +53,33 @@ Check results at 75b822f: `ruff check` passes, `ruff format --check` passes, `my
 New findings this round: 1 (Blocking), in tests. Round 1's findings stand as Follow-ups. Worst issue: R6, six failing tests that hide the criteria they exist to check.
 
 Verdict: changes needed
+
+## Round 3 (reviewing d8b387d)
+
+TASK.md is unchanged: the last allowed version is still `c283670`, signed by the shared architect/planner identity (the known limit in ROLE.md applies). No other commit touched it.
+
+This round reviews the fix diff `75b822f...d8b387d` (b3a530d, d8b387d). Check results at d8b387d, with `SSH_AUTH_SOCK` unset: `uv run --group dev pytest` passes in full, `ruff check .` passes, `ruff format --check .` passes, and `mypy` passes.
+
+Note for the human: this reviewer sandbox started with both checkouts behind origin (notes 1 commit behind, code 2 commits behind). That is the wcf-0025 symptom this task fixes, because the sandbox was launched by the runtime from before this change. I fast-forwarded both by hand before reviewing.
+
+### Open findings from earlier rounds
+- **R1** (comment overclaimed): closed by d8b387d. `src/agent_runtime/session_setup.py:72-73` now names the task-branch switch as the one exception, which matches the code.
+- **R2**: accepted as is (unchanged).
+- **R3**: deferred, Follow-up. TASK.md puts it out of scope, and the R1 comment now documents it.
+- **R4**: accepted as is (unchanged).
+- **R5**: deferred, Follow-up. The non-checkout notes dir is still reported as "detached". The dev noted it for later.
+- **R6** (Blocking, signing in `push_to_origin`): closed by b3a530d. `tests/agent_runtime/test_session_setup.py:227` commits with `-c commit.gpgsign=false`. All 25 tests in the file pass, both with and without an SSH agent, and the six tests R6 named now reach their assertions. The Behaviour agent reproduced the failure with b3a530d reverted. Every other commit in the file either already turns signing off (lines 301, 336, 375) or runs before `session_setup` adds the role gitconfig (line 56).
+
+### Standards
+No new findings. The fix is a one-line test change that follows the idiom the file already uses, plus a comment.
+
+### Spec
+No new findings and no scope creep. Every acceptance criterion R6 had left untested is now covered by a passing test, and the criterion "`uv run pytest`, `ruff check`, `ruff format --check` and `mypy` pass" is met.
+
+### Behaviour
+No new findings. d8b387d changes only a comment, so it had nothing to run. b3a530d is verified as above.
+
+### Summary
+Standards 0, Spec 0, Behaviour 0 new findings; 0 Blocking. Open follow-ups: R3 and R5 (deferred).
+
+Verdict: approved
