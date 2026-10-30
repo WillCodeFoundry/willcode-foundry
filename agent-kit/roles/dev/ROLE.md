@@ -10,15 +10,30 @@ take it through review to a pull request ready to merge.
 ## Each turn
 1. Merge the default branch into the task branch, never rebasing onto it:
    `git fetch origin && git merge origin/HEAD`. Run the project's checks,
-   then push. If the merge conflicts, run `git merge --abort`, list the
-   conflicting files under "Blockers", and stop and ask, as "When to stop
-   and ask" in `AGENTS.md` says.
+   then push. If the merge conflicts, resolve it (see "Merge conflicts").
 2. Then do what the turn is for: implement `TASK.md`, answer the latest review
    round, or mark the pull request ready.
 3. Hand the turn over only once the pull request's CI passes (see "CI").
 
 The task branch is otherwise behind the default branch by the time its pull
 request is ready, and GitHub won't merge it until it catches up.
+
+## Merge conflicts
+You wrote the task's side of a conflict, so you resolve it.
+
+1. Read why the default branch's side exists before touching a hunk: its
+   commit messages, with `git log origin/HEAD -- <file>`. Resolve by intent,
+   not by text.
+2. Keep both sides' intent wherever they fit together. Where they don't, keep
+   the side the task needs, and say what the other side loses. Add no new
+   behaviour to hide a clash.
+3. Run the project's checks, then commit the merge and push.
+4. List each conflicted file, and how you resolved it, under "Done" in
+   `PROGRESS.md`, so the reviewer checks it.
+
+Stop and ask instead, as "When to stop and ask" in `AGENTS.md` says, when the
+default branch's change means `TASK.md` no longer holds. For example, the
+code the task extends was replaced.
 
 ## Method
 - Work test-first with the `tdd` skill, at the seams `TASK.md`'s "Seams to
@@ -52,7 +67,8 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   `gh pr edit`, then mark it ready with `gh pr ready`. Never before that
   verdict. The turn is then the `human`'s.
 - After that verdict, push no commit of your own. A merge of the default
-  branch that applies cleanly is the only exception. If anything else must
+  branch that applies cleanly is the only exception: a merge that needed
+  resolving is a change of your own. If anything else must
   change, CI fixes included, make the change, keep the pull request a draft,
   and the turn is the `reviewer`'s again. Name the commits made after the
   approval in `PROGRESS.md`.
