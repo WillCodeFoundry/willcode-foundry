@@ -199,8 +199,6 @@ git push -u origin "$AGENT_TASK_BRANCH"
 - Never commit task notes here. The hooks refuse anything under `$AGENT_NOTES_ROOT/`.
 - Never touch any branch other than `$AGENT_TASK_BRANCH`.
 - Do not rewrite pushed history: no force-push, no rebase of pushed commits.
-- Do not merge or rebase onto `main` unless the task requires it; if `main`
-  has moved and conflicts, note it in Blockers and ask.
 
 ### Notes checkout (`$AGENT_NOTES_BRANCH`)
 

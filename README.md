@@ -19,7 +19,7 @@ The foundry runs coding agents on your projects. Each agent works in its own Doc
 ## Set up
 
 1. List your projects and roles in `config/foundry.yaml`. Each role needs its dir in `agent-kit/roles/<role>/`, holding its `ROLE.md` and its `gitconfig`, which sets the role's GitHub user name, email and SSH signing key. Add each signing key to `agent-kit/git/allowed_signers`.
-2. Put each role's SSH key in `secrets/ssh/<role>`. If a role should use `gh`, put its GitHub token in `secrets/github/<role>.token`. The dev opens pull requests, so it needs one that can.
+2. Put each role's SSH key in `secrets/ssh/<role>`. If a role should use `gh`, put its GitHub token in `secrets/github/<role>.token`. The dev opens pull requests and reads their CI, so its token needs pull requests read and write, and Actions read.
 3. Make each project's repository match the repo policy: see [config/repo-policy/](config/repo-policy/README.md).
 
 ## Use
