@@ -68,7 +68,14 @@ def _prepare_checkouts(session: contract.Environ, agent_kit: AgentKit) -> None:
     _step(project, "fetch", "origin")
     _require_task_on_origin(project, session)
     _switch_to_task_branch(project, session)
+    _require_notes_on_branch(session)
+    # Every refusal comes before any checkout moves, so a refusal leaves both exactly as they were. The one
+    # exception is the switch above, when the code checkout started on another branch.
+    _require_fast_forward(project, session.agent_project_dir, session.agent_task_branch, "code")
+    _require_fast_forward(project, session.agent_notes_dir, session.agent_notes_branch, "notes")
+    _fast_forward(project, session.agent_task_branch)
     _add_notes_worktree(project, session)
+    _fast_forward(Git(session.agent_notes_dir), session.agent_notes_branch)
 
 
 def _clone_if_missing(session: contract.Environ) -> Git:
@@ -113,6 +120,67 @@ def _add_notes_worktree(project: Git, session: contract.Environ) -> None:
         _step(project, "worktree", "add", str(notes), branch)
     else:
         _step(project, "worktree", "add", "--track", "-b", branch, str(notes), f"origin/{branch}")
+
+
+def _require_notes_on_branch(session: contract.Environ) -> None:
+    """An existing notes worktree must be on the notes branch, or the agent would read another branch's files."""
+    if not session.agent_notes_dir.is_dir():
+        return
+    found = Git(session.agent_notes_dir).current_branch()
+    if found != session.agent_notes_branch:
+        where = f"on branch {found}" if found else "detached"
+        raise _refusal(
+            "notes",
+            session.agent_notes_dir,
+            session.agent_notes_branch,
+            f"it is {where}, expected {session.agent_notes_branch}.",
+            "any unpushed commits or uncommitted changes in it",
+        )
+
+
+def _require_fast_forward(project: Git, folder: Path, branch: str, label: str) -> None:
+    """Refuse, changing nothing, when the branch can't be fast-forwarded to origin's: it has diverged, or the
+    update would overwrite uncommitted changes. A branch only ahead of origin is fine."""
+    local, remote = f"refs/heads/{branch}", f"refs/remotes/origin/{branch}"
+    if not project.succeeds("show-ref", "-q", "--verify", local) or project.succeeds(
+        "merge-base", "--is-ancestor", remote, local
+    ):
+        return
+    if not project.succeeds("merge-base", "--is-ancestor", local, remote):
+        subjects = project.run_captured("log", "--format=%s", f"{remote}..{local}").stdout.splitlines()
+        listed = "".join(f"\n    {subject}" for subject in subjects)
+        raise _refusal(
+            label,
+            folder,
+            branch,
+            f"it has diverged from origin/{branch}. Local commits origin lacks:{listed}",
+            f"those {len(subjects)} local commits",
+        )
+    if folder.is_dir():
+        # A dry run of the update itself, so git gives the reason and nothing is touched.
+        dry_run = Git(folder).run_captured("read-tree", "-m", "-u", "-n", local, remote)
+        if dry_run.returncode != 0:
+            raise _refusal(
+                label,
+                folder,
+                branch,
+                f"updating it to origin/{branch} would overwrite uncommitted changes: {dry_run.stderr.strip()}",
+                "those uncommitted changes",
+            )
+
+
+def _refusal(label: str, folder: Path, branch: str, diagnosis: str, discards: str) -> SetupError:
+    return SetupError(
+        f"the {label} checkout {folder} (branch {branch}) can't be brought to origin's tip: {diagnosis}\n"
+        '  To start over, see the README\'s "Recreating a sandbox". Recreating discards '
+        f"{discards}."
+    )
+
+
+def _fast_forward(checkout: Git, branch: str) -> None:
+    """Bring the branch checked out in ``checkout`` to origin's tip; a branch already there, or ahead, stays."""
+    if not checkout.succeeds("merge-base", "--is-ancestor", f"origin/{branch}", "HEAD"):
+        _step(checkout, "merge", "--ff-only", f"origin/{branch}")
 
 
 def _write_instructions(home: Path, agent_kit: AgentKit, role_dir: RoleDir, task_md_path: Path) -> None:
