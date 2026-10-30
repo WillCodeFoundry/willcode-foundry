@@ -228,6 +228,23 @@ def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, s
     git(other, "push", "-q", "origin", branch)
 
 
+def commit_locally(checkout: Path, message: str) -> None:
+    """An unpushed commit in a checkout session_setup made. Unsigned, and unseen by the kit's hooks, which need
+    the session's variables this process doesn't have."""
+    git(
+        checkout,
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        message,
+    )
+
+
 def tips(session: contract.Environ) -> tuple[str, str]:
     return (
         git(session.agent_project_dir, "rev-parse", "HEAD").stdout.strip(),
@@ -298,7 +315,7 @@ def test_unpushed_commits_are_left_as_they_are(
     session = session_for(built_kit, created_task)
     session_setup.session_setup(session, home)
     for checkout in (session.agent_project_dir, session.agent_notes_dir):
-        git(checkout, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "local")
+        commit_locally(checkout, "local")
     before = tips(session)
 
     session_setup.session_setup(session, home)
@@ -333,7 +350,7 @@ def test_a_diverged_branch_is_refused_naming_the_local_commits(
     session = session_for(built_kit, created_task)
     session_setup.session_setup(session, home)
     code = session.agent_project_dir
-    git(code, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "my unpushed work")
+    commit_locally(code, "my unpushed work")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     before = snapshot(session)
 
@@ -372,7 +389,7 @@ def test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was(
 ) -> None:
     session = session_for(built_kit, created_task)
     session_setup.session_setup(session, home)
-    git(session.agent_notes_dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "local")
+    commit_locally(session.agent_notes_dir, "local")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     push_to_origin(created_task, tmp_path, NOTES_BRANCH, {"other.md": "x\n"})
     before = snapshot(session)
