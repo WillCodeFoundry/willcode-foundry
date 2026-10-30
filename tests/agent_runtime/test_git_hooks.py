@@ -65,7 +65,7 @@ def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
 
 
 Checkouts = tuple[contract.Environ, Path, Path]
-OTHER_TASK = Task("T2")
+OTHER_TASK = Task.as_open("T2")
 
 
 def stage(cwd: Path, name: str) -> None:

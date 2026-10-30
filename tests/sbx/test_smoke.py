@@ -31,7 +31,7 @@ from foundry.task import Task
 
 pytestmark = pytest.mark.sbx
 
-PROJECT, ROLE, TASK = "foundry-test", "dev", Task("sbx-smoke")
+PROJECT, ROLE, TASK = "foundry-test", "dev", Task.as_open("sbx-smoke")
 SETTINGS = "/etc/claude-code/managed-settings.json"
 DOCKER_SOCKET = "/var/run/docker.sock"
 

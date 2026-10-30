@@ -20,7 +20,7 @@ SANDBOX_IMAGE = pytest.StashKey[str]()
 printed below. pytest honours summary hooks only in this, the root conftest."""
 
 
-TASK = Task("T1")
+TASK = Task.as_open("T1")
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:

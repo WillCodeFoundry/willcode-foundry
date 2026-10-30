@@ -37,7 +37,9 @@ A task passes from role to role: planner, dev, reviewer, then back to the dev fo
 | Command | What it does |
 |---|---|
 | `foundry run PROJECT [ROLE] TASK` | Starts the sandbox for a role on a task, or re-attaches to it. Without ROLE, the role whose turn it is. |
-| `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes on `agent-notes`. |
+| `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. |
+| `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
+| `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry run` does this too. |
 | `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
@@ -51,9 +53,9 @@ Agents write nothing to this repository. Their work goes to the project's reposi
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/<task>/`: `TASK.md`, `DESIGN.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | every role, each only in its own task's dir |
+| `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `DESIGN.md`, `PROGRESS.md`, `LEARNINGS.md`, `REVIEW.md` | every role, each only in its own task's dir |
 
-`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create` always signs the commit that creates the task, with your key, and refuses to create the task if it can't:
+`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close` and `reopen` always sign their commit with your key, and refuse if they can't:
 
 ```console
 $ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in allowed_signers; its private half in your ssh-agent

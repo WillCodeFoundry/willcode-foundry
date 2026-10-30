@@ -44,7 +44,7 @@ def agent_kit_files() -> list[Path]:
 def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    variables = session_variables(Task("t1")).to_env()
+    variables = session_variables(Task.as_open("t1")).to_env()
     used = {
         (name, str(path.relative_to(REPO_ROOT)))
         for path in agent_kit_files()
@@ -68,13 +68,13 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
         return bool(re.search(rf"\b{name}\b", kit_text) or re.search(rf"\.{field}\b", runtime_text))
 
     assert {field.name for field in dataclasses.fields(contract.Environ)} == {name.lower() for name in contract.NAMES}
-    assert [name for name in session_variables(Task("t1")).to_env() if not is_read(name)] == []
+    assert [name for name in session_variables(Task.as_open("t1")).to_env() if not is_read(name)] == []
 
 
 def test_the_sandbox_definition_lists_the_variables_in_the_contracts_order(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
-    assert list(session_variables(Task("t1")).to_env()) == list(contract.NAMES)
+    assert list(session_variables(Task.as_open("t1")).to_env()) == list(contract.NAMES)
 
 
 def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
@@ -82,7 +82,7 @@ def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
 ) -> None:
     listed = re.findall(r"^\| `(AGENT_[A-Z_]+)` \|", AGENTS_MD.read_text(), flags=re.MULTILINE)
 
-    assert sorted(listed) == sorted(session_variables(Task("t1")).to_env())
+    assert sorted(listed) == sorted(session_variables(Task.as_open("t1")).to_env())
 
 
 def test_the_agent_kit_spells_out_no_task_path_or_branch() -> None:
@@ -105,7 +105,7 @@ def ref_name_lists_naming_task_branches() -> list[tuple[str, list[str]]]:
 
     Found by either name, so that changing one name alone still finds the list, and fails on the other.
     """
-    task_ref = f"refs/heads/{Task('t1').branch}"
+    task_ref = f"refs/heads/{Task.as_open('t1').branch}"
     notes_ref = f"refs/heads/{NOTES_BRANCH}"
     rulesets: list[dict[str, Any]] = yaml_io.load(RULESETS)["rulesets"]
     found = []
@@ -123,7 +123,7 @@ def test_the_rulesets_name_a_tasks_branches_as_task_py_does() -> None:
 
     assert lists, f"no ruleset in {RULESETS.name} names a task's branch or {NOTES_BRANCH}"
     for where, patterns in lists:
-        assert any(fnmatch(f"refs/heads/{Task('t1').branch}", pattern) for pattern in patterns), where
+        assert any(fnmatch(f"refs/heads/{Task.as_open('t1').branch}", pattern) for pattern in patterns), where
         assert f"refs/heads/{NOTES_BRANCH}" in patterns, where
 
 

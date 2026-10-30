@@ -1,5 +1,4 @@
-"""Tasks on a project's repository: what a task's names are, creating one from the task template, and whose turn
-it is.
+"""Tasks on a project's repository: what a task's names are, and the task template.
 
 Task is the one place a task's names are spelled out. They reach the agent kit as session
 variables (SessionVariables in session.py), so the kit derives none itself, and
@@ -7,18 +6,20 @@ tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import Final
 
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
 
 # The branch holding every task's notes, each in its own dir (Task.task_notes_dir).
 NOTES_BRANCH: Final = "agent-notes"
 # Where every task's notes dir sits, on NOTES_BRANCH.
 NOTES_ROOT: Final = ".agent"
+# Under NOTES_ROOT: the notes dirs of the open tasks, and of the closed ones (Status).
+OPEN_DIR: Final = f"{NOTES_ROOT}/tasks/open"
+CLOSED_DIR: Final = f"{NOTES_ROOT}/tasks/closed"
 # The notes file every task has: what the task is, written by you, or by the planner once you approve its draft.
 TASK_FILE: Final = "TASK.md"
 # The notes file that says whose turn it is: a role's name, or HUMAN. The task template starts it; each role writes
@@ -33,25 +34,48 @@ HUMAN: Final = "human"
 _TASK_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
 
 
+class Status(Enum):
+    """Whether a task is in progress (open) or finished (closed)."""
+
+    OPEN = auto()
+    CLOSED = auto()
+
+
+# Where each status keeps its tasks' notes dirs.
+_STATUS_DIRS: Final = {Status.OPEN: OPEN_DIR, Status.CLOSED: CLOSED_DIR}
+
+
 @dataclass(frozen=True)
 class Task:
-    """A task, named by its id: Task("WCF-0042").id is "wcf-0042".
+    """A task, named by its id and its status: Task.from_id_and_status("WCF-0042", Status.OPEN).
 
-    The id must be ASCII; it is lowercased, then must be letters, digits, '.', '_' or '-' and make a
-    valid branch name; otherwise FoundryError.
+    The id must be lowercase and ASCII, letters, digits, '.', '_' or '-', and make a valid branch name; otherwise
+    FoundryError. ProjectTasks gives a task the status its repository says it has.
     """
 
     id: str
+    status: Status
 
     def __post_init__(self) -> None:
-        # ASCII first: lower() turns a few other letters into ASCII ones (the Kelvin sign into k).
-        lowered = self.id.lower() if self.id.isascii() else ""
-        if not _TASK_ID.fullmatch(lowered) or ".." in lowered or lowered.endswith((".", ".lock")):
+        if not _TASK_ID.fullmatch(self.id) or ".." in self.id or self.id.endswith((".", ".lock")):
             raise FoundryError(
                 f"task id {self.id!r} is not valid: use letters, digits, '.', '_' and '-', "
                 "starting with a letter or digit (e.g. wcf-0042)"
             )
-        object.__setattr__(self, "id", lowered)
+
+    @classmethod
+    def from_id_and_status(cls, task_id: str, status: Status) -> "Task":
+        """The task named ``task_id``, lowercased if it is ASCII (a few other letters lowercase into ASCII ones, so
+        a non-ASCII id is refused as it is)."""
+        return cls(task_id.lower() if task_id.isascii() else task_id, status)
+
+    @classmethod
+    def as_open(cls, task_id: str) -> "Task":
+        return cls.from_id_and_status(task_id, Status.OPEN)
+
+    @classmethod
+    def as_closed(cls, task_id: str) -> "Task":
+        return cls.from_id_and_status(task_id, Status.CLOSED)
 
     @property
     def branch(self) -> str:
@@ -61,7 +85,7 @@ class Task:
     @property
     def task_notes_dir(self) -> str:
         """The task's notes dir on NOTES_BRANCH, relative to the repository root. Holds its TASK_FILE."""
-        return f"{NOTES_ROOT}/{self.id}"
+        return f"{_STATUS_DIRS[self.status]}/{self.id}"
 
     @property
     def task_file(self) -> str:
@@ -86,40 +110,3 @@ def load_template(template_dir: Path) -> dict[str, str]:
     if TASK_FILE not in template:
         raise FoundryError(f"{template_dir} has no {TASK_FILE}; every task needs one")
     return template
-
-
-def create(clone: ProjectClone, task: Task, template: Mapping[str, str]) -> None:
-    """Create the task's branch from the default branch, and copy ``template`` into its notes dir.
-
-    Both branches are pushed at once, so either both change or neither does. Refuses if the task
-    exists. NOTES_BRANCH is created for the first task, as an orphan branch: it shares no history
-    with the code.
-    """
-    default_branch = clone.default_branch()
-    branches = clone.branches()
-    if task.branch in branches:
-        raise FoundryError(f"task {task.id} already exists: there is a {task.branch} branch")
-    if default_branch is None or default_branch not in branches:  # a repository with no commits yet
-        raise FoundryError(f"the repository has no commits to branch {task.branch} from")
-
-    clone.check_out(NOTES_BRANCH)  # started with no history if it doesn't exist: the first task creates it
-    if clone.exists(task.task_notes_dir):
-        raise FoundryError(f"task {task.id} already exists: {NOTES_BRANCH} has {task.task_notes_dir}/")
-    clone.write({f"{task.task_notes_dir}/{name}": text for name, text in template.items()})
-    clone.commit(f"Add task {task.id}")
-    clone.push_atomic(from_remote={task.branch: default_branch}, from_local=[NOTES_BRANCH])
-
-
-def read_turn(clone: ProjectClone, task: Task) -> str:
-    """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
-
-    FoundryError when the file is missing or empty, saying to name the role instead.
-    """
-    text = clone.read(NOTES_BRANCH, task.turn_file)
-    turn = text.strip() if text is not None else ""
-    if not turn:
-        raise FoundryError(
-            f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-            "Name the role to run instead."
-        )
-    return turn

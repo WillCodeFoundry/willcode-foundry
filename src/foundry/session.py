@@ -83,7 +83,7 @@ class SessionVariables:
             raise FoundryError(f"missing {', '.join(missing)}")
         variables = cls(
             role_name=env[contract.ROLE],
-            task=Task(env[contract.TASK]),
+            task=Task.as_open(env[contract.TASK]),
             repo_url=env[contract.REPO_URL],
             agent_kit_dir=Path(env[contract.KIT_DIR]),
             project_dir=env[contract.PROJECT_DIR],
