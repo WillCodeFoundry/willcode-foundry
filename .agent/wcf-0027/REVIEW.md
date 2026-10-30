@@ -29,6 +29,12 @@ The Spec and Behaviour reviewers ran these in throwaway clones at 2585b62, after
   "Status" is also not in `GLOSSARY.md`, and AGENTS.md ("Docs") says to add a term you introduce. Downgraded from Blocking: DESIGN.md decides `Task(id, status)` and that "a task's status is the caller's expectation", and both docstrings say so. Who hits it: a later dev who reads `task.status` as fact. Direction: add "status" to the glossary as the expected notes location. Renaming is a design question for the owner.
 - **R2 (Follow-up), stale launch description.** `ARCHITECTURE.md:15` says `foundry run` reads `agent-notes` only "Without ROLE". Since `src/foundry/commands/run.py:40-45`, it always clones, to refuse a closed task. Who hits it: someone working out why `foundry run PROJECT ROLE TASK` now needs access to the repository. Direction: mention the closed-task check in step 1.
 
+- **R6 (Follow-up), possible Duplicated Code in the composition roots.** The reviewer added this after reading `src/foundry/commands/task.py`, because the Standards reviewer missed it.
+  - `close_main` (`src/foundry/commands/task.py:56-64`) and `reopen_main` (`:67-75`) are the same function line for line. They differ only in the factory, the operation called and the two lines printed.
+  - The scratch-clone setup, `tempfile.TemporaryDirectory(prefix=...)` and then `ProjectTasks(ProjectClone.init(url, Path(scratch_dir), os.environ))`, appears four times: `commands/task.py:50-51`, `:60-61`, `:71-72` and `src/foundry/commands/run.py:42-43`.
+
+  Who hits it: the next dev who changes how foundry reaches a project, for example a new prefix or env, and has to edit four places. Direction: extract the scratch `ProjectTasks` once and share it, or accept as is, since DESIGN.md asks for "the same composition-root shape as `create_main`".
+
 Dropped, because DESIGN.md decides them:
 - The `isinstance(self.status, Status)` → `TypeError` guard (`task.py:57-58`), flagged under design rule 6. DESIGN.md: "a non-`Status` is a `TypeError`".
 - `is_closed` testing for `TASK.md` while `create` and `_move` test for the dir, flagged as Duplicated Code. DESIGN.md: "`is_closed` reads the closed task's `TASK.md`".
@@ -100,7 +106,7 @@ Summary:
 
 | Axis | Findings | Blocking | Worst |
 |---|---|---|---|
-| Standards | 2 | 0 | R1, `Task.status` reads as fact |
+| Standards | 3 | 0 | R1, `Task.status` reads as fact |
 | Spec | 1 | 1 | R3, `create` on a closed id doesn't name the dir |
 | Behaviour | 1 | 1 | R4, a move can silently drop ignored files or rewrite CRLF ones |
 | PR description | 1 | 0 | R5 |
