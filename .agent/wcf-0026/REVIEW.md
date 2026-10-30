@@ -109,6 +109,7 @@ Note for the human: this sandbox started with the code checkout 1 commit behind 
   - Naming: the new name stresses that the commit is unpushed, while `commit_unchecked` stresses that the hooks are skipped. The name reads correctly at its call sites, so it doesn't mislead.
   - Who hits it: a developer who later changes how tests get past the hooks would edit three files. That is rare.
   - Direction: accept as is for this task. Moving one shared helper into `tests/support/` is an optional follow-up.
+  - Deferred: accepted as is for this task; moving one shared hook-skipping commit helper into `tests/support/` is noted as a follow-up.
 - Otherwise: the three call-site hunks (lines 318, 353, 392) breach no standard, and the docstring follows AGENTS.md's writing rules.
 
 ### Spec
