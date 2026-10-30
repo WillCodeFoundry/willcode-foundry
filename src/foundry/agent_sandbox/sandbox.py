@@ -116,7 +116,9 @@ class SbxCli:
         return self._sbx("env", "exec", str(self._definition_dir), "--", *command)
 
     def attach(self) -> NoReturn:
-        command = ("sbx", "env", "run", "--auto-approve", str(self._definition_dir), "--", OPENING_PROMPT)
+        """sbx run, not sbx env run: only sbx run passes arguments after -- to the agent. The sandbox already
+        exists, made by ensure_running, so --name re-attaches to it, with the variables it was created with."""
+        command = ("sbx", "run", "--name", self._sandbox_name, "--", OPENING_PROMPT)
         self._host.exec(command, self._sbx_env)
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:
