@@ -224,7 +224,7 @@ def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, s
         (other / name).parent.mkdir(parents=True, exist_ok=True)
         (other / name).write_text(text)
     git(other, "add", ".")
-    git(other, "commit", "-qm", message)
+    git(other, "-c", "commit.gpgsign=false", "commit", "-qm", message)
     git(other, "push", "-q", "origin", branch)
 
 
