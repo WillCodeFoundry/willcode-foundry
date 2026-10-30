@@ -76,7 +76,7 @@ def reopen_main(args: argparse.Namespace) -> int:
 class Outcome(NamedTuple):
     """What an action did to the task, and what you do next."""
 
-    done: str
+    past_tense: str
     next_command: str
 
 
@@ -87,6 +87,6 @@ REOPENED = Outcome("reopened", "run it with: foundry run")
 
 def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]:
     return [
-        f"{outcome.done} task {changed.id} in {project_name}",
+        f"{outcome.past_tense} task {changed.id} in {project_name}",
         f"{outcome.next_command} {project_name} {changed.id}",
     ]
