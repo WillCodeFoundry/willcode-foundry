@@ -26,7 +26,10 @@ Use this template for writing the PR body:
 - **Task:** `<$AGENT_TASK_FILE>` on `<$AGENT_NOTES_BRANCH>`
 - **Review:** `<$AGENT_TASK_NOTES_DIR>/REVIEW.md` on `<$AGENT_NOTES_BRANCH>`
 
-- [x] <acceptance criterion, as TASK.md words it>: <how it's met>
+<All N, or N of M,> acceptance criteria are met; the reviewer checked each in round <n>.
+
+- <acceptance criterion not met, or met differently than TASK.md says, in its words>: <why>
+- **For you to do:** <anything to do or check by hand before or after merging>
 
 ## Summary
 
@@ -54,7 +57,14 @@ Skip all preambles and keep prose brief. Use the project's domain language from 
 
 ### Task
 
-Where the task and its review live, so whoever merges can read them: the paths to `TASK.md` and `REVIEW.md` in the task notes on `$AGENT_NOTES_BRANCH`, with each variable in the template written out as its value. Then every acceptance criterion in `TASK.md`, in its words, each with how it's met: the test, the file or the commit that shows it. A criterion not met is listed unticked, with why.
+Where the task and its review live, so whoever merges can read them: the paths to `TASK.md` and `REVIEW.md` in the task notes on `$AGENT_NOTES_BRANCH`, with each variable in the template written out as its value. There is no issue tracker, so these links are how the reader finds what was asked.
+
+Then one line saying the criteria are met, and the review round that checked them. Don't list the criteria that are met: `REVIEW.md` already shows the evidence for each. List only the exceptions, each with why:
+
+- a criterion not met, or met differently than `TASK.md` says;
+- anything the human must do or check by hand, such as a migration step or a check CI doesn't run.
+
+Leave out the exception lines when there are none.
 
 ### Summary
 
