@@ -8,7 +8,7 @@ Read the design rules in [ARCHITECTURE.md](ARCHITECTURE.md#design-rules), and fo
 
 ## Checks
 
-Run the host tier, ruff and mypy before every commit, as an ordinary user, never as root. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too. The dev tools aren't installed by default, so run each with `uv run --group dev`, as it shows.
+Run the host tier, ruff and mypy before every commit, as an ordinary user, never as root. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too. The dev tools aren't installed by default, so run `uv sync --group dev` once before the checks, as it shows first.
 
 The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything else that runs in a sandbox is the runtime, in Python.
 
