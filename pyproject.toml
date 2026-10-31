@@ -38,7 +38,13 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "RUF", "PLW", "TID252"]
+select = ["E", "F", "W", "I", "UP", "B", "RUF", "PLW", "TID252", "N", "A"]
+ignore = [
+    "N818",  # an exception is named for what happened, such as a refusal, not always an error
+]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["input"]   # git.py and tests/support take input= as subprocess.run does
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"   # the default, "parents", would still allow `from . import x`
