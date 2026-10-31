@@ -45,6 +45,8 @@ code the task extends was replaced.
   rules and ADRs" list, with the `domain-modeling` skill: the terms in the
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
+- Name with the `naming` skill, and run its check before each commit: read
+  every name the diff introduces or renames at one of its uses.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
@@ -54,6 +56,8 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   the reviewer's text. A Follow-up may instead get "Deferred: <why>." Note it
   under "Next" in `PROGRESS.md`. Commit and push it on `$AGENT_NOTES_BRANCH`,
   with the fixes on the task branch.
+- Fix a Mysterious Name finding by the `naming` skill: read every use of the
+  new name, in the whole repository, before committing it.
 - Fix each finding with the smallest change. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   human, as "When to stop and ask" in `AGENTS.md` says.

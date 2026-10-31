@@ -91,7 +91,8 @@ anything. First find where the turn comes from:
   under "Blockers" in `PROGRESS.md`, and the turn is the `planner`'s, so the
   planner rescopes it with the human.
 - Decide the structure, not the code: name modules, interfaces and seams, not
-  how they are implemented.
+  how they are implemented. Name them with the `naming` skill, since the dev
+  and the reviewer hold the code to the names you give.
 - Every file, module, design rule or ADR you cite must exist: open it to
   confirm, or mark it as new.
 - Write nothing in the task notes but `DESIGN.md`, `TURN`, your "design

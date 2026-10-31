@@ -74,10 +74,12 @@ The Smells axis carries the **smell baseline** below: a fixed set of Fowler code
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
 - **A heuristic, not a rule.** Label each smell as one ("possible Feature Envy"). Skip anything tooling already enforces. Whether it blocks is the Smells bar's call, in step 5.
 
+Call the Skill tool with "naming", and paste its "The test" and "When no honest name comes" sections below the baseline, for Mysterious Name.
+
 Each smell reads *what it is* → *how to fix*:
 
 - **Long Function**: a function that does several things at different levels of detail, such as building what it needs and also deciding what to do with it. A function that grows a few lines per change never looks long in one diff, so judge it whole. Flag it when you can name two or more steps in it that would read better as functions of their own, with honest names, and name the function's problem, not only a symptom such as a stray variable. → extract those steps, so each can be tested on its own.
-- **Mysterious Name**: a name that doesn't let a reader predict, where it is used, what it holds or does. Judge each name at its uses, read together with the names around it, not at its definition alone. Flag a use that misleads or only makes sense once the definition is read, and a name that means two things in one scope. → rename it, quoting a use before and after; if no honest name comes, the design's murky.
+- **Mysterious Name**: a name that fails the test in the `naming` skill, pasted below the baseline. Judge each name at its uses across the repository, not at its definition, and not only in the diff. → rename it, quoting a use before and after; if no honest name comes, follow that skill's "When no honest name comes".
 - **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
 - **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
@@ -105,7 +107,7 @@ Every brief also carries these rules, word for word:
 
 The bar for Blocking, each brief carrying its own axis's:
 
-- **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a name that misleads where it is used, a contradicted ADR, or a broken design rule.
+- **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a concept named with a word the glossary says to avoid, a contradicted ADR, or a broken design rule.
 - **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out or departs from a decision in `DESIGN.md`.
 - **Spec, partial:** a requirement the change doesn't show met, by the code and the test or check that shows it, is Blocking too.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
@@ -141,9 +143,9 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Smells sub-agent prompt** should include:
 
 - The diff command, the commit list and the fixed point.
-- The smell baseline from step 4, pasted in full (the sub-agent has no other access to it).
+- The smell baseline from step 4, with the `naming` skill's sections below it, pasted in full (the sub-agent has no other access to them).
 - The text of `TASK.md` and, when the task has one, `DESIGN.md`. `TASK.md` is for one use: to check that something flagged as Speculative Generality isn't what the spec asks for. `DESIGN.md` is for telling a local fix from a design question.
-- The brief: "Read each function the diff adds or changes whole, three ways. At `HEAD`. Against its version at the fixed point (`git show <fixed point>:<path>`), asking whether the change left it simpler or more tangled; a regression counts even when each hunk looks fine. And beside its siblings in the diff, and any existing code whose shape it copies. Match each against the smell baseline. First list every function the diff adds or changes, as `file:function`, each marked 'clean', 'new' when it has no earlier version, or with its finding ids. Then report the findings. For this axis, 'who would hit it' is the next dev who changes that code, and 'fewer, or none, is a good result' doesn't apply: cover every function. Under 400 words."
+- The brief: "Read each function the diff adds or changes whole, three ways. At `HEAD`. Against its version at the fixed point (`git show <fixed point>:<path>`), asking whether the change left it simpler or more tangled; a regression counts even when each hunk looks fine. And beside its siblings in the diff, and any existing code whose shape it copies. Match each against the smell baseline. First list every function the diff adds or changes, as `file:function`, each marked 'clean', 'new' when it has no earlier version, or with its finding ids. Then list every name the diff introduces or renames: functions, types, variables, parameters, fields, files and options. Find each name's uses with a search of the whole repository, read them by the naming test, and mark the name 'clean' or with its finding ids. Then report the findings. For this axis, 'who would hit it' is the next dev who changes that code, and 'fewer, or none, is a good result' doesn't apply: cover every function and every name. Under 500 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour and Smells sub-agents and say so.
 
@@ -153,7 +155,7 @@ Write the result as a new round in the task's `REVIEW.md`, as your `ROLE.md`'s "
 
 Before writing the round, check every cited `file:line` against the file at `HEAD`, and correct any that don't match. Drop a finding the code shows to be wrong, such as a Speculative Generality flag on something the spec asks for. Remove any code fix a report included, keeping its one line of direction.
 
-Check the Smells coverage list against the diff: every function it adds or changes must be listed. Ask the sub-agent again for any that are missing.
+Check the Smells coverage lists against the diff: every function it adds or changes, and every name it introduces or renames, must be listed. Ask the sub-agent again for any that are missing.
 
 Check each label against its axis's bar, and downgrade a Blocking finding that misses it. Drop a finding that raises a settled one again. Where two axes find one cause, keep both, each saying it shares a cause with the other. Never drop a finding because `DESIGN.md` decides it: label it a Design question.
 
