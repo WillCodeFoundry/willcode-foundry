@@ -57,6 +57,9 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - Fix each finding with the smallest change. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   human, as "When to stop and ask" in `AGENTS.md` says.
+- Leave design questions to the architect. A finding that "Waits for the
+  design" is fixed against the `DESIGN.md` the architect settled, or as its
+  "design stands" line in `PROGRESS.md` says.
 - Once the work is done, or every open finding is answered, and CI passes,
   the turn is the `reviewer`'s.
 

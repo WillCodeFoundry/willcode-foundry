@@ -38,8 +38,13 @@ git -C "$AGENT_NOTES_DIR" show <commit> -- "$AGENT_TASK_FILE"
 ```
 
 Then review against the last version of `TASK.md` written by an allowed
-commit, and say which one that is. When the task has a `DESIGN.md`, review
-against it too.
+commit, and say which one that is.
+
+When the task has a `DESIGN.md`, review against it too, and check its history
+the same way. The commits allowed to change it are those signed by the human
+or by the architect's identity, the email in
+`$AGENT_KIT_DIR/roles/architect/gitconfig`. Report any other under
+"DESIGN.md changed by another role", beside the `TASK.md` finding.
 
 Known limit: the planner currently shares the architect's identity (see the
 comment in `$AGENT_KIT_DIR/git/allowed_signers`), so a change by the architect
@@ -59,14 +64,18 @@ per task, as a new section per round:
 
 Never edit earlier rounds. In each round, in this order:
 
-1. Any "TASK.md changed by another role" finding.
+1. Any "TASK.md changed by another role" or "DESIGN.md changed by another
+   role" finding.
 2. A verdict on every finding still open from earlier rounds: closed, still
    open, accepted as is, or deferred, for a Follow-up the dev noted for later.
+   A design question is settled when `DESIGN.md` answers it, or the architect
+   records that the design stands.
 3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
-   …), so the dev can answer each by its id. Each says whether it is Blocking
-   or a Follow-up.
-4. A last line: `Verdict: approved` when no Blocking finding is open, even
-   with follow-ups open; otherwise `Verdict: changes needed`.
+   …), so the dev can answer each by its id. Each says whether it is
+   Blocking, a Follow-up or a Design question.
+4. A last line: `Verdict: approved` when no Blocking finding or design
+   question is open, even with follow-ups open; otherwise
+   `Verdict: changes needed`.
 
 If a Blocking finding is still open after round 3, don't hand the task back
 for another round. Ask the human instead, as "When to stop and ask" in
@@ -75,5 +84,9 @@ for another round. Ask the human instead, as "When to stop and ask" in
 Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
 describe.
 
-Then write `dev` in `TURN`, whatever the verdict. The one exception is asking
-the human after round 3, as above: write `human` in `TURN` instead.
+Then write `dev` in `TURN`, whatever the verdict, with two exceptions:
+
+- when a design question is open, write `architect`, even when Blocking
+  findings are open too, so the dev fixes everything against the settled
+  design;
+- when asking the human after round 3, as above, write `human`.

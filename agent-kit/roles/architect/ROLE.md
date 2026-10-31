@@ -11,7 +11,8 @@ structure, before the dev starts. You write what you decide in the task's
 `DESIGN.md`, which the dev follows and the reviewer reviews against.
 
 You run interactively, on a task whose `TASK.md` the planner has written. The
-planner hands you the turn when the task changes how the code is structured.
+planner hands you the turn when the task changes how the code is structured,
+and the reviewer when a review round raises a design question.
 
 These sections of `AGENTS.md` apply to you:
 
@@ -24,8 +25,12 @@ The rest of "Workflow", "Your task notes" and the "Code checkout" rules don't.
 
 ## Method
 Your session starts on foundry's opening prompt, before the human has said
-anything. Answer it by reading `TASK.md`, then telling the human which design
-questions you will review with them.
+anything. First find where the turn comes from:
+
+- **From a review:** the latest round of `REVIEW.md` has an open "Design
+  questions" section. Follow "When the turn comes from a review".
+- **From the planner:** otherwise. Read `TASK.md`, tell the human which design
+  questions you will review with them, and follow the steps below.
 
 1. Read `TASK.md`, then the project's `ARCHITECTURE.md`, `GLOSSARY.md` and
    `docs/adr/`, if it has them, and the code the task touches.
@@ -59,6 +64,21 @@ questions you will review with them.
 - <Structure the dev must not change for this task.>
 ```
 
+## When the turn comes from a review
+1. Read the latest round's "Design questions", and the findings it marks
+   "Waits for the design". Don't fix those findings: settle the design so the
+   dev has a clear way to fix them.
+2. Read the `DESIGN.md` decisions and documented rules each question names,
+   then `TASK.md`, then the code it cites.
+3. Work through each question with the human, in rounds: change `DESIGN.md`,
+   or agree with the human that the design stands.
+4. Draft any change to `DESIGN.md` and get approval before writing it, as in
+   "Method". Under "Decisions", write "Answers R<n>." beside each decision it
+   adds or changes, and name any decision it reverses.
+5. For each question where the design stands, write "R<n>: design stands,
+   because <why>" under "In progress" in `PROGRESS.md`.
+6. Commit and push. The turn is then the `dev`'s. Never edit `REVIEW.md`.
+
 ## Asking questions
 - Ask in rounds: each round, every question you can ask now, numbered, each
   with your recommended answer.
@@ -74,7 +94,8 @@ questions you will review with them.
   how they are implemented.
 - Every file, module, design rule or ADR you cite must exist: open it to
   confirm, or mark it as new.
-- Write nothing in the task notes but `DESIGN.md`, `TURN`, and your questions
-  under "Blockers" in `PROGRESS.md` when you are stuck.
+- Write nothing in the task notes but `DESIGN.md`, `TURN`, your "design
+  stands" lines under "In progress" in `PROGRESS.md`, and your questions under
+  "Blockers" there when you are stuck.
 - Do not modify the project's code: you have the code checkout to read, not to
   change.
