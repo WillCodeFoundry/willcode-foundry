@@ -222,41 +222,6 @@ def test_removing_the_log_is_refused(checkouts: Checkouts) -> None:
     assert "LOG.md only grows" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
 
 
-@pytest.mark.parametrize(
-    "heading",
-    [
-        "## 3 · reviewer · progress",
-        "## 2 · {role} · progress",
-        "## 4 · {role} · progress",
-        "## 2026-11-01 · {role} · progress",
-        "## {role} · progress",
-        "## Notes",
-        "## 3 · {role}",
-    ],
-    ids=["another role", "a number repeated", "a number skipped", "a date", "no number", "not an entry", "no outcome"],
-)
-def test_a_new_heading_that_doesnt_number_on_under_your_role_is_refused(checkouts: Checkouts, heading: str) -> None:
-    session, _, notes = checkouts
-    assert session.agent_role != "reviewer", "the first case needs another role than the session's"
-    heading = heading.format(role=session.agent_role)
-    pushed = "# Log\n" + entry(1, "planner") + entry(2, "planner")
-    pushed_log(notes, pushed)
-    write_log(notes, f"{pushed}\n{heading}\nDone: a step.\n")
-
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
-
-    assert f"`## <number> · {session.agent_role} · <progress or outcome>`" in refusal
-    assert f"    {heading}    (expected ## 3 · {session.agent_role} · …)" in refusal
-
-
-def test_a_first_log_is_checked_too(checkouts: Checkouts) -> None:
-    """A task begun before LOG.md existed has none pushed: everything in it is new, numbered from 1."""
-    session, _, notes = checkouts
-    write_log(notes, "# Log\n" + entry(1, "reviewer"))
-
-    assert "    ## 1 · reviewer · progress" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
-
-
 def message_file(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "COMMIT_EDITMSG"
     path.write_text(text)

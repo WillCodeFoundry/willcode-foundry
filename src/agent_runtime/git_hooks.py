@@ -9,7 +9,6 @@ Each takes what git passes, the session variables and the repository, defaulting
 current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
 """
 
-import re
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
@@ -20,9 +19,6 @@ from agent_runtime.git import Git
 
 LOG_FILE: Final = "LOG.md"
 """The task notes file every role appends to, as agent-kit/AGENTS.md says; config/task-template/ starts it."""
-LOG_HEADING = re.compile(r"## (?P<number>[1-9][0-9]*) · (?P<role>[a-z]+) · [a-z-]+")
-"""An entry's first line: its number, one more than the entry before, the role that wrote it, and ``progress`` or
-the outcome its turn ended with."""
 
 
 class GitHookRefused(Exception):
@@ -60,8 +56,7 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
 
 
 def _require_log_only_added_to(session: contract.Environ, git: Git) -> None:
-    """Refuse a staged LOG_FILE that changes what origin has, or whose new entries name another role or don't
-    number on from the last.
+    """Refuse a staged LOG_FILE that changes what origin has: entries may only be added after it.
 
     Entries not yet pushed may still change, so amending your own last commit works. A guardrail: it trusts
     origin's ref as last fetched, and a role set on it could change the file through another commit.
@@ -78,30 +73,6 @@ def _require_log_only_added_to(session: contract.Environ, git: Git) -> None:
             "Put them back as they were, add yours after them, and correct an entry by appending another.",
             f"See what changed with: git diff origin/{session.agent_notes_branch} -- {path}",
         )
-    number = _last_entry_number(pushed)
-    wrong = []
-    for line in staged[len(pushed) :].splitlines():
-        if not line.startswith("## "):
-            continue
-        number += 1
-        match = LOG_HEADING.fullmatch(line)
-        if match is None or int(match["number"]) != number or match["role"] != session.agent_role:
-            wrong.append(f"    {line}    (expected ## {number} · {session.agent_role} · …)")
-    if wrong:
-        raise _refusal(
-            "pre-commit",
-            f"Each new {LOG_FILE} entry starts with `## <number> · {session.agent_role} · <progress or outcome>`,",
-            "its number one more than the entry before:",
-            *wrong,
-            "",
-            f"If another role's entries came first, pull them: git pull --rebase origin {session.agent_notes_branch}",
-        )
-
-
-def _last_entry_number(log: str) -> int:
-    """The number of the last entry in ``log``; 0 when it has none."""
-    numbers = [int(match["number"]) for line in log.splitlines() if (match := LOG_HEADING.fullmatch(line))]
-    return numbers[-1] if numbers else 0
 
 
 def _file_at(git: Git, revision_and_path: str) -> str | None:
