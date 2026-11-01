@@ -56,7 +56,7 @@ Which role works on a task next, or `human` when it waits for you. The task's `T
 _Avoid_: task state, lifecycle
 
 **Log**:
-A task's `LOG.md`: everything its roles tell each other, as dated entries each role appends and none changes once pushed. Its progress, questions (`Asks D1 → planner`), answers (`Answers D1`) and outcomes.
+A task's `LOG.md`: everything its roles tell each other, as numbered entries each role appends and none changes once pushed. Its progress, questions (`Asks D1 → planner`), answers (`Answers D1`) and outcomes.
 
 **Outcome**:
 How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed` or `task-question`. The routing table in `agent-kit/AGENTS.md` maps a role and its outcome to the next turn.

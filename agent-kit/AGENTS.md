@@ -90,7 +90,7 @@ change or delete an entry once it is pushed, yours included: `pre-commit`
 refuses it. To correct one, append another.
 
 ```markdown
-## 2026-11-01 · dev · progress
+## 7 · dev · progress
 Done: close and reopen tested, in 9f8e7d6.
 Next: the message when the task is already closed.
 - Asks D1 → planner: TASK.md says to extend `ProjectTasks.move`, but a1b2c3d
@@ -98,8 +98,9 @@ Next: the message when the task is already closed.
 - Answers R4: fixed in 9f8e7d6.
 ```
 
-- **The heading** is the date, your role, and `progress`, or, in your turn's
-  last entry, the outcome your turn ends with (see "Taking turns").
+- **The heading** is the entry's number, one more than the entry before it;
+  your role; and `progress`, or, in your turn's last entry, the outcome your
+  turn ends with (see "Taking turns"). The first entry is `1`.
 - **`Done` and `Next`** say exactly where you stopped, for whoever continues.
 - **A question** is `Asks <id> → <role or human>: <question>`. Its id is your
   role's initial and the next number for that initial in the task: `P1`
