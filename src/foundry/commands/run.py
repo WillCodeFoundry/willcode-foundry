@@ -70,7 +70,7 @@ def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task:
     names no role in ``roles``."""
     override = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
     if turn == HUMAN:
-        raise FoundryError(f"task {task.id} is waiting for you: see Blockers in its PROGRESS.md. {override}")
+        raise FoundryError(f"task {task.id} is waiting for you: see the last entry in its LOG.md. {override}")
     if turn not in roles:
         known = ", ".join(sorted(roles)) or "none"
         raise FoundryError(

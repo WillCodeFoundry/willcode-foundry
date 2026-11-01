@@ -156,6 +156,98 @@ def test_a_commit_on_another_branch_is_left_alone(checkouts: Checkouts) -> None:
     git_hooks.pre_commit(session, Git(code))
 
 
+LOG = f"{TASK.task_notes_dir}/{git_hooks.LOG_FILE}"
+
+
+def write_log(notes: Path, text: str) -> None:
+    (notes / LOG).write_text(text)
+    git(notes, "add", LOG)
+
+
+def pushed_log(notes: Path, text: str) -> None:
+    write_log(notes, text)
+    commit_unchecked(notes, f"{TASK.id}: progress")
+    git(notes, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD")
+
+
+def entry(role: str, body: str = "Done: a step.\n") -> str:
+    return f"\n## 2026-11-01 · {role} · progress\n{body}"
+
+
+def test_an_entry_added_under_your_role_is_accepted(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n" + entry("planner"))
+    write_log(notes, "# Log\n" + entry("planner") + entry(session.agent_role))
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+def test_an_entry_not_yet_pushed_may_still_change(checkouts: Checkouts) -> None:
+    """So amending your own last notes commit works."""
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n")
+    write_log(notes, "# Log\n" + entry(session.agent_role))
+    commit_unchecked(notes, f"{TASK.id}: progress")
+    write_log(notes, "# Log\n" + entry(session.agent_role, "Done: a step, corrected.\n"))
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda pushed: pushed.replace("a step", "another step") + entry("dev"),
+        lambda pushed: entry("dev") + pushed,
+        lambda pushed: "# Log\n",
+    ],
+    ids=["an entry changed", "an entry put before it", "an entry deleted"],
+)
+def test_changing_what_is_pushed_is_refused(checkouts: Checkouts, change: Callable[[str], str]) -> None:
+    session, _, notes = checkouts
+    pushed = "# Log\n" + entry("planner")
+    pushed_log(notes, pushed)
+    write_log(notes, change(pushed).replace("· dev ·", f"· {session.agent_role} ·"))
+
+    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+    assert refusal.startswith("pre-commit: refusing\n\n")
+    assert "LOG.md only grows" in refusal
+
+
+def test_removing_the_log_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n" + entry("planner"))
+    git(notes, "rm", "-q", LOG)
+
+    assert "LOG.md only grows" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["## 2026-11-01 · reviewer · progress", "## dev · progress", "## Notes", "## 2026-11-01 · dev"],
+    ids=["another role", "no date", "not an entry", "no outcome"],
+)
+def test_a_new_heading_that_isnt_your_entry_is_refused(checkouts: Checkouts, heading: str) -> None:
+    session, _, notes = checkouts
+    assert session.agent_role != "reviewer", "the first case needs another role than the session's"
+    heading = heading.replace("· dev", f"· {session.agent_role}")
+    pushed_log(notes, "# Log\n")
+    write_log(notes, f"# Log\n\n{heading}\nDone: a step.\n")
+
+    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+    assert f"`## <YYYY-MM-DD> · {session.agent_role} · <progress or outcome>`" in refusal
+    assert f"    {heading}" in refusal
+
+
+def test_a_first_log_is_checked_too(checkouts: Checkouts) -> None:
+    """A task begun before LOG.md existed has none pushed: everything in it is new."""
+    session, _, notes = checkouts
+    write_log(notes, "# Log\n" + entry("reviewer"))
+
+    assert "    ## 2026-11-01 · reviewer · progress" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+
 def message_file(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "COMMIT_EDITMSG"
     path.write_text(text)
