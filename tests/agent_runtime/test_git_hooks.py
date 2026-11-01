@@ -156,6 +156,72 @@ def test_a_commit_on_another_branch_is_left_alone(checkouts: Checkouts) -> None:
     git_hooks.pre_commit(session, Git(code))
 
 
+LOG = f"{TASK.task_notes_dir}/{git_hooks.LOG_FILE}"
+
+
+def write_log(notes: Path, text: str) -> None:
+    (notes / LOG).write_text(text)
+    git(notes, "add", LOG)
+
+
+def pushed_log(notes: Path, text: str) -> None:
+    write_log(notes, text)
+    commit_unchecked(notes, f"{TASK.id}: progress")
+    git(notes, "-c", "core.hooksPath=/dev/null", "push", "-q", "origin", "HEAD")
+
+
+def entry(number: int, role: str, body: str = "Done: a step.\n") -> str:
+    return f"\n## {number} · {role} · progress\n{body}"
+
+
+def test_an_entry_numbered_on_under_your_role_is_accepted(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n" + entry(1, "planner"))
+    write_log(notes, "# Log\n" + entry(1, "planner") + entry(2, session.agent_role) + entry(3, session.agent_role))
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+def test_an_entry_not_yet_pushed_may_still_change(checkouts: Checkouts) -> None:
+    """So amending your own last notes commit works."""
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n")
+    write_log(notes, "# Log\n" + entry(1, session.agent_role))
+    commit_unchecked(notes, f"{TASK.id}: progress")
+    write_log(notes, "# Log\n" + entry(1, session.agent_role, "Done: a step, corrected.\n"))
+
+    git_hooks.pre_commit(session, Git(notes))
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda pushed, role: pushed.replace("a step", "another step") + entry(2, role),
+        lambda pushed, role: entry(1, role) + pushed,
+        lambda pushed, role: "# Log\n",
+    ],
+    ids=["an entry changed", "an entry put before it", "an entry deleted"],
+)
+def test_changing_what_is_pushed_is_refused(checkouts: Checkouts, change: Callable[[str, str], str]) -> None:
+    session, _, notes = checkouts
+    pushed = "# Log\n" + entry(1, "planner")
+    pushed_log(notes, pushed)
+    write_log(notes, change(pushed, session.agent_role))
+
+    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+    assert refusal.startswith("pre-commit: refusing\n\n")
+    assert "LOG.md only grows" in refusal
+
+
+def test_removing_the_log_is_refused(checkouts: Checkouts) -> None:
+    session, _, notes = checkouts
+    pushed_log(notes, "# Log\n" + entry(1, "planner"))
+    git(notes, "rm", "-q", LOG)
+
+    assert "LOG.md only grows" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+
+
 def message_file(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "COMMIT_EDITMSG"
     path.write_text(text)

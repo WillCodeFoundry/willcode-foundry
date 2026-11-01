@@ -68,8 +68,8 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
         return 0
     print(
         f"guard-bash: refusing\n\n  {reason}.\n  Command: {command}\n\n"
-        "  Fix the cause instead. If you believe this is wrong, record it under\n"
-        "  Blockers in PROGRESS.md and ask.",
+        "  Fix the cause instead. If you believe this is wrong, ask in LOG.md,\n"
+        '  as "When to stop and ask" in AGENTS.md says.',
         file=stderr or sys.stderr,
     )
     return _BLOCK

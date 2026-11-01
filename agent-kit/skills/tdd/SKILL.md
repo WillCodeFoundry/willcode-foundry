@@ -29,7 +29,7 @@ A **seam** is the public boundary you test at: the interface where you observe b
 
 **Test only at pre-agreed seams.** The seams are agreed when the task is planned: they are under "Seams to test" in the task's `TASK.md`, each with what it catches. No test is written at a seam that isn't there. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 
-If "Seams to test" names none, pick them yourself. Ask: "What's the public interface, and which seams should we test?" Give each seam a one-line note on what it catches and what it misses, and write them under "In progress" in `PROGRESS.md` before writing any test. Then continue; there is no one to confirm them with.
+If "Seams to test" names none, pick them yourself. Ask: "What's the public interface, and which seams should we test?" Give each seam a one-line note on what it catches and what it misses, and append them to `LOG.md` in a `progress` entry before writing any test. Then continue; there is no one to confirm them with.
 
 When the shape of that interface is itself in question (how deep the module is, where the seam belongs, what the interface should expose), call the Skill tool with "codebase-design" for the vocabulary. It is the shared source of the module, interface, depth, seam, adapter, leverage and locality terms, and it is a reference to consult, not a session to run.
 
@@ -43,5 +43,5 @@ When the shape of that interface is itself in question (how deep the module is, 
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** The reviewer role reviews the change, with the `code-review` skill, and its findings come back to you through `REVIEW.md`. Don't widen the task to tidy up what you pass: note it under "Next" in `PROGRESS.md` instead.
-- **Each green slice is a commit.** Once a slice's test and the project's checks pass, commit it on the task branch with a message that says why, then update `PROGRESS.md` and commit it on `$AGENT_NOTES_BRANCH`, as "Work in small steps" in `AGENTS.md` says.
+- **Refactoring is not part of the loop.** The reviewer role reviews the change, with the `code-review` skill, and its findings come back to you through `REVIEW.md`. Don't widen the task to tidy up what you pass: list it under `Next` in your `LOG.md` entry instead.
+- **Each green slice is a commit.** Once a slice's test and the project's checks pass, commit it on the task branch with a message that says why, then append a `progress` entry to `LOG.md` and commit it on `$AGENT_NOTES_BRANCH`, as "Work in small steps" in `AGENTS.md` says.

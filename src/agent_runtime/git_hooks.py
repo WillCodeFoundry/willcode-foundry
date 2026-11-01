@@ -1,6 +1,7 @@
 """The git hooks, which core.hooksPath runs from the kit's hooks/ stubs; git runs them at the checkout's root.
 
-- ``pre_commit``: what each checkout may commit, so tasks don't step on each other.
+- ``pre_commit``: what each checkout may commit, so tasks don't step on each other, and the task's LOG_FILE
+  only grows.
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
 - ``pre_push``: pushes only to this task's branch and the notes branch.
 
@@ -11,9 +12,13 @@ current directory's, and raises GitHookRefused, whose message says what was wron
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
+from typing import Final
 
 from agent_runtime import contract
 from agent_runtime.git import Git
+
+LOG_FILE: Final = "LOG.md"
+"""The task notes file every role appends to, as agent-kit/AGENTS.md says; config/task-template/ starts it."""
 
 
 class GitHookRefused(Exception):
@@ -25,7 +30,7 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
 
     task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
                  subfolder are caught too;
-    notes branch: only this task's notes dir.
+    notes branch: only this task's notes dir, and LOG_FILE there only added to, as below.
     Commits on any other branch are left alone: they can't be pushed.
     """
     session = session or _read_session("pre-commit")
@@ -46,6 +51,34 @@ def pre_commit(session: contract.Environ | None = None, git: Git | None = None) 
         raise _refusal(
             "pre-commit", rule, *(f"    {path}" for path in refused), "", "Unstage with: git restore --staged <file>"
         )
+    if branch == session.agent_notes_branch:
+        _require_log_only_added_to(session, git)
+
+
+def _require_log_only_added_to(session: contract.Environ, git: Git) -> None:
+    """Refuse a staged LOG_FILE that changes what origin has: entries may only be added after it.
+
+    Entries not yet pushed may still change, so amending your own last commit works. A guardrail: it trusts
+    origin's ref as last fetched, and a role set on it could change the file through another commit.
+    """
+    path = f"{session.agent_task_notes_dir}/{LOG_FILE}"
+    if path not in _staged_paths(git):
+        return
+    pushed = _file_at(git, f"refs/remotes/origin/{session.agent_notes_branch}:{path}") or ""
+    staged = _file_at(git, f":{path}")
+    if staged is None or not staged.startswith(pushed):
+        raise _refusal(
+            "pre-commit",
+            f"{LOG_FILE} only grows: the entries already pushed can't change or go.",
+            "Put them back as they were, add yours after them, and correct an entry by appending another.",
+            f"See what changed with: git diff origin/{session.agent_notes_branch} -- {path}",
+        )
+
+
+def _file_at(git: Git, revision_and_path: str) -> str | None:
+    """A file's text at ``<revision>:<path>``, or in the index at ``:<path>``; None when it isn't there."""
+    result = git.run_captured("show", revision_and_path)
+    return result.stdout if result.returncode == 0 else None
 
 
 def prepare_commit_msg(

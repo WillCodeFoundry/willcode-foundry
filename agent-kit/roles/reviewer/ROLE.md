@@ -60,20 +60,22 @@ per task, as a new section per round:
 Never edit earlier rounds. In each round, in this order:
 
 1. Any "TASK.md changed by another role" finding.
-2. A verdict on every finding still open from earlier rounds: closed, still
-   open, accepted as is, or deferred, for a Follow-up the dev noted for later.
+2. A verdict on every finding still open from earlier rounds, judging the
+   dev's `Answers R<n>` entries in `LOG.md`: closed, still open, accepted as
+   is, or deferred, for a Follow-up the dev deferred.
 3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
    …), so the dev can answer each by its id. Each says whether it is Blocking
    or a Follow-up.
 4. A last line: `Verdict: approved` when no Blocking finding is open, even
    with follow-ups open; otherwise `Verdict: changes needed`.
 
-If a Blocking finding is still open after round 3, don't hand the task back
-for another round. Ask the human instead, as "When to stop and ask" in
-`AGENTS.md` says. Name the findings, and say where you and the dev disagree.
+Then end your turn, as "Taking turns" in `AGENTS.md` says, with the first
+outcome below that holds.
 
-Commit and push it on `$AGENT_NOTES_BRANCH`, as `AGENTS.md`'s "Notes checkout" rules
-describe.
-
-Then write `dev` in `TURN`, whatever the verdict. The one exception is asking
-the human after round 3, as above: write `human` in `TURN` instead.
+## Outcomes
+- `no-agreement`: a Blocking finding is still open after round 3. Don't hand
+  the task back for another round. In your `LOG.md` entry, ask the human
+  about each by its id, saying where you and the dev disagree.
+- `changes-needed`: a Blocking finding is open.
+- `approved`: the round's verdict is `Verdict: approved`.
+- `stuck`: as "When to stop and ask" in `AGENTS.md` says.

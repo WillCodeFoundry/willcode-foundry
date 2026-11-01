@@ -40,7 +40,9 @@ Before going further, confirm the fixed point resolves (`git rev-parse <fixed-po
 - the commit the last round reviewed, from its heading;
 - every finding that is closed, accepted as is or deferred: the settled list.
 
-Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents judge each open finding, and look for new problems only in the lines the fix diff touches. Code an earlier round reviewed and no fix touched isn't reviewed again.
+Take the dev's answer to each open finding from its `Answers R<n>` entry in the task's `LOG.md`.
+
+Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents judge each open finding, with its answer, and look for new problems only in the lines the fix diff touches. Code an earlier round reviewed and no fix touched isn't reviewed again.
 
 ### 2. Identify the spec source
 

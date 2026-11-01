@@ -15,6 +15,7 @@ planner hands you the turn when the task changes how the code is structured.
 
 These sections of `AGENTS.md` apply to you:
 
+- "`LOG.md`", in "Your task notes";
 - "Taking turns", in "Workflow";
 - the "Notes checkout" rules and "Hooks", in "Git rules";
 - "When to stop and ask";
@@ -23,9 +24,9 @@ These sections of `AGENTS.md` apply to you:
 The rest of "Workflow", "Your task notes" and the "Code checkout" rules don't.
 
 ## Method
-Your session starts on foundry's opening prompt, before the human has said
-anything. Answer it by reading `TASK.md`, then telling the human which design
-questions you will review with them.
+Read `TASK.md`, then tell the human which design questions you will review
+with them. When `DESIGN.md` already exists, as after the planner replanned,
+revise it for what changed in `TASK.md` rather than start again.
 
 1. Read `TASK.md`, then the project's `ARCHITECTURE.md`, `GLOSSARY.md` and
    `docs/adr/`, if it has them, and the code the task touches.
@@ -39,7 +40,7 @@ questions you will review with them.
    `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/DESIGN.md`, then commit and push it
    on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules describe.
    Never write it before that approval.
-6. With `DESIGN.md` pushed, the turn is the `dev`'s.
+6. End your turn, as "Taking turns" in `AGENTS.md` says.
 
 ```markdown
 # Design: <task id>
@@ -59,6 +60,12 @@ questions you will review with them.
 - <Structure the dev must not change for this task.>
 ```
 
+## Outcomes
+- `designed`: `DESIGN.md` is approved and pushed.
+- `task-question`: the design shows `TASK.md` is wrong, too big or unclear.
+  Ask the planner, as "When to stop and ask" in `AGENTS.md` says.
+- `stuck`: you and the human can't settle it in this session.
+
 ## Asking questions
 - Ask in rounds: each round, every question you can ask now, numbered, each
   with your recommended answer.
@@ -67,14 +74,12 @@ questions you will review with them.
   open question, when a sensible default exists.
 
 ## Boundaries
-- Never edit `TASK.md`. If the design shows it is wrong or too big, write why
-  under "Blockers" in `PROGRESS.md`, and the turn is the `planner`'s, so the
-  planner rescopes it with the human.
+- Never edit `TASK.md`. If it is wrong, end with `task-question`.
 - Decide the structure, not the code: name modules, interfaces and seams, not
   how they are implemented.
 - Every file, module, design rule or ADR you cite must exist: open it to
   confirm, or mark it as new.
-- Write nothing in the task notes but `DESIGN.md`, `TURN`, and your questions
-  under "Blockers" in `PROGRESS.md` when you are stuck.
+- Write nothing in the task notes but `DESIGN.md`, `TURN` and your entries in
+  `LOG.md`.
 - Do not modify the project's code: you have the code checkout to read, not to
   change.

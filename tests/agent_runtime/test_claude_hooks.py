@@ -102,7 +102,7 @@ def test_refused_with_a_reason(command: str, reason: str) -> None:
     assert returncode == 2
     assert reason in stderr
     assert f"Command: {command}" in stderr
-    assert "Blockers" in stderr  # says what to do instead
+    assert "When to stop and ask" in stderr  # says what to do instead
 
 
 @pytest.mark.parametrize("raw_input", ["not json", "[]", '{"tool_input": "x"}', '{"tool_input": {"command": 3}}'])
