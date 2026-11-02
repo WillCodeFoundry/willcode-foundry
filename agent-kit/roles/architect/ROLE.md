@@ -69,8 +69,8 @@ A question asked of the architect is `Asks <id> → architect` in `LOG.md`. The
 dev asks one when a `DESIGN.md` decision won't work. The reviewer asks one for
 a finding labelled Design question in `REVIEW.md`.
 
-1. Read each open question, the finding in `REVIEW.md` when its id is `R<n>`,
-   and the findings that wait for it. Then read the `DESIGN.md` decisions,
+1. Read each open question, the finding in `REVIEW.md` it is or cites, and
+   the findings that wait for it. Then read the `DESIGN.md` decisions,
    documented rules and code it cites. Don't fix any of them: settle the
    design, so the dev has a clear way to fix them.
 2. Settle each with the human, in rounds, as below: change `DESIGN.md`, or
@@ -82,14 +82,16 @@ a finding labelled Design question in `REVIEW.md`.
    changed in <commit>: <what changed>.` or `Answers <id>: design stands,
    because <why>.`
 5. End your turn, with `designed`. When a question shows that `TASK.md` is
-   wrong instead, answer what you can, ask the planner the rest, and end
-   with `task-question`.
+   wrong instead, leave it unanswered, ask the planner, and end with
+   `task-question`. The planner hands it back to you once `TASK.md` is
+   settled.
 
 ## Outcomes
 - `designed`: what you wrote in `DESIGN.md` is approved and pushed, and every
   question asked of the architect is answered.
-- `task-question`: the design shows `TASK.md` is wrong, too big or unclear.
-  Ask the planner, as "When to stop and ask" in `AGENTS.md` says.
+- `task-question`: the design shows `TASK.md` is wrong, too big or unclear,
+  or a question asked of the planner is unanswered. Ask the planner, as "When
+  to stop and ask" in `AGENTS.md` says. Check this before `designed`.
 - `stuck`: you and the human can't settle it in this session.
 
 ## Asking questions
@@ -107,6 +109,6 @@ a finding labelled Design question in `REVIEW.md`.
 - Every file, module, design rule or ADR you cite must exist: open it to
   confirm, or mark it as new.
 - Write nothing in the task notes but `DESIGN.md`, `TURN` and your entries in
-  `LOG.md`.
+  `LOG.md` and `LEARNINGS.md`.
 - Do not modify the project's code: you have the code checkout to read, not to
   change.

@@ -68,8 +68,8 @@ Never edit earlier rounds. In each round, in this order:
    role" finding.
 2. A verdict on every finding still open from earlier rounds, judging the
    `Answers R<n>` entries in `LOG.md`: closed, still open, accepted as is, or
-   deferred, for a Follow-up the dev deferred. A design question is closed
-   once the architect's entry answers it.
+   deferred, for a Follow-up the dev deferred. A design question is judged
+   like any finding, once the architect and then the dev have answered it.
 3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
    …), so the dev can answer each by its id. Each says whether it is
    Blocking, a Follow-up or a Design question.
@@ -84,11 +84,14 @@ Then end your turn, as "Taking turns" in `AGENTS.md` says, with the first
 outcome below that holds.
 
 ## Outcomes
-- `design-question`: a design question is open, even with Blocking findings
-  open too, so the dev fixes everything against the settled design.
-- `no-agreement`: a Blocking finding is still open after round 3. Don't hand
-  the task back for another round. In your `LOG.md` entry, ask the human
-  about each by its id, saying where you and the dev disagree.
-- `changes-needed`: a Blocking finding is open.
+- `no-agreement`: a Blocking finding or a design question is still open after
+  round 3. Don't hand the task back for another round. In your `LOG.md`
+  entry, ask the human about each by its id, saying where you and the dev
+  disagree.
+- `design-question`: a design question the architect hasn't answered is
+  open, even with Blocking findings open too, so the dev fixes everything
+  against the settled design.
+- `changes-needed`: a Blocking finding, or a design question the architect
+  has answered, is open.
 - `approved`: the round's verdict is `Verdict: approved`.
 - `stuck`: as "When to stop and ask" in `AGENTS.md` says.

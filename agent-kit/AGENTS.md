@@ -105,8 +105,8 @@ Next: the message when the task is already closed.
 - **`Done` and `Next`** say exactly where you stopped, for whoever continues.
 - **A question** is `Asks <id> → <role or human>: <question>`. Its id is your
   role's initial and the next number for that initial in the task: `P1`
-  (planner), `A1` (architect), `D1` (dev), `Q1` (qa). The reviewer numbers
-  its questions on from its findings in `REVIEW.md`: `R1` and on.
+  (planner), `A1` (architect), `D1` (dev), `Q1` (qa). The reviewer asks
+  about a finding in `REVIEW.md`, by that finding's id: `R1` and on.
 - **An answer** is `Answers <id>: <answer>`, written by the role that was
   asked, or, for a question to the human, by whichever role the human
   answers: `Answers <id>: <answer> (the human)`. A question is open until
@@ -176,8 +176,9 @@ human may type the next.
 4. Work out what is open for you from the notes, never from who had the turn
    before you: questions asked of your role that no entry answers; your
    role's questions to the human that no entry answers, which you ask the
-   human first; and what your `ROLE.md` says to check. Deal with those
-   first. Then continue from your role's latest `Next`, or start your main
+   human first; answers to your role's questions since your role's last
+   entry, which you rework against; and what your `ROLE.md` says to check.
+   Deal with those first. Then continue from your role's latest `Next`, or start your main
    work.
 5. If starting fresh, append a short plan as a `progress` entry's `Next`,
    then commit and push it before writing code.
@@ -291,7 +292,8 @@ When your `ROLE.md` lists `design-question`, ask the architect, with
 `Asks <id> → architect` and that outcome, when:
 
 - a decision in `DESIGN.md` won't work, as the code shows;
-- a fix would change a decision in `DESIGN.md`, or has no honest local form.
+- a finding's fix would change a decision in `DESIGN.md`, or its only fix
+  adds machinery.
 
 The architect settles these with the human, in its session, and answers each
 in `LOG.md`: a change to `DESIGN.md`, or why the design stands. The reviewer

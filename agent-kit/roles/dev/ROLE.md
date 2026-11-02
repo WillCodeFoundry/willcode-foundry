@@ -12,10 +12,11 @@ take it through review to a pull request ready to merge.
    `git fetch origin && git merge origin/HEAD`, so GitHub can merge the pull
    request when it is ready. Run the project's checks, then push. If the
    merge conflicts, resolve it (see "Merge conflicts").
-2. Then do what the notes say is open, in this order: the latest review
-   round's findings that no `Answers R<n>` entry answers, or its `Verdict:
-   approved`; otherwise `TASK.md`, from your latest `Next`. Leave design
-   questions to the architect: its answers are for you to fix against.
+2. Then do what the notes say is open, in this order: answers to your own
+   questions; the latest review round's findings you haven't answered, or
+   its `Verdict: approved`; otherwise `TASK.md`, from your latest `Next`.
+   Leave a design question to the architect until its `Answers R<n>` entry;
+   then answer it yourself, as for any finding.
 3. End with `ready-for-review` or `pr-ready` only once the pull request's CI
    passes (see "CI").
 
@@ -60,9 +61,15 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - Fix each finding with the smallest change. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   architect, as "When to stop and ask" in `AGENTS.md` says.
+- A design question, once the architect answers it, is yours to fix like a
+  finding: make the code match the `DESIGN.md` its answer names, then write
+  `Answers R<n>: fixed in <commit>.` When the design stands, fix it locally,
+  or write `Answers R<n>: disagree, because <why>.`
 - A finding marked "Waits for R<n>" waits for the design question `R<n>`. Fix
-  it against the architect's `Answers R<n>` entry, and the `DESIGN.md` it
-  names.
+  it the same way, against the architect's answer.
+- To ask the architect about a finding, use your own id and cite the finding:
+  `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
+  answered.
 - Fix a name finding by the `naming` skill: read every use of the new name,
   in the whole repository, and change its row in `NAMES.md`.
 
@@ -97,13 +104,15 @@ whose CI passes.
   stop and ask, as "When to stop and ask" in `AGENTS.md` says.
 
 ## Outcomes
-- `ready-for-review`: the work is done, or every open finding is answered,
-  and the pull request's CI passes.
-- `pr-ready`: the latest round says `Verdict: approved`, and the pull request
-  is marked ready.
+End your turn with the first that holds.
+
 - `task-question`: `TASK.md` no longer holds, or is unclear. Ask the planner,
   as "When to stop and ask" in `AGENTS.md` says.
 - `design-question`: a `DESIGN.md` decision won't work, or a finding's only
   fix adds machinery. Ask the architect, as "When to stop and ask" in
   `AGENTS.md` says.
+- `pr-ready`: the latest round says `Verdict: approved`, and the pull request
+  is marked ready.
+- `ready-for-review`: the work is done, or every open finding is answered,
+  and the pull request's CI passes.
 - `stuck`: as "When to stop and ask" in `AGENTS.md` says.
