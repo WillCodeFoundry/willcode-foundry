@@ -107,7 +107,7 @@ a finding labelled Design question in `REVIEW.md`.
 ## Boundaries
 - Never edit `TASK.md`. If it is wrong, end with `task-question`.
 - Decide the structure, not the code: name modules, interfaces and seams, not
-  how they are implemented. Name them with the `naming` skill, since the dev
+  how they are implemented. Name them with the `python-naming` skill, since the dev
   and the reviewer hold the code to the names you give.
 - Every file, module, design rule or ADR you cite must exist: open it to
   confirm, or mark it as new.

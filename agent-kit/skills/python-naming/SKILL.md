@@ -1,9 +1,9 @@
 ---
-name: naming
-description: How to choose a name, record it, and judge it. Use when the dev or architect names something (an identifier, a glossary term, a command, flag or config key, or a concept in prose), when renaming one, when the dev records names in NAMES.md, and when the reviewer judges the names a change adds or renames.
+name: python-naming
+description: How to choose a name in a Python project, record it, and judge it. Use when the dev or architect names something (an identifier, a glossary term, a command, flag or config key, or a concept in prose), when renaming one, when the dev records names in NAMES.md, and when the reviewer judges the names a change adds or renames.
 ---
 
-# Naming
+# Naming in Python
 
 A name is good when a reader at one of its uses, with the names around it, can predict what it holds or does. This skill is the foundry's one statement of that test. The dev and the architect choose names by it, and the `code-review` skill's Names axis judges them by it. The project's own `AGENTS.md` wins where it says otherwise.
 
@@ -13,7 +13,7 @@ A name is any word that names a concept, wherever it appears:
 
 | Kind | Examples | What's particular |
 |---|---|---|
-| identifier | module, type, function, method, variable, parameter, field, file | all of this skill |
+| identifier | module, class, function, method, property, variable, parameter, attribute, exception, file | all of this skill |
 | term | an entry the diff adds to `GLOSSARY.md` | it becomes the word others are judged by, so check it hardest |
 | interface name | command, flag, config key, environment variable, branch, outcome | see "Interface names" |
 | prose word | a concept named in a doc, docstring, message, comment or instruction | only what "Prose" says |
@@ -68,9 +68,9 @@ A name fails when a use:
 
 When you rename, read every use of the name, not only those in your diff. A use outside the diff can change meaning too.
 
-## In Python
+## Python
 
-These apply when the project is in Python. Leave case and builtin shadowing to the project's linter.
+The projects are in Python. Leave case and builtin shadowing to the linter: ruff's `N` and `A` rules.
 
 - Don't repeat the module in a name. Callers read `task.Status`, so `TaskStatus` says "task" twice.
 - A property is a noun, cheap, and without side effects. Anything that does I/O, changes state or can fail is a method, named with a verb.
@@ -120,7 +120,7 @@ A name that simply follows the glossary, `DESIGN.md` or its class needs no row. 
 ```
 
 - **Name**: the name, with its old name for a rename.
-- **Kind**: an identifier's kind (function, type, variable, …), term, or interface name.
+- **Kind**: an identifier's kind (function, class, variable, …), term, or interface name.
 - **Why**: the decision. For a new word, the words you searched for. For a rename, why. For a clash, the word you turned down and where it already means something else, or the drift you found.
 
 ## Before each commit

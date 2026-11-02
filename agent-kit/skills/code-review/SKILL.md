@@ -66,7 +66,7 @@ When the task has a `DESIGN.md`, the architect's design agreed with the human, i
 
 In this order: the project's own `AGENTS.md` at the repository root first, since it wins for anything about the code (as `AGENTS.md` in the agent kit says); then the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`; then `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Each counts only if present. Where they disagree, the earlier one wins.
 
-The project's `GLOSSARY.md` is a standard for names, if present (or the glossaries a `GLOSSARY-MAP.md` points to). Names are judged on the Names axis alone, by the `naming` skill, which takes the glossary's words first.
+The project's `GLOSSARY.md` is a standard for names, if present (or the glossaries a `GLOSSARY-MAP.md` points to). Names are judged on the Names axis alone, by the `python-naming` skill, which takes the glossary's words first.
 
 A change that contradicts a recorded decision is a finding, even if the code is good: the decision changes only through a new ADR that supersedes it, not silently.
 
@@ -82,9 +82,9 @@ Each smell reads *what it is* → *how to fix*:
 - **Long Function**: a function that does several things at different levels of detail, such as building what it needs and also deciding what to do with it. A function that grows a few lines per change never looks long in one diff, so judge it whole. Flag it when you can name two or more steps in it that would read better as functions of their own, with honest names, and name the function's problem, not only a symptom such as a stray variable. → extract those steps, so each can be tested on its own.
 - **Duplicated Code**: the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
 - **Feature Envy**: a method that reaches into another object's data more than its own. → move the method onto the data it envies.
-- **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
-- **Primitive Obsession**: a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
-- **Repeated Switches**: the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
+- **Data Clumps**: the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one dataclass, pass that.
+- **Primitive Obsession**: a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type, such as an `Enum` or a dataclass.
+- **Repeated Switches**: the same `match`, or `if`/`elif` chain, on the same type recurs across the change. → replace with polymorphism, or one dict both sites share.
 - **Shotgun Surgery**: one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
 - **Divergent Change**: one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
 - **Speculative Generality**: abstraction, parameters, or hooks added for needs the spec doesn't have. Check `TASK.md` first: what it asks for is never speculative. → delete it; inline back until a real need shows.
@@ -102,7 +102,7 @@ Every brief also carries these rules, word for word:
 
 - "Cite each finding as `file:line` at `HEAD`, read from that one file (`git show HEAD:<path> | cat -n`). Never take line numbers from a listing of several files joined together, since every number after the first file is shifted."
 - "Say what is wrong, where, and why it matters. Give the fix as one line of direction at most, never code. The dev fixes each finding test-first, and a ready-made fix skips the failing test."
-- "Label each finding Blocking, Follow-up or Design question, by your axis's bar below and the design-question test after it. Everything that misses the bar is a Follow-up, except on the Names axis, which follows the naming skill's bar."
+- "Label each finding Blocking, Follow-up or Design question, by your axis's bar below and the design-question test after it. Everything that misses the bar is a Follow-up, except on the Names axis, which follows the python-naming skill's bar."
 - "Say who would hit each finding, doing what, and how often. Drop a finding nobody realistic would hit."
 - "Direct the smallest fix. 'Accept as is' is a valid direction. If the only fix you see adds machinery, or instructions that script a recovery, label it a Design question: that is for the architect and the human, not a fix."
 - "Report at most five findings, most important first. Fewer, or none, is a good result."
@@ -114,7 +114,7 @@ The bar for Blocking, each brief carrying its own axis's:
 - **Spec, partial:** a requirement the change doesn't show met, by the code and the test or check that shows it, is Blocking too.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
 - **Smells:** the diff introduces the smell, or makes worse one the code already had, and its fix is local: one or two functions, with no change to an interface `DESIGN.md` decides. A smell the diff only touches is a Follow-up.
-- **Names:** the `naming` skill's "Reviewing names" bar. A name that misses it isn't reported.
+- **Names:** the `python-naming` skill's "Reviewing names" bar. A name that misses it isn't reported.
 
 Any axis's finding is a **Design question** instead when its fix isn't a fix the dev can make alone:
 
@@ -153,10 +153,10 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Names sub-agent prompt** should include:
 
 - The diff command, the commit list and the fixed point.
-- The `naming` skill's body, pasted in full: call the Skill tool with "naming" (the sub-agent has no other access to it).
+- The `python-naming` skill's body, pasted in full: call the Skill tool with "python-naming" (the sub-agent has no other access to it).
 - The text of the task's `NAMES.md` from the notes checkout, when the dev wrote one: the naming decisions behind the names.
 - The text of `DESIGN.md` when the task has one, and whether this is the first round since it was written or changed.
-- The brief: "Judge names as the naming skill's 'Reviewing names' says, and only by its bar. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Under 400 words."
+- The brief: "Judge names as the python-naming skill's 'Reviewing names' says, and only by its bar. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour and Smells sub-agents and say so. Never skip the Names sub-agent: prose has names too.
 

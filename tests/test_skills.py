@@ -333,7 +333,7 @@ def test_the_kits_copied_skills_all_have_a_source() -> None:
     skills_dir = Path(__file__).parents[1] / "agent-kit" / "skills"
     sources = {path.parent.name: skills.read_source(path) for path in skills_dir.glob("*/SKILL.md")}
 
-    assert sorted(name for name, source in sources.items() if source is None) == ["git-conventions", "naming"]
+    assert sorted(name for name, source in sources.items() if source is None) == ["git-conventions", "python-naming"]
     assert {source.repo for source in sources.values() if source is not None} == {"mattpocock/skills"}
 
 

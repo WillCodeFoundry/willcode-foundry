@@ -47,7 +47,7 @@ code the task extends was replaced.
   rules and ADRs" list, with the `domain-modeling` skill: the terms in the
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
-- Name with the `naming` skill. Before each commit, run its "Before each
+- Name with the `python-naming` skill. Before each commit, run its "Before each
   commit" check, and record your naming decisions in the task's `NAMES.md`
   as it says.
 
@@ -71,7 +71,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - To ask the architect about a finding, use your own id and cite the finding:
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
-- Fix a name finding by the `naming` skill: read every use of the new name,
+- Fix a name finding by the `python-naming` skill: read every use of the new name,
   in the whole repository, and record the rename in `NAMES.md`.
 
 ## Pull request
