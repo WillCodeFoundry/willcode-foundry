@@ -35,6 +35,8 @@ Before choosing a name, and before judging one, search the whole repository with
 | A homonym | this word, already used for a different concept | choose another word, so one word means one thing |
 | An instance named otherwise | another instance of the same class, named neither for its class nor for one of the two reasons above | name yours for the class anyway |
 
+When the clashing word is one `DESIGN.md` gives, the dev doesn't change it: it asks the architect, as "When to stop and ask" in `AGENTS.md` says.
+
 The code's agreed word for a concept is the glossary's, then `DESIGN.md`'s, then the class's own name for its instances, then a word the code uses for that concept and nothing else. An instance named otherwise is drift, not agreement. Don't copy it, and don't rename it in this task: the dev lists it under `Next` in `LOG.md` as a suggested follow-up.
 
 ## The test
@@ -89,7 +91,7 @@ The dev records its naming decisions in the task's `NAMES.md`, in `$AGENT_NOTES_
 
 - **Name**: the name, with its old name for a rename.
 - **Kind**: function, method, type, variable, parameter, field, file or option.
-- **Evidence**: where the word comes from, by "Where a name comes from": the glossary entry, the `DESIGN.md` section, or existing uses as `file:line`. For a new word, the words you searched for. Add any synonym, homonym or drift the search found.
+- **Evidence**: where the word comes from, by "Where a name comes from": the glossary entry, the `DESIGN.md` section, or existing uses as `file:line`. For a new word, the words you searched for. Add any synonym or homonym you steered clear of, and any drift the search found.
 
 ## Before each commit
 

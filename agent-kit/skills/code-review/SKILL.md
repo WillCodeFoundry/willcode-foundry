@@ -41,9 +41,9 @@ Before going further, confirm the fixed point resolves (`git rev-parse <fixed-po
 - the commit the last round reviewed, from its heading;
 - every finding that is closed, accepted as is or deferred: the settled list.
 
-Take the answer to each open finding from its `Answers R<n>` entry in the task's `LOG.md`: the dev's for a finding, the architect's for a design question.
+Take the answer to each open finding from its `Answers R<n>` entries in the task's `LOG.md`: the dev's for a finding; for a design question, the architect's and then the dev's fix.
 
-Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents judge each open finding, with its answer, and look for new problems only in the lines the fix diff touches. Code an earlier round reviewed and no fix touched isn't reviewed again.
+Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents judge each open finding, with its answer, and look for new problems only in the lines the fix diff touches. Code an earlier round reviewed and no fix touched isn't reviewed again. The dev merges the default branch each turn, so a line in the fix diff is new surface only when the task's full diff has it too.
 
 The settled list holds findings, never code. Code and names a fix introduced are new surface for this round, even in a round that focuses on one concern.
 

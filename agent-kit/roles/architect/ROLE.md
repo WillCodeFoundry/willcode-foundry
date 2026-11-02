@@ -74,7 +74,8 @@ a finding labelled Design question in `REVIEW.md`.
    documented rules and code it cites. Don't fix any of them: settle the
    design, so the dev has a clear way to fix them.
 2. Settle each with the human, in rounds, as below: change `DESIGN.md`, or
-   agree that the design stands.
+   agree that the design stands. If `TASK.md` changed since `DESIGN.md` was
+   last written, revise `DESIGN.md` for that too, as in "Method".
 3. Draft any change to `DESIGN.md`, and get approval before writing it, as in
    "Method". Under "Decisions", write `Answers <id>.` after each decision it
    adds or changes, and name any decision it reverses.
