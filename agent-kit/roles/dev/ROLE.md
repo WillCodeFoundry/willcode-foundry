@@ -48,7 +48,8 @@ code the task extends was replaced.
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
 - Name with the `naming` skill. Before each commit, run its "Before each
-  commit" check, and record each name in the task's `NAMES.md` as it says.
+  commit" check, and record your naming decisions in the task's `NAMES.md`
+  as it says.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
@@ -71,7 +72,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
 - Fix a name finding by the `naming` skill: read every use of the new name,
-  in the whole repository, and change its row in `NAMES.md`.
+  in the whole repository, and record the rename in `NAMES.md`.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a

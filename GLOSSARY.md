@@ -45,7 +45,7 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `DESIGN.md` when the task had an architect turn, `REVIEW.md`, `NAMES.md` when the dev named something, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `DESIGN.md` when the task had an architect turn, `REVIEW.md`, `NAMES.md` when the dev made a naming decision, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Open task**, **Closed task**:

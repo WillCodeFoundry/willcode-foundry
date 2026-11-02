@@ -47,7 +47,7 @@ Before choosing a name, and before judging one, search the whole repository with
 | A homonym | this word, already used for a different concept | choose another word, so one word means one thing |
 | An instance named otherwise | another instance of the same class, named neither for its class nor for one of the two reasons above | name yours for the class anyway |
 
-When the clashing word is one `DESIGN.md` gives, the dev doesn't change it: it asks the architect, as "When to stop and ask" in `AGENTS.md` says. The architect checks its own names the same way, and lists each one `DESIGN.md` adds, with its evidence, on a "Names" line.
+When the clashing word is one `DESIGN.md` gives, the dev doesn't change it: it asks the architect, as "When to stop and ask" in `AGENTS.md` says. The architect checks its own names the same way, and lists each one `DESIGN.md` adds, with its source, on a "Names" line.
 
 The code's agreed word for a concept is the glossary's, then `DESIGN.md`'s, then the class's own name for its instances, then a word the code uses for that concept and nothing else. An instance named otherwise is drift, not agreement. Don't copy it, and don't rename it in this task: the dev lists it under `Next` in `LOG.md` as a suggested follow-up.
 
@@ -101,38 +101,39 @@ A thing that has no honest name is doing more than one job, or the design is unc
 
 ## NAMES.md
 
-The dev records its naming decisions in the task's `NAMES.md`, in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/`. Only the dev writes it. It has one row for each identifier, term and interface name the task adds or renames, and for each new term its prose introduces. Prose that uses existing words needs no row. Keep it current: when a name changes again, change its row, and remove the row of a name the code no longer has.
+The dev records the naming decisions the code can't show in the task's `NAMES.md`, in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/`. Only the dev writes it. The diff already shows every name, so a name gets a row only when:
+
+- it is a new word, which the glossary, `DESIGN.md` and the code don't have;
+- it renames something;
+- the search found a synonym, homonym or drift for it.
+
+A name that simply follows the glossary, `DESIGN.md` or its class needs no row. Keep each row current: when a name changes again, change its row, and remove the row of a name the code no longer has.
 
 ```markdown
 # Names
 
-| Name | Kind | Where | Evidence |
+| Name | Kind | Where | Why |
 |---|---|---|---|
-| `project_tasks` | variable | `src/app/run.py` | Instance of `ProjectTasks`. `cli.py:40` names one `tasks`: drift, noted in LOG.md. |
-| `close` (was `finish`) | method | `src/app/task.py` | GLOSSARY.md: Closed task. `finish` already means a session ending, `session.py:88`. |
-| `TaskMover` | type | `src/app/move.py` | DESIGN.md, "Modules and seams". |
 | `relaunch` | function | `src/app/run.py` | New word. No synonym found for: restart, resume, reopen. |
-| Drain | term | `GLOSSARY.md` | TASK.md, "Terms and decisions". No synonym found for: flush, empty. |
-| `--keep-notes` | interface name | `src/app/cli.py` | New flag. `notes` as in GLOSSARY.md: Task notes dir. |
+| `close` (was `finish`) | method | `src/app/task.py` | GLOSSARY.md: Closed task. Not `finish`, which already means a session ending, `session.py:88`. |
+| `project_tasks` | variable | `src/app/run.py` | Instance of `ProjectTasks`. `cli.py:40` names one `tasks`: drift, noted in LOG.md. |
 ```
 
 - **Name**: the name, with its old name for a rename.
 - **Kind**: an identifier's kind (function, type, variable, …), term, or interface name.
-- **Evidence**: where the word comes from, by "Where a name comes from": the glossary entry, the `DESIGN.md` section, or existing uses as `file:line`. For a new word, the words you searched for. Add any synonym or homonym you steered clear of, and any drift the search found.
+- **Why**: the decision. For a new word, the words you searched for. For a rename, why. For a clash, the word you turned down and where it already means something else, or the drift you found.
 
 ## Before each commit
 
-The dev lists every name the staged diff (`git diff --cached`) adds or renames, of every kind above, and each existing name whose behaviour it changes. It checks its added prose as "Prose" says. Check each name against the code, and read it at one of its uses by the test. Fix any that fails, unless the fix changes what `DESIGN.md` decides: then ask the architect, as "When to stop and ask" in `AGENTS.md` says. Then add or change its row in `NAMES.md`, and commit that with the step's `LOG.md` entry.
+The dev lists every name the staged diff (`git diff --cached`) adds or renames, of every kind above, and each existing name whose behaviour it changes. It checks its added prose as "Prose" says. Check each name against the code, and read it at one of its uses by the test. Fix any that fails, unless the fix changes what `DESIGN.md` decides: then ask the architect, as "When to stop and ask" in `AGENTS.md` says. Then add or change a row in `NAMES.md` for each decision "NAMES.md" lists, and commit that with the step's `LOG.md` entry.
 
 ## Reviewing names
 
-The reviewer judges names in the `code-review` skill's Names axis, starting from `NAMES.md`. It judges only the names the diff adds or renames, existing names whose behaviour the diff changes, and the names `DESIGN.md` adds. A name whose behaviour changes is judged again: a `get_` lookup the diff makes write fails the test. A poor name the diff leaves as it was isn't reported.
+The reviewer judges names in the `code-review` skill's Names axis. It takes the names from the diff, and reads `NAMES.md` for the decisions behind them. It judges only the names the diff adds or renames, existing names whose behaviour the diff changes, and the names `DESIGN.md` adds. A name whose behaviour changes is judged again: a `get_` lookup the diff makes write fails the test. A poor name the diff leaves as it was isn't reported.
 
-1. For each row, check that its evidence says what the row claims: open the glossary entry, the `DESIGN.md` section, or the uses it cites.
-2. List the names the diff adds or renames that have no row.
-3. Check each name against the code, and read it at its uses by the test.
-4. Check the diff's added prose, as "Prose" says.
-5. In the first round after `DESIGN.md` is written or changed, check the names that version adds or changes, wherever it names them, the same way.
+1. Check each name against the code, and read it at its uses by the test. Where a row says a word was turned down, check its reason before suggesting that word.
+2. Check the diff's added prose, as "Prose" says.
+3. In the first round after `DESIGN.md` is written or changed, check the names that version adds or changes, wherever it names them, the same way.
 
 Report a name only when it meets this bar:
 
@@ -145,4 +146,4 @@ Report a name only when it meets this bar:
 | passes all of these, but could be better | not reported |
 | a prose word that only reads poorly | not reported |
 
-Names with no row in `NAMES.md` are one Follow-up, listing them. They are judged like any other name.
+A missing or thin row isn't a finding: judge the name itself.
