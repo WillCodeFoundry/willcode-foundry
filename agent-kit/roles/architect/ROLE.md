@@ -55,6 +55,8 @@ already exists, as after the planner replanned, revise it for what changed in
 ## Modules and seams
 - <Module or file>: <what this task changes in it, its interface, and where
   its seam is>. Mark a module that doesn't exist yet as new.
+- Names: <each name this design adds, with its evidence, as the `naming`
+  skill's "NAMES.md" gives it>.
 
 ## Design rules and ADRs
 - <Each design rule or ADR the task meets, and how the design keeps to it.

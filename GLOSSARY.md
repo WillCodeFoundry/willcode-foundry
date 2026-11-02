@@ -65,7 +65,7 @@ How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed
 A question about `TASK.md`, which the planner, who owns it, answers with the human.
 
 **Design question**:
-A question about `DESIGN.md`, which the architect, who owns it, answers with the human. The dev asks one when a decision won't work. The reviewer raises one when a finding's fix would change the design.
+A question about `DESIGN.md`, which the architect, who owns it, answers with the human. The dev asks one when a decision won't work. The reviewer raises one for a finding the dev can't fix alone, such as one whose fix would change the design.
 
 **Code checkout** and **notes checkout**:
 The two working copies of a project inside a sandbox: one on the task branch, one on the notes branch.
