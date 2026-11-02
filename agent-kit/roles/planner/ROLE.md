@@ -46,10 +46,11 @@ and follow the steps below.
 5. End your turn, with the outcome the task needs now.
 
 ## Outcomes
-- `needs-design`: `TASK.md` is approved and pushed, and either the task
-  changes how the code is structured (a new module or seam, an interface
-  other code depends on, a design rule or ADR), or a change you made touches
-  a decision in `DESIGN.md`.
+- `needs-design`: `TASK.md` is approved and pushed, and one of these holds:
+  the task changes how the code is structured (a new module or seam, an
+  interface other code depends on, a design rule or ADR); a change you made
+  touches a decision in `DESIGN.md`; or a question asked of the architect in
+  `LOG.md` is still unanswered.
 - `planned`: `TASK.md` is approved and pushed, and none of those holds.
 - `stuck`: you and the human can't settle it in this session.
 

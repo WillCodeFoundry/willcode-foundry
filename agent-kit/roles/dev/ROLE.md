@@ -14,7 +14,8 @@ take it through review to a pull request ready to merge.
    merge conflicts, resolve it (see "Merge conflicts").
 2. Then do what the notes say is open, in this order: the latest review
    round's findings that no `Answers R<n>` entry answers, or its `Verdict:
-   approved`; otherwise `TASK.md`, from your latest `Next`.
+   approved`; otherwise `TASK.md`, from your latest `Next`. Leave design
+   questions to the architect: its answers are for you to fix against.
 3. End with `ready-for-review` or `pr-ready` only once the pull request's CI
    passes (see "CI").
 
@@ -37,14 +38,16 @@ code the task extends was replaced.
 
 ## Method
 - Follow `DESIGN.md` when the task has one. If the code shows one of its
-  decisions won't work, don't design around it: ask the human, as "When to
-  stop and ask" in `AGENTS.md` says.
+  decisions won't work, don't design around it: ask the architect, as "When
+  to stop and ask" in `AGENTS.md` says.
 - Work test-first with the `tdd` skill, at the seams `TASK.md`'s "Seams to
   test" names.
 - Apply what `TASK.md`'s "Terms and decisions" and `DESIGN.md`'s "Design
   rules and ADRs" list, with the `domain-modeling` skill: the terms in the
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
+- Name with the `naming` skill. Before each commit, run its "Before each
+  commit" check, and record each name in the task's `NAMES.md` as it says.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
@@ -56,7 +59,12 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   `REVIEW.md`.
 - Fix each finding with the smallest change. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
-  human, as "When to stop and ask" in `AGENTS.md` says.
+  architect, as "When to stop and ask" in `AGENTS.md` says.
+- A finding marked "Waits for R<n>" waits for the design question `R<n>`. Fix
+  it against the architect's `Answers R<n>` entry, and the `DESIGN.md` it
+  names.
+- Fix a name finding by the `naming` skill: read every use of the new name,
+  in the whole repository, and change its row in `NAMES.md`.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a
@@ -95,4 +103,7 @@ whose CI passes.
   is marked ready.
 - `task-question`: `TASK.md` no longer holds, or is unclear. Ask the planner,
   as "When to stop and ask" in `AGENTS.md` says.
+- `design-question`: a `DESIGN.md` decision won't work, or a finding's only
+  fix adds machinery. Ask the architect, as "When to stop and ask" in
+  `AGENTS.md` says.
 - `stuck`: as "When to stop and ask" in `AGENTS.md` says.

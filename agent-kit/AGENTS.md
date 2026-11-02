@@ -72,6 +72,7 @@ Each file but `TURN` has one writer, or only grows:
 | `TASK.md` | the planner, once the human approves | The goal and acceptance criteria. Every other role: **never edit it.** |
 | `DESIGN.md` | the architect, once the human approves | How the task fits the code's structure, when it needs that. Every other role: **never edit it**, and follow it as you follow `TASK.md`. |
 | `REVIEW.md` | the reviewer | Review rounds and their findings, `R1`, `R2`, … |
+| `NAMES.md` | the dev | Each name the task's code adds or renames, and the evidence for it, as the `naming` skill says. |
 | `LOG.md` | every role, appending only | Everything roles tell each other: progress, questions, answers, outcomes. |
 | `LEARNINGS.md` | every role, appending only | What you found out and decided. |
 | `TURN` | the role ending its turn | One line: the next role, or `human`. |
@@ -154,6 +155,8 @@ pull request the human merges.
 | dev | `ready-for-review` | reviewer |
 | dev | `pr-ready` | human |
 | dev | `task-question` | planner |
+| dev | `design-question` | architect |
+| reviewer | `design-question` | architect |
 | reviewer | `changes-needed` | dev |
 | reviewer | `approved` | dev |
 | reviewer | `no-agreement` | human |
@@ -283,6 +286,17 @@ When your `ROLE.md` lists `task-question`, ask the planner, with
 
 The planner settles these with the human, in its session. The reviewer raises
 them as findings.
+
+When your `ROLE.md` lists `design-question`, ask the architect, with
+`Asks <id> → architect` and that outcome, when:
+
+- a decision in `DESIGN.md` won't work, as the code shows;
+- a fix would change a decision in `DESIGN.md`, or has no honest local form.
+
+The architect settles these with the human, in its session, and answers each
+in `LOG.md`: a change to `DESIGN.md`, or why the design stands. The reviewer
+raises them as findings labelled Design question, as the `code-review` skill
+says.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

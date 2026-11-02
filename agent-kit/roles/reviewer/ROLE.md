@@ -38,8 +38,13 @@ git -C "$AGENT_NOTES_DIR" show <commit> -- "$AGENT_TASK_FILE"
 ```
 
 Then review against the last version of `TASK.md` written by an allowed
-commit, and say which one that is. When the task has a `DESIGN.md`, review
-against it too.
+commit, and say which one that is.
+
+When the task has a `DESIGN.md`, review against it too, and check its history
+the same way. The commits allowed to change it are those signed by the human
+or by the architect's identity, the email in
+`$AGENT_KIT_DIR/roles/architect/gitconfig`. Report any other under
+"DESIGN.md changed by another role", beside the `TASK.md` finding.
 
 Known limit: the planner currently shares the architect's identity (see the
 comment in `$AGENT_KIT_DIR/git/allowed_signers`), so a change by the architect
@@ -59,20 +64,28 @@ per task, as a new section per round:
 
 Never edit earlier rounds. In each round, in this order:
 
-1. Any "TASK.md changed by another role" finding.
+1. Any "TASK.md changed by another role" or "DESIGN.md changed by another
+   role" finding.
 2. A verdict on every finding still open from earlier rounds, judging the
-   dev's `Answers R<n>` entries in `LOG.md`: closed, still open, accepted as
-   is, or deferred, for a Follow-up the dev deferred.
+   `Answers R<n>` entries in `LOG.md`: closed, still open, accepted as is, or
+   deferred, for a Follow-up the dev deferred. A design question is closed
+   once the architect's entry answers it.
 3. New findings, with ids continuing the sequence across rounds (`R1`, `R2`,
-   …), so the dev can answer each by its id. Each says whether it is Blocking
-   or a Follow-up.
-4. A last line: `Verdict: approved` when no Blocking finding is open, even
-   with follow-ups open; otherwise `Verdict: changes needed`.
+   …), so the dev can answer each by its id. Each says whether it is
+   Blocking, a Follow-up or a Design question.
+4. A last line: `Verdict: approved` when no Blocking finding or design
+   question is open, even with follow-ups open; otherwise
+   `Verdict: changes needed`.
+
+Ask the architect each new design question in your last `LOG.md` entry, one
+line each: `Asks R<n> → architect: <the question>. See REVIEW.md, round <round>.`
 
 Then end your turn, as "Taking turns" in `AGENTS.md` says, with the first
 outcome below that holds.
 
 ## Outcomes
+- `design-question`: a design question is open, even with Blocking findings
+  open too, so the dev fixes everything against the settled design.
 - `no-agreement`: a Blocking finding is still open after round 3. Don't hand
   the task back for another round. In your `LOG.md` entry, ask the human
   about each by its id, saying where you and the dev disagree.
