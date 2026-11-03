@@ -637,7 +637,11 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(origin_dir, git_env) -> Non
         origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n", ".agent/tasks/open/Bad Dir/TURN": "dev"}
     )
 
-    with pytest.raises(FoundryError, match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id.*Rename or remove it"):
+    with pytest.raises(
+        FoundryError,
+        match=r"^.agent/tasks/open/ on agent-notes has a dir that isn't a task id: task id 'Bad Dir' is not valid: "
+        r".*Rename or remove the dir\.$",
+    ):
         summaries_of(origin_dir, git_env)
 
 
@@ -646,8 +650,8 @@ def test_an_upper_case_dir_is_not_a_task_id_either(origin_dir, git_env) -> None:
 
     with pytest.raises(
         FoundryError,
-        match=r"^.agent/tasks/open/WCF-1/ is not a valid task id \(task id 'WCF-1' is not valid: "
-        r"use lowercase letters, .*\)\. Rename or remove it\.$",
+        match=r"^.agent/tasks/open/ on agent-notes has a dir that isn't a task id: task id 'WCF-1' is not valid: "
+        r"use lowercase letters, .*\. Rename or remove the dir\.$",
     ):
         summaries_of(origin_dir, git_env)
 
