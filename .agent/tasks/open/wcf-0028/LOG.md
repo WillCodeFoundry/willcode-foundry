@@ -67,3 +67,13 @@ was needed (the default branch has no new commits). Host tier, ruff and mypy pas
 - Answers R7: fixed in 87a4ac7. Widths first, then each project in one pass.
 - Answers R8: fixed in 8e7f8d6. `read` and `push_atomic` use `_local_ref`.
 Next: wait for CI on PR #43, then end the turn ready-for-review. Follow-up: R4.
+
+## 6 · dev · ready-for-review
+Done: every round 1 finding answered (entry 5): R1, R2, R3, R5, R6, R7, R8 fixed
+in 4195ec5, 87a4ac7, 8e7f8d6, 294b4af; R4 deferred. All acceptance criteria
+still met. Host tier, ruff and mypy pass, and CI passes on 294b4af in the draft
+PR https://github.com/WillCodeFoundry/willcode-foundry/pull/43. No merge conflicts.
+New names are in NAMES.md (`read_project_listing`, `_read_local_task_summary`,
+`_open_task_in_dir`).
+Next (reviewer): round 2. Follow-ups, not part of this task: R4 (multi-line
+`TURN`), and the planner's two.
