@@ -76,7 +76,11 @@ class FakeHost:
 
 
 class Attached(Exception):
-    """Raised by FakeSandbox.attach instead of handing this process over."""
+    """Raised by FakeSandbox.attach instead of handing this process over, with the model it was given."""
+
+    def __init__(self, model: str | None) -> None:
+        super().__init__(model)
+        self.model = model
 
 
 class FakeSandbox:
@@ -120,8 +124,8 @@ class FakeSandbox:
         code = self._exit_codes_by_command.get(command, 0)
         return subprocess.CompletedProcess(command, code, stdout=f"ran {' '.join(command)}\n", stderr="")
 
-    def attach(self) -> NoReturn:
-        raise Attached()
+    def attach(self, model: str | None) -> NoReturn:
+        raise Attached(model)
 
 
 _: type[Sandbox] = FakeSandbox  # FakeSandbox implements the port

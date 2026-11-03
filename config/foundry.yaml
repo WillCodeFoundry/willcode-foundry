@@ -10,7 +10,9 @@ projects:
   foundry-test:
     url: git@github.com:WillCodeFoundry/foundry-test.git
 roles:
-  # Each role maps to {}: options per role aren't supported yet.
+  # Each role maps to {}, or {model: <model>} to run its agent on that model, such as
+  # {model: opus} or {model: claude-sonnet-5-5}. Without one, Claude Code's default.
+  # It applies from the next launch: see docs/adr/0014-a-role-s-model-is-given-at-launch.md.
   planner: {}
   dev: {}
   qa: {}

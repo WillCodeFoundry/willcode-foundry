@@ -43,8 +43,9 @@ class Sandbox(Protocol):
         """Run a command inside the sandbox, with its definition's variables, and wait for it."""
         ...
 
-    def attach(self) -> NoReturn:
-        """Replace this process with the agent's session in the sandbox, which starts on the opening prompt."""
+    def attach(self, model: str | None) -> NoReturn:
+        """Replace this process with the agent's session in the sandbox, which starts on the opening prompt, on
+        ``model``, or its default when None."""
         ...
 
 
@@ -115,10 +116,12 @@ class SbxCli:
     def run(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         return self._sbx("env", "exec", str(self._definition_dir), "--", *command)
 
-    def attach(self) -> NoReturn:
+    def attach(self, model: str | None) -> NoReturn:
         """sbx run, not sbx env run: only sbx run passes arguments after -- to the agent. The sandbox already
-        exists, made by ensure_running, so --name re-attaches to it, with the variables it was created with."""
-        command = ("sbx", "run", "--name", self._sandbox_name, "--", OPENING_PROMPT)
+        exists, made by ensure_running, so --name re-attaches to it, with the variables it was created with. The
+        model goes to Claude Code as --model, so it can change between launches without recreating the sandbox."""
+        model_args = ("--model", model) if model is not None else ()
+        command = ("sbx", "run", "--name", self._sandbox_name, "--", *model_args, OPENING_PROMPT)
         self._host.exec(command, self._sbx_env)
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:
