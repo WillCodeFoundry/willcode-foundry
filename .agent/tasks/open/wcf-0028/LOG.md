@@ -13,3 +13,11 @@ this task:
   closes; `task list` copes by catching a narrow missing-path error. Consider
   a task that keeps the dir in git (e.g. a `.gitkeep` seeded by `create` and
   kept by `close`), after which that catch could go.
+
+## 2 · dev · progress
+Done: read TASK.md, the code and the notes; the default branch is already merged.
+Next: test-first, one slice per commit: (1) `ProjectClone.fetch_branch`,
+`local_list_dir`, `local_read`; (2) `TaskSummary` and
+`ProjectTasks.list_open_task_summaries`, plus the fetch count; (3) the pure
+listing function and the `task list` parser and `main`; (4) README and
+ARCHITECTURE.md. Then the host tier, ruff and mypy, `NAMES.md`, and the draft PR.
