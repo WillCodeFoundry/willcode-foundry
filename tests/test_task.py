@@ -17,6 +17,7 @@ from foundry.commands.task import (
     REOPENED,
     Outcome,
     ProjectListing,
+    list_project,
     list_projects,
     listing_lines,
     report,
@@ -620,7 +621,9 @@ def test_a_missing_empty_or_directory_turn_fails_naming_the_task(origin_dir, git
     if files:  # t0 starts without a TURN
         edit_notes(origin_dir, git_env, write=files)
 
-    with pytest.raises(FoundryError, match=r"^task t0 has no turn: agent-notes has no .*TURN.*Name the role"):
+    with pytest.raises(
+        FoundryError, match=r"^task t0 has no turn: agent-notes has no .*TURN.*Write the next role's name in it\.$"
+    ):
         summaries_of(origin_dir, git_env)
 
 
@@ -735,3 +738,38 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
     with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
         list_projects(foundry_config, ["store", "nope"])
+
+
+def test_a_project_s_listing_holds_its_tasks_or_the_reason_it_failed(origin_dir, git_env, tmp_path: Path) -> None:
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n"})
+
+    good = list_project(Project("store", str(origin_dir)), git_env)
+    bad = list_project(Project("gone", str(tmp_path / "missing.git")), git_env)
+
+    assert good == ProjectListing("store", [TaskSummary(Task.as_open("t0"), "dev")], None)
+    assert (bad.project_name, bad.summaries) == ("gone", [])
+    assert bad.error is not None and "does not appear to be a git repo" in bad.error
+
+
+def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
+    origin_dir, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, in a foundry instance of its own: one project lists, the other can't be reached."""
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n"})
+    foundry_root = tmp_path / "foundry"
+    (foundry_root / "config").mkdir(parents=True)
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        f"name: f\nprojects:\n  store: {{url: '{origin_dir}'}}\n  gone: {{url: '{tmp_path / 'missing.git'}'}}\n"
+        "roles: {}\n"
+    )
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+
+    assert cli.main(["task", "list"]) == 1
+    printed = capsys.readouterr()
+    assert printed.out == "store  t0  dev\n"
+    assert printed.err.startswith("error: gone: ") and printed.err.count("error: ") == 1
+
+    assert cli.main(["task", "list", "store"]) == 0
+    assert capsys.readouterr() == ("store  t0  dev\n", "")

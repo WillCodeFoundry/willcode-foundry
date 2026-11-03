@@ -3,7 +3,7 @@
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
 from agent_runtime.git import GitError
@@ -95,13 +95,7 @@ def reopen_main(args: argparse.Namespace) -> int:
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = list_projects(config.load(paths.find_foundry_root()), args.project_names)
-    listings = []
-    for project in projects:
-        try:
-            with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-                listings.append(ProjectListing(project.name, project_tasks.list_open_task_summaries(), None))
-        except (FoundryError, GitError) as error:
-            listings.append(ProjectListing(project.name, [], str(error)))
+    listings = [list_project(project, os.environ) for project in projects]
     stdout, stderr = listing_lines(listings, args.turn)
     if stdout:
         print("\n".join(stdout))
@@ -140,6 +134,18 @@ class ProjectListing(NamedTuple):
 def list_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
     """The projects to list, in name order: those named, each once, or all. FoundryError for an unknown name."""
     return [foundry_config.project(name) for name in sorted(set(project_names) or foundry_config.projects)]
+
+
+def list_project(project: Project, env: Mapping[str, str]) -> ProjectListing:
+    """``project``'s open tasks, through a scratch clone; a failure is the listing's error, so the rest can go on.
+
+    ``env`` is the environment git runs in, as for ProjectClone.
+    """
+    try:
+        with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
+            return ProjectListing(project.name, project_tasks.list_open_task_summaries(), None)
+    except (FoundryError, GitError) as error:
+        return ProjectListing(project.name, [], str(error))
 
 
 def listing_lines(listings: Sequence[ProjectListing], turn: str | None) -> tuple[list[str], list[str]]:

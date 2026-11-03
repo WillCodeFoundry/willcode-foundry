@@ -1,8 +1,9 @@
-"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, and reading
-their turn.
+"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, reading their
+turn, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every other operation goes through it. Callers pass task ids, and get Tasks back.
+every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
+reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
 import tempfile
@@ -117,7 +118,7 @@ class ProjectTasks:
         FoundryError when the file is missing or empty, saying to name the role instead.
         """
         task = self.get_task_by_id(task_id)
-        return _turn_of(task, self._clone.read(NOTES_BRANCH, task.turn_file))
+        return _turn_of(task, self._clone.read(NOTES_BRANCH, task.turn_file), fix="Name the role to run instead.")
 
     def list_open_task_summaries(self) -> list[TaskSummary]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
@@ -131,22 +132,15 @@ class ProjectTasks:
             names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
         except MissingPathError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
-        summaries = []
-        for name in sorted(names):
-            try:
-                task = Task.as_open(name)
-                if task.id != name:
-                    raise FoundryError("upper case letters are not allowed")
-            except FoundryError as error:
-                raise FoundryError(
-                    f"{OPEN_DIR}/{name}/ is not a valid task id ({error}). Rename or remove it."
-                ) from None
-            try:
-                text: str | None = clone.local_read(NOTES_BRANCH, task.turn_file)
-            except MissingPathError:
-                text = None
-            summaries.append(TaskSummary(task, _turn_of(task, text)))
-        return summaries
+        return [self._local_task_summary(_open_task_in_dir(name)) for name in sorted(names)]
+
+    def _local_task_summary(self, task: Task) -> TaskSummary:
+        """``task`` with its turn, read from NOTES_BRANCH as last fetched."""
+        try:
+            text: str | None = self._clone.local_read(NOTES_BRANCH, task.turn_file)
+        except MissingPathError:
+            text = None
+        return TaskSummary(task, _turn_of(task, text, fix="Write the next role's name in it."))
 
     def _move(self, task: Task, destination: Task, *, message: str) -> Task:
         """Move ``task``'s notes dir to ``destination``'s, commit it with ``message``, and push NOTES_BRANCH.
@@ -161,12 +155,24 @@ class ProjectTasks:
         return destination
 
 
-def _turn_of(task: Task, text: str | None) -> str:
-    """The turn ``text`` of ``task``'s TURN_FILE gives; FoundryError when there is no text, or only blanks."""
+def _open_task_in_dir(dir_name: str) -> Task:
+    """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError when ``dir_name`` isn't a task id as it
+    stands, upper case included, since Task lowercases the id and would look for its notes elsewhere."""
+    try:
+        task = Task.as_open(dir_name)
+    except FoundryError as error:
+        reason = str(error)
+    else:
+        if task.id == dir_name:
+            return task
+        reason = "upper case letters are not allowed"
+    raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({reason}). Rename or remove it.")
+
+
+def _turn_of(task: Task, text: str | None, *, fix: str) -> str:
+    """The turn ``text`` of ``task``'s TURN_FILE gives; FoundryError, ending with ``fix``, when there is no text, or
+    only blanks."""
     turn = text.strip() if text is not None else ""
     if not turn:
-        raise FoundryError(
-            f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-            "Name the role to run instead."
-        )
+        raise FoundryError(f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. {fix}")
     return turn
