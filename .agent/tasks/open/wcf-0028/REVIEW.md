@@ -197,3 +197,34 @@ None.
 Summary: Standards 0. Spec 0. Behaviour 0. Smells 0. Names 0. None block and no design questions are open. Of the earlier findings, R1–R3 and R5–R8 are closed and R4 is deferred as a follow-up.
 
 Verdict: approved
+
+## Round 3 (reviewing 294b4af)
+
+The code hasn't changed since round 2. After round 2, the human read `_open_task_in_dir` and asked for it to be fixed before the PR, so this round reopens the review with one finding. `TASK.md` is unchanged: this round reviews against `e3b591a`, as rounds 1 and 2 did.
+
+### Earlier findings
+
+Unchanged from round 2: R4 is deferred, and every other finding is closed.
+
+### Smells
+
+**R9 · Blocking · possible Duplicated Code: `_open_task_in_dir` reworks a check that `Task` already makes** (`src/foundry/project_tasks.py:158-169`)
+- The lowercasing lives only in `Task.from_id_and_status` (`src/foundry/task.py:67-70`), which `as_open` calls; it tidies ids people type. The plain constructor checks the id exactly as given: `__post_init__` (`task.py:59-64`) matches it against `_TASK_ID`, which has no upper case.
+- `_open_task_in_dir` builds the task with `as_open`, which lowercases the dir name. It then compares `task.id != dir_name` to catch the case it just lowercased, and writes its own "upper case letters are not allowed" reason. So the function has two ways to fail and two reasons to give where one would do.
+- A dir name is never typed by a person, so nothing needs lowercasing. Built with `Task(dir_name, Status.OPEN)`, the task has only `Task`'s own check, and its own reason.
+- The function still has a job: the message. On its own, `Task`'s error doesn't say the problem is a dir under `OPEN_DIR` on `agent-notes`, or that the fix is to rename or remove it, and TASK.md asks that the message say how to fix it. What's left is the path, the fix, and catching `Task`'s error.
+- `Task`'s message (`task.py:62`) says "use letters, digits, '.', '_' and '-'". For `WCF-1` that misleads, because upper-case letters are letters too. Saying lowercase letters there fixes the listing's message and `create`'s.
+- Who hits it: the next dev who changes the id rules, who has to keep `_TASK_ID` and this comparison in step. Also anyone who lists a project with an upper-case dir, or runs `create` with a bad id, and is told letters are allowed.
+- Direction: build the task with the constructor, keep only the path and the fix in `_open_task_in_dir`, and say lowercase in `Task`'s message. Keep the `Bad Dir` and `WCF-1` tests passing, and pin the new wording.
+
+### Standards, Spec, Behaviour, Names
+
+No new findings.
+
+### Design questions
+
+None.
+
+Summary: Smells 1 (1 blocking; R9, `_open_task_in_dir` reworks `Task`'s own check). Standards, Spec, Behaviour, Names 0. No design questions open.
+
+Verdict: changes needed

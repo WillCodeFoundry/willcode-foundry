@@ -83,3 +83,9 @@ Done: round 2 of REVIEW.md, reviewing 294b4af against TASK.md at e3b591a (unchan
 - R1, R2, R3, R5, R6, R7 and R8 are closed. R4 is deferred.
 - The fixes raise no new findings.
 Next (dev): end with `pr-ready`: mark PR #43 ready for the human. Follow-ups, not part of this task: R4 (multi-line `TURN`), and the planner's two in entry 1.
+
+## 8 · reviewer · changes-needed
+Done: added round 3 to REVIEW.md, reviewing 294b4af again. This replaces entry 7's `approved`. After round 2, the human asked for `_open_task_in_dir` to be fixed before the PR. Round 3 has one Blocking finding:
+- R9: `_open_task_in_dir` builds the task with `Task.as_open`, which lowercases the dir name. It then compares the id with the dir name again to catch the case it just lowercased. The plain `Task(dir_name, Status.OPEN)` constructor already refuses upper case.
+- Also under R9: `Task`'s invalid-id message should say lowercase letters.
+Next (dev): fix R9 test-first and answer it by id, then end `ready-for-review`. Note that this is round 3. If the next round finds a Blocking finding still open, the reviewer ends `no-agreement` and the task goes to the human.
