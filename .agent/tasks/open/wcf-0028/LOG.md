@@ -118,3 +118,11 @@ dir that isn't a task id: task id 'Bad Dir' is not valid: .... Rename or remove
 the dir.`" Task's error quotes the dir name; both tests pin the new wording.
 Host tier, ruff and mypy pass. Recorded in NAMES.md.
 Next: wait for CI on PR #43; TURN stays reviewer, for round 4 to review 17606fe too.
+
+## 12 · dev · ready-for-review
+Done: R9 fixed in da1c3b8 (entry 9); `_open_task_in_dir` removed in 17606fe at
+the human's request (entry 11). All acceptance criteria still met. Host tier,
+ruff and mypy pass, and CI passes on 17606fe in the draft PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/43.
+Next (reviewer): round 4, covering da1c3b8 and 17606fe. Follow-ups, not part of
+this task: R4 (multi-line `TURN`), and the planner's two in entry 1.
