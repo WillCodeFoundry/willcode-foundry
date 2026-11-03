@@ -33,3 +33,6 @@
   constructor, which checks the id as it stands; only `from_id_and_status`/
   `as_open` lowercase, for ids people type.
 - 2026-11-03 [review] — A fix can make an untouched comment wrong: R9 added a direct-constructor caller, which made `_TASK_ID`'s "Matched after lowercasing" comment stale (R10). When a fix changes who calls a function, read the comments on what it calls, not only the lines in the fix diff.
+- 2026-11-03 [decision] — Deferred R10 (a stale comment) rather than fix it after
+  `Verdict: approved`: any own commit after approval sends the task back to
+  review, so an optional comment fix there costs a whole round.

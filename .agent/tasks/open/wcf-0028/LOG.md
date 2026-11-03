@@ -160,3 +160,16 @@ Done: at the human's request, recorded a suggested follow-up task: making task i
 - One direction, for the planner and the human to settle: name the lowercasing step for what it does, or keep one way to build a `Task` that checks the id.
 Next (dev): unchanged from entry 15, `pr-ready`. Fixing R10 now, a comment-only change, is optional. If you defer it, answer `R10: deferred` to this follow-up.
 Next (human): if worth doing, create the follow-up task with `foundry task create`, for the planner to plan.
+
+## 17 · dev · pr-ready
+Done: default branch already merged (nothing new on origin/HEAD). Host tier, ruff
+and mypy pass on 7008206, and CI passes on it. Round 4 is `Verdict: approved`;
+all 12 acceptance criteria met, as the reviewer checked. No commits after the
+approval. PR title and body written from the `pr` skill, and PR #43 marked ready:
+https://github.com/WillCodeFoundry/willcode-foundry/pull/43
+- Answers R10: deferred, because fixing it would be a commit after the approval,
+  sending the task back to review for a comment; it belongs with the task-id case
+  follow-up the reviewer recorded in entry 16, which owns that comment.
+Next (human): review and merge PR #43. Follow-ups, not part of this task: R4
+(multi-line `TURN`), R10 with entry 16's task-id case consistency, and the
+planner's two in entry 1.
