@@ -147,9 +147,17 @@ def test_commands_run_inside_with_the_definitions_variables(host, sbx_cli: SbxCl
 
 def test_attaching_hands_over_to_sbx_run_by_name_with_the_opening_prompt_and_the_sandboxs_socket(host, sbx_cli: SbxCli):
     with pytest.raises(host.ExecCalled) as handed_over:
-        sbx_cli.attach()
+        sbx_cli.attach(None)
     assert handed_over.value.command == ("sbx", "run", "--name", "n", "--", "Start your turn, as AGENTS.md says.")
     assert handed_over.value.env == ENV
+
+
+def test_attaching_with_a_model_gives_it_to_the_agent_before_the_opening_prompt(host, sbx_cli: SbxCli):
+    with pytest.raises(host.ExecCalled) as handed_over:
+        sbx_cli.attach("opus")
+    assert handed_over.value.command == (
+        "sbx", "run", "--name", "n", "--", "--model", "opus", "Start your turn, as AGENTS.md says."
+    )  # fmt: skip
 
 
 # --- list_live_sandboxes ------------------------------------------------------

@@ -56,9 +56,36 @@ def test_unknown_project_and_role_are_reported(tmp_path: Path) -> None:
         cfg.role("qa")
 
 
-def test_role_options_are_rejected_not_ignored(tmp_path: Path) -> None:
-    with pytest.raises(FoundryError, match="role options are not supported yet"):
+def test_a_role_without_a_model_runs_on_the_default(tmp_path: Path) -> None:
+    give_kit_roles(tmp_path, "dev", "qa", "reviewer")
+    cfg = config.parse(
+        {"name": "x", "roles": {"dev": {}, "qa": None, "reviewer": {"model": None}}}, foundry_root=tmp_path
+    )
+    assert [role.model for role in cfg.roles.values()] == [None, None, None]
+
+
+@pytest.mark.parametrize("model", ["opus", "sonnet[1m]", "claude-opus-5-5", "claude-haiku-5-5"])
+def test_a_role_s_model_is_read_as_written(tmp_path: Path, model: str) -> None:
+    give_kit_roles(tmp_path, "dev")
+    cfg = config.parse({"name": "x", "roles": {"dev": {"model": model}}}, foundry_root=tmp_path)
+    assert cfg.role("dev").model == model
+
+
+def test_role_options_other_than_model_are_rejected_not_ignored(tmp_path: Path) -> None:
+    with pytest.raises(FoundryError, match=r"roles.dev: unknown role option 'memory'; the only one is 'model'"):
         config.parse({"name": "x", "roles": {"dev": {"memory": "8g"}}}, foundry_root=tmp_path)
+
+
+@pytest.mark.parametrize("model", ["", "--dangerously-skip-permissions", "opus 4", 5, ["opus"]])
+def test_a_model_claude_code_couldn_t_take_is_refused(tmp_path: Path, model: object) -> None:
+    """A model starting with '-' would be read as another option of Claude Code's."""
+    with pytest.raises(FoundryError, match=r"roles.dev.model .* is not a model"):
+        config.parse({"name": "x", "roles": {"dev": {"model": model}}}, foundry_root=tmp_path)
+
+
+def test_role_options_must_be_a_mapping(tmp_path: Path) -> None:
+    with pytest.raises(FoundryError, match=r"roles.dev must be a mapping"):
+        config.parse({"name": "x", "roles": {"dev": "opus"}}, foundry_root=tmp_path)
 
 
 @pytest.mark.parametrize("raw", [[], "x", {}, {"name": ""}, {"name": "x", "projects": {"p": {}}}])

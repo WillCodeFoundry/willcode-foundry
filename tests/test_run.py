@@ -53,6 +53,15 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
     )
     assert request.ssh_key_path == foundry_root / "secrets" / "ssh" / "dev"
     assert request.github_token_path is None
+    assert request.model is None
+
+
+def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
+    (foundry_root / "config" / "foundry.yaml").write_text(CONFIG.replace("dev: {}", "dev: {model: sonnet}"))
+
+    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+
+    assert launch.request.model == "sonnet"
 
 
 def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:

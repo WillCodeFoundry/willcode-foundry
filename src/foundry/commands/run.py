@@ -101,5 +101,6 @@ def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, tas
         ssh_key_path=role.ssh_key_path,
         init_command=opened.init_command,
         github_token_path=role.github_token_path,
+        model=role.model,
     )
     return Launch(request, opened.created)

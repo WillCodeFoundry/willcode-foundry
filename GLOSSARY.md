@@ -26,7 +26,7 @@ The last job of a project's CI, which passes only if every other job did: the on
 ### Roles and tasks
 
 **Role**:
-Who an agent is (planner, dev, qa, reviewer or architect): its instructions, its git identity, its SSH key and, optionally, its GitHub token.
+Who an agent is (planner, dev, qa, reviewer or architect): its instructions, its git identity, its SSH key and, optionally, its GitHub token and the model its agent runs on.
 
 **Task**:
 A unit of work on one project: a task branch, plus a task notes dir on the notes branch holding the task's `TASK.md`.
