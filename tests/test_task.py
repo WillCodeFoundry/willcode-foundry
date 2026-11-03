@@ -11,7 +11,17 @@ import pytest
 
 from agent_runtime.git import GitError
 from foundry import cli, task
-from foundry.commands.task import CLOSED, CREATED, REOPENED, Outcome, report
+from foundry.commands.task import (
+    CLOSED,
+    CREATED,
+    REOPENED,
+    Outcome,
+    ProjectListing,
+    list_projects,
+    listing_lines,
+    report,
+)
+from foundry.config import Config, Project
 from foundry.errors import FoundryError
 from foundry.project_clone import MissingPathError, ProjectClone
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary
@@ -658,3 +668,70 @@ def test_listing_costs_one_fetch_however_many_tasks(origin_dir, git_env, tmp_pat
 
     assert len(found) == 6
     assert sum(" fetch " in f" {line} " for line in log.read_text().splitlines()) == 1
+
+
+# --- foundry task list: the lines and the arguments -----------------------------------------
+
+
+def listing(name: str, *turns: tuple[str, str], error: str | None = None) -> ProjectListing:
+    return ProjectListing(name, [TaskSummary(Task.as_open(task_id), turn) for task_id, turn in turns], error)
+
+
+def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
+    stdout, stderr = listing_lines(
+        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t1", "reviewer"))], turn=None
+    )
+
+    assert stdout == [
+        "store  wcf-0007  dev",
+        "store  wcf-0010  human",
+        "a      t1        reviewer",
+    ]
+    assert stderr == []
+
+
+def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
+    stdout, _ = listing_lines(
+        [listing("store", ("t1", "dev"), ("t2", "developer"), ("t3", "dev"), ("t4", "Dev"))], turn="dev"
+    )
+
+    assert stdout == ["store  t1  dev", "store  t3  dev"]
+
+
+def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
+    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))], turn=None)
+
+    assert stdout == ["empty  no open tasks", "store  wcf-0007  dev"]
+
+
+def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
+    stdout, _ = listing_lines([listing("store", ("t1", "dev")), listing("empty")], turn="human")
+
+    assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
+
+
+def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
+    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("t1", "dev"))], turn=None)
+
+    assert (stdout, stderr) == (["store  t1  dev"], ["error: bad: boom"])
+
+
+def test_list_takes_optional_projects_and_a_turn() -> None:
+    parse = cli.build_parser().parse_args
+    assert (parse(["task", "list"]).project_names, parse(["task", "list"]).turn) == ([], None)
+    args = parse(["task", "list", "store", "blog", "--turn", "human"])
+    assert (args.project_names, args.turn) == (["store", "blog"], "human")
+
+
+def test_list_projects_are_in_name_order_once_each_and_all_when_none_are_named() -> None:
+    foundry_config = Config("f", {name: Project(name, f"url/{name}") for name in ("store", "blog")}, {})
+
+    assert [p.name for p in list_projects(foundry_config, [])] == ["blog", "store"]
+    assert [p.name for p in list_projects(foundry_config, ["store", "blog", "store"])] == ["blog", "store"]
+
+
+def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
+    foundry_config = Config("f", {"store": Project("store", "url")}, {})
+
+    with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
+        list_projects(foundry_config, ["store", "nope"])

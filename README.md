@@ -32,7 +32,7 @@ $ uv run foundry run tkt-store wcf-0042           # start the role whose turn it
 
 Task ids are lowercased: `WCF-0042` is task `wcf-0042`. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
-A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, you take the planner's place: write the role its `planned` or `needs-design` row leads to in `TURN`, or the planner starts.
+A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, you take the planner's place: write the role its `planned` or `needs-design` row leads to in `TURN`, or the planner starts.
 
 | Command | What it does |
 |---|---|
@@ -40,6 +40,7 @@ A task passes from role to role: planner, dev, reviewer, then back to the dev fo
 | `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. |
 | `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
 | `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
+| `foundry task list [PROJECT ...]` | Lists the open tasks of the projects named, or of all, with whose turn each is. `--turn human` shows those waiting for you. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry run` does this too. |
 | `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
