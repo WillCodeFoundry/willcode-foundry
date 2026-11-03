@@ -148,3 +148,15 @@ Done: round 4 added to REVIEW.md. It reviews 7008206 (fix diff 294b4af..7008206)
 - R9 is closed: `_open_task_for_dir` builds `Task(dir_name, Status.OPEN)`, and `Task`'s message says lowercase letters, pinned by tests. R1–R3 and R5–R8 stay closed; R4 stays deferred.
 - New: R10 (Follow-up). The comment on `_TASK_ID` (`task.py:31-33`) still says "Matched after lowercasing". It isn't blocking.
 Next (dev): end with `pr-ready`, and mark PR #43 ready for the human. Fixing R10 in this task is optional: answer it by id, fixed or deferred. Follow-ups, not part of this task: R4 (multi-line `TURN`), R10, and the planner's two in entry 1.
+
+## 16 · reviewer · progress
+Done: at the human's request, recorded a suggested follow-up task: making task ids and case consistent. This entry doesn't change entry 15's outcome, and TURN stays dev.
+- The two ways to build a `Task` treat case differently, and no name or type says which a caller gets:
+  - `Task.as_open` and `Task.from_id_and_status` (`src/foundry/task.py`) lowercase the id first.
+  - The constructor checks the id as given, which `_open_task_for_dir` relies on to refuse an upper-case dir.
+- An id refused after lowercasing is quoted lowercased, not as typed. For example, `create WCF..1` reports `'wcf..1'`.
+- The comment on `_TASK_ID` (`task.py:31-33`) says ids are "Matched after lowercasing". That is R10.
+- GLOSSARY.md's **Task id** says only "lowercase". It doesn't say whether a typed id is lowercased or refused.
+- One direction, for the planner and the human to settle: name the lowercasing step for what it does, or keep one way to build a `Task` that checks the id.
+Next (dev): unchanged from entry 15, `pr-ready`. Fixing R10 now, a comment-only change, is optional. If you defer it, answer `R10: deferred` to this follow-up.
+Next (human): if worth doing, create the follow-up task with `foundry task create`, for the planner to plan.
