@@ -19,3 +19,6 @@
   open/closed `Status`.
 - 2026-11-03 [decision] — `list_open_task_summaries` refuses an upper-case dir under `open/` as an invalid id: `Task.as_open` lowercases, which would read the wrong `TURN` path and report a misleading "no turn".
 - 2026-11-03 [testing] — The fetch count test puts a `git` shim on `PATH` that logs its arguments and execs the real git; `uv sync --group dev` is needed before `uv run pytest`.
+- 2026-11-03 [review] — Dropped from round 1 as below the bar: a symlinked
+  `.agent/tasks/open` reads as "no open tasks" (nobody would commit one), and
+  `ProjectListing`'s `summaries`/`error` pair (the spec asks for an error value).

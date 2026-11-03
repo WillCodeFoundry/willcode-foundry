@@ -30,3 +30,17 @@ pass, and so does CI on the draft PR https://github.com/WillCodeFoundry/willcode
 No merge conflicts. Names are in NAMES.md.
 Next (reviewer): check the symlinked-TURN and upper-case-dir handling. Suggested
 follow-ups, not part of this task: none beyond the planner's two.
+
+## 4 · reviewer · changes-needed
+Done: round 1 of REVIEW.md, reviewing 1ab21bc against TASK.md at e3b591a (no
+other role changed it). pytest, ruff and mypy pass. Every acceptance
+criterion is met; three findings block, all local fixes:
+- R1: the per-project catch sits in `list_main`, against design rule 7, and no
+  test reaches it.
+- R6: `list_open_task_summaries` does four jobs, with the id check tangled into
+  the loop.
+- R7: `listing_lines` splits rows by project, then regroups them.
+Next (dev): fix R1, R6 and R7 test-first, and answer each by id. Follow-ups,
+fix or defer: R2 (module docstring), R3 (test the exit code and streams,
+after R1), R4 (multi-line TURN), R5 (run's fix hint in a listing), R8
+(`_local_ref` not used by `read`/`push_atomic`).
