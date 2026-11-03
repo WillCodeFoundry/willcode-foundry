@@ -156,17 +156,12 @@ class ProjectTasks:
 
 
 def _open_task_in_dir(dir_name: str) -> Task:
-    """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError when ``dir_name`` isn't a task id as it
-    stands, upper case included, since Task lowercases the id and would look for its notes elsewhere."""
+    """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError, naming the dir, when ``dir_name`` isn't a
+    task id as it stands."""
     try:
-        task = Task.as_open(dir_name)
+        return Task(dir_name, Status.OPEN)
     except FoundryError as error:
-        reason = str(error)
-    else:
-        if task.id == dir_name:
-            return task
-        reason = "upper case letters are not allowed"
-    raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({reason}). Rename or remove it.")
+        raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
 
 
 def _turn_of(task: Task, text: str | None, *, fix: str) -> str:

@@ -151,6 +151,11 @@ def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> N
         Task.as_open(task_id)
 
 
+def test_an_invalid_task_id_is_told_letters_must_be_lowercase() -> None:
+    with pytest.raises(FoundryError, match=re.escape("use lowercase letters, digits, '.', '_' and '-'")):
+        Task("WCF-1", Status.OPEN)
+
+
 # --- create ---------------------------------------------------------------------
 
 
@@ -639,7 +644,11 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(origin_dir, git_env) -> Non
 def test_an_upper_case_dir_is_not_a_task_id_either(origin_dir, git_env) -> None:
     edit_notes(origin_dir, git_env, write={".agent/tasks/open/WCF-1/TURN": "dev"})
 
-    with pytest.raises(FoundryError, match=r"^.agent/tasks/open/WCF-1/ is not a valid task id.*Rename or remove it"):
+    with pytest.raises(
+        FoundryError,
+        match=r"^.agent/tasks/open/WCF-1/ is not a valid task id \(task id 'WCF-1' is not valid: "
+        r"use lowercase letters, .*\)\. Rename or remove it\.$",
+    ):
         summaries_of(origin_dir, git_env)
 
 

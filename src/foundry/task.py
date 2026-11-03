@@ -59,7 +59,7 @@ class Task:
     def __post_init__(self) -> None:
         if not _TASK_ID.fullmatch(self.id) or ".." in self.id or self.id.endswith((".", ".lock")):
             raise FoundryError(
-                f"task id {self.id!r} is not valid: use letters, digits, '.', '_' and '-', "
+                f"task id {self.id!r} is not valid: use lowercase letters, digits, '.', '_' and '-', "
                 "starting with a letter or digit (e.g. wcf-0042)"
             )
 
