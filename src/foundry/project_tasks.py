@@ -132,7 +132,7 @@ class ProjectTasks:
             names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
         except MissingPathError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
-        return [self._read_local_task_summary(_open_task_in_dir(name)) for name in sorted(names)]
+        return [self._read_local_task_summary(_open_task_for_dir(name)) for name in sorted(names)]
 
     def _read_local_task_summary(self, task: Task) -> TaskSummary:
         """``task`` with its turn, read from NOTES_BRANCH as last fetched."""
@@ -155,7 +155,7 @@ class ProjectTasks:
         return destination
 
 
-def _open_task_in_dir(dir_name: str) -> Task:
+def _open_task_for_dir(dir_name: str) -> Task:
     """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError, naming the dir, when ``dir_name`` isn't a
     task id as it stands."""
     try:
