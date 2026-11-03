@@ -71,7 +71,7 @@ class ProjectClone:
         if branch not in self.branches():
             return None
         self._fetch(branch)
-        where = f"refs/remotes/{_REMOTE_NAME}/{branch}:{path}"
+        where = self._local_ref(branch, path)
         if not self._git.succeeds("cat-file", "-e", where):
             return None
         return self._git.output("show", where)
@@ -160,7 +160,7 @@ class ProjectClone:
         for source in dict.fromkeys(from_remote.values()):
             self._fetch(source)
         refspecs = [
-            *(f"refs/remotes/{_REMOTE_NAME}/{source}:refs/heads/{branch}" for branch, source in from_remote.items()),
+            *(f"{self._local_ref(source)}:refs/heads/{branch}" for branch, source in from_remote.items()),
             *(f"refs/heads/{branch}:refs/heads/{branch}" for branch in from_local),
         ]
         self._git.output("push", "--quiet", "--atomic", _REMOTE_NAME, *refspecs)
