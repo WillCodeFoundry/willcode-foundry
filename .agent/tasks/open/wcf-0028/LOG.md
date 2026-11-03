@@ -21,3 +21,12 @@ Next: test-first, one slice per commit: (1) `ProjectClone.fetch_branch`,
 `ProjectTasks.list_open_task_summaries`, plus the fetch count; (3) the pure
 listing function and the `task list` parser and `main`; (4) README and
 ARCHITECTURE.md. Then the host tier, ruff and mypy, `NAMES.md`, and the draft PR.
+
+## 3 · dev · ready-for-review
+Done: all acceptance criteria met, in commits on task/wcf-0028 (clone methods;
+`list_open_task_summaries` with the fetch-count test; `task list` and its
+pure `listing_lines`; README and ARCHITECTURE.md). Host tier, ruff and mypy
+pass, and so does CI on the draft PR https://github.com/WillCodeFoundry/willcode-foundry/pull/43.
+No merge conflicts. Names are in NAMES.md.
+Next (reviewer): check the symlinked-TURN and upper-case-dir handling. Suggested
+follow-ups, not part of this task: none beyond the planner's two.
