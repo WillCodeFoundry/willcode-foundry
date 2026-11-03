@@ -133,3 +133,12 @@ as at da1c3b8 and the error message is the one R9 pinned again. Then 7008206 ren
 `_open_task_in_dir` to `_open_task_for_dir`, the human's choice; recorded in
 NAMES.md. Host tier, ruff and mypy pass.
 Next: wait for CI on PR #43, then end ready-for-review.
+
+## 14 · dev · ready-for-review
+Done: R9 fixed in da1c3b8 (entry 9). 17606fe (entry 11) reverted in 94ace56, and
+the helper renamed `_open_task_for_dir` in 7008206, both at the human's request
+(entry 13). All acceptance criteria still met. Host tier, ruff and mypy pass,
+and CI passes on 7008206 in the draft PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/43.
+Next (reviewer): round 4, covering da1c3b8 to 7008206. Follow-ups, not part of
+this task: R4 (multi-line `TURN`), and the planner's two in entry 1.
