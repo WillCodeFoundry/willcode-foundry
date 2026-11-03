@@ -155,20 +155,21 @@ def listing_lines(listings: Sequence[ProjectListing], turn: str | None) -> tuple
     with nothing to show gets a line outside the columns, and a failed one an error line. ``turn``, when given,
     keeps only the tasks whose turn it equals.
     """
-    rows, notes, errors = [], [], []
-    for project_name, summaries, error in listings:
-        if error is not None:
-            errors.append(f"error: {project_name}: {error}")
-            continue
-        shown = [s for s in summaries if turn is None or s.turn == turn]
-        rows += [(project_name, s.task.id, s.turn) for s in shown]
-        if not summaries:
-            notes.append((project_name, "no open tasks"))
-        elif not shown:
-            notes.append((project_name, f"no open tasks with turn {turn}"))
-    widths = [max(len(row[column]) for row in rows) for column in range(2)] if rows else [0, 0]
+    listed = [(listing, _with_turn(listing.summaries, turn)) for listing in listings if listing.error is None]
+    name_width = max((len(listing.project_name) for listing, shown in listed if shown), default=0)
+    id_width = max((len(summary.task.id) for _, shown in listed for summary in shown), default=0)
     stdout = []
-    for listing in listings:
-        stdout += [f"{p:<{widths[0]}}  {i:<{widths[1]}}  {t}" for p, i, t in rows if p == listing.project_name]
-        stdout += [f"{p}  {text}" for p, text in notes if p == listing.project_name]
-    return stdout, errors
+    for listing, shown in listed:
+        if shown:
+            stdout += [f"{listing.project_name:<{name_width}}  {s.task.id:<{id_width}}  {s.turn}" for s in shown]
+        elif not listing.summaries:
+            stdout.append(f"{listing.project_name}  no open tasks")
+        else:
+            stdout.append(f"{listing.project_name}  no open tasks with turn {turn}")
+    stderr = [f"error: {listing.project_name}: {listing.error}" for listing in listings if listing.error is not None]
+    return stdout, stderr
+
+
+def _with_turn(summaries: Sequence[TaskSummary], turn: str | None) -> list[TaskSummary]:
+    """The summaries whose turn is ``turn``, or all of them when it is None."""
+    return [summary for summary in summaries if turn is None or summary.turn == turn]
