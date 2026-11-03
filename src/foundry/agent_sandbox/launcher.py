@@ -31,6 +31,8 @@ class LaunchRequest:
     """Run inside the sandbox before the agent starts; the launch aborts if it fails."""
     github_token_path: Path | None = None
     """File holding a GitHub token for the sandbox; sbx reads it on the host when needed."""
+    model: str | None = None
+    """The model the agent runs on, given to it at each attach; None for its default. Not part of the sandbox."""
 
 
 @dataclass(frozen=True)
@@ -51,7 +53,7 @@ def launch(request: LaunchRequest) -> NoReturn:
     """
     prepared = start(request, report=lambda line: print(line, file=sys.stderr))
     print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
-    prepared.sandbox.attach()
+    prepared.sandbox.attach(request.model)
 
 
 def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: None) -> PreparedSandbox:
@@ -97,6 +99,7 @@ def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_ag
         f"github:     token from {request.github_token_path}"
         if request.github_token_path is not None
         else "github:     no token",
+        f"model:      {request.model or 'the agent default'}",
     )
     return "\n".join(f"==> {note}" for note in notes)
 

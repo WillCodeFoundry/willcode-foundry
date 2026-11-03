@@ -12,7 +12,7 @@ import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import LaunchRequest, prepare
+from foundry.agent_sandbox.launcher import LaunchRequest, launch_summary, prepare
 from foundry.agent_sandbox.sandbox import Sandbox
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
@@ -151,6 +151,13 @@ def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
         "run",
         "attach",
     }
+
+
+@pytest.mark.parametrize(("model", "line"), [(None, "the agent default"), ("opus", "opus")])
+def test_the_summary_names_the_model(layout: Layout, model: str | None, line: str) -> None:
+    request = LaunchRequest(definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, model=model)
+    summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
+    assert summary.splitlines()[-1] == f"==> model:      {line}"
 
 
 # --- layouts prepare refuses, before touching anything ------------------------------
