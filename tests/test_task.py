@@ -13,7 +13,7 @@ from agent_runtime.git import GitError
 from foundry import cli, task
 from foundry.commands.task import CLOSED, CREATED, REOPENED, Outcome, report
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
+from foundry.project_clone import MissingPathError, ProjectClone
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError
 from foundry.task import Status, Task
 
@@ -302,6 +302,67 @@ def test_move_dir_refuses_an_existing_destination(tmp_path: Path, git_env) -> No
 
     with pytest.raises(FileExistsError):
         clone.move_dir("a", "b")
+
+
+# --- ProjectClone: fetch_branch, local_list_dir, local_read ---------------------------------
+
+
+def fetched_clone(origin_dir: Path, git_env: dict[str, str]) -> ProjectClone:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    clone.fetch_branch(task.NOTES_BRANCH)
+    return clone
+
+
+def test_fetch_branch_refuses_a_branch_the_remote_lacks(origin_dir, git_env) -> None:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    with pytest.raises(FoundryError, match=r"^the repository has no nope branch$"):
+        clone.fetch_branch("nope")
+
+
+def test_local_list_dir_lists_only_the_directories_in_a_fetched_branch(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    assert clone.local_list_dir(task.NOTES_BRANCH, task.OPEN_DIR) == ["t0"]
+    assert clone.local_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0") == []  # TASK.md is a file
+
+
+def test_local_list_dir_of_a_missing_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    with pytest.raises(MissingPathError):
+        clone.local_list_dir(task.NOTES_BRANCH, ".agent/tasks/nope")
+    with pytest.raises(MissingPathError):  # a file is not a dir
+        clone.local_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md")
+
+
+def test_local_reads_of_an_unfetched_branch_raise_something_broader(origin_dir, git_env) -> None:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    for call in (
+        lambda: clone.local_list_dir(task.NOTES_BRANCH, task.OPEN_DIR),
+        lambda: clone.local_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md"),
+    ):
+        with pytest.raises(FoundryError, match=r"agent-notes isn't fetched") as raised:
+            call()
+        assert not isinstance(raised.value, MissingPathError)
+
+
+def test_local_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git_env, tmp_path: Path) -> None:
+    seed_dir = tmp_path / "seed2"
+    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(seed_dir))
+    (seed_dir / ".agent/tasks/open/t0/LINK").symlink_to("/etc/hostname")
+    git(git_env, "-C", str(seed_dir), "add", ".")
+    git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "link")
+    git(git_env, "-C", str(seed_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
+
+    clone = fetched_clone(origin_dir, git_env)
+
+    assert clone.local_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md") == "t0\n"
+    assert clone.local_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/LINK") == "/etc/hostname"
+
+
+def test_local_read_of_a_missing_file_or_a_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    for path in (f"{task.OPEN_DIR}/t0/NOPE", f"{task.OPEN_DIR}/t0"):
+        with pytest.raises(MissingPathError):
+            clone.local_read(task.NOTES_BRANCH, path)
 
 
 # --- read_task_turn ---------------------------------------------------------------------
