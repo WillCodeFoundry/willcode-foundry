@@ -11,3 +11,4 @@
 | `_read_local_task_summary` | method | `src/foundry/project_tasks.py` | A verb, since it reads git; `local` as in `local_read`, no network. |
 | `_open_task_in_dir` | function | `src/foundry/project_tasks.py` | New word. Pure, like `Task.as_open`, so a noun phrase as `_turn_of` is. Searched: `task_from_dir`, `parse_task`; none in use. |
 | ~~`_open_task_in_dir`~~ | removed | `src/foundry/project_tasks.py` | Removed in 17606fe, at the human's request: one caller, and only wrapped `Task`'s error. The ids are built in a comprehension under one `try` in `list_open_task_summaries`. |
+| `_open_task_for_dir` | function (rename) | `src/foundry/project_tasks.py` | Renamed from `_open_task_in_dir` in 7008206, at the human's request: the dir holds the task's notes, it doesn't contain the task. Restored by 94ace56, so the "removed" row above no longer holds. Every use read: the one call in `list_open_task_summaries`. |

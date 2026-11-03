@@ -126,3 +126,10 @@ ruff and mypy pass, and CI passes on 17606fe in the draft PR
 https://github.com/WillCodeFoundry/willcode-foundry/pull/43.
 Next (reviewer): round 4, covering da1c3b8 and 17606fe. Follow-ups, not part of
 this task: R4 (multi-line `TURN`), and the planner's two in entry 1.
+
+## 13 · dev · progress
+Done: at the human's request, undid entry 11: 94ace56 reverts 17606fe, so the code is
+as at da1c3b8 and the error message is the one R9 pinned again. Then 7008206 renames
+`_open_task_in_dir` to `_open_task_for_dir`, the human's choice; recorded in
+NAMES.md. Host tier, ruff and mypy pass.
+Next: wait for CI on PR #43, then end ready-for-review.
