@@ -132,13 +132,7 @@ class ProjectTasks:
             names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
         except MissingPathError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
-        try:  # each id as its dir stands: Task.as_open would lowercase it, and read another dir's TURN_FILE
-            tasks = [Task(name, Status.OPEN) for name in sorted(names)]
-        except FoundryError as error:
-            raise FoundryError(
-                f"{OPEN_DIR}/ on {NOTES_BRANCH} has a dir that isn't a task id: {error}. Rename or remove the dir."
-            ) from error
-        return [self._read_local_task_summary(task) for task in tasks]
+        return [self._read_local_task_summary(_open_task_in_dir(name)) for name in sorted(names)]
 
     def _read_local_task_summary(self, task: Task) -> TaskSummary:
         """``task`` with its turn, read from NOTES_BRANCH as last fetched."""
@@ -159,6 +153,15 @@ class ProjectTasks:
         clone.commit(message)
         clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
         return destination
+
+
+def _open_task_in_dir(dir_name: str) -> Task:
+    """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError, naming the dir, when ``dir_name`` isn't a
+    task id as it stands."""
+    try:
+        return Task(dir_name, Status.OPEN)
+    except FoundryError as error:
+        raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
 
 
 def _turn_of(task: Task, text: str | None, *, fix: str) -> str:
