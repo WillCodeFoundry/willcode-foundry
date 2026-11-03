@@ -72,6 +72,7 @@ Each file but `TURN` has one writer, or only grows:
 | `TASK.md` | the planner, once the human approves | The goal and acceptance criteria. Every other role: **never edit it.** |
 | `DESIGN.md` | the architect, once the human approves | How the task fits the code's structure, when it needs that. Every other role: **never edit it**, and follow it as you follow `TASK.md`. |
 | `REVIEW.md` | the reviewer | Review rounds and their findings, `R1`, `R2`, … |
+| `NAMES.md` | the dev | The naming decisions the code can't show: new words, renames, and clashes found, as the `python-naming` skill says. |
 | `LOG.md` | every role, appending only | Everything roles tell each other: progress, questions, answers, outcomes. |
 | `LEARNINGS.md` | every role, appending only | What you found out and decided. |
 | `TURN` | the role ending its turn | One line: the next role, or `human`. |
@@ -104,8 +105,8 @@ Next: the message when the task is already closed.
 - **`Done` and `Next`** say exactly where you stopped, for whoever continues.
 - **A question** is `Asks <id> → <role or human>: <question>`. Its id is your
   role's initial and the next number for that initial in the task: `P1`
-  (planner), `A1` (architect), `D1` (dev), `Q1` (qa). The reviewer numbers
-  its questions on from its findings in `REVIEW.md`: `R1` and on.
+  (planner), `A1` (architect), `D1` (dev), `Q1` (qa). The reviewer asks
+  about a finding in `REVIEW.md`, by that finding's id: `R1` and on.
 - **An answer** is `Answers <id>: <answer>`, written by the role that was
   asked, or, for a question to the human, by whichever role the human
   answers: `Answers <id>: <answer> (the human)`. A question is open until
@@ -154,6 +155,8 @@ pull request the human merges.
 | dev | `ready-for-review` | reviewer |
 | dev | `pr-ready` | human |
 | dev | `task-question` | planner |
+| dev | `design-question` | architect |
+| reviewer | `design-question` | architect |
 | reviewer | `changes-needed` | dev |
 | reviewer | `approved` | dev |
 | reviewer | `no-agreement` | human |
@@ -173,9 +176,10 @@ human may type the next.
 4. Work out what is open for you from the notes, never from who had the turn
    before you: questions asked of your role that no entry answers; your
    role's questions to the human that no entry answers, which you ask the
-   human first; and what your `ROLE.md` says to check. Deal with those
-   first. Then continue from your role's latest `Next`, or start your main
-   work.
+   human first; answers to your role's questions since your role's last
+   entry, which you rework against; and what your `ROLE.md` says to check.
+   Deal with those first. Then continue from your role's latest `Next`, or
+   start your main work.
 5. If starting fresh, append a short plan as a `progress` entry's `Next`,
    then commit and push it before writing code.
 
@@ -283,6 +287,18 @@ When your `ROLE.md` lists `task-question`, ask the planner, with
 
 The planner settles these with the human, in its session. The reviewer raises
 them as findings.
+
+When your `ROLE.md` lists `design-question`, ask the architect, with
+`Asks <id> → architect` and that outcome, when:
+
+- a decision in `DESIGN.md` won't work, as the code shows;
+- a finding's fix would change a decision in `DESIGN.md`, or its only fix
+  adds machinery.
+
+The architect settles these with the human, in its session, and answers each
+in `LOG.md`: a change to `DESIGN.md`, or why the design stands. The reviewer
+raises them as findings labelled Design question, as the `code-review` skill
+says.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

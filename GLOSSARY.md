@@ -45,7 +45,7 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `DESIGN.md` when the task had an architect turn, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `DESIGN.md` when the task had an architect turn, `REVIEW.md`, `NAMES.md` when the dev made a naming decision, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Open task**, **Closed task**:
@@ -63,6 +63,9 @@ How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed
 
 **Task question**:
 A question about `TASK.md`, which the planner, who owns it, answers with the human.
+
+**Design question**:
+A question about `DESIGN.md`, which the architect, who owns it, answers with the human. The dev asks one when a decision won't work. The reviewer raises one for a finding the dev can't fix alone, such as one whose fix would change the design.
 
 **Code checkout** and **notes checkout**:
 The two working copies of a project inside a sandbox: one on the task branch, one on the notes branch.
