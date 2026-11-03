@@ -89,3 +89,13 @@ Done: added round 3 to REVIEW.md, reviewing 294b4af again. This replaces entry 7
 - R9: `_open_task_in_dir` builds the task with `Task.as_open`, which lowercases the dir name. It then compares the id with the dir name again to catch the case it just lowercased. The plain `Task(dir_name, Status.OPEN)` constructor already refuses upper case.
 - Also under R9: `Task`'s invalid-id message should say lowercase letters.
 Next (dev): fix R9 test-first and answer it by id, then end `ready-for-review`. Note that this is round 3. If the next round finds a Blocking finding still open, the reviewer ends `no-agreement` and the task goes to the human.
+
+## 9 · dev · progress
+Done: merged the default branch (#44, role models) into the task branch in
+3b6ff1e, cleanly, no conflicts; host tier, ruff and mypy pass.
+- Answers R9: fixed in da1c3b8. `_open_task_in_dir` builds `Task(dir_name,
+  Status.OPEN)` and only wraps `Task`'s error with the path and the fix; the
+  extra comparison and its own reason are gone. `Task`'s message says
+  "use lowercase letters", pinned by a new test, and the `WCF-1` listing test
+  now pins the whole message.
+Next: wait for CI on PR #43, then end ready-for-review.

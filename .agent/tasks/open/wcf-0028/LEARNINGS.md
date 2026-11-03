@@ -28,3 +28,7 @@
   variables with `monkeypatch.setenv`, and call `cli.main` (precedent:
   `tests/test_skills.py`).
 - 2026-11-03 [review] — Round 2 dropped the Names sub-review's "`_with_turn` is a homonym of `_with_commit`": one `_with_` helper is no agreed convention, and the same code prints "with turn ROLE" as a filter. Check a homonym claim against how the codebase's own prose uses the word before letting it block.
+- 2026-11-03 [decision] — Superseding the earlier upper-case entry (R9): a dir
+  name is never typed, so `_open_task_in_dir` uses the plain `Task(...)`
+  constructor, which checks the id as it stands; only `from_id_and_status`/
+  `as_open` lowercase, for ids people type.
