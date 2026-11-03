@@ -95,7 +95,7 @@ def reopen_main(args: argparse.Namespace) -> int:
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = list_projects(config.load(paths.find_foundry_root()), args.project_names)
-    listings = [list_project(project, os.environ) for project in projects]
+    listings = [read_project_listing(project, os.environ) for project in projects]
     stdout, stderr = listing_lines(listings, args.turn)
     if stdout:
         print("\n".join(stdout))
@@ -136,7 +136,7 @@ def list_projects(foundry_config: Config, project_names: Sequence[str]) -> list[
     return [foundry_config.project(name) for name in sorted(set(project_names) or foundry_config.projects)]
 
 
-def list_project(project: Project, env: Mapping[str, str]) -> ProjectListing:
+def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing:
     """``project``'s open tasks, through a scratch clone; a failure is the listing's error, so the rest can go on.
 
     ``env`` is the environment git runs in, as for ProjectClone.

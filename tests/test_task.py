@@ -17,9 +17,9 @@ from foundry.commands.task import (
     REOPENED,
     Outcome,
     ProjectListing,
-    list_project,
     list_projects,
     listing_lines,
+    read_project_listing,
     report,
 )
 from foundry.config import Config, Project
@@ -743,8 +743,8 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 def test_a_project_s_listing_holds_its_tasks_or_the_reason_it_failed(origin_dir, git_env, tmp_path: Path) -> None:
     edit_notes(origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n"})
 
-    good = list_project(Project("store", str(origin_dir)), git_env)
-    bad = list_project(Project("gone", str(tmp_path / "missing.git")), git_env)
+    good = read_project_listing(Project("store", str(origin_dir)), git_env)
+    bad = read_project_listing(Project("gone", str(tmp_path / "missing.git")), git_env)
 
     assert good == ProjectListing("store", [TaskSummary(Task.as_open("t0"), "dev")], None)
     assert (bad.project_name, bad.summaries) == ("gone", [])

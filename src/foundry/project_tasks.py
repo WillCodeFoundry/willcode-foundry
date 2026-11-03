@@ -132,9 +132,9 @@ class ProjectTasks:
             names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
         except MissingPathError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
-        return [self._local_task_summary(_open_task_in_dir(name)) for name in sorted(names)]
+        return [self._read_local_task_summary(_open_task_in_dir(name)) for name in sorted(names)]
 
-    def _local_task_summary(self, task: Task) -> TaskSummary:
+    def _read_local_task_summary(self, task: Task) -> TaskSummary:
         """``task`` with its turn, read from NOTES_BRANCH as last fetched."""
         try:
             text: str | None = self._clone.local_read(NOTES_BRANCH, task.turn_file)
