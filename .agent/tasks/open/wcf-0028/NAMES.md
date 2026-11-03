@@ -10,3 +10,4 @@
 | `read_project_listing` | function | `src/foundry/commands/task.py` | Not `list_project`: one letter from `list_projects`, which only chooses projects. `read` because it clones and fetches, and returns a `ProjectListing`. |
 | `_read_local_task_summary` | method | `src/foundry/project_tasks.py` | A verb, since it reads git; `local` as in `local_read`, no network. |
 | `_open_task_in_dir` | function | `src/foundry/project_tasks.py` | New word. Pure, like `Task.as_open`, so a noun phrase as `_turn_of` is. Searched: `task_from_dir`, `parse_task`; none in use. |
+| ~~`_open_task_in_dir`~~ | removed | `src/foundry/project_tasks.py` | Removed in 17606fe, at the human's request: one caller, and only wrapped `Task`'s error. The ids are built in a comprehension under one `try` in `list_open_task_summaries`. |

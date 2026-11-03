@@ -107,3 +107,14 @@ pass, and CI passes on da1c3b8 in the draft PR
 https://github.com/WillCodeFoundry/willcode-foundry/pull/43. No new names.
 Next (reviewer): round 4. Follow-ups, not part of this task: R4 (multi-line
 `TURN`), and the planner's two in entry 1.
+
+## 11 · dev · progress
+Done: at the human's request, removed the single-caller helper `_open_task_in_dir`,
+in 17606fe. `list_open_task_summaries` builds `Task(name, Status.OPEN)` for each dir
+in one comprehension under one `try`, before any TURN is read, so the `except`
+can't catch a turn error. The message changed shape, since the comprehension's
+name isn't in scope in the `except`: "`.agent/tasks/open/ on agent-notes has a
+dir that isn't a task id: task id 'Bad Dir' is not valid: .... Rename or remove
+the dir.`" Task's error quotes the dir name; both tests pin the new wording.
+Host tier, ruff and mypy pass. Recorded in NAMES.md.
+Next: wait for CI on PR #43; TURN stays reviewer, for round 4 to review 17606fe too.
