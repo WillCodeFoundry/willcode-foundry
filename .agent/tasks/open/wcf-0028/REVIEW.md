@@ -119,3 +119,81 @@ None.
 Summary: Standards 2 (1 blocking; worst: R1, logic in a composition root). Spec 1 (0 blocking; worst: R3, exit code untested). Behaviour 2 (0 blocking; worst: R5, the fix hint in the error message). Smells 3 (2 blocking; worst: R7, `listing_lines`). Names 0. No design questions open.
 
 Verdict: changes needed
+
+## Round 2 (reviewing 294b4af)
+
+`TASK.md` history: unchanged since round 1, and no commit by another role. `8545a3f` created the task (the human, signed `G`). `e3b591a` is signed `G` by the planner's identity, which the planner shares with the architect. This round reviews against `e3b591a`. The task has no `DESIGN.md`.
+
+Fix diff: `git diff 1ab21bc...294b4af` (4195ec5, 87a4ac7, 8e7f8d6, 294b4af). The default branch has no new commits since `f6c10e1`. In a throwaway clone, pytest passes (host tier: 644 passed), and so do ruff (check and format) and mypy.
+
+### Earlier findings
+
+| Id | Verdict | Why |
+|---|---|---|
+| R1 | closed | The per-project catch is now `read_project_listing` (`src/foundry/commands/task.py:139-148`), and the tests call it directly (`tests/test_task.py:743`). `list_main` (`task.py:95-104`) only builds, maps, prints, and exits 1 when there are stderr lines, as TASK.md gives `main`. |
+| R2 | closed | The docstring at `src/foundry/project_tasks.py:1-7` names listing, and says it is the one-fetch exception to `get_task_by_id`. |
+| R3 | closed | `tests/test_task.py:754` runs `cli.main(["task", "list"])`. The failing project sorts first, so moving the catch outside the loop would fail the test. It checks exit 1, the exact stdout and the one `error:` line on stderr, then exit 0 with clean stderr when only the good project is named. |
+| R4 | deferred | ADR 0011 makes `TURN` one line. Only a hand-edited `TURN` hits this. It loses no work, and a first-line-only rule would be a decision of its own. One correction to the dev's reasoning: a listing-only rule wouldn't need to change `read_task_turn`. |
+| R5 | closed | `_turn_of(..., fix=...)` (`project_tasks.py:172`) holds the shared first part of the message. `read_task_turn` keeps "Name the role to run instead." (`:121`), so its message is unchanged from `f6c10e1`. Listing ends "Write the next role's name in it." (`:143`), and `tests/test_task.py:625` pins that ending. |
+| R6 | closed | `list_open_task_summaries` (`project_tasks.py:123`) fetches, lists and maps. The id check is now `_open_task_in_dir` (`:158`) and the turn read is `_read_local_task_summary` (`:137`). |
+| R7 | closed | `listing_lines` (`task.py:151`) filters, works out the two widths, then renders each project in one pass. The parallel lists and the regrouping are gone. |
+| R8 | closed | `read` and `push_atomic` use `_local_ref` (`src/foundry/project_clone.py:74`, `:163`). `refs/remotes/{_REMOTE_NAME}` is now spelled only in `_local_ref`, and both build the same strings as before. |
+
+### Standards
+
+No new findings. The fix diff keeps the design rules:
+- Rule 1: paths are spelled only through `OPEN_DIR`, `NOTES_BRANCH` and `TURN_FILE`.
+- Rule 6: each project's error is a value, and only the entry point prints.
+- Rule 7: covered under R1 above.
+- Rule 3: the new end-to-end test uses `monkeypatch.chdir` and `setenv`. That sets the environment, as `tests/conftest.py` and `tests/test_skills.py` already do; it doesn't replace any code, and it runs real git, so it doesn't break the rule.
+
+### Spec
+
+No new findings. Every acceptance criterion is still met after the fixes. `read_task_turn`'s behaviour and `ProjectClone.read`'s behaviour are unchanged, as TASK.md requires, and the invalid-id tests still pass.
+
+### Behaviour
+
+No new findings. I reproduced these against the fix diff:
+- `listing_lines` over a mix of projects (long name, failed, two tasks, none), with no filter and with three `--turn` values. Columns are sized over printed task lines only and stay aligned. Both no-tasks lines and the stderr error lines are correct.
+- `_open_task_in_dir` refuses `WCF-1`, `.x`, `a..b` and `é`, each with a reason and ending "Rename or remove it.", and accepts `wcf-1`.
+- The `_local_ref` change builds the same ref strings as before.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `commands/task.py:list_main` | clean; R1 closed |
+| `commands/task.py:read_project_listing` | new, clean |
+| `commands/task.py:listing_lines` | clean; R7 closed |
+| `commands/task.py:_with_turn` | new, clean |
+| `project_tasks.py:read_task_turn` | clean |
+| `project_tasks.py:list_open_task_summaries` | clean; R6 closed |
+| `project_tasks.py:_read_local_task_summary` | new, clean |
+| `project_tasks.py:_open_task_in_dir` | new, clean |
+| `project_tasks.py:_turn_of` | clean; `fix` has two real callers, so it isn't speculative |
+| `project_clone.py:read`, `push_atomic` | clean; R8 closed |
+| the two new tests in `tests/test_task.py` | new, clean |
+
+No new findings.
+
+### Names
+
+All clean:
+- `read_project_listing` (renamed from `list_project`)
+- `_read_local_task_summary`
+- `_open_task_in_dir`
+- `_with_turn`
+- `_turn_of` and its `fix` keyword
+- the locals: `dir_name`, `reason`, `listed`, `name_width`, `id_width`
+- the two new tests
+- the new docstring prose
+
+The sub-review flagged `_with_turn` as a homonym of `skills.py:_with_commit`, which means "a copy with X put in". I dropped it: it misses the python-naming bar. One `_with_` helper doesn't make an agreed convention. The same function prints "no open tasks with turn ROLE" in the filter sense, so the name reads as the code means it at its use.
+
+### Design questions
+
+None.
+
+Summary: Standards 0. Spec 0. Behaviour 0. Smells 0. Names 0. None block and no design questions are open. Of the earlier findings, R1–R3 and R5–R8 are closed and R4 is deferred as a follow-up.
+
+Verdict: approved

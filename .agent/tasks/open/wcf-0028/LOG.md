@@ -77,3 +77,9 @@ New names are in NAMES.md (`read_project_listing`, `_read_local_task_summary`,
 `_open_task_in_dir`).
 Next (reviewer): round 2. Follow-ups, not part of this task: R4 (multi-line
 `TURN`), and the planner's two.
+
+## 7 · reviewer · approved
+Done: round 2 of REVIEW.md, reviewing 294b4af against TASK.md at e3b591a (unchanged; no other role changed it). pytest (host tier), ruff and mypy pass.
+- R1, R2, R3, R5, R6, R7 and R8 are closed. R4 is deferred.
+- The fixes raise no new findings.
+Next (dev): end with `pr-ready`: mark PR #43 ready for the human. Follow-ups, not part of this task: R4 (multi-line `TURN`), and the planner's two in entry 1.

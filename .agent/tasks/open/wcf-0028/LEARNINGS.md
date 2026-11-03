@@ -27,3 +27,4 @@
   real temporary repositories, `monkeypatch.chdir` into it, set the `git_env`
   variables with `monkeypatch.setenv`, and call `cli.main` (precedent:
   `tests/test_skills.py`).
+- 2026-11-03 [review] — Round 2 dropped the Names sub-review's "`_with_turn` is a homonym of `_with_commit`": one `_with_` helper is no agreed convention, and the same code prints "with turn ROLE" as a filter. Check a homonym claim against how the codebase's own prose uses the word before letting it block.
