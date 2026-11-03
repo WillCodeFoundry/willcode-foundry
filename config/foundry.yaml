@@ -13,8 +13,8 @@ roles:
   # Each role maps to {}, or {model: <model>} to run its agent on that model, such as
   # {model: opus} or {model: claude-sonnet-5-5}. Without one, Claude Code's default.
   # It applies from the next launch: see docs/adr/0014-a-role-s-model-is-given-at-launch.md.
-  planner: {}
-  dev: {}
-  qa: {}
-  reviewer: {}
-  architect: {}
+  planner: {model: claude-opus-5-5}
+  dev: {model: claude-opus-5-5}
+  qa: {model: claude-opus-5-5}
+  reviewer: {model: claude-opus-5-5}
+  architect: {model: claude-opus-5-5}
