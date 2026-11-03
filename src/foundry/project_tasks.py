@@ -8,15 +8,24 @@ every other operation goes through it. Callers pass task ids, and get Tasks back
 import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
-from foundry.task import NOTES_BRANCH, Status, Task
+from foundry.project_clone import MissingPathError, ProjectClone
+from foundry.task import NOTES_BRANCH, OPEN_DIR, Status, Task
 
 
 class TaskNotFoundError(FoundryError):
     """The task's notes dir is on neither side: it isn't open and it isn't closed."""
+
+
+@dataclass(frozen=True)
+class TaskSummary:
+    """A task and whose turn it is: the stripped text of its TURN_FILE."""
+
+    task: Task
+    turn: str
 
 
 class ProjectTasks:
@@ -108,14 +117,36 @@ class ProjectTasks:
         FoundryError when the file is missing or empty, saying to name the role instead.
         """
         task = self.get_task_by_id(task_id)
-        text = self._clone.read(NOTES_BRANCH, task.turn_file)
-        turn = text.strip() if text is not None else ""
-        if not turn:
-            raise FoundryError(
-                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-                "Name the role to run instead."
-            )
-        return turn
+        return _turn_of(task, self._clone.read(NOTES_BRANCH, task.turn_file))
+
+    def list_open_task_summaries(self) -> list[TaskSummary]:
+        """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
+
+        Fetches NOTES_BRANCH once, then reads git objects. FoundryError when it isn't there, when a dir under
+        OPEN_DIR isn't a valid task id, or when a task's TURN_FILE is missing, empty or not a file.
+        """
+        clone = self._clone
+        clone.fetch_branch(NOTES_BRANCH)
+        try:
+            names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
+        except MissingPathError:
+            return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
+        summaries = []
+        for name in sorted(names):
+            try:
+                task = Task.as_open(name)
+                if task.id != name:
+                    raise FoundryError("upper case letters are not allowed")
+            except FoundryError as error:
+                raise FoundryError(
+                    f"{OPEN_DIR}/{name}/ is not a valid task id ({error}). Rename or remove it."
+                ) from None
+            try:
+                text: str | None = clone.local_read(NOTES_BRANCH, task.turn_file)
+            except MissingPathError:
+                text = None
+            summaries.append(TaskSummary(task, _turn_of(task, text)))
+        return summaries
 
     def _move(self, task: Task, destination: Task, *, message: str) -> Task:
         """Move ``task``'s notes dir to ``destination``'s, commit it with ``message``, and push NOTES_BRANCH.
@@ -128,3 +159,14 @@ class ProjectTasks:
         clone.commit(message)
         clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
         return destination
+
+
+def _turn_of(task: Task, text: str | None) -> str:
+    """The turn ``text`` of ``task``'s TURN_FILE gives; FoundryError when there is no text, or only blanks."""
+    turn = text.strip() if text is not None else ""
+    if not turn:
+        raise FoundryError(
+            f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
+            "Name the role to run instead."
+        )
+    return turn
