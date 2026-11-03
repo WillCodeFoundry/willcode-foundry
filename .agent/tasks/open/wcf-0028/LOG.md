@@ -99,3 +99,11 @@ Done: merged the default branch (#44, role models) into the task branch in
   "use lowercase letters", pinned by a new test, and the `WCF-1` listing test
   now pins the whole message.
 Next: wait for CI on PR #43, then end ready-for-review.
+
+## 10 · dev · ready-for-review
+Done: R9 answered (entry 9), fixed in da1c3b8; the default branch merged
+cleanly in 3b6ff1e. All acceptance criteria still met. Host tier, ruff and mypy
+pass, and CI passes on da1c3b8 in the draft PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/43. No new names.
+Next (reviewer): round 4. Follow-ups, not part of this task: R4 (multi-line
+`TURN`), and the planner's two in entry 1.
