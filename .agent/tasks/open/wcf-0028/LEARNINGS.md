@@ -22,3 +22,8 @@
 - 2026-11-03 [review] — Dropped from round 1 as below the bar: a symlinked
   `.agent/tasks/open` reads as "no open tasks" (nobody would commit one), and
   `ProjectListing`'s `summaries`/`error` pair (the spec asks for an error value).
+- 2026-11-03 [testing] — A command's streams and exit code can be tested end to end
+  without patching git: write a `config/foundry.yaml` in a temporary folder naming
+  real temporary repositories, `monkeypatch.chdir` into it, set the `git_env`
+  variables with `monkeypatch.setenv`, and call `cli.main` (precedent:
+  `tests/test_skills.py`).
