@@ -228,3 +228,71 @@ None.
 Summary: Smells 1 (1 blocking; R9, `_open_task_in_dir` reworks `Task`'s own check). Standards, Spec, Behaviour, Names 0. No design questions open.
 
 Verdict: changes needed
+
+## Round 4 (reviewing 7008206)
+
+This round reviews the fix diff `294b4af..7008206`, against `TASK.md` at `e3b591a`. That version is unchanged since rounds 1 to 3, and it was written by an allowed commit. `e3b591a` is signed by the planner's identity, which the architect shares (see `allowed_signers`), so it can't be told apart from an architect commit. No other role changed `TASK.md`, and the task has no `DESIGN.md`.
+
+The fix diff contains these commits:
+- da1c3b8: the R9 fix.
+- 17606fe and 94ace56: 17606fe removed the helper, and 94ace56 reverts that, at the human's request. The two cancel out.
+- 7008206: renames the helper `_open_task_in_dir` to `_open_task_for_dir`, the human's choice.
+
+The rest of `294b4af..HEAD` is the default branch merged in 3b6ff1e (#44, role models). It isn't part of this task's diff, so this round doesn't review it. Host tier, ruff and mypy pass on 7008206.
+
+### Earlier findings
+
+- **R9: closed.** `_open_task_for_dir` (`src/foundry/project_tasks.py:158-164`) builds `Task(dir_name, Status.OPEN)`. That leaves `Task`'s own check as the only one, and the wrapper adds only the path, the fix and the chained error. `Task`'s message says "use lowercase letters" (`src/foundry/task.py:62`). The wording is pinned by `test_an_invalid_task_id_is_told_letters_must_be_lowercase` (`tests/test_task.py:154`), and through the wrapper by the `WCF-1` test (`tests/test_task.py:644-652`). The `Bad Dir` test still passes.
+- R1–R3 and R5–R8 stay closed. R4 stays deferred.
+
+### Standards
+
+**R10 · Follow-up · the comment on `_TASK_ID` says ids are "Matched after lowercasing"** (`src/foundry/task.py:31-33`)
+- That was true while every caller went through `from_id_and_status`. Since da1c3b8, `_open_task_for_dir` calls the constructor directly, and it relies on the pattern *not* lowercasing to refuse an upper-case dir.
+- AGENTS.md "Writing" asks every comment to state its point accurately, and this one now contradicts a caller.
+- Who hits it: someone changing the id pattern, rarely. If they trusted the comment and added `A-Z`, `test_an_upper_case_dir_is_not_a_task_id_either` would fail first. So the finding misses the Blocking bar.
+- Direction: say that `from_id_and_status` lowercases and the constructor checks the id as given.
+
+No other findings. Design rules 1, 3 and 6 hold for the fix.
+
+### Spec
+
+No new findings. The wrapper's message names the dir and says how to fix it, as TASK.md asks. Both tests pin it.
+
+### Behaviour
+
+No new findings. Reproduced in a throwaway clone:
+- Each of these dirs fails its project with a message that names it and ends "Rename or remove it.": `WCF-1`, `Wcf-1`, `wcf-1.lock`, `a..b`, `é-1`, `-x`.
+- Valid dirs still list in id order.
+- Where people type an id (`create`, `close`, `reopen`), the id is lowercased before the check. So the new wording shows only for an id that is invalid for some other reason, and following it gives a valid id.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `project_tasks.py:ProjectTasks.list_open_task_summaries` | clean (only the call's name changed) |
+| `project_tasks.py:_open_task_for_dir` | clean; simpler than at 294b4af, one try/except, one reason; R9 closed |
+| `task.py:Task.__post_init__` | clean (wording only) |
+| `tests/test_task.py:test_an_invalid_task_id_is_told_letters_must_be_lowercase` | new, clean |
+| `tests/test_task.py:test_an_upper_case_dir_is_not_a_task_id_either` | clean |
+
+No new findings. The one-caller wrapper stays, at the human's request (entry 13), and it adds the path and the fix of its own.
+
+### Names
+
+All clean:
+- `_open_task_for_dir` (renamed from `_open_task_in_dir`): a noun phrase for a pure function, like `_turn_of`. No homonym found.
+- `test_an_invalid_task_id_is_told_letters_must_be_lowercase`
+- `error`: the codebase's usual name for a caught exception.
+- the message's "lowercase": the glossary's word, from **Task id**.
+- the docstring's prose: no new term.
+
+No new findings.
+
+### Design questions
+
+None.
+
+Summary: Standards 1 (Follow-up; R10, a stale comment on `_TASK_ID`). Spec, Behaviour, Smells and Names 0. Nothing blocks, and no design questions are open. R9 is closed, R4 is deferred and R10 is a follow-up.
+
+Verdict: approved

@@ -32,3 +32,4 @@
   name is never typed, so `_open_task_in_dir` uses the plain `Task(...)`
   constructor, which checks the id as it stands; only `from_id_and_status`/
   `as_open` lowercase, for ids people type.
+- 2026-11-03 [review] — A fix can make an untouched comment wrong: R9 added a direct-constructor caller, which made `_TASK_ID`'s "Matched after lowercasing" comment stale (R10). When a fix changes who calls a function, read the comments on what it calls, not only the lines in the fix diff.

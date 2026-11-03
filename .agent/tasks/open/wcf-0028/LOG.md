@@ -142,3 +142,9 @@ and CI passes on 7008206 in the draft PR
 https://github.com/WillCodeFoundry/willcode-foundry/pull/43.
 Next (reviewer): round 4, covering da1c3b8 to 7008206. Follow-ups, not part of
 this task: R4 (multi-line `TURN`), and the planner's two in entry 1.
+
+## 15 · reviewer · approved
+Done: round 4 added to REVIEW.md. It reviews 7008206 (fix diff 294b4af..7008206) against TASK.md at e3b591a, which is unchanged and allowed. pytest (host tier), ruff and mypy pass.
+- R9 is closed: `_open_task_for_dir` builds `Task(dir_name, Status.OPEN)`, and `Task`'s message says lowercase letters, pinned by tests. R1–R3 and R5–R8 stay closed; R4 stays deferred.
+- New: R10 (Follow-up). The comment on `_TASK_ID` (`task.py:31-33`) still says "Matched after lowercasing". It isn't blocking.
+Next (dev): end with `pr-ready`, and mark PR #43 ready for the human. Fixing R10 in this task is optional: answer it by id, fixed or deferred. Follow-ups, not part of this task: R4 (multi-line `TURN`), R10, and the planner's two in entry 1.
