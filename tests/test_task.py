@@ -15,6 +15,7 @@ from foundry.commands.task import (
     CREATED,
     REOPENED,
     Outcome,
+    ProjectFailure,
     ProjectListing,
     chosen_projects,
     filter_project_listing,
@@ -736,8 +737,8 @@ def test_listing_costs_one_fetch_however_many_tasks(origin_dir, git_env, tmp_pat
 # --- foundry task list: the lines and the arguments -----------------------------------------
 
 
-def listing(name: str, *turns: tuple[str, str], error: str | None = None) -> ProjectListing:
-    return ProjectListing(name, [TaskSummary(Task.as_open(task_id), turn) for task_id, turn in turns], error)
+def listing(name: str, *turns: tuple[str, str]) -> ProjectListing:
+    return ProjectListing(name, [TaskSummary(Task.as_open(task_id), turn) for task_id, turn in turns])
 
 
 def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
@@ -756,10 +757,7 @@ def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_col
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
 
-    kept = filter_project_listing(store, "dev")
-
-    assert [summary.task.id for summary in kept.summaries] == ["tst-0001", "tst-0003"]
-    assert (kept.project_name, kept.error) == ("store", None)
+    assert filter_project_listing(store, "dev") == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev"))
     assert len(store.summaries) == 4  # a new listing; the one given is left as it was
 
 
@@ -767,6 +765,12 @@ def test_no_turn_keeps_the_listing_as_it_is() -> None:
     store = listing("store", ("tst-0001", "dev"))
 
     assert filter_project_listing(store, None) is store
+
+
+def test_a_failure_has_no_tasks_to_filter() -> None:
+    failure = ProjectFailure("bad", "boom")
+
+    assert filter_project_listing(failure, "dev") is failure
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
@@ -787,7 +791,7 @@ def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
 
 
 def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
-    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("tst-0001", "dev"))])
+    stdout, stderr = listing_lines([ProjectFailure("bad", "boom"), listing("store", ("tst-0001", "dev"))])
 
     assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
 

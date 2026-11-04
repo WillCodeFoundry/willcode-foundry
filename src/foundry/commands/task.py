@@ -124,15 +124,18 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
 
 
 class ProjectListing(NamedTuple):
-    """What listing one project gave: its open tasks, or the reason it couldn't be listed.
-
-    ``no_tasks_note`` is what the project's line says when it shows no task.
-    """
+    """A project's open tasks. ``no_tasks_note`` is what the project's line says when it shows no task."""
 
     project_name: str
     summaries: list[TaskSummary]
-    error: str | None
     no_tasks_note: str = "no open tasks"
+
+
+class ProjectFailure(NamedTuple):
+    """Why a project couldn't be listed; none of its tasks are."""
+
+    project_name: str
+    error: str
 
 
 def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
@@ -140,38 +143,40 @@ def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> lis
     return [foundry_config.project(name) for name in sorted(set(project_names) or foundry_config.projects)]
 
 
-def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing:
-    """``project``'s open tasks, through a scratch clone; a failure is the listing's error, so the rest can go on.
+def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing | ProjectFailure:
+    """``project``'s open tasks, through a scratch clone; a failure is returned, not raised, so the rest can go on.
 
     ``env`` is the environment git runs in, as for ProjectClone.
     """
     try:
         with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
-            return ProjectListing(project.name, project_tasks.list_open_task_summaries(), None)
+            return ProjectListing(project.name, project_tasks.list_open_task_summaries())
     except (FoundryError, GitError) as error:
-        return ProjectListing(project.name, [], str(error))
+        return ProjectFailure(project.name, str(error))
 
 
-def filter_project_listing(listing: ProjectListing, turn: str | None) -> ProjectListing:
+def filter_project_listing(
+    listing: ProjectListing | ProjectFailure, turn: str | None
+) -> ProjectListing | ProjectFailure:
     """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``; when it had tasks but none
-    match, its note says so. ``listing`` itself when ``turn`` is None: no --turn was given."""
-    if turn is None:
+    match, its note says so. ``listing`` itself when ``turn`` is None (no --turn was given), or for a failure, which
+    has no tasks to filter."""
+    if turn is None or isinstance(listing, ProjectFailure):
         return listing
     return ProjectListing(
         project_name=listing.project_name,
         summaries=[summary for summary in listing.summaries if summary.turn == turn],
-        error=listing.error,
         no_tasks_note=f"no open tasks with turn {turn}" if listing.summaries else listing.no_tasks_note,
     )
 
 
-def listing_lines(listings: Sequence[ProjectListing]) -> tuple[list[str], list[str]]:
+def listing_lines(listings: Sequence[ProjectListing | ProjectFailure]) -> tuple[list[str], list[str]]:
     """The lines list prints on stdout and on stderr.
 
     A task line is its project, id and turn, in columns as wide as the widest across every task line. A project
     with no task gets its note, outside the columns, and a failed one an error line.
     """
-    listed = [listing for listing in listings if listing.error is None]
+    listed = [listing for listing in listings if isinstance(listing, ProjectListing)]
     name_width = max((len(listing.project_name) for listing in listed if listing.summaries), default=0)
     id_width = max((len(summary.task.id) for listing in listed for summary in listing.summaries), default=0)
     stdout = []
@@ -182,5 +187,7 @@ def listing_lines(listings: Sequence[ProjectListing]) -> tuple[list[str], list[s
             ]
         else:
             stdout.append(f"{listing.project_name}  {listing.no_tasks_note}")
-    stderr = [f"error: {listing.project_name}: {listing.error}" for listing in listings if listing.error is not None]
+    stderr = [
+        f"error: {failure.project_name}: {failure.error}" for failure in listings if isinstance(failure, ProjectFailure)
+    ]
     return stdout, stderr
