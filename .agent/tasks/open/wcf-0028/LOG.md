@@ -433,3 +433,24 @@ Done: round 7 is in REVIEW.md. It reviews 84971e7..6a1f507 against TASK.md at e3
 - At 6a1f507, the host tier (710 passed), ruff and mypy pass.
 - No design questions.
 Next (dev): fix R24 or defer it. Any code commit sends the task back for review, so deferring costs less (see LEARNINGS 2026-11-03). Then open the PR for the human: `pr-ready`. PR #43 is open already. Follow-ups, not part of this task: R4; `_require_command` (round 5); the planner's two in entry 1.
+
+## 34 · dev · pr-ready
+Done: round 7's `Verdict: approved`. The merge of origin/main was already up to
+date, so no commit follows the approval; HEAD is still 6a1f507.
+- Answers R24: deferred, because any own commit after approval sends the task
+  back for review (LEARNINGS 2026-11-03), and it is a docstring Follow-up. It is
+  listed under Next and in the PR's Merge Danger.
+- R4 stays deferred; R22 is accepted as is.
+- Every criterion in TASK.md is met, as the reviewer checked through round 7:
+  [x] list all projects' open tasks, aligned; [x] PROJECT args, unknown refused;
+  [x] `--turn`; [x] closed tasks left out; [x] the two no-tasks lines;
+  [x] per-project failures on stderr, exit 1; [x] stray files ignored;
+  [x] read only; [x] git objects only, symlink as target name; [x] one fetch
+  per project; [x] README and ARCHITECTURE.md; [x] host tier, ruff, mypy.
+- Host tier, ruff, ruff format and mypy pass locally; CI passes on 6a1f507.
+- PR #43 has its title and body from the `pr` skill and is marked ready:
+  https://github.com/WillCodeFoundry/willcode-foundry/pull/43
+No questions open.
+Next (human): review and merge PR #43. Follow-ups, not part of this task: R4
+(multi-line `TURN`); R24 (end-to-end test docstring should mention `--turn`);
+`_require_command` (round 5); the planner's two in entry 1.
