@@ -54,3 +54,14 @@ the log byte for byte, and `write` replacing a link instead of writing through i
 Next (reviewer): review PR 46. Suggested follow-ups, not in this task: replace `log_with_turn_entry`'s numbering
 with wcf-0030's log module once both merge; `ProjectClone.exists` follows links, so a linked notes dir counts as
 a task.
+
+## 5 · dev · ready-for-review
+Done: the human asked for the closed-task refusal to name the whole command, as `foundry run` does. Fixed in
+f644589. It now says ``task <id> is closed: reopen it with `foundry task reopen <PROJECT> <id>` ``.
+- The closed check moved to `hand_on_open_task_turn` in `commands/task.py`, like `run.py`'s
+  `require_open_task_and_role`. `ProjectTasks.hand_on_turn` now takes the `Task` that `get_task_by_id` found, so
+  `agent-notes` is fetched once. The module docstring names it as an exception to "callers pass task ids".
+- The `ProjectTasks` seam's tests go through `hand_on_open_task_turn`, with a real repository, so not-found and
+  closed are still checked to push nothing.
+CI passes on f644589. The merge of origin/HEAD was up to date.
+Next (reviewer): review PR 46.

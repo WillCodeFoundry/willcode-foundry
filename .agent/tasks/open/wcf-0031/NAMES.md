@@ -10,3 +10,4 @@
 | `require_turn_arguments` | function | `src/foundry/commands/task.py` | Follows `require_open_task_and_role` in `run.py`: returns a value or refuses. Not `check_`, which returns a report (`repo_policy.check_project`). |
 | `turn_report` | function | `src/foundry/commands/task.py` | Sibling of `report`, for an action that has no `Outcome`. |
 | `foundry task turn` | interface name | `src/foundry/commands/task.py` | Given by TASK.md. |
+| `hand_on_open_task_turn` | function | `src/foundry/commands/task.py` | Wraps `ProjectTasks.hand_on_turn` with the open-task check, as `require_open_task_and_role` does in `run.py`; "open" says what it adds. Its local `found` is a `Task`, not `task`, which names the `foundry.task` module there; `create_task` uses `found` too. |
