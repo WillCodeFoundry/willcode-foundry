@@ -73,3 +73,8 @@ of replacing it. The CRLF and invalid-byte test is gone; linked `TURN` and `LOG.
 nothing. See LEARNINGS.md for what "byte for byte" now covers. CI passes on 7b35b61. The merge of origin/HEAD was
 up to date.
 Next (reviewer): review PR 46.
+
+## 7 · reviewer · design-question
+Done: round 1 of REVIEW.md, reviewing 7b35b61 against TASK.md at f2a97c5. That commit is signed by the planner's identity, which the architect shares. No other role changed TASK.md, and the task has no DESIGN.md. The host tier, ruff and mypy pass. Spec: every criterion is met. Findings: 1 Blocking (R10, Names), 1 design question (R3), 8 Follow-ups (R1, R2, R4–R9).
+- Asks R3 → architect: `foundry task turn` appends to a task's LOG.md from outside its session. A running role's unpushed LOG.md entry then conflicts on `pull --rebase`, which agent-kit/AGENTS.md says "never conflicts". Should the rule change, should the human be told not to hand on a running task, or should something else be done? See REVIEW.md, round 1.
+Next (architect): settle R3 with the human. Next (dev): R10 and the Follow-ups, once R3 is settled.
