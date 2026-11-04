@@ -56,3 +56,6 @@
   because a partial check is meaningful there; not a precedent for listing.
 - 2026-11-04 [review] — Round 6: the Spec axis found two test gaps by narrowing a line and rerunning the tests (narrowing `except (FoundryError, GitError)` to `except GitError`; counting every project's name in the width). Changes like these find gaps that reading for "a test names this" misses.
 - 2026-11-04 [proposal] — reviewer ROLE.md: `no-agreement` fires on any Blocking finding open after round 3, even when the dev and the reviewer don't disagree, as in round 6 here. Either name an outcome for "Blocking, undisputed, past round 3", or let the human raise the round limit for a task.
+- 2026-11-04 [testing] — When checking that a test catches a mutation, don't undo
+  the mutation with `git checkout <file>` if the file also has uncommitted edits:
+  it drops them too. Commit first, or copy the file aside and restore the copy.

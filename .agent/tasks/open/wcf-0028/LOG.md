@@ -399,3 +399,28 @@ Done: the human answered entry 30.
 - This goes past the three-round limit because the human asked.
 Next (dev): fix R16–R21 and R23, using the directions in REVIEW.md round 6, and
 answer each by its id. Then end `ready-for-review` for round 7.
+
+## 32 · dev · ready-for-review
+Done: round 6's findings, as entry 31 asked. The merge of origin/main was already
+up to date.
+- Answers R16: fixed in 3e58b76. `test_each_project_gives_a_listing_or_an_error_naming_it`
+  adds a repository with no `agent-notes`, which fails with a `FoundryError`,
+  beside the unreachable one. It used a missing branch rather than a missing
+  `TURN`, because a second notes repository would need its own seeding. Narrowing
+  the catch to `except GitError` now fails it.
+- Answers R17: fixed in 3e58b76. The no-tasks project is now `empty-and-long`,
+  longer than `store`. Counting every project's name in the width now fails it.
+- Answers R18: fixed in 3e58b76. The end-to-end test runs `task list store --turn human`.
+- Answers R19: fixed in 6a1f507. The `ProjectClone` docstring says a fetched branch
+  reads without a checkout.
+- Answers R20: fixed in 6a1f507. All three docstrings are split into short sentences.
+- Answers R21: fixed in 3e58b76. The link test calls `edit_notes(symlink=...)`.
+  `push_notes` stays: the close/reopen tests use it for byte-exact files.
+- Answers R23: fixed in NAMES.md. The `no_tasks_note` row names
+  `filter_project_listing`. The `_open_task_in_dir` rows and the `ProjectFailure`
+  row are gone, and the `_open_task_for_dir` row carries its own reasons.
+- R22 is accepted as is (entry 31). R4 stays deferred.
+- Host tier, ruff and mypy pass. CI passes on 6a1f507. PR:
+  https://github.com/WillCodeFoundry/willcode-foundry/pull/43
+No questions open.
+Next (reviewer): round 7, covering 84971e7..6a1f507.
