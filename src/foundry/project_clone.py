@@ -3,11 +3,14 @@ remote's name, refspecs) stay inside it."""
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
 from agent_runtime.git import Git, GitError
 from foundry.errors import FoundryError
 
 _REMOTE_NAME = "origin"
+# The word the messages use for each type of git tree entry a caller can ask for.
+_ENTRY_KIND = {"tree": "dir", "blob": "file"}
 
 
 class NotOnBranchError(FoundryError):
@@ -78,16 +81,10 @@ class ProjectClone:
         Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError, which nothing else
         raises, when ``path`` isn't a dir there.
         """
-        self._require_fetched(branch)
-        where = f"{self._tracking_ref(branch)}:{path}"
-        if self._object_type(where) != "tree":
-            raise NotOnBranchError(f"{branch} has no dir {path}")
-        names = []
-        for entry in filter(None, self._git.output("ls-tree", "-z", where).split("\0")):
-            info, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
-            if info.split()[1] == "tree":
-                names.append(name)
-        return names
+        self._require_on_branch(branch, path, "tree")
+        return [
+            name for entry_type, name in self._ls_tree(f"{self._tracking_ref(branch)}:{path}") if entry_type == "tree"
+        ]
 
     def fetched_read(self, branch: str, path: str) -> str:
         """The text of the file ``path`` on ``branch``, as last fetched; a link reads as its target's name.
@@ -95,11 +92,8 @@ class ProjectClone:
         Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError when ``path`` isn't a
         file there.
         """
-        self._require_fetched(branch)
-        where = f"{self._tracking_ref(branch)}:{path}"
-        if self._object_type(where) != "blob":
-            raise NotOnBranchError(f"{branch} has no file {path}")
-        return self._git.output("show", where)
+        self._require_on_branch(branch, path, "blob")
+        return self._git.output("show", f"{self._tracking_ref(branch)}:{path}")
 
     def exists(self, path: str) -> bool:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
@@ -159,9 +153,24 @@ class ProjectClone:
         if not self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._tracking_ref(branch)}^{{commit}}"):
             raise FoundryError(f"{branch} isn't fetched: call fetch_branch first")
 
-    def _object_type(self, where: str) -> str | None:
-        result = self._git.run_captured("cat-file", "-t", where)
-        return result.stdout.strip() if result.returncode == 0 else None
+    def _require_on_branch(self, branch: str, path: str, entry_type: Literal["tree", "blob"]) -> None:
+        """Check ``path`` is an ``entry_type`` entry on ``branch``, as last fetched.
+
+        FoundryError when the branch isn't fetched; NotOnBranchError when nothing is at ``path``, or an entry of
+        another type is. Any other git failure is a GitError, never taken for a missing path.
+        """
+        self._require_fetched(branch)
+        entries = self._ls_tree(self._tracking_ref(branch), "--", path)
+        if (entry_type, path) not in entries:  # ls-tree lists a dir's contents for "dir/", so match the name exactly
+            raise NotOnBranchError(f"{branch} has no {_ENTRY_KIND[entry_type]} {path}")
+
+    def _ls_tree(self, *args: str) -> list[tuple[str, str]]:
+        """The type and name of each entry ``git ls-tree`` lists for ``args``."""
+        entries = []
+        for entry in filter(None, self._git.output("ls-tree", "-z", *args).split("\0")):
+            info, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
+            entries.append((info.split()[1], name))
+        return entries
 
     @staticmethod
     def _tracking_ref(branch: str) -> str:

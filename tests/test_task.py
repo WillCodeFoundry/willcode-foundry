@@ -379,6 +379,8 @@ def test_fetched_list_dir_of_a_missing_dir_raises_the_narrow_error(origin_dir, g
         clone.fetched_list_dir(task.NOTES_BRANCH, ".agent/tasks/nope")
     with pytest.raises(NotOnBranchError):  # a file is not a dir
         clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md")
+    with pytest.raises(NotOnBranchError):  # a prefix of a dir's name is not that dir
+        clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR[:-1])
 
 
 def test_fetched_reads_of_an_unfetched_branch_raise_something_broader(origin_dir, git_env) -> None:
@@ -408,7 +410,8 @@ def test_fetched_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git
 
 def test_fetched_read_of_a_missing_file_or_a_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
     clone = fetched_clone(origin_dir, git_env)
-    for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000"):
+    # "dir/" makes ls-tree list the dir's contents: still not a file
+    for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000", f"{task.OPEN_DIR}/tst-0000/"):
         with pytest.raises(NotOnBranchError):
             clone.fetched_read(task.NOTES_BRANCH, path)
 
