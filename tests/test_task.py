@@ -757,7 +757,10 @@ def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_col
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
 
-    assert filter_project_listing(store, "dev") == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev"))
+    kept = filter_project_listing(store, "dev")
+
+    assert isinstance(kept, ProjectListing) and kept.project_name == "store"
+    assert kept.summaries == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev")).summaries
     assert len(store.summaries) == 4  # a new listing; the one given is left as it was
 
 
