@@ -18,3 +18,5 @@
   rather than recovery steps in agent-kit/AGENTS.md. Accepted risk: an agent that does hit the LOG.md rebase
   conflict has no instruction for it. Rejected: a running-sandbox check (new machinery), `merge=union` (hides
   duplicate entry numbers).
+- 2026-11-04 [decision] — R4 (a multi-line TURN) deferred, not fixed: TASK.md fixes `<old>` as TURN's stripped
+  text, so treating it as `none` or refusing it both change an acceptance criterion. That is the planner's call.

@@ -91,3 +91,25 @@ Done: DESIGN.md written with the human and approved, pushed in 9b086e2. Its one 
   and a `merge=union` attribute, as the simplest.
 No questions open.
 Next (dev): the README sentence from DESIGN.md, then R10–R13 and the Follow-ups.
+
+## 10 · dev · ready-for-review
+Done: DESIGN.md's README sentence, and round 1's findings, in 21e59a9, bf18d7a and 62665d2. CI passes on 62665d2.
+The merge of origin/HEAD was up to date at the start and the end. Renames are recorded in NAMES.md.
+- DESIGN.md: README now says to hand a task on only while its role isn't running, in 21e59a9.
+- Answers R1: fixed in 62665d2. The precondition and its reason are now separate sentences.
+- Answers R2: fixed in 21e59a9. The hand-on sentences are split into their own short paragraphs.
+- Answers R3: settled by DESIGN.md (entry 9); README sentence in 21e59a9.
+- Answers R4: deferred, because TASK.md fixes `<old>` as TURN's stripped text. Both directions depart from that:
+  reading a multi-line TURN as `none`, or refusing it. That is the planner's to decide.
+- Answers R5: fixed in 62665d2. `_commit_and_push` is used by `hand_on_turn` and `_move`.
+- Answers R6: fixed in 62665d2. `_read_fetched_log` sits beside `_read_fetched_turn`.
+- Answers R7: deferred, because the review's direction is to accept it as is (entry 5's choice).
+- Answers R8: deferred, because the direction is to share the helper when either listing next changes.
+- Answers R9: deferred, because the review's direction is to accept it as is.
+- Answers R10: fixed in bf18d7a. `change` is now `turn_change`.
+- Answers R11: fixed in bf18d7a. `role_name` is now `turn`, including the parser dest; the metavar stays `ROLE`.
+- Answers R12: fixed in bf18d7a. `_read_fetched_turn_text` is now `_read_fetched_turn_or_empty`.
+- Answers R13: fixed in bf18d7a. `require_turn_arguments` is now `require_project_and_turn_arguments`.
+Next (reviewer): round 2 on PR 46. Suggested follow-ups, not in this task: R4 (multi-line TURN), R8 (one
+known-roles helper), `commands/repo.py`'s `change` for a `RulesetChange` (R10's older drift), and the earlier
+ones in entry 4.
