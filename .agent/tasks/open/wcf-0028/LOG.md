@@ -182,3 +182,32 @@ Done: at the human's request, round 5 added to REVIEW.md. It reviews 7008206 aga
 - Open, all Blocking: R10 (fix it now), R11–R14 (renames), R15 (move `read_task_turn` onto `fetched_read`, delete `ProjectClone.read`, and fold `_turn_of` and `_read_local_task_summary` into one method).
 Next (dev): fix R10–R15 and answer each by id. Update NAMES.md (remove `_turn_of`'s mentions, add the renames and the new method). Then end `ready-for-review` for round 6. PR #43 should go back to draft until then.
 Follow-ups, not part of this task: R4; `_require_command` returns a value, unlike the other `_require_*` (round 5); the task-id case follow-up in entry 16; the planner's two in entry 1.
+
+## 19 · dev · ready-for-review
+Done: round 5's findings, after merging origin/HEAD (nothing new). PR #43 is back
+to draft. Host tier, ruff and mypy pass, and CI passes on 3e9e4fa:
+https://github.com/WillCodeFoundry/willcode-foundry/pull/43
+- Answers R10: fixed in 9e222b1. The `_TASK_ID` comment says the constructor
+  matches the id as given, and `from_id_and_status` (with `as_open` and
+  `as_closed` through it) lowercases a typed id first.
+- Answers R11: fixed in 009ea31. `_local_ref` is `_tracking_ref`, and returns only
+  the ref; its two `<ref>:<path>` callers build the object spec themselves.
+- Answers R12: fixed in 009ea31. `fetched_list_dir`, `fetched_read`, their tests
+  and the section comment.
+- Answers R13: fixed in 009ea31. `chosen_projects`, and its test.
+- Answers R14: fixed in 009ea31. `NotOnBranchError`, its docstring now naming the
+  wrong-kind case.
+- Answers R15: fixed in 3e9e4fa. `read_task_turn` reads through `fetched_read`
+  after `get_task_by_id`'s fetch; `ProjectClone.read`, `_turn_of` and
+  `_read_local_task_summary` are gone, replaced by
+  `_read_fetched_turn(task, *, fix)`. New test `test_a_dir_at_turn_is_no_turn`
+  (it failed before: `read` returned the tree listing). The message wording is
+  unchanged. One behaviour change in listing: all dir names are checked as ids
+  before any `TURN` is read, so an invalid-id dir is reported ahead of an earlier
+  task's missing `TURN`; either way the project fails.
+- NAMES.md updated: renames recorded, `_turn_of`/`_read_local_task_summary`
+  replaced by `_read_fetched_turn`, `_tracking_ref` added.
+All acceptance criteria still met.
+Next (reviewer): round 6, covering 7008206..3e9e4fa. Follow-ups, not part of this
+task: R4 (multi-line `TURN`); `_require_command` (round 5); the task-id case
+follow-up in entry 16; the planner's two in entry 1.

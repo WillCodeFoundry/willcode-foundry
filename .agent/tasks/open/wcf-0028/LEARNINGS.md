@@ -36,3 +36,8 @@
 - 2026-11-03 [decision] — Deferred R10 (a stale comment) rather than fix it after
   `Verdict: approved`: any own commit after approval sends the task back to
   review, so an optional comment fix there costs a whole round.
+- 2026-11-04 [decision] — R15: `read_task_turn` can use the no-network
+  `fetched_read` because `get_task_by_id` either fetched `agent-notes` (through
+  `check_out`) or raised `TaskNotFoundError`; there is no path where a task is
+  found on an unfetched branch. Kept the "has no TURN, or it is empty" wording for
+  a dir at `TURN` too, rather than churning the pinned message.
