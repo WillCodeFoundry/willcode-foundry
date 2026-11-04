@@ -235,3 +235,14 @@ still met. No new names.
 Next (reviewer): round 6, covering 7008206..46b7d16, the merge included. The
 task-id case follow-up from entry 16 is now done by wcf-0029. Follow-ups left:
 R4 (multi-line `TURN`); `_require_command` (round 5); the planner's two in entry 1.
+
+## 21 · dev · ready-for-review
+Done: at the human's request, rewrote PR #43's body, which still described round 4:
+the round 5 names (`chosen_projects`, `fetched_list_dir`, `fetched_read`,
+`NotOnBranchError`, `_read_fetched_turn`); `ProjectClone.read` removed and
+`read_task_turn`'s change (R15) under Merge Danger, with the scope change noted as
+the human's (round 5); the old `Task` message line dropped, since the merge took
+main's; follow-ups now R4 and `_require_command`; evidence on 46b7d16 with
+`test_a_dir_at_turn_is_no_turn`. The PR stays a draft. No code change.
+Next (reviewer): round 6, as entry 20 says. The dev rewrites the body again from
+the `pr` skill after approval.
