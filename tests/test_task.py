@@ -15,11 +15,11 @@ from foundry.commands.task import (
     CREATED,
     REOPENED,
     Outcome,
-    ProjectFailure,
     ProjectListing,
     chosen_projects,
     filter_project_listing,
     listing_lines,
+    read_listings_and_errors,
     report,
 )
 from foundry.config import Config, Project
@@ -743,7 +743,8 @@ def listing(name: str, *turns: tuple[str, str]) -> ProjectListing:
 
 def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
     stdout, stderr = listing_lines(
-        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))]
+        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))],
+        [],
     )
 
     assert stdout == [
@@ -759,7 +760,7 @@ def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
 
     kept = filter_project_listing(store, "dev")
 
-    assert isinstance(kept, ProjectListing) and kept.project_name == "store"
+    assert kept.project_name == "store"
     assert kept.summaries == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev")).summaries
     assert len(store.summaries) == 4  # a new listing; the one given is left as it was
 
@@ -770,14 +771,8 @@ def test_no_turn_keeps_the_listing_as_it_is() -> None:
     assert filter_project_listing(store, None) is store
 
 
-def test_a_failure_has_no_tasks_to_filter() -> None:
-    failure = ProjectFailure("bad", "boom")
-
-    assert filter_project_listing(failure, "dev") is failure
-
-
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
-    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))])
+    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))], [])
 
     assert stdout == ["empty  no open tasks", "store  wcf-0007  dev"]
 
@@ -787,14 +782,15 @@ def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
         [
             filter_project_listing(listing("store", ("tst-0001", "dev")), "human"),
             filter_project_listing(listing("empty"), "human"),
-        ]
+        ],
+        [],
     )
 
     assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
 
 
 def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
-    stdout, stderr = listing_lines([ProjectFailure("bad", "boom"), listing("store", ("tst-0001", "dev"))])
+    stdout, stderr = listing_lines([listing("store", ("tst-0001", "dev"))], [FoundryError("bad: boom")])
 
     assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
 
@@ -818,6 +814,17 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
     with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
         chosen_projects(foundry_config, ["store", "nope"])
+
+
+def test_each_project_gives_a_listing_or_an_error_naming_it(origin_dir, git_env, tmp_path: Path) -> None:
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    projects = [Project("gone", str(tmp_path / "missing.git")), Project("store", str(origin_dir))]
+
+    listings, errors = read_listings_and_errors(projects, git_env)
+
+    assert listings == [ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")])]
+    assert [type(error) for error in errors] == [FoundryError]  # git's GitError too
+    assert str(errors[0]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[0])
 
 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(

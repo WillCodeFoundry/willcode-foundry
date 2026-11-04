@@ -95,8 +95,8 @@ def reopen_main(args: argparse.Namespace) -> int:
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
-    listings = [filter_project_listing(read_project_listing(project, os.environ), args.turn) for project in projects]
-    stdout, stderr = listing_lines(listings)
+    listings, errors = read_listings_and_errors(projects, os.environ)
+    stdout, stderr = listing_lines([filter_project_listing(listing, args.turn) for listing in listings], errors)
     if stdout:
         print("\n".join(stdout))
     if stderr:
@@ -131,37 +131,39 @@ class ProjectListing(NamedTuple):
     no_tasks_note: str = "no open tasks"
 
 
-class ProjectFailure(NamedTuple):
-    """Why a project couldn't be listed; none of its tasks are."""
-
-    project_name: str
-    error: str
-
-
 def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
     """The projects to list, in name order: those named, each once, or all. FoundryError for an unknown name."""
     return [foundry_config.project(name) for name in sorted(set(project_names) or foundry_config.projects)]
 
 
-def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing | ProjectFailure:
-    """``project``'s open tasks, through a scratch clone; a failure is returned, not raised, so the rest can go on.
+def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing:
+    """``project``'s open tasks, through a scratch clone.
 
     ``env`` is the environment git runs in, as for ProjectClone.
     """
-    try:
-        with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
-            return ProjectListing(project.name, project_tasks.list_open_task_summaries())
-    except (FoundryError, GitError) as error:
-        return ProjectFailure(project.name, str(error))
+    with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
+        return ProjectListing(project.name, project_tasks.list_open_task_summaries())
 
 
-def filter_project_listing(
-    listing: ProjectListing | ProjectFailure, turn: str | None
-) -> ProjectListing | ProjectFailure:
+def read_listings_and_errors(
+    projects: Sequence[Project], env: Mapping[str, str]
+) -> tuple[list[ProjectListing], list[FoundryError]]:
+    """The listing of each project that could be listed, and a FoundryError, naming the project, for each that
+    couldn't, both in ``projects``' order: one project's failure doesn't stop the rest."""
+    listings: list[ProjectListing] = []
+    errors: list[FoundryError] = []
+    for project in projects:
+        try:
+            listings.append(read_project_listing(project, env))
+        except (FoundryError, GitError) as error:
+            errors.append(FoundryError(f"{project.name}: {error}"))
+    return listings, errors
+
+
+def filter_project_listing(listing: ProjectListing, turn: str | None) -> ProjectListing:
     """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``; when it had tasks but none
-    match, its note says so. ``listing`` itself when ``turn`` is None (no --turn was given), or for a failure, which
-    has no tasks to filter."""
-    if turn is None or isinstance(listing, ProjectFailure):
+    match, its note says so. ``listing`` itself when ``turn`` is None: no --turn was given."""
+    if turn is None:
         return listing
     return ProjectListing(
         project_name=listing.project_name,
@@ -170,24 +172,21 @@ def filter_project_listing(
     )
 
 
-def listing_lines(listings: Sequence[ProjectListing | ProjectFailure]) -> tuple[list[str], list[str]]:
+def listing_lines(listings: Sequence[ProjectListing], errors: Sequence[FoundryError]) -> tuple[list[str], list[str]]:
     """The lines list prints on stdout and on stderr.
 
     A task line is its project, id and turn, in columns as wide as the widest across every task line. A project
-    with no task gets its note, outside the columns, and a failed one an error line.
+    with no task gets its note, outside the columns. Each error is an error line.
     """
-    listed = [listing for listing in listings if isinstance(listing, ProjectListing)]
-    name_width = max((len(listing.project_name) for listing in listed if listing.summaries), default=0)
-    id_width = max((len(summary.task.id) for listing in listed for summary in listing.summaries), default=0)
+    name_width = max((len(listing.project_name) for listing in listings if listing.summaries), default=0)
+    id_width = max((len(summary.task.id) for listing in listings for summary in listing.summaries), default=0)
     stdout = []
-    for listing in listed:
+    for listing in listings:
         if listing.summaries:
             stdout += [
                 f"{listing.project_name:<{name_width}}  {s.task.id:<{id_width}}  {s.turn}" for s in listing.summaries
             ]
         else:
             stdout.append(f"{listing.project_name}  {listing.no_tasks_note}")
-    stderr = [
-        f"error: {failure.project_name}: {failure.error}" for failure in listings if isinstance(failure, ProjectFailure)
-    ]
+    stderr = [f"error: {error}" for error in errors]
     return stdout, stderr
