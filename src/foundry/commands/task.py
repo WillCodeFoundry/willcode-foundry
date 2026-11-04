@@ -155,7 +155,11 @@ def listing_lines(listings: Sequence[ProjectListing], turn: str | None) -> tuple
     with nothing to show gets a line outside the columns, and a failed one an error line. ``turn``, when given,
     keeps only the tasks whose turn it equals.
     """
-    listed = [(listing, _with_turn(listing.summaries, turn)) for listing in listings if listing.error is None]
+    listed = [
+        (listing, [summary for summary in listing.summaries if turn is None or summary.turn == turn])
+        for listing in listings
+        if listing.error is None
+    ]
     name_width = max((len(listing.project_name) for listing, shown in listed if shown), default=0)
     id_width = max((len(summary.task.id) for _, shown in listed for summary in shown), default=0)
     stdout = []
@@ -168,8 +172,3 @@ def listing_lines(listings: Sequence[ProjectListing], turn: str | None) -> tuple
             stdout.append(f"{listing.project_name}  no open tasks with turn {turn}")
     stderr = [f"error: {listing.project_name}: {listing.error}" for listing in listings if listing.error is not None]
     return stdout, stderr
-
-
-def _with_turn(summaries: Sequence[TaskSummary], turn: str | None) -> list[TaskSummary]:
-    """The summaries whose turn is ``turn``, or all of them when it is None."""
-    return [summary for summary in summaries if turn is None or summary.turn == turn]
