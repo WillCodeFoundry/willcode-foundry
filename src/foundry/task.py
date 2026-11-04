@@ -29,8 +29,9 @@ TURN_FILE: Final = "TURN"
 HUMAN: Final = "human"
 
 # A task id becomes the git branch task/<id>, so it must be a valid ref
-# component as well as readable: wcf-0042, fix-login.2. Matched after
-# lowercasing.
+# component as well as readable: wcf-0042, fix-login.2. The constructor
+# matches the id as given; Task.from_id_and_status, and as_open and as_closed
+# through it, lowercase a typed id first.
 _TASK_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
 
 
