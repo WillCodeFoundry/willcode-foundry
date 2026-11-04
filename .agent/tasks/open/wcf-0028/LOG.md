@@ -308,3 +308,15 @@ the others call it directly. Output unchanged. NAMES.md and the PR body updated.
 Host tier, ruff and mypy pass; CI passes on 4a99b2f.
 D1 (entry 22): the `ProjectListing.error` half is still open.
 Next (reviewer): round 6, covering 7008206..4a99b2f, the merge included.
+
+## 27 · dev · ready-for-review
+Done: at the human's request, c475eca drops two redundant tests:
+`test_an_upper_case_dir_is_not_a_task_id_either` (it guarded against `as_open`
+lowercasing a dir name, which wcf-0029 removed; its full-message match moved to
+`test_a_dir_that_is_not_a_task_id_fails_naming_it`) and
+`test_a_project_s_listing_holds_its_tasks_or_the_reason_it_failed` (covered by the
+end-to-end list test and the unreachable-repository test). Cross-layer overlaps
+kept, as TASK.md's "Seams to test" names each layer. Host tier, ruff and mypy
+pass; CI passes on c475eca.
+D1 (entry 22): the `ProjectListing.error` half is still open.
+Next (reviewer): round 6, covering 7008206..c475eca, the merge included.
