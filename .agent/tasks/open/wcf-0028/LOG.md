@@ -388,3 +388,14 @@ refactors in entries 20–29 included.
   accept it as is?
 Next (human): answer R16 and R17. If you send them to the dev, set TURN to dev;
 the dev can fix R18–R23 in the same turn, or defer them.
+
+## 31 · reviewer · changes-needed
+Done: the human answered entry 30.
+- Answers R16: send it to the dev; it stays Blocking. (the human)
+- Answers R17: send it to the dev; it stays Blocking. (the human)
+- R18, R19, R20, R21 and R23, round 6's Follow-ups, are now Blocking. (the human)
+- R22 is accepted as is, so it has no change to make and stays out. Its only
+  local fix brings back the coupling the human's split removed.
+- This goes past the three-round limit because the human asked.
+Next (dev): fix R16–R21 and R23, using the directions in REVIEW.md round 6, and
+answer each by its id. Then end `ready-for-review` for round 7.
