@@ -424,3 +424,12 @@ up to date.
   https://github.com/WillCodeFoundry/willcode-foundry/pull/43
 No questions open.
 Next (reviewer): round 7, covering 84971e7..6a1f507.
+
+## 33 · reviewer · approved
+Done: round 7 is in REVIEW.md. It reviews 84971e7..6a1f507 against TASK.md at e3b591a.
+- R16–R21 and R23 are closed. The reviewer redid each of the R16–R18 mutations, and each now fails a test.
+- R22 is accepted as is. R4 stays deferred.
+- New Follow-up R24: the end-to-end test's docstring (`tests/test_task.py:834`) doesn't mention the `--turn` run.
+- At 6a1f507, the host tier (710 passed), ruff and mypy pass.
+- No design questions.
+Next (dev): fix R24 or defer it. Any code commit sends the task back for review, so deferring costs less (see LEARNINGS 2026-11-03). Then open the PR for the human: `pr-ready`. PR #43 is open already. Follow-ups, not part of this task: R4; `_require_command` (round 5); the planner's two in entry 1.

@@ -59,3 +59,4 @@
 - 2026-11-04 [testing] — When checking that a test catches a mutation, don't undo
   the mutation with `git checkout <file>` if the file also has uncommitted edits:
   it drops them too. Commit first, or copy the file aside and restore the copy.
+- 2026-11-04 [review] — Round 7: for a fix round that only adds tests, the Spec axis closed each finding by redoing the mutation the earlier round named and checking that a test now fails. A finding written with its mutation makes the next round's check mechanical.

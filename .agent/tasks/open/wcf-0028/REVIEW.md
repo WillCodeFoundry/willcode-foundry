@@ -477,3 +477,80 @@ None.
 Summary: Standards 3 (Follow-ups R18–R20; worst is R18, `--turn` untested where `main` wires it). Spec 2, both Blocking (R16, the `FoundryError` half of the per-project catch is untested; R17, the name width is unpinned). Behaviour 0. Smells 2 (Follow-ups R21 and R22; R22 accepted as is). Names 1 (Follow-up R23, stale NAMES.md rows). R10–R15 are closed and R4 is deferred. No design questions are open.
 
 Verdict: changes needed
+
+## Round 7 (reviewing 6a1f507)
+
+TASK.md: no change by another role. Its history is the human's `Add task wcf-0028` (8545a3f) and e3b591a, which has a good signature from the identity the planner shares with the architect. This round reviews against e3b591a. The task has no DESIGN.md.
+
+Scope: the fix diff 84971e7...6a1f507. 3e58b76 changes tests only, and 6a1f507 changes docstrings only.
+
+### Earlier findings
+
+- R16: **closed**. With the catch in `read_listings_and_errors` (`commands/task.py:161`) narrowed to `except GitError`, `test_each_project_gives_a_listing_or_an_error_naming_it` (`tests/test_task.py:814`) now fails. Its `bare` project fails with a `FoundryError` naming `agent-notes`, while `store` still lists.
+- R17: **closed**. With every name counted in the width (`commands/task.py:187`), `test_a_project_without_tasks_is_a_line_outside_the_columns` (`tests/test_task.py:769`) now fails.
+- R18: **closed**. With `args.turn` replaced by `None` in `list_main` (`commands/task.py:99`), the end-to-end test now fails at `tests/test_task.py:854-855`.
+- R19: **closed**. `project_clone.py:22-25` says a fetched branch can be read without a checkout.
+- R20: **closed**. All three docstrings are split into short sentences (`commands/task.py:151-155`, `:167-171`, `project_clone.py:17-18`).
+- R21: **closed**. The link test calls `edit_notes(symlink=...)` (`tests/test_task.py:399`). `push_notes` stays: it writes bytes, which the close/reopen tests need.
+- R23: **closed**. Every NAMES.md row names code that exists at HEAD, and no removed name is described as current.
+- R22: accepted as is (entry 31). R4: deferred, unchanged.
+
+### Standards
+
+R18, R19 and R20 are closed, as above.
+
+**R24 · Follow-up.** The end-to-end test's docstring (`tests/test_task.py:834`) still says only "one project lists, the other can't be reached". It doesn't mention the `--turn` run added at `:854-855`.
+- Standard: CONTRIBUTING.md "Test tiers" says a costlier test says in its docstring what cheaper tests can't show. This test is on the host tier, so the rule applies by analogy: it is the slow test, beside the pure ones.
+- Who hits it: a dev trimming slow tests could take `:854-855` for a repeat of `test_turn_with_open_tasks_but_none_matching_says_so` and delete them, which brings R18 back. That would be rare.
+- Direction: have the docstring say the `--turn` run checks that the flag reaches the filter.
+
+The other comments the diff adds are short labels. The reworded docstrings follow AGENTS.md "Writing".
+
+### Spec
+
+R16, R17 and R18 are closed. The reviewer redid each mutation in a throwaway clone, and each now fails a test. The new tests show these requirements met:
+- "the remaining projects are still listed" and "one about the branch names `agent-notes`", for the `FoundryError` path;
+- "the widths taken across all the task lines printed";
+- `--turn` wired through the real command.
+
+The link test still pushes a symlink and reads its target's name. No new findings. Checks at 6a1f507: `uv run pytest`, 710 passed. ruff check, ruff format --check and mypy are clean.
+
+### Behaviour
+
+No findings. Checked in a throwaway clone:
+- `git init --bare` makes a repository with no branches, whatever `init.defaultBranch` is.
+- Errors keep the order the projects are given, so the order the test asserts is fixed.
+- A `--turn` filter that does nothing would fail `:854-855`. `readouterr()` at `:852` empties the captured output first.
+- `edit_notes(symlink=...)` commits a real symlink, so a `fetched_read` that followed the link would fail `:404`.
+- The changed tests passed on three more runs. The `gone` check matches git's English text, but it did before this round.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `commands/task.py:read_listings_and_errors` | clean (docstring only) |
+| `commands/task.py:filter_project_listing` | clean (docstring only) |
+| `project_clone.py:NotOnBranchError`, `ProjectClone` | clean (docstrings only) |
+| `tests/test_task.py:test_fetched_read_reads_a_file_and_a_link_as_its_target_name` | clean; R21 closed |
+| `tests/test_task.py:test_a_project_without_tasks_is_a_line_outside_the_columns` | clean |
+| `tests/test_task.py:test_each_project_gives_a_listing_or_an_error_naming_it` | clean |
+| `tests/test_task.py:test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed` | clean |
+
+No new findings.
+
+### Names
+
+R23 is closed, as above. These are clean:
+- the new test project names `bare` (as `bare.git` at `tests/test_task.py:483`) and `empty-and-long`;
+- the reworded docstrings, which use "fetched", "checked out" and "checkout" as the glossary and the methods do;
+- the new test comments.
+
+No new findings.
+
+### Design questions
+
+None.
+
+Summary: Standards 1 (Follow-up R24, the end-to-end docstring doesn't mention `--turn`). Spec 0. Behaviour 0. Smells 0. Names 0. None blocks. R16–R21 and R23 are closed, R22 is accepted as is and R4 is deferred. No design questions are open.
+
+Verdict: approved
