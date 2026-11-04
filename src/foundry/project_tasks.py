@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import MissingPathError, ProjectClone
+from foundry.project_clone import NotOnBranchError, ProjectClone
 from foundry.task import NOTES_BRANCH, OPEN_DIR, Status, Task
 
 
@@ -129,16 +129,16 @@ class ProjectTasks:
         clone = self._clone
         clone.fetch_branch(NOTES_BRANCH)
         try:
-            names = clone.local_list_dir(NOTES_BRANCH, OPEN_DIR)
-        except MissingPathError:
+            names = clone.fetched_list_dir(NOTES_BRANCH, OPEN_DIR)
+        except NotOnBranchError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
         return [self._read_local_task_summary(_open_task_for_dir(name)) for name in sorted(names)]
 
     def _read_local_task_summary(self, task: Task) -> TaskSummary:
         """``task`` with its turn, read from NOTES_BRANCH as last fetched."""
         try:
-            text: str | None = self._clone.local_read(NOTES_BRANCH, task.turn_file)
-        except MissingPathError:
+            text: str | None = self._clone.fetched_read(NOTES_BRANCH, task.turn_file)
+        except NotOnBranchError:
             text = None
         return TaskSummary(task, _turn_of(task, text, fix="Write the next role's name in it."))
 

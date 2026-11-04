@@ -94,7 +94,7 @@ def reopen_main(args: argparse.Namespace) -> int:
 
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
-    projects = list_projects(config.load(paths.find_foundry_root()), args.project_names)
+    projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
     listings = [read_project_listing(project, os.environ) for project in projects]
     stdout, stderr = listing_lines(listings, args.turn)
     if stdout:
@@ -131,7 +131,7 @@ class ProjectListing(NamedTuple):
     error: str | None
 
 
-def list_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
+def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
     """The projects to list, in name order: those named, each once, or all. FoundryError for an unknown name."""
     return [foundry_config.project(name) for name in sorted(set(project_names) or foundry_config.projects)]
 

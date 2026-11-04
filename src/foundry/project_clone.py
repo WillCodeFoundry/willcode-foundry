@@ -10,8 +10,9 @@ from foundry.errors import FoundryError
 _REMOTE_NAME = "origin"
 
 
-class MissingPathError(FoundryError):
-    """A path isn't on a fetched branch, or isn't the kind of entry asked for: a dir to list, a file to read."""
+class NotOnBranchError(FoundryError):
+    """The dir or file asked for isn't on a fetched branch: nothing is at its path, or something of the other kind
+    is, such as a dir where a file is wanted."""
 
 
 class ProjectClone:
@@ -71,27 +72,30 @@ class ProjectClone:
         if branch not in self.branches():
             return None
         self._fetch(branch)
-        where = self._local_ref(branch, path)
+        where = f"{self._tracking_ref(branch)}:{path}"
         if not self._git.succeeds("cat-file", "-e", where):
             return None
         return self._git.output("show", where)
 
     def fetch_branch(self, branch: str) -> None:
-        """Fetch the remote's ``branch``, for local_list_dir and local_read. FoundryError when it has no such branch."""
+        """Fetch the remote's ``branch``, for fetched_list_dir and fetched_read.
+
+        FoundryError when it has no such branch.
+        """
         if branch not in self.branches():
             raise FoundryError(f"the repository has no {branch} branch")
         self._fetch(branch)
 
-    def local_list_dir(self, branch: str, path: str) -> list[str]:
+    def fetched_list_dir(self, branch: str, path: str) -> list[str]:
         """The names of the dirs directly in ``path`` on ``branch``, as last fetched; files and links are left out.
 
-        Makes no network call. FoundryError when the branch isn't fetched; MissingPathError, which nothing else
+        Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError, which nothing else
         raises, when ``path`` isn't a dir there.
         """
         self._require_fetched(branch)
-        where = self._local_ref(branch, path)
+        where = f"{self._tracking_ref(branch)}:{path}"
         if self._object_type(where) != "tree":
-            raise MissingPathError(f"{branch} has no dir {path}")
+            raise NotOnBranchError(f"{branch} has no dir {path}")
         names = []
         for entry in filter(None, self._git.output("ls-tree", "-z", where).split("\0")):
             info, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
@@ -99,16 +103,16 @@ class ProjectClone:
                 names.append(name)
         return names
 
-    def local_read(self, branch: str, path: str) -> str:
+    def fetched_read(self, branch: str, path: str) -> str:
         """The text of the file ``path`` on ``branch``, as last fetched; a link reads as its target's name.
 
-        Makes no network call. FoundryError when the branch isn't fetched; MissingPathError when ``path`` isn't a
+        Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError when ``path`` isn't a
         file there.
         """
         self._require_fetched(branch)
-        where = self._local_ref(branch, path)
+        where = f"{self._tracking_ref(branch)}:{path}"
         if self._object_type(where) != "blob":
-            raise MissingPathError(f"{branch} has no file {path}")
+            raise NotOnBranchError(f"{branch} has no file {path}")
         return self._git.output("show", where)
 
     def exists(self, path: str) -> bool:
@@ -160,13 +164,13 @@ class ProjectClone:
         for source in dict.fromkeys(from_remote.values()):
             self._fetch(source)
         refspecs = [
-            *(f"{self._local_ref(source)}:refs/heads/{branch}" for branch, source in from_remote.items()),
+            *(f"{self._tracking_ref(source)}:refs/heads/{branch}" for branch, source in from_remote.items()),
             *(f"refs/heads/{branch}:refs/heads/{branch}" for branch in from_local),
         ]
         self._git.output("push", "--quiet", "--atomic", _REMOTE_NAME, *refspecs)
 
     def _require_fetched(self, branch: str) -> None:
-        if not self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._local_ref(branch)}^{{commit}}"):
+        if not self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._tracking_ref(branch)}^{{commit}}"):
             raise FoundryError(f"{branch} isn't fetched: call fetch_branch first")
 
     def _object_type(self, where: str) -> str | None:
@@ -174,9 +178,9 @@ class ProjectClone:
         return result.stdout.strip() if result.returncode == 0 else None
 
     @staticmethod
-    def _local_ref(branch: str, path: str | None = None) -> str:
-        ref = f"refs/remotes/{_REMOTE_NAME}/{branch}"
-        return ref if path is None else f"{ref}:{path}"
+    def _tracking_ref(branch: str) -> str:
+        """The ref the remote's ``branch`` is fetched into."""
+        return f"refs/remotes/{_REMOTE_NAME}/{branch}"
 
     def _fetch(self, branch: str) -> None:
         """Fetch ``branch``'s latest commit, as refs/remotes/origin/<branch>."""
