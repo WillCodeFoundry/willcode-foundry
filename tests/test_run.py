@@ -37,7 +37,7 @@ def foundry_root(tmp_path: Path) -> Path:
 
 
 def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
-    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
     request = launch.request
 
     assert launch.created
@@ -59,13 +59,13 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
     (foundry_root / "config" / "foundry.yaml").write_text(CONFIG.replace("dev: {}", "dev: {model: sonnet}"))
 
-    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
 
     assert launch.request.model == "sonnet"
 
 
 def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
 
     assert AgentKit(foundry_root / "agent-kit").runtime.is_file()
 
@@ -74,12 +74,12 @@ def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
     AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
 
     with pytest.raises(FoundryError, match="can't build the agent runtime"):
-        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
 
 
 def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
-    first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
-    again = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042"))
+    first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
+    again = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
     assert (again.request, again.created) == (first.request, False)
 
 
@@ -89,7 +89,7 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token.write_text("ghp_x")
     assert (
         prepare_launch(
-            foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("WCF-0042")
+            foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042")
         ).request.github_token_path
         == token
     )
@@ -101,7 +101,7 @@ def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
 )
 def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
-        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task.as_open("t1"))
+        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task.as_open("tst-0001"))
 
 
 # --- whose turn -----------------------------------------------------------------------
@@ -111,36 +111,39 @@ ROLES = ("dev", "reviewer")
 
 
 def test_a_role_s_turn_launches_that_role() -> None:
-    assert role_for_turn("reviewer", ROLES, project_name="tkt-store", task=Task.as_open("t1")) == "reviewer"
+    assert role_for_turn("reviewer", ROLES, project_name="tkt-store", task=Task.as_open("tst-0001")) == "reviewer"
 
 
 def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None:
-    with pytest.raises(FoundryError, match=r"t1 is waiting for you.*foundry run tkt-store ROLE t1"):
-        role_for_turn(HUMAN, ROLES, project_name="tkt-store", task=Task.as_open("t1"))
+    with pytest.raises(FoundryError, match=r"tst-0001 is waiting for you.*foundry run tkt-store ROLE tst-0001"):
+        role_for_turn(HUMAN, ROLES, project_name="tkt-store", task=Task.as_open("tst-0001"))
 
 
 @pytest.mark.parametrize("turn", ["Human", "dev\nreviewer", "qa"])
 def test_a_turn_that_names_no_role_is_refused_naming_the_turn_file(turn: str) -> None:
-    with pytest.raises(FoundryError, match=r"\.agent/tasks/open/t1/TURN on agent-notes names .*not a role.*ROLE t1"):
-        role_for_turn(turn, ROLES, project_name="tkt-store", task=Task.as_open("t1"))
+    with pytest.raises(
+        FoundryError, match=r"\.agent/tasks/open/tst-0001/TURN on agent-notes names .*not a role.*ROLE tst-0001"
+    ):
+        role_for_turn(turn, ROLES, project_name="tkt-store", task=Task.as_open("tst-0001"))
 
 
 @pytest.mark.parametrize(
     ("argv", "role_name"),
-    [(["run", "tkt-store", "t1"], None), (["run", "tkt-store", "dev", "t1"], "dev")],
+    [(["run", "tkt-store", "tst-0001"], None), (["run", "tkt-store", "dev", "tst-0001"], "dev")],
     ids=["without ROLE", "with ROLE"],
 )
 def test_run_takes_an_optional_role_between_the_project_and_the_task(argv: list[str], role_name) -> None:
     args = cli.build_parser().parse_args(argv)
-    assert (args.project_name, args.role_name, args.task_id) == ("tkt-store", role_name, "t1")
+    assert (args.project_name, args.role_name, args.task_id) == ("tkt-store", role_name, "tst-0001")
 
 
 @pytest.fixture
 def project_tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
-    """The tasks of a repository whose agent-notes holds open t1, whose turn is the reviewer's, and closed t2."""
+    """The tasks of a repository whose agent-notes holds open tst-0001, whose turn is the reviewer's, and closed
+    tst-0002."""
     seed = tmp_path / "seed"
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
-    for a_task in (Task.as_open("t1"), Task.as_closed("t2")):
+    for a_task in (Task.as_open("tst-0001"), Task.as_closed("tst-0002")):
         (seed / a_task.task_notes_dir).mkdir(parents=True)
         (seed / a_task.task_file).write_text("# Task\n")
         (seed / a_task.turn_file).write_text("reviewer\n")
@@ -156,21 +159,32 @@ def test_an_open_task_launches_the_role_named_or_else_the_turn_s(
     project_tasks: ProjectTasks, role_name, launched
 ) -> None:
     assert require_open_task_and_role(
-        project_tasks, project_name="tkt-store", task_id="T1", role_name=role_name, roles=ROLES
-    ) == (Task.as_open("t1"), launched)
+        project_tasks, project_name="tkt-store", task_id="tst-0001", role_name=role_name, roles=ROLES
+    ) == (Task.as_open("tst-0001"), launched)
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
 def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(FoundryError, match=r"^task t2 is closed: reopen it with `foundry task reopen tkt-store t2`$"):
+    with pytest.raises(
+        FoundryError, match=r"^task tst-0002 is closed: reopen it with `foundry task reopen tkt-store tst-0002`$"
+    ):
         require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="t2", role_name=role_name, roles=ROLES
+            project_tasks, project_name="tkt-store", task_id="tst-0002", role_name=role_name, roles=ROLES
         )
 
 
 @pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
 def test_a_task_that_doesn_t_exist_is_refused(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(TaskNotFoundError, match=r"^task t9 doesn't exist"):
+    with pytest.raises(TaskNotFoundError, match=r"^task tst-0009 doesn't exist"):
         require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="t9", role_name=role_name, roles=ROLES
+            project_tasks, project_name="tkt-store", task_id="tst-0009", role_name=role_name, roles=ROLES
         )
+
+
+@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
+def test_an_uppercase_task_id_is_refused_not_lowercased(project_tasks: ProjectTasks, role_name) -> None:
+    with pytest.raises(FoundryError, match=r"^task id 'TST-0001' is not valid: ") as error:
+        require_open_task_and_role(
+            project_tasks, project_name="tkt-store", task_id="TST-0001", role_name=role_name, roles=ROLES
+        )
+    assert not isinstance(error.value, TaskNotFoundError)

@@ -5,7 +5,7 @@ session-init as the agent with sudo the first time, and that the sandbox's priva
 root's after a restart. Run it after upgrading sbx, and before merging changes to agent-kit/, src/agent_runtime/
 or src/foundry/agent_sandbox/: see "Testing against real sbx" in CONTRIBUTING.md.
 
-It uses this foundry's project foundry-test, role dev and task sbx-smoke, and touches only that sandbox and its
+It uses this foundry's project foundry-test, role dev and task sbx-0001, and touches only that sandbox and its
 session directory: removed before it starts and after it ends, whatever the outcome. The tests run in order,
 each building on the one before.
 """
@@ -31,7 +31,7 @@ from foundry.task import Task
 
 pytestmark = pytest.mark.sbx
 
-PROJECT, ROLE, TASK = "foundry-test", "dev", Task.as_open("sbx-smoke")
+PROJECT, ROLE, TASK = "foundry-test", "dev", Task.as_open("sbx-0001")
 SETTINGS = "/etc/claude-code/managed-settings.json"
 DOCKER_SOCKET = "/var/run/docker.sock"
 

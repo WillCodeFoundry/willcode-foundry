@@ -54,5 +54,5 @@ The docker tier pulls the template image by its tag, as sbx does, so a change to
 `tests/sbx/` launches a real sandbox up to, but not including, attaching the agent. It shows what nothing else can: that sbx accepts the sandbox definition, mounts the kit read-only, runs `session-init` with sudo the first time, and keeps the Docker socket root's after a restart.
 
 - **When:** after upgrading sbx, and before merging changes to `agent-kit/`, `src/agent_runtime/` or `src/foundry/agent_sandbox/`.
-- **Prerequisites:** sbx with KVM, signed in; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-smoke`. The run lists every missing one before any sbx call.
-- **What it leaves:** nothing. It removes the sandbox `dev-foundry-test-sbx-smoke` and its session before and after, whatever the outcome. Expect a few minutes.
+- **Prerequisites:** sbx with KVM, signed in; `secrets/ssh/dev` with access to `foundry-test`; and the task, created once with `uv run foundry task create foundry-test sbx-0001`. The run lists every missing one before any sbx call.
+- **What it leaves:** nothing. It removes the sandbox `dev-foundry-test-sbx-0001` and its session before and after, whatever the outcome. Expect a few minutes.
