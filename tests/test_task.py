@@ -10,10 +10,22 @@ import pytest
 
 from agent_runtime.git import GitError
 from foundry import cli, task
-from foundry.commands.task import CLOSED, CREATED, REOPENED, Outcome, report
+from foundry.commands.task import (
+    CLOSED,
+    CREATED,
+    REOPENED,
+    Outcome,
+    ProjectListing,
+    chosen_projects,
+    filter_project_listing,
+    listing_lines,
+    read_listings_and_errors,
+    report,
+)
+from foundry.config import Config, Project
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError
+from foundry.project_clone import NotOnBranchError, ProjectClone
+from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary
 from foundry.task import Status, Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -341,6 +353,65 @@ def test_move_dir_refuses_an_existing_destination(tmp_path: Path, git_env) -> No
         clone.move_dir("a", "b")
 
 
+# --- ProjectClone: fetch_branch, fetched_list_dir, fetched_read -------------------------
+
+
+def fetched_clone(origin_dir: Path, git_env: dict[str, str]) -> ProjectClone:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    clone.fetch_branch(task.NOTES_BRANCH)
+    return clone
+
+
+def test_fetch_branch_refuses_a_branch_the_remote_lacks(origin_dir, git_env) -> None:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    with pytest.raises(FoundryError, match=r"^the repository has no nope branch$"):
+        clone.fetch_branch("nope")
+
+
+def test_fetched_list_dir_lists_only_the_directories_in_a_fetched_branch(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    assert clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR) == ["tst-0000"]
+    assert clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000") == []  # TASK.md is a file
+
+
+def test_fetched_list_dir_of_a_missing_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    with pytest.raises(NotOnBranchError):
+        clone.fetched_list_dir(task.NOTES_BRANCH, ".agent/tasks/nope")
+    with pytest.raises(NotOnBranchError):  # a file is not a dir
+        clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md")
+    with pytest.raises(NotOnBranchError):  # a prefix of a dir's name is not that dir
+        clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR[:-1])
+
+
+def test_fetched_reads_of_an_unfetched_branch_raise_something_broader(origin_dir, git_env) -> None:
+    clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
+    for call in (
+        lambda: clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR),
+        lambda: clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md"),
+    ):
+        with pytest.raises(FoundryError, match=r"agent-notes isn't fetched") as raised:
+            call()
+        assert not isinstance(raised.value, NotOnBranchError)
+
+
+def test_fetched_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git_env) -> None:
+    edit_notes(origin_dir, git_env, symlink={".agent/tasks/open/tst-0000/LINK": "/etc/hostname"})
+
+    clone = fetched_clone(origin_dir, git_env)
+
+    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md") == "tst-0000\n"
+    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/LINK") == "/etc/hostname"
+
+
+def test_fetched_read_of_a_missing_file_or_a_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
+    clone = fetched_clone(origin_dir, git_env)
+    # "dir/" makes ls-tree list the dir's contents: still not a file
+    for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000", f"{task.OPEN_DIR}/tst-0000/"):
+        with pytest.raises(NotOnBranchError):
+            clone.fetched_read(task.NOTES_BRANCH, path)
+
+
 # --- read_task_turn ---------------------------------------------------------------------
 
 
@@ -357,6 +428,15 @@ def test_a_new_task_s_turn_is_the_template_s(origin_dir, git_env) -> None:
 def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env) -> None:
     with pytest.raises(
         FoundryError, match=r"task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN.*Name"
+    ):
+        turn_of(origin_dir, git_env, "tst-0000")
+
+
+def test_a_dir_at_turn_is_no_turn(origin_dir, git_env) -> None:
+    push_notes(origin_dir, git_env, {".agent/tasks/open/tst-0000/TURN/dev": "dev\n"})
+
+    with pytest.raises(
+        FoundryError, match=r"^task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN"
     ):
         turn_of(origin_dir, git_env, "tst-0000")
 
@@ -533,6 +613,246 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
         operation(project_tasks_of(origin_dir, git_env), task_id)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
+# --- list_open_task_summaries -----------------------------------------------------------
+
+
+def edit_notes(origin_dir: Path, git_env: dict[str, str], *, write=None, symlink=None, remove=()) -> None:
+    """Commit to agent-notes: files to ``write``, links to ``symlink`` (path -> target), paths to ``remove``."""
+    work_dir = Path(tempfile.mkdtemp(dir=origin_dir.parent, prefix="edit-"))
+    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(work_dir))
+    for path, text in (write or {}).items():
+        (work_dir / path).parent.mkdir(parents=True, exist_ok=True)
+        (work_dir / path).write_text(text)
+    for path, target in (symlink or {}).items():
+        (work_dir / path).parent.mkdir(parents=True, exist_ok=True)
+        (work_dir / path).symlink_to(target)
+    for path in remove:
+        git(git_env, "-C", str(work_dir), "rm", "-rq", path)
+    git(git_env, "-C", str(work_dir), "add", "-A")
+    git(git_env, "-C", str(work_dir), "commit", "--quiet", "-m", "edit")
+    git(git_env, "-C", str(work_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
+
+
+def summaries_of(origin_dir: Path, git_env: dict[str, str]) -> list[tuple[str, str]]:
+    found = project_tasks_of(origin_dir, git_env).list_open_task_summaries()
+    assert all(summary.task.status is Status.OPEN for summary in found)
+    return [(summary.task.id, summary.turn) for summary in found]
+
+
+def test_open_tasks_are_listed_in_id_order_with_their_stripped_turns(origin_dir, git_env) -> None:
+    edit_notes(
+        origin_dir,
+        git_env,
+        write={
+            ".agent/tasks/open/tst-0000/TURN": "dev\n",
+            ".agent/tasks/open/bbb-0001/TURN": "  human \n\n",
+            ".agent/tasks/open/aaa-0002/TURN": "reviewer",
+            ".agent/tasks/closed/cls-0000/TURN": "dev\n",  # closed: left out
+            ".agent/tasks/open/stray.txt": "not a task\n",  # a file: ignored
+        },
+    )
+
+    assert summaries_of(origin_dir, git_env) == [("aaa-0002", "reviewer"), ("bbb-0001", "human"), ("tst-0000", "dev")]
+    assert isinstance(project_tasks_of(origin_dir, git_env).list_open_task_summaries()[0], TaskSummary)
+
+
+def test_a_symlinked_turn_shows_the_link_s_target_name_and_reads_nothing_outside(origin_dir, git_env) -> None:
+    edit_notes(origin_dir, git_env, symlink={".agent/tasks/open/tst-0000/TURN": "/etc/hostname"})
+
+    assert summaries_of(origin_dir, git_env) == [("tst-0000", "/etc/hostname")]
+
+
+def test_no_open_dir_after_the_last_task_closed_lists_nothing(origin_dir, git_env) -> None:
+    edit_notes(origin_dir, git_env, remove=[".agent/tasks/open"])
+
+    assert summaries_of(origin_dir, git_env) == []
+
+
+@pytest.mark.parametrize(
+    "files",
+    [{}, {".agent/tasks/open/tst-0000/TURN": " \n"}, {".agent/tasks/open/tst-0000/TURN/x": "x"}],
+    ids=["missing", "empty", "directory"],
+)
+def test_a_missing_empty_or_directory_turn_fails_naming_the_task(origin_dir, git_env, files) -> None:
+    if files:  # tst-0000 starts without a TURN
+        edit_notes(origin_dir, git_env, write=files)
+
+    with pytest.raises(
+        FoundryError,
+        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*Write the next role's name in it\.$",
+    ):
+        summaries_of(origin_dir, git_env)
+
+
+def test_a_dir_that_is_not_a_task_id_fails_naming_it(origin_dir, git_env) -> None:
+    edit_notes(
+        origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/Bad Dir/TURN": "dev"}
+    )
+
+    with pytest.raises(
+        FoundryError,
+        match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id \(task id 'Bad Dir' is not valid: "
+        r"use lowercase letters, .*\)\. Rename or remove it\.$",
+    ):
+        summaries_of(origin_dir, git_env)
+
+
+def test_listing_a_repository_without_a_notes_branch_names_agent_notes(tmp_path: Path, git_env) -> None:
+    origin_dir = tmp_path / "bare.git"
+    git(git_env, "init", "--quiet", "--bare", str(origin_dir))
+
+    with pytest.raises(FoundryError, match=r"^the repository has no agent-notes branch$"):
+        summaries_of(origin_dir, git_env)
+
+
+def test_listing_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
+    with pytest.raises(GitError, match=r"ls-remote --heads origin failed: .*does not appear to be a git repo"):
+        summaries_of(tmp_path / "missing.git", git_env)
+
+
+def test_listing_costs_one_fetch_however_many_tasks(origin_dir, git_env, tmp_path: Path) -> None:
+    edit_notes(origin_dir, git_env, write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(0, 6)})
+    log = tmp_path / "git-calls.log"
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    real_git = subprocess.run(["which", "git"], env=git_env, capture_output=True, text=True, check=True).stdout.strip()
+    shim = shim_dir / "git"
+    shim.write_text(f'#!/bin/sh\necho "$*" >> {log}\nexec {real_git} "$@"\n')
+    shim.chmod(0o755)
+    counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
+
+    found = project_tasks_of(origin_dir, counting_env).list_open_task_summaries()
+
+    assert len(found) == 6
+    assert sum(" fetch " in f" {line} " for line in log.read_text().splitlines()) == 1
+
+
+# --- foundry task list: the lines and the arguments -----------------------------------------
+
+
+def listing(name: str, *turns: tuple[str, str]) -> ProjectListing:
+    return ProjectListing(name, [TaskSummary(Task.as_open(task_id), turn) for task_id, turn in turns])
+
+
+def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
+    stdout, stderr = listing_lines(
+        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))],
+        [],
+    )
+
+    assert stdout == [
+        "store  wcf-0007  dev",
+        "store  wcf-0010  human",
+        "a      t-0001    reviewer",
+    ]
+    assert stderr == []
+
+
+def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
+    store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
+
+    kept = filter_project_listing(store, "dev")
+
+    assert kept.project_name == "store"
+    assert kept.summaries == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev")).summaries
+    assert len(store.summaries) == 4  # a new listing; the one given is left as it was
+
+
+def test_no_turn_keeps_the_listing_as_it_is() -> None:
+    store = listing("store", ("tst-0001", "dev"))
+
+    assert filter_project_listing(store, None) is store
+
+
+def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
+    stdout, _ = listing_lines([listing("empty-and-long"), listing("store", ("wcf-0007", "dev"))], [])
+
+    assert stdout == ["empty-and-long  no open tasks", "store  wcf-0007  dev"]  # its name doesn't widen the column
+
+
+def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
+    stdout, _ = listing_lines(
+        [
+            filter_project_listing(listing("store", ("tst-0001", "dev")), "human"),
+            filter_project_listing(listing("empty"), "human"),
+        ],
+        [],
+    )
+
+    assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
+
+
+def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
+    stdout, stderr = listing_lines([listing("store", ("tst-0001", "dev"))], [FoundryError("bad: boom")])
+
+    assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
+
+
+def test_list_takes_optional_projects_and_a_turn() -> None:
+    parse = cli.build_parser().parse_args
+    assert (parse(["task", "list"]).project_names, parse(["task", "list"]).turn) == ([], None)
+    args = parse(["task", "list", "store", "blog", "--turn", "human"])
+    assert (args.project_names, args.turn) == (["store", "blog"], "human")
+
+
+def test_chosen_projects_are_in_name_order_once_each_and_all_when_none_are_named() -> None:
+    foundry_config = Config("f", {name: Project(name, f"url/{name}") for name in ("store", "blog")}, {})
+
+    assert [p.name for p in chosen_projects(foundry_config, [])] == ["blog", "store"]
+    assert [p.name for p in chosen_projects(foundry_config, ["store", "blog", "store"])] == ["blog", "store"]
+
+
+def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
+    foundry_config = Config("f", {"store": Project("store", "url")}, {})
+
+    with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
+        chosen_projects(foundry_config, ["store", "nope"])
+
+
+def test_each_project_gives_a_listing_or_an_error_naming_it(origin_dir, git_env, tmp_path: Path) -> None:
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    git(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: a FoundryError
+    projects = [
+        Project("bare", str(tmp_path / "bare.git")),
+        Project("gone", str(tmp_path / "missing.git")),  # unreachable: git's GitError
+        Project("store", str(origin_dir)),
+    ]
+
+    listings, errors = read_listings_and_errors(projects, git_env)
+
+    assert listings == [ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")])]
+    assert [type(error) for error in errors] == [FoundryError, FoundryError]
+    assert str(errors[0]) == "bare: the repository has no agent-notes branch"
+    assert str(errors[1]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[1])
+
+
+def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
+    origin_dir, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, in a foundry instance of its own: one project lists, the other can't be reached."""
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    foundry_root = tmp_path / "foundry"
+    (foundry_root / "config").mkdir(parents=True)
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        f"name: f\nprojects:\n  store: {{url: '{origin_dir}'}}\n  gone: {{url: '{tmp_path / 'missing.git'}'}}\n"
+        "roles: {}\n"
+    )
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+
+    assert cli.main(["task", "list"]) == 1
+    printed = capsys.readouterr()
+    assert printed.out == "store  tst-0000  dev\n"
+    assert printed.err.startswith("error: gone: ") and printed.err.count("error: ") == 1
+
+    assert cli.main(["task", "list", "store"]) == 0
+    assert capsys.readouterr() == ("store  tst-0000  dev\n", "")
+
+    assert cli.main(["task", "list", "store", "--turn", "human"]) == 0
+    assert capsys.readouterr() == ("store  no open tasks with turn human\n", "")
 
 
 # --- an id given in uppercase ------------------------------------------------------------

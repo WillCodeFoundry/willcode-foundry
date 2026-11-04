@@ -1,22 +1,32 @@
-"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, and reading
-their turn.
+"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, reading their
+turn, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every other operation goes through it. Callers pass task ids, and get Tasks back.
+every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
+reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
 import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
-from foundry.task import NOTES_BRANCH, Status, Task
+from foundry.project_clone import NotOnBranchError, ProjectClone
+from foundry.task import NOTES_BRANCH, OPEN_DIR, Status, Task
 
 
 class TaskNotFoundError(FoundryError):
     """The task's notes dir is on neither side: it isn't open and it isn't closed."""
+
+
+@dataclass(frozen=True)
+class TaskSummary:
+    """A task and whose turn it is: the stripped text of its TURN_FILE."""
+
+    task: Task
+    turn: str
 
 
 class ProjectTasks:
@@ -105,15 +115,40 @@ class ProjectTasks:
     def read_task_turn(self, task_id: str) -> str:
         """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
 
-        FoundryError when the file is missing or empty, saying to name the role instead.
+        FoundryError when the file is missing, not a file or empty, saying to name the role instead.
         """
-        task = self.get_task_by_id(task_id)
-        text = self._clone.read(NOTES_BRANCH, task.turn_file)
-        turn = text.strip() if text is not None else ""
+        task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
+        return self._read_fetched_turn(task, fix="Name the role to run instead.")
+
+    def list_open_task_summaries(self) -> list[TaskSummary]:
+        """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
+
+        Fetches NOTES_BRANCH once, then reads git objects. FoundryError when it isn't there, when a dir under
+        OPEN_DIR isn't a valid task id, or when a task's TURN_FILE is missing, empty or not a file.
+        """
+        clone = self._clone
+        clone.fetch_branch(NOTES_BRANCH)
+        try:
+            names = clone.fetched_list_dir(NOTES_BRANCH, OPEN_DIR)
+        except NotOnBranchError:
+            return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
+        tasks = [_open_task_for_dir(name) for name in sorted(names)]
+        return [
+            TaskSummary(task, self._read_fetched_turn(task, fix="Write the next role's name in it.")) for task in tasks
+        ]
+
+    def _read_fetched_turn(self, task: Task, *, fix: str) -> str:
+        """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
+
+        FoundryError, ending with ``fix``, when the file is missing, not a file, or holds only blanks.
+        """
+        try:
+            turn = self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
+        except NotOnBranchError:
+            turn = ""
         if not turn:
             raise FoundryError(
-                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-                "Name the role to run instead."
+                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. {fix}"
             )
         return turn
 
@@ -128,3 +163,12 @@ class ProjectTasks:
         clone.commit(message)
         clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
         return destination
+
+
+def _open_task_for_dir(dir_name: str) -> Task:
+    """The open task whose notes dir is OPEN_DIR/``dir_name``; FoundryError, naming the dir, when ``dir_name`` isn't a
+    task id as it stands."""
+    try:
+        return Task(dir_name, Status.OPEN)
+    except FoundryError as error:
+        raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
