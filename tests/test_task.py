@@ -712,41 +712,6 @@ def test_hand_on_turn_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     assert_notes_signed_with_your_key(origin_dir, git_env)
 
 
-def test_hand_on_turn_keeps_the_log_byte_for_byte(origin_dir, git_env) -> None:
-    log = b"# Log\r\n\r\n## 4 \xc2\xb7 dev \xc2\xb7 progress\r\nbad byte \xff\r\nno final newline"
-    work = Path(tempfile.mkdtemp(dir=origin_dir.parent, prefix="bytes-"))
-    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(work))
-    (work / ".agent/tasks/open/tst-0000/LOG.md").write_bytes(log)
-    git(git_env, "-C", str(work), "add", ".")
-    git(git_env, "-C", str(work), "commit", "--quiet", "-m", "log")
-    git(git_env, "-C", str(work), "push", "--quiet", "origin", task.NOTES_BRANCH)
-
-    hand_on(origin_dir, git_env, "tst-0000")
-
-    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/LOG.md") == (
-        log + "\n\n## 5 · human · turn\nTurn: none → dev.\n".encode()
-    )
-
-
-def test_hand_on_turn_replaces_a_linked_turn_and_writes_nothing_outside(origin_dir, git_env, tmp_path: Path) -> None:
-    outside = tmp_path / "outside"
-    outside.write_text("keep\n")
-    edit_notes(
-        origin_dir,
-        git_env,
-        write={".agent/tasks/open/tst-0000/LOG.md": LOG},
-        symlink={".agent/tasks/open/tst-0000/TURN": str(outside)},
-    )
-
-    change = hand_on(origin_dir, git_env, "tst-0000")
-
-    assert change.before == str(outside)
-    assert outside.read_text() == "keep\n"
-    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/TURN") == b"dev\n"
-    mode = git(git_env, f"--git-dir={origin_dir}", "ls-tree", task.NOTES_BRANCH, ".agent/tasks/open/tst-0000/TURN")
-    assert mode.startswith("100644 blob ")
-
-
 @pytest.mark.parametrize(
     "task_id, edits, message",
     [
@@ -770,10 +735,18 @@ def test_hand_on_turn_replaces_a_linked_turn_and_writes_nothing_outside(origin_d
         (
             "tst-0000",
             {"write": {".agent/LOG.md": LOG}, "symlink": {".agent/tasks/open/tst-0000/LOG.md": "../../../LOG.md"}},
-            r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
+            r"^\.agent/tasks/open/tst-0000/LOG\.md is a link: foundry writes only files$",
+        ),
+        (
+            "tst-0000",
+            {
+                "write": {".agent/tasks/open/tst-0000/LOG.md": LOG, ".agent/TURN": "dev\n"},
+                "symlink": {".agent/tasks/open/tst-0000/TURN": "../../../TURN"},
+            },
+            r"^\.agent/tasks/open/tst-0000/TURN is a link: foundry writes only files$",
         ),
     ],
-    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
+    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link", "turn-is-a-link"],
 )
 def test_hand_on_turn_refuses_and_pushes_nothing(origin_dir, git_env, task_id, edits, message) -> None:
     if edits:

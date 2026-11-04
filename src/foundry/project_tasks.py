@@ -142,8 +142,8 @@ class ProjectTasks:
 
         Relies on get_task_by_id having just found ``task`` open: it checked out NOTES_BRANCH, so the change is made
         on the commit the task was found on. The turn before is TURN_FILE's text stripped, or "none" when it is
-        missing or blank. Refuses a task whose turn is already ``turn``, or that has no LOG_FILE. Checks nothing
-        about ``turn``: the caller does.
+        missing or blank. Refuses a task whose turn is already ``turn``, that has no LOG_FILE, or whose TURN_FILE or
+        LOG_FILE is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
         """
         assert task.status is Status.OPEN, "hand_on_turn needs an open task"  # a programming error
         before = self._read_fetched_turn_text(task) or _NO_TURN
@@ -151,8 +151,8 @@ class ProjectTasks:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
         clone = self._clone
         try:
-            log = clone.read(task.log_file)
-        except FileNotFoundError:
+            log = clone.fetched_read(NOTES_BRANCH, task.log_file)
+        except NotOnBranchError:
             raise FoundryError(
                 f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"
             ) from None

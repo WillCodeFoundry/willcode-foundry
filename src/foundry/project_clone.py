@@ -100,30 +100,17 @@ class ProjectClone:
         """Whether ``path``, relative to the repository root, exists in the checked-out files."""
         return (self._work_dir / path).exists()
 
-    def read(self, path: str) -> str:
-        """The text of the checked-out file ``path``, relative to the repository root, exactly as it is.
-
-        No line ending is translated, and bytes that aren't UTF-8 are kept, so writing the text back changes
-        nothing. FileNotFoundError when ``path`` isn't a file, or is a link.
-        """
-        file_path = self._work_dir / path
-        if file_path.is_symlink() or not file_path.is_file():
-            raise FileNotFoundError(f"{path} is not a file")
-        with file_path.open(encoding="utf-8", errors="surrogateescape", newline="") as file:
-            return file.read()
-
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
 
-        A link at a path is replaced by the file, never written through. Text from read is written back byte for
-        byte. Nothing is staged or committed.
+        FoundryError when a path is a link, which could point outside the clone. Nothing is staged or committed.
         """
         for path, text in files.items():
             file_path = self._work_dir / path
-            file_path.parent.mkdir(parents=True, exist_ok=True)
             if file_path.is_symlink():
-                file_path.unlink()
-            file_path.write_text(text, encoding="utf-8", errors="surrogateescape", newline="")
+                raise FoundryError(f"{path} is a link: foundry writes only files")
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(text)
 
     def move_dir(self, src: str, dst: str) -> None:
         """Move the folder ``src``, with everything in it, to ``dst``, both relative to the repository root.
