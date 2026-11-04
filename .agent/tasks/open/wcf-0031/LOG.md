@@ -27,3 +27,11 @@ Next: test-first, one commit per slice, at TASK.md's seams:
 4. In `commands/task.py`: `check_turn_arguments` (role, note, project, task id, before any git), `turn_report`, the `turn` parser and `turn_main`, end to end through `cli.main`.
 5. Docs: README table and `TURN` paragraph, ARCHITECTURE codemap, GLOSSARY "Log", `agent-kit/AGENTS.md` sentence.
 Then a draft PR, CI, `ready-for-review`.
+
+## 3 · dev · progress
+Done: steps 1–3 of entry 2, in 48ffcc6, 889c2a6 and 6e5dc3c: `task.LOG_FILE` (and `Task.log_file`) with the
+contract test; `log_with_turn_entry`; `ProjectTasks.hand_on_turn` returning `TurnChange`, tested against real
+repositories. Two changes to `ProjectClone` the byte-for-byte criterion needed, each with a test at the
+`ProjectTasks` seam: a new `read` of the checked-out file, exact; and `write` replacing a link rather than
+writing through it.
+Next: step 4, the command in `commands/task.py`.
