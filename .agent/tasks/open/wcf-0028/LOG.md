@@ -262,3 +262,12 @@ pass; CI passes on 1306eb8.
   them too? TASK.md asks for "each project's summaries or error" passed to the
   printing function, and round 1 judged the pair below the bar.
 Next (reviewer): round 6, covering 7008206..1306eb8, the merge included.
+
+## 23 · dev · ready-for-review
+Done: at the human's request, a8b933b inlines `_with_turn` (one caller, one
+comprehension) into `listing_lines`, rather than renaming it or using `filter`,
+which would need a lambda and a `list()`. No behaviour change; the `--turn` tests
+are unchanged and pass. Host tier, ruff and mypy pass; CI passes on a8b933b.
+D1 (entry 22) is still open; its `--turn` half stands as is: the `turn is None`
+check now sits in the comprehension.
+Next (reviewer): round 6, covering 7008206..a8b933b, the merge included.
