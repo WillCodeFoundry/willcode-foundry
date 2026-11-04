@@ -19,7 +19,7 @@ DEV = Role(name="dev", ssh_key_path=Path("/foundry/secrets/ssh/dev"), github_tok
 
 
 def test_the_first_open_creates_the_session_with_its_workspace_inside(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     session_dir = tmp_path / "sessions" / "dev-tkt-store-wcf-0042"
     assert opened.created
@@ -33,7 +33,7 @@ def test_the_first_open_creates_the_session_with_its_workspace_inside(tmp_path: 
 
 
 def test_the_definition_carries_the_variables_the_agent_kit_reads(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     assert opened.definition.variables == {
         "AGENT_ROLE": "dev",
@@ -52,8 +52,8 @@ def test_the_definition_carries_the_variables_the_agent_kit_reads(tmp_path: Path
 
 def test_sandbox_names_are_sbx_safe(tmp_path: Path) -> None:
     project = Project(name="Tkt Store!", url="git@github.com:o/tkt-store.git")
-    opened = session.open_or_create(tmp_path, project=project, role=DEV, task=Task.as_open("T1"))
-    assert opened.dir.name == "dev-tkt-store-t1"
+    opened = session.open_or_create(tmp_path, project=project, role=DEV, task=Task.as_open("tst-0001"))
+    assert opened.dir.name == "dev-tkt-store-tst-0001"
 
 
 def test_a_sandbox_name_over_the_limit_is_refused(tmp_path: Path) -> None:
@@ -64,11 +64,11 @@ def test_a_sandbox_name_over_the_limit_is_refused(tmp_path: Path) -> None:
 
 
 def test_a_reopen_reuses_the_definition_unchanged(tmp_path: Path) -> None:
-    first = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    first = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
     definition_path = first.dir / SandboxDefinition.FILE_NAME
     before = definition_path.read_text()
 
-    second = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    second = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     assert not second.created
     assert (second.dir, second.definition) == (first.dir, first.definition)
@@ -78,24 +78,24 @@ def test_a_reopen_reuses_the_definition_unchanged(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("project", "role", "task"),
     [
-        # Slugs collide: dev on foundry, task test-1, and dev on foundry-test, task 1.
-        (Project(name="foundry-test", url="git@github.com:o/foundry-test.git"), DEV, Task.as_open("1")),
+        # Slugs collide: dev on foundry, and dev on Foundry, task tst-0001.
+        (Project(name="Foundry", url="git@github.com:o/Foundry.git"), DEV, Task.as_open("tst-0001")),
         # The project's url changed since the session was created.
-        (Project(name="foundry", url="git@github.com:o/moved.git"), DEV, Task.as_open("test-1")),
+        (Project(name="foundry", url="git@github.com:o/moved.git"), DEV, Task.as_open("tst-0001")),
     ],
 )
 def test_a_sandbox_for_another_role_task_or_repository_is_refused(
     tmp_path: Path, project: Project, role: Role, task: Task
 ) -> None:
     foundry = Project(name="foundry", url="git@github.com:o/foundry.git")
-    session.open_or_create(tmp_path, project=foundry, role=DEV, task=Task.as_open("test-1"))
+    session.open_or_create(tmp_path, project=foundry, role=DEV, task=Task.as_open("tst-0001"))
 
     with pytest.raises(FoundryError, match="already exists for a different role, task or repository"):
         session.open_or_create(tmp_path, project=project, role=role, task=task)
 
 
 def test_the_init_command_runs_the_foundrys_agent_kit(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
     assert opened.init_command == AgentKit(tmp_path / "agent-kit").command("session-init")
 
@@ -104,30 +104,31 @@ def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> Non
     """sbx fixed the mount when it created the sandbox, on the original's kit: a copy launching it would rebuild
     the runtime under the original's sandboxes."""
     original, copy = tmp_path / "original", tmp_path / "copy"
-    session.open_or_create(original, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+    session.open_or_create(original, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     shutil.copytree(original, copy)
     (original / "agent-kit").mkdir()
 
     with pytest.raises(FoundryError) as refused:
-        session.open_or_create(copy, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+        session.open_or_create(copy, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
     assert str(refused.value) == (
-        f"dev-tkt-store-t1 mounts the agent kit at {original / 'agent-kit'}, not this foundry's "
-        f"({copy / 'agent-kit'}): launch it from the foundry there, or {session.recreate_hint('dev-tkt-store-t1')}"
+        f"dev-tkt-store-tst-0001 mounts the agent kit at {original / 'agent-kit'}, not this foundry's "
+        f"({copy / 'agent-kit'}): launch it from the foundry there, "
+        f"or {session.recreate_hint('dev-tkt-store-tst-0001')}"
     )
 
 
 def test_a_moved_foundrys_sandbox_needs_recreating(tmp_path: Path) -> None:
     """The kit the sandbox mounts is gone with the move: sbx can't mount it again."""
-    session.open_or_create(tmp_path / "before", project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+    session.open_or_create(tmp_path / "before", project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     (tmp_path / "before").rename(tmp_path / "after")
 
     with pytest.raises(FoundryError) as refused:
-        session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+        session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
     assert str(refused.value) == (
-        f"dev-tkt-store-t1 mounts the agent kit at {tmp_path / 'before' / 'agent-kit'}, which is gone: "
-        f"{session.recreate_hint('dev-tkt-store-t1')}"
+        f"dev-tkt-store-tst-0001 mounts the agent kit at {tmp_path / 'before' / 'agent-kit'}, which is gone: "
+        f"{session.recreate_hint('dev-tkt-store-tst-0001')}"
     )
 
 
@@ -141,7 +142,7 @@ def test_the_recreate_hint_points_at_the_readme() -> None:
 def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> None:
     (tmp_path / "sessions" / "dev-tkt-store-wcf-0042" / "workspace").mkdir(parents=True)
 
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     assert opened.created
     assert opened.definition == SandboxDefinition.read(opened.dir)
@@ -154,7 +155,7 @@ def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_
     (session_dir / leftover).write_text("x")
 
     with pytest.raises(FoundryError, match="holds more than an empty workspace"):
-        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
     assert not (session_dir / SandboxDefinition.FILE_NAME).exists()
 
 
@@ -162,7 +163,7 @@ def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_
 
 
 def test_the_session_carries_its_variables(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("WCF-0042"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     assert opened.variables == SessionVariables(
         role_name="dev",
@@ -175,9 +176,16 @@ def test_the_session_carries_its_variables(tmp_path: Path) -> None:
 
 
 def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
-    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1")).variables
+    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001")).variables
 
     assert SessionVariables.from_env(variables.to_env()) == variables
+
+
+def test_variables_read_back_refuse_a_task_id_not_matching_the_pattern(tmp_path: Path) -> None:
+    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042")).variables
+
+    with pytest.raises(FoundryError, match=r"^task id 'WCF-0042' is not valid: "):
+        SessionVariables.from_env({**variables.to_env(), "AGENT_TASK": "WCF-0042"})
 
 
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
@@ -189,31 +197,31 @@ def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
 
 
 def test_a_sandbox_created_without_a_variable_is_refused_naming_it(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     rewrite_variables(opened.dir, {"AGENT_TASK_FILE": None, "AGENT_NOTES_ROOT": None})
 
     with pytest.raises(FoundryError, match=r"missing AGENT_NOTES_ROOT, AGENT_TASK_FILE\).*sbx env rm --force"):
-        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
 
 def test_a_sandbox_created_with_another_name_is_refused_naming_both(tmp_path: Path) -> None:
     """Its hooks would guard the old branch, so it is recreated rather than reused."""
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     rewrite_variables(opened.dir, {"AGENT_NOTES_BRANCH": "notes"})
 
     with pytest.raises(FoundryError, match="AGENT_NOTES_BRANCH='notes', now 'agent-notes'"):
-        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("t1"))
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
 
 def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
     variables = SessionVariables(
-        role_name="dev", task=Task.as_open("t1"), repo_url="u", agent_kit_dir=Path("/kit"), project_dir="/w/p"
+        role_name="dev", task=Task.as_open("tst-0001"), repo_url="u", agent_kit_dir=Path("/kit"), project_dir="/w/p"
     )
 
     assert variables.is_same_sandbox(dataclasses.replace(variables, agent_kit_dir=Path("/moved"), project_dir="/w/q"))
     for other in (
         dataclasses.replace(variables, role_name="qa"),
-        dataclasses.replace(variables, task=Task.as_open("t2")),
+        dataclasses.replace(variables, task=Task.as_open("tst-0002")),
         dataclasses.replace(variables, repo_url="v"),
     ):
         assert not variables.is_same_sandbox(other)
