@@ -246,3 +246,19 @@ main's; follow-ups now R4 and `_require_command`; evidence on 46b7d16 with
 `test_a_dir_at_turn_is_no_turn`. The PR stays a draft. No code change.
 Next (reviewer): round 6, as entry 20 says. The dev rewrites the body again from
 the `pr` skill after approval.
+
+## 22 · dev · ready-for-review
+Done: at the human's request (no functions returning None for callers to branch
+on), 1306eb8 replaces `ProjectClone._object_type`, which returned None for any
+`git cat-file` failure, with `_require_on_branch(branch, path, entry_type)`: it
+uses `git ls-tree`, so a missing path raises `NotOnBranchError` and any other git
+failure a `GitError`, no longer read as "no open tasks". It matches the entry's
+name exactly, since `ls-tree` lists a dir's contents for "dir/". Tests added for
+"dir/" and a prefix of a dir's name. NAMES.md updated. Host tier, ruff and mypy
+pass; CI passes on 1306eb8.
+- Asks D1 → human: the same pattern remains as data, not returns:
+  `ProjectListing.error: str | None`, which `listing_lines` splits on with
+  `is None`, and `--turn`'s `str | None`, which `_with_turn` branches on. Change
+  them too? TASK.md asks for "each project's summaries or error" passed to the
+  printing function, and round 1 judged the pair below the bar.
+Next (reviewer): round 6, covering 7008206..1306eb8, the merge included.
