@@ -96,7 +96,7 @@ def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
     listings = [read_project_listing(project, os.environ) for project in projects]
-    stdout, stderr = listing_lines(listings, args.turn)
+    stdout, stderr = listing_lines(listings_with_turn(listings, args.turn))
     if stdout:
         print("\n".join(stdout))
     if stderr:
@@ -124,11 +124,21 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
 
 
 class ProjectListing(NamedTuple):
-    """What listing one project gave: its open tasks, or the reason it couldn't be listed."""
+    """What listing one project gave: its open tasks, or the reason it couldn't be listed.
+
+    ``no_tasks_note`` is what the project's line says when it shows no task.
+    """
 
     project_name: str
     summaries: list[TaskSummary]
     error: str | None
+    no_tasks_note: str = "no open tasks"
+
+    def with_turn(self, turn: str) -> "ProjectListing":
+        """Only the tasks whose turn is ``turn``; when it had tasks but none match, its note says so."""
+        kept = [summary for summary in self.summaries if summary.turn == turn]
+        note = f"no open tasks with turn {turn}" if self.summaries else self.no_tasks_note
+        return self._replace(summaries=kept, no_tasks_note=note)
 
 
 def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
@@ -148,27 +158,27 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
         return ProjectListing(project.name, [], str(error))
 
 
-def listing_lines(listings: Sequence[ProjectListing], turn: str | None) -> tuple[list[str], list[str]]:
+def listings_with_turn(listings: Sequence[ProjectListing], turn: str | None) -> list[ProjectListing]:
+    """Each listing with only the tasks whose turn is ``turn``; all of them when no --turn was given."""
+    return list(listings) if turn is None else [listing.with_turn(turn) for listing in listings]
+
+
+def listing_lines(listings: Sequence[ProjectListing]) -> tuple[list[str], list[str]]:
     """The lines list prints on stdout and on stderr.
 
     A task line is its project, id and turn, in columns as wide as the widest across every task line. A project
-    with nothing to show gets a line outside the columns, and a failed one an error line. ``turn``, when given,
-    keeps only the tasks whose turn it equals.
+    with no task gets its note, outside the columns, and a failed one an error line.
     """
-    listed = [
-        (listing, [summary for summary in listing.summaries if turn is None or summary.turn == turn])
-        for listing in listings
-        if listing.error is None
-    ]
-    name_width = max((len(listing.project_name) for listing, shown in listed if shown), default=0)
-    id_width = max((len(summary.task.id) for _, shown in listed for summary in shown), default=0)
+    listed = [listing for listing in listings if listing.error is None]
+    name_width = max((len(listing.project_name) for listing in listed if listing.summaries), default=0)
+    id_width = max((len(summary.task.id) for listing in listed for summary in listing.summaries), default=0)
     stdout = []
-    for listing, shown in listed:
-        if shown:
-            stdout += [f"{listing.project_name:<{name_width}}  {s.task.id:<{id_width}}  {s.turn}" for s in shown]
-        elif not listing.summaries:
-            stdout.append(f"{listing.project_name}  no open tasks")
+    for listing in listed:
+        if listing.summaries:
+            stdout += [
+                f"{listing.project_name:<{name_width}}  {s.task.id:<{id_width}}  {s.turn}" for s in listing.summaries
+            ]
         else:
-            stdout.append(f"{listing.project_name}  no open tasks with turn {turn}")
+            stdout.append(f"{listing.project_name}  {listing.no_tasks_note}")
     stderr = [f"error: {listing.project_name}: {listing.error}" for listing in listings if listing.error is not None]
     return stdout, stderr

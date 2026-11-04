@@ -18,6 +18,7 @@ from foundry.commands.task import (
     ProjectListing,
     chosen_projects,
     listing_lines,
+    listings_with_turn,
     read_project_listing,
     report,
 )
@@ -749,8 +750,7 @@ def listing(name: str, *turns: tuple[str, str], error: str | None = None) -> Pro
 
 def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
     stdout, stderr = listing_lines(
-        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))],
-        turn=None,
+        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))]
     )
 
     assert stdout == [
@@ -762,28 +762,35 @@ def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_col
 
 
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
-    stdout, _ = listing_lines(
-        [listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))],
-        turn="dev",
-    )
+    store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
 
-    assert stdout == ["store  tst-0001  dev", "store  tst-0003  dev"]
+    kept = store.with_turn("dev")
+
+    assert [summary.task.id for summary in kept.summaries] == ["tst-0001", "tst-0003"]
+    assert (kept.project_name, kept.error) == ("store", None)
+
+
+def test_no_turn_keeps_every_listing_as_it_is() -> None:
+    listings = [listing("store", ("tst-0001", "dev")), listing("bad", error="boom")]
+
+    assert listings_with_turn(listings, None) == listings
+    assert listings_with_turn(listings, "human") == [listing.with_turn("human") for listing in listings]
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
-    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))], turn=None)
+    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))])
 
     assert stdout == ["empty  no open tasks", "store  wcf-0007  dev"]
 
 
 def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
-    stdout, _ = listing_lines([listing("store", ("tst-0001", "dev")), listing("empty")], turn="human")
+    stdout, _ = listing_lines(listings_with_turn([listing("store", ("tst-0001", "dev")), listing("empty")], "human"))
 
     assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
 
 
 def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
-    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("tst-0001", "dev"))], turn=None)
+    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("tst-0001", "dev"))])
 
     assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
 
