@@ -271,3 +271,18 @@ are unchanged and pass. Host tier, ruff and mypy pass; CI passes on a8b933b.
 D1 (entry 22) is still open; its `--turn` half stands as is: the `turn is None`
 check now sits in the comprehension.
 Next (reviewer): round 6, covering 7008206..a8b933b, the merge included.
+
+## 24 · dev · ready-for-review
+Done: at the human's request, 3429522 separates filtering from printing.
+`listing_lines(listings)` only formats. `ProjectListing.with_turn(turn)` keeps the
+tasks whose turn is `turn`, and sets the new field `no_tasks_note` to "no open
+tasks with turn ROLE" when the project had tasks but none match.
+`listings_with_turn(listings, turn)` is the one place no `--turn` (None) is
+handled, so `list_main` still decides nothing (design rule 7). Output unchanged.
+Tests: `with_turn` and `listings_with_turn` tested directly; `listing_lines`
+calls lose `turn`. This departs from TASK.md's Context, which had the printing
+function take the `--turn` filter; the human asked for it. NAMES.md and the PR
+body updated. Host tier, ruff and mypy pass; CI passes on 3429522.
+D1 (entry 22): its `--turn` half is now confined to `listings_with_turn`; the
+`ProjectListing.error` half is still open.
+Next (reviewer): round 6, covering 7008206..3429522, the merge included.
