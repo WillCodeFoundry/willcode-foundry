@@ -8,3 +8,7 @@
   A linked or dir `LOG.md` is refused as "has no LOG.md", since `read` takes only regular files.
 - 2026-11-04 [decision] — An empty `LOG.md` gets no newline before the entry's blank line: TASK.md's "a newline
   added first if the file didn't end with one" reads as applying to a file with text, so the result starts "\n## 1".
+- 2026-11-04 [decision] — Replaces the two `ProjectClone` entries above, at the human's call: no `read`, and
+  `write` raises on a link rather than replacing it. `LOG.md` is read with `fetched_read`, so "byte for byte" holds
+  for UTF-8 logs with LF line endings, which agents write. CRLF folds to LF and bytes that aren't UTF-8 become
+  U+FFFD (`Git.output`'s text mode). A linked `TURN` or `LOG.md` is refused, naming the path, with nothing pushed.

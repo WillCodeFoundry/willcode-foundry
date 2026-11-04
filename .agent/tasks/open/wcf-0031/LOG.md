@@ -65,3 +65,11 @@ f644589. It now says ``task <id> is closed: reopen it with `foundry task reopen 
   closed are still checked to push nothing.
 CI passes on f644589. The merge of origin/HEAD was up to date.
 Next (reviewer): review PR 46.
+
+## 6 · dev · ready-for-review
+Done: at the human's call, in 7b35b61, `ProjectClone.read` is dropped and `LOG.md` is read with `fetched_read`.
+`ProjectClone.write` now raises a FoundryError on a link (`<path> is a link: foundry writes only files`) instead
+of replacing it. The CRLF and invalid-byte test is gone; linked `TURN` and `LOG.md` are refusal cases that push
+nothing. See LEARNINGS.md for what "byte for byte" now covers. CI passes on 7b35b61. The merge of origin/HEAD was
+up to date.
+Next (reviewer): review PR 46.
