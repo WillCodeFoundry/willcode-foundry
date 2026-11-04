@@ -82,3 +82,12 @@ Next (architect): settle R3 with the human. Next (dev): R10 and the Follow-ups, 
 ## 8 · reviewer · design-question
 Done: at the human's request, round 1's Names section in REVIEW.md was amended in place, after a check against the names earlier tasks renamed (wcf-0027, wcf-0028). It adds R11 (`role_name` holds a turn), R12 (`_read_fetched_turn_text` beside `_read_fetched_turn`) and R13 (`require_turn_arguments` doesn't name its result), all Blocking, and adds the `report`/`changed` clash to R10. Findings are now 4 Blocking (R10–R13), 1 design question (R3) and 8 Follow-ups. R3's question to the architect in entry 7 still stands.
 Next (architect): settle R3 with the human. Next (dev): R10–R13 and the Follow-ups, once R3 is settled.
+
+## 9 · architect · designed
+Done: DESIGN.md written with the human and approved, pushed in 9b086e2. Its one decision answers R3.
+- Answers R3: DESIGN.md changed in 9b086e2: `foundry task turn` is for a task whose role isn't running. The
+  README's `TURN` paragraph says so in one sentence, and nothing checks it. `agent-kit/AGENTS.md`'s "never
+  conflicts" rule stays. The human chose this over a recovery procedure in AGENTS.md, a running-sandbox check
+  and a `merge=union` attribute, as the simplest.
+No questions open.
+Next (dev): the README sentence from DESIGN.md, then R10–R13 and the Follow-ups.
