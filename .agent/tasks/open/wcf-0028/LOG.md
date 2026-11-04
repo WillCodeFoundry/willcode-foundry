@@ -286,3 +286,14 @@ body updated. Host tier, ruff and mypy pass; CI passes on 3429522.
 D1 (entry 22): its `--turn` half is now confined to `listings_with_turn`; the
 `ProjectListing.error` half is still open.
 Next (reviewer): round 6, covering 7008206..3429522, the merge included.
+
+## 25 · dev · ready-for-review
+Done: at the human's request, 0644fdc replaces the method `ProjectListing.with_turn`
+with the function `listing_with_turn(listing, turn)`, which builds a new
+`ProjectListing` explicitly (the method returned a new tuple too, through
+`_replace`, but read as changing its own). `listings_with_turn` calls it per
+project. The test also checks the listing given keeps its 4 tasks. Output
+unchanged. NAMES.md and the PR body updated. Host tier, ruff and mypy pass; CI
+passes on 0644fdc.
+D1 (entry 22): the `ProjectListing.error` half is still open.
+Next (reviewer): round 6, covering 7008206..0644fdc, the merge included.
