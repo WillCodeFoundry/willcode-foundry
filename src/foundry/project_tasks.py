@@ -146,7 +146,7 @@ class ProjectTasks:
         LOG_FILE is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
         """
         assert task.status is Status.OPEN, "hand_on_turn needs an open task"  # a programming error
-        before = self._read_fetched_turn_text(task) or _NO_TURN
+        before = self._read_fetched_turn_or_empty(task) or _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
         clone = self._clone
@@ -188,14 +188,14 @@ class ProjectTasks:
 
         FoundryError, ending with ``fix``, when the file is missing, not a file, or holds only blanks.
         """
-        turn = self._read_fetched_turn_text(task)
+        turn = self._read_fetched_turn_or_empty(task)
         if not turn:
             raise FoundryError(
                 f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. {fix}"
             )
         return turn
 
-    def _read_fetched_turn_text(self, task: Task) -> str:
+    def _read_fetched_turn_or_empty(self, task: Task) -> str:
         """``task``'s TURN_FILE on NOTES_BRANCH as last fetched, stripped; empty when it is missing or not a file."""
         try:
             return self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()

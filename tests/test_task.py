@@ -22,7 +22,7 @@ from foundry.commands.task import (
     listing_lines,
     read_listings_and_errors,
     report,
-    require_turn_arguments,
+    require_project_and_turn_arguments,
     turn_report,
 )
 from foundry.config import Config, Project, Role
@@ -666,7 +666,7 @@ LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
 def hand_on(origin_dir: Path, git_env: dict[str, str], task_id: str, *, note: str | None = None) -> TurnChange:
     """Hand ``task_id``'s turn in the project store to dev, through a clone of its own."""
     return hand_on_open_task_turn(
-        project_tasks_of(origin_dir, git_env), project_name="store", task_id=task_id, role_name="dev", note=note
+        project_tasks_of(origin_dir, git_env), project_name="store", task_id=task_id, turn="dev", note=note
     )
 
 
@@ -696,9 +696,9 @@ def test_hand_on_turn_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     files_before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     commits_before = len(notes_commits(origin_dir, git_env))
 
-    change = hand_on(origin_dir, git_env, "tst-0000", note=" see R2 ")
+    turn_change = hand_on(origin_dir, git_env, "tst-0000", note=" see R2 ")
 
-    assert change == TurnChange(Task.as_open("tst-0000"), before=before, after="dev")
+    assert turn_change == TurnChange(Task.as_open("tst-0000"), before=before, after="dev")
     expected_log = LOG + f"\n## 2 · human · turn\nTurn: {before} → dev.\nNote: see R2\n"
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         **files_before,
@@ -1017,20 +1017,20 @@ TURN_CONFIG = Config(
 )
 
 
-@pytest.mark.parametrize("role_name", ["dev", "human"])
+@pytest.mark.parametrize("turn", ["dev", "human"])
 @pytest.mark.parametrize("note", [None, "see R2", "  padded  "])
-def test_turn_arguments_that_check_out_give_the_project(role_name: str, note: str | None) -> None:
-    assert require_turn_arguments(
-        TURN_CONFIG, project_name="store", task_id="tst-0001", role_name=role_name, note=note
+def test_turn_arguments_that_check_out_give_the_project(turn: str, note: str | None) -> None:
+    assert require_project_and_turn_arguments(
+        TURN_CONFIG, project_name="store", task_id="tst-0001", turn=turn, note=note
     ) == Project("store", "url")
 
 
 @pytest.mark.parametrize(
     "arguments, message",
     [
-        ({"role_name": "dve"}, r"^'dve' is not a role; known: dev, reviewer, or human$"),
-        ({"role_name": "Human"}, r"^'Human' is not a role; known: dev, reviewer, or human$"),
-        ({"role_name": ""}, r"^'' is not a role; known: dev, reviewer, or human$"),
+        ({"turn": "dve"}, r"^'dve' is not a role; known: dev, reviewer, or human$"),
+        ({"turn": "Human"}, r"^'Human' is not a role; known: dev, reviewer, or human$"),
+        ({"turn": ""}, r"^'' is not a role; known: dev, reviewer, or human$"),
         ({"note": ""}, r"^--note is empty: give it text, or leave it out$"),
         ({"note": " \t "}, r"^--note is empty: give it text, or leave it out$"),
         ({"note": "one\ntwo"}, r"^--note holds a line break: give it one line$"),
@@ -1053,18 +1053,18 @@ def test_turn_arguments_that_check_out_give_the_project(role_name: str, note: st
     ],
 )
 def test_turn_arguments_are_refused_before_any_git(arguments, message) -> None:
-    valid = {"project_name": "store", "task_id": "tst-0001", "role_name": "dev", "note": None}
+    valid = {"project_name": "store", "task_id": "tst-0001", "turn": "dev", "note": None}
     with pytest.raises(FoundryError, match=message):
-        require_turn_arguments(TURN_CONFIG, **{**valid, **arguments})
+        require_project_and_turn_arguments(TURN_CONFIG, **{**valid, **arguments})
 
 
 def test_a_config_without_roles_knows_only_human() -> None:
     with pytest.raises(FoundryError, match=r"^'dev' is not a role; known: none, or human$"):
-        require_turn_arguments(
+        require_project_and_turn_arguments(
             Config("f", {"store": Project("store", "url")}, {}),
             project_name="store",
             task_id="tst-0001",
-            role_name="dev",
+            turn="dev",
             note=None,
         )
 
@@ -1082,7 +1082,7 @@ def test_the_turn_report_says_how_to_run_the_task_unless_it_waits_for_you(after:
 
 def test_turn_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
     args = cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "dev", "--note", "see R2"])
-    assert (args.project_name, args.task_id, args.role_name, args.note) == ("store", "tst-0001", "dev", "see R2")
+    assert (args.project_name, args.task_id, args.turn, args.note) == ("store", "tst-0001", "dev", "see R2")
     assert cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "human"]).note is None
 
 

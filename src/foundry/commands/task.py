@@ -57,7 +57,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         f"key. Refuses a task that is closed or doesn't exist, whose turn is already ROLE, or that has no "
         f"{task.LOG_FILE}. Starts nothing: run the role with foundry run.",
     )
-    turn.add_argument("role_name", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
+    turn.add_argument("turn", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
     turn.add_argument("--note", metavar="TEXT", help=f"one line to add to the {task.LOG_FILE} entry")
     turn.set_defaults(func=turn_main)
     list_parser = actions.add_parser(
@@ -107,18 +107,18 @@ def reopen_main(args: argparse.Namespace) -> int:
 
 def turn_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
-    project = require_turn_arguments(
+    project = require_project_and_turn_arguments(
         config.load(paths.find_foundry_root()),
         project_name=args.project_name,
         task_id=args.task_id,
-        role_name=args.role_name,
+        turn=args.turn,
         note=args.note,
     )
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        change = hand_on_open_task_turn(
-            project_tasks, project_name=project.name, task_id=args.task_id, role_name=args.role_name, note=args.note
+        turn_change = hand_on_open_task_turn(
+            project_tasks, project_name=project.name, task_id=args.task_id, turn=args.turn, note=args.note
         )
-    print("\n".join(turn_report(project.name, change)))
+    print("\n".join(turn_report(project.name, turn_change)))
     return 0
 
 
@@ -153,19 +153,19 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
     ]
 
 
-def require_turn_arguments(
-    foundry_config: Config, *, project_name: str, task_id: str, role_name: str, note: str | None
+def require_project_and_turn_arguments(
+    foundry_config: Config, *, project_name: str, task_id: str, turn: str, note: str | None
 ) -> Project:
     """The project to hand a turn on in, once each argument checks out, so none that doesn't reaches git.
 
-    FoundryError for an unknown project, an invalid task id, a role that is neither in ``foundry_config`` nor
-    HUMAN, or a ``note`` that is blank or more than one line.
+    FoundryError for an unknown project, an invalid task id, a ``turn`` that is neither a role in ``foundry_config``
+    nor HUMAN, or a ``note`` that is blank or more than one line.
     """
     project = foundry_config.project(project_name)
     task.Task.as_open(task_id)  # refuses an invalid id as create does
-    if role_name != task.HUMAN and role_name not in foundry_config.roles:
+    if turn != task.HUMAN and turn not in foundry_config.roles:
         known = ", ".join(sorted(foundry_config.roles)) or "none"
-        raise FoundryError(f"{role_name!r} is not a role; known: {known}, or {task.HUMAN}")
+        raise FoundryError(f"{turn!r} is not a role; known: {known}, or {task.HUMAN}")
     if note is not None and not note.strip():
         raise FoundryError("--note is empty: give it text, or leave it out")
     if note is not None and note.splitlines() != [note]:
@@ -174,23 +174,23 @@ def require_turn_arguments(
 
 
 def hand_on_open_task_turn(
-    project_tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str, note: str | None
+    project_tasks: ProjectTasks, *, project_name: str, task_id: str, turn: str, note: str | None
 ) -> TurnChange:
-    """Hand the open task's turn on to ``role_name``, as ProjectTasks.hand_on_turn does.
+    """Hand the open task's turn on to ``turn``, as ProjectTasks.hand_on_turn does.
 
     FoundryError when the task doesn't exist, or is closed (saying how to reopen it), before anything is written.
     """
     found = project_tasks.get_task_by_id(task_id)
     if found.status is task.Status.CLOSED:
         raise FoundryError(f"task {found.id} is closed: reopen it with `foundry task reopen {project_name} {found.id}`")
-    return project_tasks.hand_on_turn(found, role_name, note=note)
+    return project_tasks.hand_on_turn(found, turn, note=note)
 
 
-def turn_report(project_name: str, change: TurnChange) -> list[str]:
+def turn_report(project_name: str, turn_change: TurnChange) -> list[str]:
     """What turn prints: the hand-off, then how to run the task, unless it now waits for you."""
-    lines = [f"task {change.task.id} in {project_name}: turn {change.before} → {change.after}"]
-    if change.after != task.HUMAN:
-        lines.append(f"run it with: foundry run {project_name} {change.task.id}")
+    lines = [f"task {turn_change.task.id} in {project_name}: turn {turn_change.before} → {turn_change.after}"]
+    if turn_change.after != task.HUMAN:
+        lines.append(f"run it with: foundry run {project_name} {turn_change.task.id}")
     return lines
 
 
