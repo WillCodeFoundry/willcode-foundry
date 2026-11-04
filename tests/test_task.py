@@ -21,8 +21,10 @@ from foundry.commands.task import (
     listing_lines,
     read_listings_and_errors,
     report,
+    require_turn_arguments,
+    turn_report,
 )
-from foundry.config import Config, Project
+from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, TurnChange, log_with_turn_entry
@@ -1023,6 +1025,120 @@ def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_f
 
     assert cli.main(["task", "list", "store", "--turn", "human"]) == 0
     assert capsys.readouterr() == ("store  no open tasks with turn human\n", "")
+
+
+# --- foundry task turn ------------------------------------------------------------------
+
+TURN_CONFIG = Config(
+    "f",
+    {"store": Project("store", "url")},
+    {name: Role(name, Path(f"/secrets/ssh/{name}"), None) for name in ("reviewer", "dev")},
+)
+
+
+@pytest.mark.parametrize("role_name", ["dev", "human"])
+@pytest.mark.parametrize("note", [None, "see R2", "  padded  "])
+def test_turn_arguments_that_check_out_give_the_project(role_name: str, note: str | None) -> None:
+    assert require_turn_arguments(
+        TURN_CONFIG, project_name="store", task_id="tst-0001", role_name=role_name, note=note
+    ) == Project("store", "url")
+
+
+@pytest.mark.parametrize(
+    "arguments, message",
+    [
+        ({"role_name": "dve"}, r"^'dve' is not a role; known: dev, reviewer, or human$"),
+        ({"role_name": "Human"}, r"^'Human' is not a role; known: dev, reviewer, or human$"),
+        ({"role_name": ""}, r"^'' is not a role; known: dev, reviewer, or human$"),
+        ({"note": ""}, r"^--note is empty: give it text, or leave it out$"),
+        ({"note": " \t "}, r"^--note is empty: give it text, or leave it out$"),
+        ({"note": "one\ntwo"}, r"^--note holds a line break: give it one line$"),
+        ({"note": "one\r"}, r"^--note holds a line break: give it one line$"),
+        ({"note": "one\u2028two"}, r"^--note holds a line break: give it one line$"),
+        ({"project_name": "nope"}, r"^unknown project 'nope'; known: store$"),
+        ({"task_id": "TST-0001"}, r"^task id 'TST-0001' is not valid: "),
+    ],
+    ids=[
+        "unknown-role",
+        "human-capitalised",
+        "empty-role",
+        "empty-note",
+        "blank-note",
+        "note-newline",
+        "note-return",
+        "note-line-separator",
+        "unknown-project",
+        "invalid-task-id",
+    ],
+)
+def test_turn_arguments_are_refused_before_any_git(arguments, message) -> None:
+    valid = {"project_name": "store", "task_id": "tst-0001", "role_name": "dev", "note": None}
+    with pytest.raises(FoundryError, match=message):
+        require_turn_arguments(TURN_CONFIG, **{**valid, **arguments})
+
+
+def test_a_config_without_roles_knows_only_human() -> None:
+    with pytest.raises(FoundryError, match=r"^'dev' is not a role; known: none, or human$"):
+        require_turn_arguments(
+            Config("f", {"store": Project("store", "url")}, {}),
+            project_name="store",
+            task_id="tst-0001",
+            role_name="dev",
+            note=None,
+        )
+
+
+@pytest.mark.parametrize(
+    "after, lines",
+    [
+        ("dev", ["task tst-0001 in store: turn none → dev", "run it with: foundry run store tst-0001"]),
+        ("human", ["task tst-0001 in store: turn none → human"]),
+    ],
+)
+def test_the_turn_report_says_how_to_run_the_task_unless_it_waits_for_you(after: str, lines: list[str]) -> None:
+    assert turn_report("store", TurnChange(Task.as_open("tst-0001"), before="none", after=after)) == lines
+
+
+def test_turn_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
+    args = cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "dev", "--note", "see R2"])
+    assert (args.project_name, args.task_id, args.role_name, args.note) == ("store", "tst-0001", "dev", "see R2")
+    assert cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "human"]).note is None
+
+
+def test_turn_prints_the_hand_off_or_an_error_and_exits_accordingly(
+    origin_dir, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, in a foundry instance of its own with one role, dev."""
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/LOG.md": "# Log\n"})
+    foundry_root = tmp_path / "foundry"
+    (foundry_root / "config").mkdir(parents=True)
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        f"name: f\nprojects:\n  store: {{url: '{origin_dir}'}}\nroles:\n  dev: {{}}\n"
+    )
+    role_dir = foundry_root / "agent-kit" / "roles" / "dev"
+    role_dir.mkdir(parents=True)
+    (role_dir / "ROLE.md").write_text("dev\n")
+    (role_dir / "gitconfig").write_text("")
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+
+    assert cli.main(["task", "turn", "store", "tst-0000", "dev", "--note", "go"]) == 0
+    assert capsys.readouterr() == (
+        "task tst-0000 in store: turn none → dev\nrun it with: foundry run store tst-0000\n",
+        "",
+    )
+    assert notes_commits(origin_dir, git_env)[0] == "Turn of task tst-0000: none → dev"
+
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+    assert cli.main(["task", "turn", "store", "tst-0000", "dev"]) == 1
+    assert capsys.readouterr() == ("", "error: task tst-0000's turn is already dev\n")
+    assert cli.main(["task", "turn", "store", "tst-0000", "planner"]) == 1
+    assert capsys.readouterr() == ("", "error: 'planner' is not a role; known: dev, or human\n")
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+    assert cli.main(["task", "turn", "store", "tst-0000", "human"]) == 0
+    assert capsys.readouterr() == ("task tst-0000 in store: turn dev → human\n", "")
 
 
 # --- an id given in uppercase ------------------------------------------------------------

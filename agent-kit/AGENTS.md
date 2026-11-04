@@ -111,6 +111,8 @@ Next: the message when the task is already closed.
   asked, or, for a question to the human, by whichever role the human
   answers: `Answers <id>: <answer> (the human)`. A question is open until
   some entry answers it.
+- **An entry headed `human · turn`** is the human handing the turn on, with
+  `foundry task turn`.
 
 Each `LEARNINGS.md` entry is short, dated and tagged by topic:
 
