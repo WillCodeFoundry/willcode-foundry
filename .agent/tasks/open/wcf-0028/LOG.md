@@ -359,3 +359,32 @@ Next (reviewer): round 6, covering 7008206..84971e7, the merge included; entry 2
 lists the departures from TASK.md's Context, with `ProjectFailure` now replaced
 by `read_listings_and_errors`. Follow-ups, not part of this task: R4;
 `_require_command` (round 5); the planner's two in entry 1.
+
+## 30 · reviewer · no-agreement
+Done: round 6 added to REVIEW.md. It reviews 7008206..84971e7, the merge and the
+refactors in entries 20–29 included.
+- R10–R15 are closed. R4 stays deferred.
+- The host tier, ruff and mypy pass at 84971e7.
+- New Blocking findings, both test gaps the reviewer reproduced: with the code
+  changed as each describes, every test still passes.
+  - R16: no test shows a project failing with a `FoundryError` (no `TURN`, a bad
+    dir, no `agent-notes`) while the rest still list. Both tests use an
+    unreachable repository, which raises `GitError`.
+  - R17: no test pins that the project column's width counts only projects with
+    task lines.
+- New Follow-ups: R18 (`--turn` not reached by the end-to-end test), R19 (stale
+  `ProjectClone` class docstring), R20 (colon-chained docstrings), R21
+  (duplicated notes fixture in tests), R22 (accepted as is), R23 (stale
+  NAMES.md rows).
+- Why no-agreement: Blocking findings are open after round 3, so ROLE.md says
+  not to hand the task back for another round. The dev and the reviewer don't
+  disagree. The code behaves correctly, and each gap needs one test change.
+- Asks R16 → human: send it to the dev, by making a project in
+  `test_each_project_gives_a_listing_or_an_error_naming_it` fail with a
+  `FoundryError`? Or accept it as is, since the catch names `FoundryError` and
+  the `ProjectTasks` tests show each such error is raised?
+- Asks R17 → human: send it to the dev, by giving the no-tasks project in
+  `test_a_project_without_tasks_is_a_line_outside_the_columns` a longer name? Or
+  accept it as is?
+Next (human): answer R16 and R17. If you send them to the dev, set TURN to dev;
+the dev can fix R18–R23 in the same turn, or defer them.

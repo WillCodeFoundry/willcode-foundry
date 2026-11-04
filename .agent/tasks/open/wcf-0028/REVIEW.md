@@ -349,3 +349,131 @@ This also takes one fetch off `read_task_turn`, and with it off every `foundry r
 Summary: Names 4 (R11–R14), Smells 1 (R15), Standards 1 still open (R10). All Blocking, at the human's request. No design questions.
 
 Verdict: changes needed
+
+## Round 6 (reviewing 84971e7)
+
+This round reviews the fixes since round 5 (7008206..84971e7). That includes merge 46b7d16 of origin/main (wcf-0029), and the refactors the human asked for in LOG.md entries 20–29. Only lines that are also in the task's full diff (`a781f1d...84971e7`) count as new surface.
+
+TASK.md: unchanged since e3b591a. That commit is allowed: it is signed by the planner's identity, which the architect shares. No other commit touches it. There is no DESIGN.md.
+
+The departures from TASK.md's Context are the human's, and this round doesn't judge them: `ProjectClone.read` removed (round 5), filtering in `filter_project_listing`, `_require_on_branch`, and `read_listings_and_errors` (D1, entry 29).
+
+### Earlier findings
+
+- R10: **closed**. The merge replaced the comment with main's. It now states the pattern as matched (`task.py:31-32`).
+- R11: **closed**. `_tracking_ref` returns only the ref, and every caller uses it.
+- R12: **closed**. `fetched_list_dir` and `fetched_read` are used in the code, the tests, the section comment (`tests/test_task.py:356`) and `fetch_branch`'s docstring.
+- R13: **closed**. `chosen_projects` is used in the code and in its test.
+- R14: **closed**. `NotOnBranchError`'s docstring names the wrong-kind case.
+- R15: **closed**. There is one turn reader now, `_read_fetched_turn` (`project_tasks.py:140`). `ProjectClone.read`, `_turn_of` and `_read_local_task_summary` are gone. `test_a_dir_at_turn_is_no_turn` pins the bug that came with them. A closed task's turn still reads, and an unknown id raises before anything is read.
+- R4: deferred, unchanged.
+
+### Standards
+
+R10–R15 are closed for this axis: no docstring or comment names a removed function.
+
+**R18 · Follow-up.** In `list_main`, the `--turn` filter is wired at `commands/task.py:99`, and no test reaches that call.
+- Design rule 7 says "Logic in `main` is logic no test reaches."
+- The end-to-end test (`tests/test_task.py:830`) never passes `--turn`.
+- Who hits it: a dev who mis-wires `args.turn` would ship a `--turn` that does nothing, and no test would fail.
+- It is only a Follow-up because the human chose this placement (entry 26), and the step is one comprehension.
+- Direction: add a `--turn` call to the end-to-end test.
+
+**R19 · Follow-up.** The `ProjectClone` class docstring is stale (`project_clone.py:22-23`).
+- It says the clone holds "nothing until a branch is checked out". But `fetch_branch` now makes a branch readable by `fetched_read` and `fetched_list_dir` with no checkout.
+- Who hits it: a reader of the class docstring alone. The method docstrings say otherwise, so the cost is low.
+- Direction: reword it to cover fetching without a checkout.
+
+**R20 · Follow-up.** Three docstrings chain reasons behind colons, which AGENTS.md "Writing" rules out: `commands/task.py:151-152` (a sentence of about 33 words), `commands/task.py:164-165` and `project_clone.py:17-18`. Nobody would be misled by them. Direction: split each into short sentences.
+
+Design rules 1, 3 and 6 hold for the fixes. The README rows and ARCHITECTURE.md's codemap rows still match the code.
+
+### Spec
+
+R15 is closed: `test_a_dir_at_turn_is_no_turn` (`tests/test_task.py:440`) shows it.
+
+The reviewer reproduced both findings below: with the code changed as each describes, every test in `tests/test_task.py` still passes. Both gaps were already there at 7008206, but 84971e7 rewrote these lines (it moved the catch into `read_listings_and_errors`, and changed the width line), so they are this round's surface.
+
+**R16 · Blocking.** No test shows that a project failing with a `FoundryError` lets the rest be listed (`commands/task.py:158`).
+- Spec: "A project is a failure, and nothing of it is listed, when any of these holds: … no `agent-notes` branch; an open task's `TURN` is missing, empty or not a file; a directory under `.agent/tasks/open/` is not a valid task id. It prints `error: PROJECT: <message>` on stderr, the remaining projects are still listed."
+- Both tests that go through the catch, `test_each_project_gives_a_listing_or_an_error_naming_it` (`:819`) and the end-to-end test (`:830`), use an unreachable repository, which raises `GitError`.
+- Narrowing the catch to `except GitError` passes every test. Yet with that change, a missing `TURN`, a bad dir name or a missing `agent-notes` would reach `cli.main` without the project's name, and the remaining projects would go unlisted.
+- c475eca dropped the earlier test of this layer, and that test used an unreachable repository too.
+- Direction: in `:819`, make one project fail with a `FoundryError`, such as a task with no `TURN`.
+
+**R17 · Blocking.** No test pins "the widths taken across all the task lines printed" for the project column (`commands/task.py:181`).
+- Spec: "in aligned columns two spaces apart, the widths taken across all the task lines printed."
+- Counting every project's name, including those with no task line, passes every test. In `test_a_project_without_tasks_is_a_line_outside_the_columns` (`tests/test_task.py:774`), `empty` and `store` are the same length.
+- Who hits it: anyone listing with `--turn`, or a project with a long name and no open tasks. A regression would pad every task line, and no test would fail.
+- Direction: give the no-tasks project in `:774` a name longer than the project with tasks.
+
+Everything else is shown: the error line and exit codes (`:819-851`), the two no-tasks lines (`:774`, `:780`), one fetch per project (`:720`), and the parser with an unknown project (`:798-816`). The reviewer also checked read-only use by hand: with no signing key, listing works and no ref in origin changes. Nothing goes beyond TASK.md, apart from the human's departures.
+
+### Behaviour
+
+R15 is closed. Reproduced against real repositories in a throwaway clone:
+- `read_task_turn` raises the shared message for a dir, a missing file or a blank `TURN`.
+- A symlinked `TURN` reads as its target's name.
+- A closed task's turn still reads.
+- An unknown id, or a repository with no `agent-notes`, raises `TaskNotFoundError` before `fetched_read` runs.
+
+Every suspect checked came back clean:
+- `_require_on_branch` matches nested paths exactly, since `ls-tree -z` gives full, unquoted paths.
+- `list_open_task_summaries` behaves as TASK.md says in every case.
+- An unreachable repository becomes a `FoundryError` naming the project, and the other projects still list.
+- `filter_project_listing` and `listing_lines` give the right notes and widths for plain values.
+- `list_main` returns 1 exactly when there are stderr lines.
+- `chosen_projects` refuses an unknown name before any clone is made.
+
+No new findings. The host tier, ruff and mypy pass at 84971e7.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `commands/task.py:list_main` | clean |
+| `commands/task.py:ProjectListing` | R22 |
+| `commands/task.py:chosen_projects` | clean (rename only) |
+| `commands/task.py:read_project_listing` | clean; simpler without its try |
+| `commands/task.py:read_listings_and_errors` | new, clean |
+| `commands/task.py:filter_project_listing` | new, R22 |
+| `commands/task.py:listing_lines` | clean; flatter than before |
+| `project_clone.py:NotOnBranchError`, `fetch_branch`, `fetched_list_dir`, `fetched_read`, `push_atomic`, `_require_fetched`, `_tracking_ref` | clean; `fetched_list_dir` simpler |
+| `project_clone.py:_require_on_branch`, `_ls_tree` | new, clean |
+| `project_tasks.py:read_task_turn`, `list_open_task_summaries` | clean |
+| `project_tasks.py:_read_fetched_turn` | new, clean; R15 closed |
+| `tests/test_task.py`: the `fetched_*` tests, listing tests, line and filter tests, `test_chosen_projects_*`, `test_each_project_gives_a_listing_or_an_error_naming_it` | clean, except R21 |
+| `tests/test_task.py:test_a_dir_at_turn_is_no_turn` | new, R21 |
+
+**R21 · Follow-up · possible Duplicated Code.** Three test fixtures clone `agent-notes`, write, commit and push:
+- `push_notes` (`tests/test_task.py:511`), already there at the fixed point;
+- `edit_notes` (`:626`), which this task added;
+- the steps inline in `test_fetched_read_reads_a_file_and_a_link_as_its_target_name` (`:399-404`), which `edit_notes(symlink=...)` already covers.
+
+The new `test_a_dir_at_turn_is_no_turn` uses `push_notes`, while its twin listing test uses `edit_notes`. Who hits it: the next dev who adds a notes fixture has to choose between the two. Direction: have `:399-404` call `edit_notes`.
+
+**R22 · Follow-up, accept as is · possible Divergent Change.** The no-tasks wording is split between `ProjectListing`'s default (`commands/task.py:131`) and `filter_project_listing` (`:171`), and neither is the line formatter. This follows from the human's split of filtering from printing, and the only local alternative brings back the coupling the split removed.
+
+### Names
+
+Clean:
+- the human's choices: `_tracking_ref`, `fetched_list_dir`, `fetched_read`, `chosen_projects`, `NotOnBranchError`, `filter_project_listing`. Each is applied everywhere.
+- the new identifiers: `_require_on_branch`, `_ls_tree`, `_ENTRY_KIND`, `entry_type` (git's word), `ProjectListing`, `no_tasks_note`, `read_project_listing`, `read_listings_and_errors`, `listing_lines`, `_read_fetched_turn`, `fix`, `errors`, `kept`.
+- the new test names.
+
+No removed name is left in the repository: `MissingPathError`, `local_read`, `list_projects`, `ProjectFailure`, `with_turn`, `_turn_of` and `_object_type` all return nothing. The added prose keeps the glossary's words. R11–R14 are closed.
+
+**R23 · Follow-up.** NAMES.md still names removed code:
+- The `no_tasks_note` row says it is "set by `with_turn`".
+- The `_open_task_in_dir` rows justify the name "as `_turn_of` is".
+- There is a "removed" row for `ProjectFailure`.
+
+Who hits it: the next dev or reviewer who reads NAMES.md for a name's reasons. The python-naming skill says to keep its rows current. Direction: name `filter_project_listing` in the `no_tasks_note` row, and drop the rows for names the code no longer has.
+
+### Design questions
+
+None.
+
+Summary: Standards 3 (Follow-ups R18–R20; worst is R18, `--turn` untested where `main` wires it). Spec 2, both Blocking (R16, the `FoundryError` half of the per-project catch is untested; R17, the name width is unpinned). Behaviour 0. Smells 2 (Follow-ups R21 and R22; R22 accepted as is). Names 1 (Follow-up R23, stale NAMES.md rows). R10–R15 are closed and R4 is deferred. No design questions are open.
+
+Verdict: changes needed
