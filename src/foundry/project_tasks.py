@@ -140,8 +140,8 @@ class ProjectTasks:
         """Write ``turn`` to the open ``task``'s TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when
         it isn't None. One commit, pushed to NOTES_BRANCH.
 
-        Relies on get_task_by_id having just found ``task`` open: it checked out NOTES_BRANCH, so the change is made
-        on the commit the task was found on. The turn before is TURN_FILE's text stripped, or "none" when it is
+        Relies on get_task_by_id having just found ``task`` open. It checked out NOTES_BRANCH, which the change is
+        made on. The turn before is TURN_FILE's text stripped, or "none" when it is
         missing or blank. Refuses a task whose turn is already ``turn``, that has no LOG_FILE, or whose TURN_FILE or
         LOG_FILE is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
         """
@@ -149,21 +149,14 @@ class ProjectTasks:
         before = self._read_fetched_turn_or_empty(task) or _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
-        clone = self._clone
-        try:
-            log = clone.fetched_read(NOTES_BRANCH, task.log_file)
-        except NotOnBranchError:
-            raise FoundryError(
-                f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"
-            ) from None
-        clone.write(
+        log = self._read_fetched_log(task)
+        self._clone.write(
             {
                 task.turn_file: f"{turn}\n",
                 task.log_file: log_with_turn_entry(log, before=before, after=turn, note=note),
             }
         )
-        clone.commit(f"Turn of task {task.id}: {before} → {turn}")
-        clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
+        self._commit_and_push(f"Turn of task {task.id}: {before} → {turn}")
         return TurnChange(task, before=before, after=turn)
 
     def list_open_task_summaries(self) -> list[TaskSummary]:
@@ -202,17 +195,30 @@ class ProjectTasks:
         except NotOnBranchError:
             return ""
 
+    def _read_fetched_log(self, task: Task) -> str:
+        """``task``'s LOG_FILE on NOTES_BRANCH as last fetched; FoundryError, naming the file, when it is missing or
+        not a file."""
+        try:
+            return self._clone.fetched_read(NOTES_BRANCH, task.log_file)
+        except NotOnBranchError:
+            raise FoundryError(
+                f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"
+            ) from None
+
     def _move(self, task: Task, destination: Task, *, message: str) -> Task:
         """Move ``task``'s notes dir to ``destination``'s, commit it with ``message``, and push NOTES_BRANCH.
 
         Relies on get_task_by_id having found ``task``: it checked out NOTES_BRANCH, so the move is made on the commit
         the task was found on.
         """
-        clone = self._clone
-        clone.move_dir(task.task_notes_dir, destination.task_notes_dir)
-        clone.commit(message)
-        clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
+        self._clone.move_dir(task.task_notes_dir, destination.task_notes_dir)
+        self._commit_and_push(message)
         return destination
+
+    def _commit_and_push(self, message: str) -> None:
+        """Commit every change in the checkout with ``message``, signed, and push NOTES_BRANCH."""
+        self._clone.commit(message)
+        self._clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
 
 
 def _open_task_for_dir(dir_name: str) -> Task:
