@@ -117,12 +117,13 @@ def assert_notes_signed_with_your_key(origin_dir: Path, git_env: dict[str, str])
 
 def test_an_open_task_is_its_id_its_branch_and_its_task_notes_dir_under_open() -> None:
     a_task = Task.as_open("wcf-0042")
-    assert (a_task.id, a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file) == (
+    assert (a_task.id, a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file, a_task.log_file) == (
         "wcf-0042",
         "task/wcf-0042",
         ".agent/tasks/open/wcf-0042",
         ".agent/tasks/open/wcf-0042/TASK.md",
         ".agent/tasks/open/wcf-0042/TURN",
+        ".agent/tasks/open/wcf-0042/LOG.md",
     )
     assert a_task == Task("wcf-0042", Status.OPEN)
 
