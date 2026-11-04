@@ -342,3 +342,20 @@ removed (round 5); filtering split from `listing_lines` into
 `filter_project_listing`; `_object_type` replaced by `_require_on_branch`;
 `ProjectFailure` split from `ProjectListing`. Follow-ups, not part of this task:
 R4; `_require_command` (round 5); the planner's two in entry 1.
+
+## 29 · dev · ready-for-review
+Done: at the human's request, 84971e7 drops `ProjectFailure` (c6876a8).
+`read_project_listing` no longer catches anything. The new
+`read_listings_and_errors(projects, env) -> (list[ProjectListing],
+list[FoundryError])` loops over the projects and turns a `FoundryError` or
+`GitError` into a `FoundryError("<project>: <message>")`, so the rest go on.
+`filter_project_listing` and `listing_lines(listings, errors)` take plain types,
+with no `isinstance` and no failure pass-through. Output unchanged. New test
+`test_each_project_gives_a_listing_or_an_error_naming_it` (a `GitError` becomes a
+`FoundryError` naming the project); the failure-filter test is gone. NAMES.md and
+the PR body updated. Host tier, ruff and mypy pass; CI passes on 84971e7.
+No questions open.
+Next (reviewer): round 6, covering 7008206..84971e7, the merge included; entry 28
+lists the departures from TASK.md's Context, with `ProjectFailure` now replaced
+by `read_listings_and_errors`. Follow-ups, not part of this task: R4;
+`_require_command` (round 5); the planner's two in entry 1.
