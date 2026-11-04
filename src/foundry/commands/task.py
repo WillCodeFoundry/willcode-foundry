@@ -134,12 +134,6 @@ class ProjectListing(NamedTuple):
     error: str | None
     no_tasks_note: str = "no open tasks"
 
-    def with_turn(self, turn: str) -> "ProjectListing":
-        """Only the tasks whose turn is ``turn``; when it had tasks but none match, its note says so."""
-        kept = [summary for summary in self.summaries if summary.turn == turn]
-        note = f"no open tasks with turn {turn}" if self.summaries else self.no_tasks_note
-        return self._replace(summaries=kept, no_tasks_note=note)
-
 
 def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> list[Project]:
     """The projects to list, in name order: those named, each once, or all. FoundryError for an unknown name."""
@@ -158,9 +152,20 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
         return ProjectListing(project.name, [], str(error))
 
 
+def listing_with_turn(listing: ProjectListing, turn: str) -> ProjectListing:
+    """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``; when it had tasks but none
+    match, its note says so."""
+    return ProjectListing(
+        project_name=listing.project_name,
+        summaries=[summary for summary in listing.summaries if summary.turn == turn],
+        error=listing.error,
+        no_tasks_note=f"no open tasks with turn {turn}" if listing.summaries else listing.no_tasks_note,
+    )
+
+
 def listings_with_turn(listings: Sequence[ProjectListing], turn: str | None) -> list[ProjectListing]:
     """Each listing with only the tasks whose turn is ``turn``; all of them when no --turn was given."""
-    return list(listings) if turn is None else [listing.with_turn(turn) for listing in listings]
+    return list(listings) if turn is None else [listing_with_turn(listing, turn) for listing in listings]
 
 
 def listing_lines(listings: Sequence[ProjectListing]) -> tuple[list[str], list[str]]:

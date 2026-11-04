@@ -18,6 +18,7 @@ from foundry.commands.task import (
     ProjectListing,
     chosen_projects,
     listing_lines,
+    listing_with_turn,
     listings_with_turn,
     read_project_listing,
     report,
@@ -764,17 +765,18 @@ def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_col
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
 
-    kept = store.with_turn("dev")
+    kept = listing_with_turn(store, "dev")
 
     assert [summary.task.id for summary in kept.summaries] == ["tst-0001", "tst-0003"]
     assert (kept.project_name, kept.error) == ("store", None)
+    assert len(store.summaries) == 4  # a new listing; the one given is left as it was
 
 
 def test_no_turn_keeps_every_listing_as_it_is() -> None:
     listings = [listing("store", ("tst-0001", "dev")), listing("bad", error="boom")]
 
     assert listings_with_turn(listings, None) == listings
-    assert listings_with_turn(listings, "human") == [listing.with_turn("human") for listing in listings]
+    assert listings_with_turn(listings, "human") == [listing_with_turn(listing, "human") for listing in listings]
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
