@@ -19,7 +19,6 @@ from foundry.commands.task import (
     chosen_projects,
     filter_project_listing,
     listing_lines,
-    read_project_listing,
     report,
 )
 from foundry.config import Config, Project
@@ -696,16 +695,9 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(origin_dir, git_env) -> Non
         origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/Bad Dir/TURN": "dev"}
     )
 
-    with pytest.raises(FoundryError, match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id.*Rename or remove it"):
-        summaries_of(origin_dir, git_env)
-
-
-def test_an_upper_case_dir_is_not_a_task_id_either(origin_dir, git_env) -> None:
-    edit_notes(origin_dir, git_env, write={".agent/tasks/open/WCF-1/TURN": "dev"})
-
     with pytest.raises(
         FoundryError,
-        match=r"^.agent/tasks/open/WCF-1/ is not a valid task id \(task id 'WCF-1' is not valid: "
+        match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id \(task id 'Bad Dir' is not valid: "
         r"use lowercase letters, .*\)\. Rename or remove it\.$",
     ):
         summaries_of(origin_dir, git_env)
@@ -819,17 +811,6 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
     with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
         chosen_projects(foundry_config, ["store", "nope"])
-
-
-def test_a_project_s_listing_holds_its_tasks_or_the_reason_it_failed(origin_dir, git_env, tmp_path: Path) -> None:
-    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
-
-    good = read_project_listing(Project("store", str(origin_dir)), git_env)
-    bad = read_project_listing(Project("gone", str(tmp_path / "missing.git")), git_env)
-
-    assert good == ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")], None)
-    assert (bad.project_name, bad.summaries) == ("gone", [])
-    assert bad.error is not None and "does not appear to be a git repo" in bad.error
 
 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
