@@ -296,3 +296,56 @@ None.
 Summary: Standards 1 (Follow-up; R10, a stale comment on `_TASK_ID`). Spec, Behaviour, Smells and Names 0. Nothing blocks, and no design questions are open. R9 is closed, R4 is deferred and R10 is a follow-up.
 
 Verdict: approved
+
+## Round 5 (reviewing 7008206)
+
+At the human's request, after round 4's approval. The code is unchanged since round 4. This round reviews it again for names, and for the smell behind one of them.
+
+TASK.md: unchanged since e3b591a, which is allowed (signed by the planner's identity, which the architect shares). No other commits touch it. No DESIGN.md.
+
+**The human's decision (LOG.md entry 18):** the scope constraint is relaxed. TASK.md's out-of-scope line "Changing `ProjectClone.read`, `read_task_turn` or `in_scratch_clone`" no longer holds. Any change that makes the code simpler and easier to read is in scope. The human chose the names in R11–R14.
+
+The role allows at most three rounds before `no-agreement`. This round and its `changes-needed` outcome go past that only because the human asked for them. The dev and the reviewer don't disagree about anything.
+
+### Earlier findings
+
+- R1–R3, R5–R9: closed.
+- R4 (multi-line `TURN`): deferred, unchanged.
+- R10 (the stale comment on `_TASK_ID`, `task.py:31-33`): **still open**. The dev deferred it to avoid a commit after the approval, and that reason no longer applies. Fix it in this PR: the comment should say the pattern is matched as given, and that `Task.as_open` and `Task.from_id_and_status` lowercase the id before it.
+
+### New findings
+
+**R11 · Blocking · Names.** `ProjectClone._local_ref` (`project_clone.py:177`) returns `refs/remotes/origin/<branch>`, a remote-tracking ref. In git, "local" means `refs/heads`. At its use in `push_atomic` (`:163`) the name reads backwards: the `from_remote` refspecs use `_local_ref`, while the `from_local` ones use `refs/heads`. Rename it to `_tracking_ref` (the human's choice). Also, with a `path` it returns `<ref>:<path>`, an object spec, not a ref. The dev can split that out, or document it in a docstring.
+
+**R12 · Blocking · Names.** `local_list_dir` and `local_read` (`project_clone.py:85,102`): "local" is ambiguous in a class whose `exists` reads the checked-out files, while these read the fetched tracking ref. Rename them to `fetched_list_dir` and `fetched_read` (the human's choice). Rename the tests that use them as well (`test_local_list_dir_…`, `test_local_read_…`, `test_local_reads_of_an_unfetched_branch_…`), and the section comment at `tests/test_task.py:323`.
+
+**R13 · Blocking · Names.** `list_projects` (`commands/task.py:134`): in this module "list" is the command's verb, printing tasks, but this function only picks the projects to list. NAMES.md notes it is one letter from `list_project`. Rename it to `chosen_projects` (the human's choice), and rename `test_list_projects_…` with it.
+
+**R14 · Blocking · Names.** `MissingPathError` (`project_clone.py:13`) is also raised when the path exists but is the wrong kind, such as a dir where a file is wanted. Its own docstring has to say so. Rename it to `NotOnBranchError` (the human's choice): the dir or file asked for isn't on the branch. The messages already read that way ("agent-notes has no file …").
+
+**R15 · Blocking · Smells.** There are two ways to read a file from `agent-notes`, and `_turn_of` (`project_tasks.py:167`) is the adapter between them:
+
+| | `ProjectClone.read` | `local_read` (R12: `fetched_read`) |
+|---|---|---|
+| fetches | on every call | never |
+| missing file | returns `None` | raises `MissingPathError` (R14: `NotOnBranchError`) |
+| path is a dir | returns `git show`'s listing of the tree as text | raises |
+
+`_turn_of` takes `text: str | None` only so that both can feed it. `_read_local_task_summary` (`:137`) catches the precise error only to turn it back into `None`. A pre-existing bug comes with it: `read` checks only `cat-file -e`, so a dir at `TURN` makes `read_task_turn` return the tree listing as the turn.
+
+`read_task_turn` (`:115`) is `read`'s only caller. `get_task_by_id` has already fetched `NOTES_BRANCH`, through `check_out`, by the time it returns. Fix:
+- Make `read_task_turn` read through `fetched_read`, like listing does.
+- Delete `ProjectClone.read`.
+- Replace `_turn_of` and `_read_local_task_summary` with one method. It takes a `Task` and `fix`, reads `TURN_FILE` with `fetched_read`, and raises the shared `FoundryError` for a file that is missing, not a file, or blank. Its name is a verb, since it reads git, and must not be one underscore from `read_task_turn`. Something like `_read_fetched_turn(task, *, fix)`; the dev decides and records it in NAMES.md.
+- `list_open_task_summaries` then builds `TaskSummary(task, self._read_fetched_turn(task, fix=...))` directly.
+- Add a test: a dir at `TURN` makes `read_task_turn` raise. Update the docstrings that mention `read` (`fetch_branch`'s, and `project_tasks.py`'s module docstring if it does).
+
+This also takes one fetch off `read_task_turn`, and with it off every `foundry run`. Spell no path again (design rule 1).
+
+### Suggested follow-up (not this PR)
+
+- `_require_command` (`agent_runtime/hardening.py:207`) returns a value, but the other `_require_*` functions (`_require_fetched`, `_require_log_only_added_to`) only guard and return `None`. The human prefers "require" to mean "check, or raise". Unrelated to this task.
+
+Summary: Names 4 (R11–R14), Smells 1 (R15), Standards 1 still open (R10). All Blocking, at the human's request. No design questions.
+
+Verdict: changes needed

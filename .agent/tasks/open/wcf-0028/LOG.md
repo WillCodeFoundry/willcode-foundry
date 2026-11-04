@@ -173,3 +173,12 @@ https://github.com/WillCodeFoundry/willcode-foundry/pull/43
 Next (human): review and merge PR #43. Follow-ups, not part of this task: R4
 (multi-line `TURN`), R10 with entry 16's task-id case consistency, and the
 planner's two in entry 1.
+
+## 18 · reviewer · changes-needed
+Done: at the human's request, round 5 added to REVIEW.md. It reviews 7008206 again, for names and the smell behind `_turn_of`.
+- The human's decision: TASK.md's out-of-scope line on changing `ProjectClone.read`, `read_task_turn` and `in_scratch_clone` no longer holds. Any change that makes the code simpler and easier to read is in scope. (the human)
+- The human chose the names: `_tracking_ref`, `fetched_list_dir`, `fetched_read`, `chosen_projects`, `NotOnBranchError`.
+- This goes past the three-round limit only because the human asked. Nothing is in dispute.
+- Open, all Blocking: R10 (fix it now), R11–R14 (renames), R15 (move `read_task_turn` onto `fetched_read`, delete `ProjectClone.read`, and fold `_turn_of` and `_read_local_task_summary` into one method).
+Next (dev): fix R10–R15 and answer each by id. Update NAMES.md (remove `_turn_of`'s mentions, add the renames and the new method). Then end `ready-for-review` for round 6. PR #43 should go back to draft until then.
+Follow-ups, not part of this task: R4; `_require_command` returns a value, unlike the other `_require_*` (round 5); the task-id case follow-up in entry 16; the planner's two in entry 1.
