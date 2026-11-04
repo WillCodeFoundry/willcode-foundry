@@ -47,3 +47,10 @@
   then a fetch from the code checkout (which shares the notes checkout's `.git`)
   succeeded and the notes pull after it did too. A push also failed once with
   GitHub's "fatal error in commit_refs" / 500, and succeeded on retry.
+- 2026-11-04 [testing] — A check script that runs `uv run pytest | tail` under
+  `set -e` passes when pytest fails: the pipeline's status is `tail`'s. Use
+  `set -o pipefail`. CI caught the one failure this hid (c6876a8).
+- 2026-11-04 [decision] — `ProjectFailure` split from `ProjectListing` (D1): a
+  project is listed whole or not at all, so the type should not allow tasks and
+  an error together. `repo_policy.ProjectCheck` keeps `error` beside its results
+  because a partial check is meaningful there; not a precedent for listing.

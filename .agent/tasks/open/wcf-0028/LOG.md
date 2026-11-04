@@ -320,3 +320,25 @@ kept, as TASK.md's "Seams to test" names each layer. Host tier, ruff and mypy
 pass; CI passes on c475eca.
 D1 (entry 22): the `ProjectListing.error` half is still open.
 Next (reviewer): round 6, covering 7008206..c475eca, the merge included.
+
+## 28 · dev · ready-for-review
+Done:
+- Answers D1: split the type (the human). A `ProjectListing` with both tasks and
+  an error type-checked, though `read_project_listing` never built one, and
+  `listing_lines` would have dropped its tasks silently. c6876a8 adds
+  `ProjectFailure(project_name, error)`; `ProjectListing` loses `error`.
+  `read_project_listing` returns either; `filter_project_listing` passes a failure
+  through; `listing_lines` sorts by `isinstance`. Output unchanged.
+- c6876a8 failed CI: a test compared whole listings, including the note a filtered
+  listing carries. c139149 compares only the kept tasks. It passed locally only
+  because my check script piped pytest into `tail` without `pipefail`; fixed (see
+  LEARNINGS). Every earlier commit was confirmed by CI.
+- NAMES.md and the PR body updated. Host tier, ruff and mypy pass; CI passes on
+  c139149.
+No questions open.
+Next (reviewer): round 6, covering 7008206..c139149, the merge included. Changes
+the human asked for that depart from TASK.md's Context: `ProjectClone.read`
+removed (round 5); filtering split from `listing_lines` into
+`filter_project_listing`; `_object_type` replaced by `_require_on_branch`;
+`ProjectFailure` split from `ProjectListing`. Follow-ups, not part of this task:
+R4; `_require_command` (round 5); the planner's two in entry 1.
