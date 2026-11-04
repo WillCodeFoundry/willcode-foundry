@@ -63,20 +63,6 @@ class ProjectClone:
         else:
             self._git.output("switch", "--quiet", "--orphan", branch)
 
-    def read(self, branch: str, path: str) -> str | None:
-        """The text of ``path`` on the remote's ``branch``; None if the branch or the file isn't there.
-
-        It reads from git, never the checked-out files, so a link is read as its target's name and nothing outside
-        the clone is followed.
-        """
-        if branch not in self.branches():
-            return None
-        self._fetch(branch)
-        where = f"{self._tracking_ref(branch)}:{path}"
-        if not self._git.succeeds("cat-file", "-e", where):
-            return None
-        return self._git.output("show", where)
-
     def fetch_branch(self, branch: str) -> None:
         """Fetch the remote's ``branch``, for fetched_list_dir and fetched_read.
 

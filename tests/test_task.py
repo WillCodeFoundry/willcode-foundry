@@ -399,6 +399,13 @@ def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env) -> Non
         turn_of(origin_dir, git_env, "t0")
 
 
+def test_a_dir_at_turn_is_no_turn(origin_dir, git_env) -> None:
+    push_notes(origin_dir, git_env, {".agent/tasks/open/t0/TURN/dev": "dev\n"})
+
+    with pytest.raises(FoundryError, match=r"^task t0 has no turn: agent-notes has no .agent/tasks/open/t0/TURN"):
+        turn_of(origin_dir, git_env, "t0")
+
+
 def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(origin_dir, git_env) -> None:
     with pytest.raises(FoundryError, match=r"task c0 has no turn: agent-notes has no .agent/tasks/closed/c0/TURN"):
         turn_of(origin_dir, git_env, "c0")
