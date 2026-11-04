@@ -6,6 +6,7 @@ every operation on one task goes through it. Callers pass task ids, and get Task
 reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
+import re
 import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -14,7 +15,10 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.task import NOTES_BRANCH, OPEN_DIR, Status, Task
+from foundry.task import HUMAN, NOTES_BRANCH, OPEN_DIR, Status, Task
+
+# A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
+_LOG_HEADING = re.compile(r"## ([0-9]+) · ")
 
 
 class TaskNotFoundError(FoundryError):
@@ -172,3 +176,18 @@ def _open_task_for_dir(dir_name: str) -> Task:
         return Task(dir_name, Status.OPEN)
     except FoundryError as error:
         raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
+
+
+def log_with_turn_entry(log: str, *, before: str, after: str, note: str | None) -> str:
+    """``log``, unchanged, then a blank line and an entry saying you handed the turn from ``before`` to ``after``.
+
+    The entry is numbered one more than the last line that starts as a heading, or 1. Its Note line holds ``note``
+    stripped, and is left out when ``note`` is None. A newline is added after non-empty ``log`` that lacks one.
+    """
+    numbers = [match[1] for line in log.split("\n") if (match := _LOG_HEADING.match(line))]
+    number = int(numbers[-1]) + 1 if numbers else 1
+    entry = [f"## {number} · {HUMAN} · turn", f"Turn: {before} → {after}."]
+    if note is not None:
+        entry.append(f"Note: {note.strip()}")
+    separator = "\n" if log and not log.endswith("\n") else ""
+    return log + separator + "\n" + "\n".join(entry) + "\n"

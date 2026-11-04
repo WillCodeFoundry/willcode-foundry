@@ -25,7 +25,7 @@ from foundry.commands.task import (
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary
+from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
 from foundry.task import Status, Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -614,6 +614,45 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
         operation(project_tasks_of(origin_dir, git_env), task_id)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
+# --- log_with_turn_entry -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "log, note, expected",
+    [
+        ("", None, "\n## 1 · human · turn\nTurn: none → dev.\n"),
+        ("# Log\n", None, "# Log\n\n## 1 · human · turn\nTurn: none → dev.\n"),
+        (
+            "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n",
+            "  look at R3  ",
+            "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n"
+            "\n## 3 · human · turn\nTurn: none → dev.\nNote: look at R3\n",
+        ),
+        (
+            "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.",
+            None,
+            "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.\n"
+            "\n## 5 · human · turn\nTurn: none → dev.\n",
+        ),
+        (
+            "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n",
+            None,
+            "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n"
+            "\n## 12 · human · turn\nTurn: none → dev.\n",
+        ),
+    ],
+    ids=["empty", "no-entries", "entries-with-note", "last-heading-not-highest-no-final-newline", "headings-only"],
+)
+def test_the_turn_entry_follows_the_log_unchanged_numbered_after_its_last_entry(log, note, expected) -> None:
+    assert log_with_turn_entry(log, before="none", after="dev", note=note) == expected
+
+
+def test_the_turn_entry_names_both_turns() -> None:
+    assert log_with_turn_entry("# Log\n", before="reviewer", after="human", note=None).endswith(
+        "\n\n## 1 · human · turn\nTurn: reviewer → human.\n"
+    )
 
 
 # --- list_open_task_summaries -----------------------------------------------------------
