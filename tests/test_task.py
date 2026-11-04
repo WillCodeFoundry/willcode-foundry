@@ -395,13 +395,8 @@ def test_fetched_reads_of_an_unfetched_branch_raise_something_broader(origin_dir
         assert not isinstance(raised.value, NotOnBranchError)
 
 
-def test_fetched_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git_env, tmp_path: Path) -> None:
-    seed_dir = tmp_path / "seed2"
-    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(seed_dir))
-    (seed_dir / ".agent/tasks/open/tst-0000/LINK").symlink_to("/etc/hostname")
-    git(git_env, "-C", str(seed_dir), "add", ".")
-    git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "link")
-    git(git_env, "-C", str(seed_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
+def test_fetched_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git_env) -> None:
+    edit_notes(origin_dir, git_env, symlink={".agent/tasks/open/tst-0000/LINK": "/etc/hostname"})
 
     clone = fetched_clone(origin_dir, git_env)
 
@@ -772,9 +767,9 @@ def test_no_turn_keeps_the_listing_as_it_is() -> None:
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
-    stdout, _ = listing_lines([listing("empty"), listing("store", ("wcf-0007", "dev"))], [])
+    stdout, _ = listing_lines([listing("empty-and-long"), listing("store", ("wcf-0007", "dev"))], [])
 
-    assert stdout == ["empty  no open tasks", "store  wcf-0007  dev"]
+    assert stdout == ["empty-and-long  no open tasks", "store  wcf-0007  dev"]  # its name doesn't widen the column
 
 
 def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
@@ -818,13 +813,19 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
 def test_each_project_gives_a_listing_or_an_error_naming_it(origin_dir, git_env, tmp_path: Path) -> None:
     edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
-    projects = [Project("gone", str(tmp_path / "missing.git")), Project("store", str(origin_dir))]
+    git(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: a FoundryError
+    projects = [
+        Project("bare", str(tmp_path / "bare.git")),
+        Project("gone", str(tmp_path / "missing.git")),  # unreachable: git's GitError
+        Project("store", str(origin_dir)),
+    ]
 
     listings, errors = read_listings_and_errors(projects, git_env)
 
     assert listings == [ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")])]
-    assert [type(error) for error in errors] == [FoundryError]  # git's GitError too
-    assert str(errors[0]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[0])
+    assert [type(error) for error in errors] == [FoundryError, FoundryError]
+    assert str(errors[0]) == "bare: the repository has no agent-notes branch"
+    assert str(errors[1]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[1])
 
 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
@@ -849,6 +850,9 @@ def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_f
 
     assert cli.main(["task", "list", "store"]) == 0
     assert capsys.readouterr() == ("store  tst-0000  dev\n", "")
+
+    assert cli.main(["task", "list", "store", "--turn", "human"]) == 0
+    assert capsys.readouterr() == ("store  no open tasks with turn human\n", "")
 
 
 # --- an id given in uppercase ------------------------------------------------------------
