@@ -13,3 +13,4 @@
   for UTF-8 logs with LF line endings, which agents write. CRLF folds to LF and bytes that aren't UTF-8 become
   U+FFFD (`Git.output`'s text mode). A linked `TURN` or `LOG.md` is refused, naming the path, with nothing pushed.
 - 2026-11-04 [review] — Anything foundry appends to a task's notes from outside its session, such as `foundry task turn` writing LOG.md, breaks agent-kit/AGENTS.md's claim that `pull --rebase` on agent-notes never conflicts. Before then, each file in a task's notes dir had only one writer at a time. Raised as R3.
+- 2026-11-04 [review] — The Names sub-agent, given only the skill, passed three names that the precedents in earlier tasks' REVIEW.md and NAMES.md would have flagged: a near-twin with a different contract, a `require_` that doesn't name its result, and a glossary word (Turn vs Role). [proposal] code-review skill: give the Names brief the earlier tasks' naming findings and renames as precedent.

@@ -75,13 +75,36 @@ Functions:
 
 ### Names
 
-Clean: `LOG_FILE`, `Task.log_file`, `TurnChange` and its `task`, `before` and `after`. Also clean: `hand_on_turn`, `_read_fetched_turn_text`, `_NO_TURN`, `_LOG_HEADING`, `log_with_turn_entry`, `turn_main`, `require_turn_arguments`, `hand_on_open_task_turn`, `turn_report`, `found`, `known`, the CLI's `foundry task turn`, `ROLE` and `--note`, and the test helpers. `ProjectClone.write`'s new refusal is clean too. The added prose (README, GLOSSARY, `agent-kit/AGENTS.md`, ARCHITECTURE, docstrings) breaks no agreed word.
+At the human's request, this section was checked again against the names renamed in earlier tasks' reviews (wcf-0027 R22–R26, wcf-0028 R11–R15 and their NAMES.md). The human ruled each of those Blocking. That check added R11–R13 and the second point of R10.
+
+Clean: `LOG_FILE`, `Task.log_file`, `TurnChange` and its `task`, `before` and `after`. Also clean: `hand_on_turn`, `_NO_TURN`, `_LOG_HEADING`, `log_with_turn_entry`, `turn_main`, `hand_on_open_task_turn`, `turn_report`, `found`, `known`, the CLI's `foundry task turn`, `ROLE` and `--note`, and the test names and helpers. `ProjectClone.write`'s new refusal is clean too. The added prose (README, GLOSSARY, `agent-kit/AGENTS.md`, ARCHITECTURE, docstrings) breaks no agreed word.
 
 - **R10 (Blocking), an instance named otherwise.** A `TurnChange` is named `change` at `src/foundry/commands/task.py:118` and `:189` (the `turn_report` parameter), and at `tests/test_task.py:699`.
   - The python-naming skill names an instance for its class unless its scope holds two of the type or its role is what the reader needs. Neither applies here.
-  - In `commands/`, `change` already holds a `RulesetChange` (`commands/repo.py:60`), so the word now names two types in sibling modules.
+  - `turn_report(project_name, change: TurnChange)` at `:189` sits beside `report(outcome, project_name, changed: task.Task)` at `:149`. Those are sibling functions in one module, with parameters a letter apart that hold different types. That is the `list_project` and `list_projects` clash wcf-0028 renamed (R13 there).
+  - In `commands/`, `change` already holds a `RulesetChange` (`commands/repo.py:60`), so the word names two types in sibling modules.
   - Who hits it: the next reader of `turn_report`, or of a search for `change.` across `commands/`.
   - Direction: name it for its class. The `repo.py` drift is older, so list it as a follow-up and don't rename it here.
+- **R11 (Blocking), `role_name` holds a turn, not a role.**
+  - In `src/foundry/commands/task.py`, `require_turn_arguments` (`:157`) and `hand_on_open_task_turn` (`:177`) take `role_name`, and the parser's dest is `role_name` (`:60`). The value may be `human`.
+  - GLOSSARY.md's "Turn" is "which role works on a task next, or `human`". Its "Role" (planner, dev, qa, reviewer or architect) doesn't include `human`.
+  - The code says so itself at `:166-168`: `if role_name != task.HUMAN and …`, then "`{role_name!r}` is not a role".
+  - At `:186` the same value becomes `turn`, in `hand_on_turn(found, role_name, …)`, so one value has two names on its way through.
+  - Everywhere else in `src/foundry` (`config.py`, `run.py`), `role_name` holds only a role. This use is a homonym, and a synonym for the glossary's word.
+  - Who hits it: the next reader of the turn command's checks, every time they read `:157-186`.
+  - Direction: name the value for the glossary's word, as `hand_on_turn` does. `ROLE` as the metavar stays, since TASK.md fixes it.
+- **R12 (Blocking), `_read_fetched_turn_text` beside `_read_fetched_turn`.**
+  - At `src/foundry/project_tasks.py:186` and `:198`, the two names differ only by `_text`, and both return the text of TURN_FILE as a `str`.
+  - What differs is the contract. `_read_fetched_turn` refuses a missing or blank TURN_FILE. `_read_fetched_turn_text` returns `""`.
+  - wcf-0028 turned down `_read_turn` for the same reason: a near-twin of `read_task_turn` with a different contract.
+  - Who hits it: whoever next reads a turn in `ProjectTasks`, choosing between the two.
+  - Direction: name it for what sets it apart, the empty result for a missing or blank TURN_FILE.
+- **R13 (Blocking), `require_turn_arguments` names its checks but not what it returns.**
+  - At `src/foundry/commands/task.py:156`, it returns the `Project`. It is called as `project = require_turn_arguments(...)` (`:110`).
+  - wcf-0027 renamed `role_to_launch` (R25 there) so that the name gives both the check and the result: `require_open_task_and_role`, which this function's NAMES.md row cites.
+  - The other `require_` names in the code, `_require_fetched` and `_require_on_branch`, return nothing.
+  - Who hits it: a reader of `turn_main`, or of the `require_` helpers.
+  - Direction: name the result as well as the check, as `require_open_task_and_role` does.
 
 ### Design questions
 
@@ -95,6 +118,6 @@ Summary:
 | Spec | 0 | 0 | |
 | Behaviour | 2 | 0, plus 1 design question open | R3, a `LOG.md` rebase conflict for a running role |
 | Smells | 5 | 0 | R5, the duplicated commit-and-push |
-| Names | 1 | 1 | R10, `change` for a `TurnChange` |
+| Names | 4 | 4 | R11, `role_name` for a turn that may be `human` |
 
 Verdict: changes needed
