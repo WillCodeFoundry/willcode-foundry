@@ -2,8 +2,9 @@
 turn and handing it on, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
-reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
+every operation on one task goes through it. Callers pass task ids, and get Tasks back. hand_on_turn is the exception
+that takes the Task get_task_by_id gave, so a caller can check it first without a second fetch. Listing is another:
+it reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
 import re
@@ -135,17 +136,16 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task, fix="Name the role to run instead.")
 
-    def hand_on_turn(self, task_id: str, turn: str, *, note: str | None) -> TurnChange:
-        """Write ``turn`` to the open task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it
-        isn't None. One commit, pushed to NOTES_BRANCH.
+    def hand_on_turn(self, task: Task, turn: str, *, note: str | None) -> TurnChange:
+        """Write ``turn`` to the open ``task``'s TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when
+        it isn't None. One commit, pushed to NOTES_BRANCH.
 
-        The turn before is TURN_FILE's text stripped, or "none" when it is missing or blank. Refuses a task that is
-        closed or doesn't exist, whose turn is already ``turn``, or that has no LOG_FILE. Checks nothing about
-        ``turn``: the caller does.
+        Relies on get_task_by_id having just found ``task`` open: it checked out NOTES_BRANCH, so the change is made
+        on the commit the task was found on. The turn before is TURN_FILE's text stripped, or "none" when it is
+        missing or blank. Refuses a task whose turn is already ``turn``, or that has no LOG_FILE. Checks nothing
+        about ``turn``: the caller does.
         """
-        task = self.get_task_by_id(task_id)  # it checked out NOTES_BRANCH, so the change is made on that commit
-        if task.status is Status.CLOSED:
-            raise FoundryError(f"task {task.id} is closed: reopen it first, with foundry task reopen")
+        assert task.status is Status.OPEN, "hand_on_turn needs an open task"  # a programming error
         before = self._read_fetched_turn_text(task) or _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")

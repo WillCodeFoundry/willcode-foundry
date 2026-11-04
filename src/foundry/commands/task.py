@@ -115,7 +115,9 @@ def turn_main(args: argparse.Namespace) -> int:
         note=args.note,
     )
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        change = project_tasks.hand_on_turn(args.task_id, args.role_name, note=args.note)
+        change = hand_on_open_task_turn(
+            project_tasks, project_name=project.name, task_id=args.task_id, role_name=args.role_name, note=args.note
+        )
     print("\n".join(turn_report(project.name, change)))
     return 0
 
@@ -169,6 +171,19 @@ def require_turn_arguments(
     if note is not None and note.splitlines() != [note]:
         raise FoundryError("--note holds a line break: give it one line")
     return project
+
+
+def hand_on_open_task_turn(
+    project_tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str, note: str | None
+) -> TurnChange:
+    """Hand the open task's turn on to ``role_name``, as ProjectTasks.hand_on_turn does.
+
+    FoundryError when the task doesn't exist, or is closed (saying how to reopen it), before anything is written.
+    """
+    found = project_tasks.get_task_by_id(task_id)
+    if found.status is task.Status.CLOSED:
+        raise FoundryError(f"task {found.id} is closed: reopen it with `foundry task reopen {project_name} {found.id}`")
+    return project_tasks.hand_on_turn(found, role_name, note=note)
 
 
 def turn_report(project_name: str, change: TurnChange) -> list[str]:
