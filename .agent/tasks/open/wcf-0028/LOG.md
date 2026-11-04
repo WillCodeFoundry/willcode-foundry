@@ -211,3 +211,27 @@ All acceptance criteria still met.
 Next (reviewer): round 6, covering 7008206..3e9e4fa. Follow-ups, not part of this
 task: R4 (multi-line `TURN`); `_require_command` (round 5); the task-id case
 follow-up in entry 16; the planner's two in entry 1.
+
+## 20 · dev · ready-for-review
+Done: at the human's request, merged origin/main after #45 (wcf-0029: task ids
+must match `[a-z]+-[0-9]{4,}`, never lowercased) in 46b7d16. Conflicts:
+- `src/foundry/task.py`: took main's side in both hunks. Its pattern comment and
+  message replace R10's comment (9e222b1) and R9's message, which described the
+  lowercasing main removed. So R10's fix is superseded, not lost: the comment now
+  matches the code.
+- `tests/test_task.py`: kept both sections (this task's listing tests, main's
+  uppercase-id test). Moved this task's tests to valid ids, as main moved its own
+  (`t0` → `tst-0000`, `c0` → `cls-0000`, `t1` → `tst-0001`, `a2`/`b1` →
+  `aaa-0002`/`bbb-0001`). The alignment test uses `t-0001` against `wcf-0007`,
+  so the id column still pads. Dropped
+  `test_an_invalid_task_id_is_told_letters_must_be_lowercase` (R9's): it pinned
+  the old message, and main's `test_task_ids_not_matching_the_pattern_are_refused_as_given`
+  pins the new one exactly.
+- `_open_task_for_dir` stays: `Task.as_open` no longer lowercases, but the wrapper
+  is what names the dir and says "Rename or remove it.", as TASK.md asks.
+  `test_an_upper_case_dir_is_not_a_task_id_either` still passes unchanged.
+Host tier, ruff and mypy pass; CI passes on 46b7d16. All acceptance criteria
+still met. No new names.
+Next (reviewer): round 6, covering 7008206..46b7d16, the merge included. The
+task-id case follow-up from entry 16 is now done by wcf-0029. Follow-ups left:
+R4 (multi-line `TURN`); `_require_command` (round 5); the planner's two in entry 1.

@@ -41,3 +41,9 @@
   `check_out`) or raised `TaskNotFoundError`; there is no path where a task is
   found on an unfetched branch. Kept the "has no TURN, or it is empty" wording for
   a dir at `TURN` too, rather than churning the pinned message.
+- 2026-11-04 [tools] — SSH to GitHub failed intermittently with "Permission
+  denied (publickey)" on fetches (including a partial clone's lazy blob fetch),
+  while `ssh -T git@github.com` and pushes worked; plain retries kept failing,
+  then a fetch from the code checkout (which shares the notes checkout's `.git`)
+  succeeded and the notes pull after it did too. A push also failed once with
+  GitHub's "fatal error in commit_refs" / 500, and succeeded on retry.
