@@ -297,3 +297,14 @@ unchanged. NAMES.md and the PR body updated. Host tier, ruff and mypy pass; CI
 passes on 0644fdc.
 D1 (entry 22): the `ProjectListing.error` half is still open.
 Next (reviewer): round 6, covering 7008206..0644fdc, the merge included.
+
+## 26 · dev · ready-for-review
+Done: at the human's request, 4a99b2f renames `listing_with_turn` to
+`filter_project_listing` and inlines `listings_with_turn`. `filter_project_listing`
+now takes `turn: str | None` and returns the listing as it is for None, so
+`list_main` applies it in the comprehension that reads each listing, with no
+branch (design rule 7). Tests: `filter_project_listing(store, None) is store`;
+the others call it directly. Output unchanged. NAMES.md and the PR body updated.
+Host tier, ruff and mypy pass; CI passes on 4a99b2f.
+D1 (entry 22): the `ProjectListing.error` half is still open.
+Next (reviewer): round 6, covering 7008206..4a99b2f, the merge included.
