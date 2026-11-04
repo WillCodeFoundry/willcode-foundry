@@ -95,8 +95,8 @@ def reopen_main(args: argparse.Namespace) -> int:
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
-    listings = [read_project_listing(project, os.environ) for project in projects]
-    stdout, stderr = listing_lines(listings_with_turn(listings, args.turn))
+    listings = [filter_project_listing(read_project_listing(project, os.environ), args.turn) for project in projects]
+    stdout, stderr = listing_lines(listings)
     if stdout:
         print("\n".join(stdout))
     if stderr:
@@ -152,20 +152,17 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
         return ProjectListing(project.name, [], str(error))
 
 
-def listing_with_turn(listing: ProjectListing, turn: str) -> ProjectListing:
+def filter_project_listing(listing: ProjectListing, turn: str | None) -> ProjectListing:
     """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``; when it had tasks but none
-    match, its note says so."""
+    match, its note says so. ``listing`` itself when ``turn`` is None: no --turn was given."""
+    if turn is None:
+        return listing
     return ProjectListing(
         project_name=listing.project_name,
         summaries=[summary for summary in listing.summaries if summary.turn == turn],
         error=listing.error,
         no_tasks_note=f"no open tasks with turn {turn}" if listing.summaries else listing.no_tasks_note,
     )
-
-
-def listings_with_turn(listings: Sequence[ProjectListing], turn: str | None) -> list[ProjectListing]:
-    """Each listing with only the tasks whose turn is ``turn``; all of them when no --turn was given."""
-    return list(listings) if turn is None else [listing_with_turn(listing, turn) for listing in listings]
 
 
 def listing_lines(listings: Sequence[ProjectListing]) -> tuple[list[str], list[str]]:

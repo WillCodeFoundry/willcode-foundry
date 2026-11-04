@@ -17,9 +17,8 @@ from foundry.commands.task import (
     Outcome,
     ProjectListing,
     chosen_projects,
+    filter_project_listing,
     listing_lines,
-    listing_with_turn,
-    listings_with_turn,
     read_project_listing,
     report,
 )
@@ -765,18 +764,17 @@ def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_col
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     store = listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))
 
-    kept = listing_with_turn(store, "dev")
+    kept = filter_project_listing(store, "dev")
 
     assert [summary.task.id for summary in kept.summaries] == ["tst-0001", "tst-0003"]
     assert (kept.project_name, kept.error) == ("store", None)
     assert len(store.summaries) == 4  # a new listing; the one given is left as it was
 
 
-def test_no_turn_keeps_every_listing_as_it_is() -> None:
-    listings = [listing("store", ("tst-0001", "dev")), listing("bad", error="boom")]
+def test_no_turn_keeps_the_listing_as_it_is() -> None:
+    store = listing("store", ("tst-0001", "dev"))
 
-    assert listings_with_turn(listings, None) == listings
-    assert listings_with_turn(listings, "human") == [listing_with_turn(listing, "human") for listing in listings]
+    assert filter_project_listing(store, None) is store
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
@@ -786,7 +784,12 @@ def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
 
 
 def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
-    stdout, _ = listing_lines(listings_with_turn([listing("store", ("tst-0001", "dev")), listing("empty")], "human"))
+    stdout, _ = listing_lines(
+        [
+            filter_project_listing(listing("store", ("tst-0001", "dev")), "human"),
+            filter_project_listing(listing("empty"), "human"),
+        ]
+    )
 
     assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
 
