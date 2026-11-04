@@ -14,14 +14,15 @@ _ENTRY_KIND = {"tree": "dir", "blob": "file"}
 
 
 class NotOnBranchError(FoundryError):
-    """The dir or file asked for isn't on a fetched branch: nothing is at its path, or something of the other kind
-    is, such as a dir where a file is wanted."""
+    """The dir or file asked for isn't on a fetched branch. Either nothing is at its path, or something of the
+    other kind is, such as a dir where a file is wanted."""
 
 
 class ProjectClone:
-    """A shallow clone of the repository at a URL, made with your own access in a folder you give it, holding
-    nothing until a branch is checked out. Only the branches needed are fetched, one commit deep. Every commit is
-    signed with SSH, using the signing key in your git config.
+    """A shallow clone of the repository at a URL, made with your own access in a folder you give it. It holds
+    nothing until a branch is fetched or checked out. A fetched branch can be read without a checkout. Only the
+    branches needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key in your
+    git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
     A git failure is a GitError; a failed commit's adds how to sign.

@@ -148,8 +148,11 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
 def read_listings_and_errors(
     projects: Sequence[Project], env: Mapping[str, str]
 ) -> tuple[list[ProjectListing], list[FoundryError]]:
-    """The listing of each project that could be listed, and a FoundryError, naming the project, for each that
-    couldn't, both in ``projects``' order: one project's failure doesn't stop the rest."""
+    """The listing of each project that could be listed, and an error for each that couldn't.
+
+    Each error is a FoundryError that names its project. Both lists keep ``projects``' order. One project's failure
+    doesn't stop the rest.
+    """
     listings: list[ProjectListing] = []
     errors: list[FoundryError] = []
     for project in projects:
@@ -161,8 +164,11 @@ def read_listings_and_errors(
 
 
 def filter_project_listing(listing: ProjectListing, turn: str | None) -> ProjectListing:
-    """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``; when it had tasks but none
-    match, its note says so. ``listing`` itself when ``turn`` is None: no --turn was given."""
+    """A new listing of ``listing``'s project with only the tasks whose turn is ``turn``.
+
+    When it had tasks but none match, its note says so. When ``turn`` is None, no --turn was given, and
+    ``listing`` itself is returned.
+    """
     if turn is None:
         return listing
     return ProjectListing(
