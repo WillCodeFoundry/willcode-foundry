@@ -454,3 +454,12 @@ No questions open.
 Next (human): review and merge PR #43. Follow-ups, not part of this task: R4
 (multi-line `TURN`); R24 (end-to-end test docstring should mention `--turn`);
 `_require_command` (round 5); the planner's two in entry 1.
+
+## 35 · dev · pr-ready
+Done: at the human's request, rewrote PR #43's body to fit the `pr` skill. No
+commit; HEAD is still 6a1f507 and the PR stays ready.
+- Summary cut to the sample output and the `read_task_turn` diff; the call tree is gone.
+- Evidence now has before/after pseudocode for the fetch-count and dir-at-`TURN`
+  tests, and the checks' output (710 passed, ruff, mypy).
+- Follow-ups moved out of Blast Radius to a line of their own.
+Next (human): review and merge PR #43.
