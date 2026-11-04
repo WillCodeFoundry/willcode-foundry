@@ -1,5 +1,5 @@
 """ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, reading their
-turn, and listing the open ones with their turns.
+turn and handing it on, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
 every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
@@ -15,8 +15,10 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.task import HUMAN, NOTES_BRANCH, OPEN_DIR, Status, Task
+from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
+# The turn a task has when its TURN_FILE is missing, empty or only blanks, as a hand-off names it.
+_NO_TURN = "none"
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
 
@@ -31,6 +33,15 @@ class TaskSummary:
 
     task: Task
     turn: str
+
+
+@dataclass(frozen=True)
+class TurnChange:
+    """A task whose turn you handed on: its turn ``before``, as hand_on_turn read it, and ``after``."""
+
+    task: Task
+    before: str
+    after: str
 
 
 class ProjectTasks:
@@ -124,6 +135,37 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task, fix="Name the role to run instead.")
 
+    def hand_on_turn(self, task_id: str, turn: str, *, note: str | None) -> TurnChange:
+        """Write ``turn`` to the open task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it
+        isn't None. One commit, pushed to NOTES_BRANCH.
+
+        The turn before is TURN_FILE's text stripped, or "none" when it is missing or blank. Refuses a task that is
+        closed or doesn't exist, whose turn is already ``turn``, or that has no LOG_FILE. Checks nothing about
+        ``turn``: the caller does.
+        """
+        task = self.get_task_by_id(task_id)  # it checked out NOTES_BRANCH, so the change is made on that commit
+        if task.status is Status.CLOSED:
+            raise FoundryError(f"task {task.id} is closed: reopen it first, with foundry task reopen")
+        before = self._read_fetched_turn_text(task) or _NO_TURN
+        if before == turn:
+            raise FoundryError(f"task {task.id}'s turn is already {turn}")
+        clone = self._clone
+        try:
+            log = clone.read(task.log_file)
+        except FileNotFoundError:
+            raise FoundryError(
+                f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"
+            ) from None
+        clone.write(
+            {
+                task.turn_file: f"{turn}\n",
+                task.log_file: log_with_turn_entry(log, before=before, after=turn, note=note),
+            }
+        )
+        clone.commit(f"Turn of task {task.id}: {before} → {turn}")
+        clone.push_atomic(from_remote={}, from_local=[NOTES_BRANCH])
+        return TurnChange(task, before=before, after=turn)
+
     def list_open_task_summaries(self) -> list[TaskSummary]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
 
@@ -146,15 +188,19 @@ class ProjectTasks:
 
         FoundryError, ending with ``fix``, when the file is missing, not a file, or holds only blanks.
         """
-        try:
-            turn = self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
-        except NotOnBranchError:
-            turn = ""
+        turn = self._read_fetched_turn_text(task)
         if not turn:
             raise FoundryError(
                 f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. {fix}"
             )
         return turn
+
+    def _read_fetched_turn_text(self, task: Task) -> str:
+        """``task``'s TURN_FILE on NOTES_BRANCH as last fetched, stripped; empty when it is missing or not a file."""
+        try:
+            return self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
+        except NotOnBranchError:
+            return ""
 
     def _move(self, task: Task, destination: Task, *, message: str) -> Task:
         """Move ``task``'s notes dir to ``destination``'s, commit it with ``message``, and push NOTES_BRANCH.

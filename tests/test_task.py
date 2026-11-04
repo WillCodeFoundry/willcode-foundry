@@ -25,7 +25,7 @@ from foundry.commands.task import (
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
+from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, TurnChange, log_with_turn_entry
 from foundry.task import Status, Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -653,6 +653,136 @@ def test_the_turn_entry_names_both_turns() -> None:
     assert log_with_turn_entry("# Log\n", before="reviewer", after="human", note=None).endswith(
         "\n\n## 1 · human · turn\nTurn: reviewer → human.\n"
     )
+
+
+# --- hand_on_turn -------------------------------------------------------------------------
+
+LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
+
+
+def notes_file(origin_dir: Path, git_env: dict[str, str], path: str) -> bytes:
+    """The file at ``path`` on agent-notes, byte for byte."""
+    return subprocess.run(
+        ["git", f"--git-dir={origin_dir}", "show", f"{task.NOTES_BRANCH}:{path}"],
+        env=git_env,
+        capture_output=True,
+        check=True,
+    ).stdout
+
+
+@pytest.mark.parametrize(
+    "turn_files, before",
+    [
+        ({".agent/tasks/open/tst-0000/TURN": " reviewer \n"}, "reviewer"),
+        ({}, "none"),
+        ({".agent/tasks/open/tst-0000/TURN": " \n\t"}, "none"),
+    ],
+    ids=["a-turn", "no-turn", "blank-turn"],
+)
+def test_hand_on_turn_writes_turn_and_appends_to_the_log_in_one_signed_commit(
+    origin_dir, git_env, turn_files, before
+) -> None:
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/LOG.md": LOG, **turn_files})
+    files_before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
+    commits_before = len(notes_commits(origin_dir, git_env))
+
+    change = project_tasks_of(origin_dir, git_env).hand_on_turn("tst-0000", "dev", note=" see R2 ")
+
+    assert change == TurnChange(Task.as_open("tst-0000"), before=before, after="dev")
+    expected_log = LOG + f"\n## 2 · human · turn\nTurn: {before} → dev.\nNote: see R2\n"
+    assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
+        **files_before,
+        ".agent/tasks/open/tst-0000/TURN": "dev\n",
+        ".agent/tasks/open/tst-0000/LOG.md": expected_log,
+    }
+    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/TURN") == b"dev\n"
+    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/LOG.md") == expected_log.encode()
+    assert notes_commits(origin_dir, git_env)[0] == f"Turn of task tst-0000: {before} → dev"
+    assert len(notes_commits(origin_dir, git_env)) == commits_before + 1
+    assert_notes_signed_with_your_key(origin_dir, git_env)
+
+
+def test_hand_on_turn_keeps_the_log_byte_for_byte(origin_dir, git_env) -> None:
+    log = b"# Log\r\n\r\n## 4 \xc2\xb7 dev \xc2\xb7 progress\r\nbad byte \xff\r\nno final newline"
+    work = Path(tempfile.mkdtemp(dir=origin_dir.parent, prefix="bytes-"))
+    git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(work))
+    (work / ".agent/tasks/open/tst-0000/LOG.md").write_bytes(log)
+    git(git_env, "-C", str(work), "add", ".")
+    git(git_env, "-C", str(work), "commit", "--quiet", "-m", "log")
+    git(git_env, "-C", str(work), "push", "--quiet", "origin", task.NOTES_BRANCH)
+
+    project_tasks_of(origin_dir, git_env).hand_on_turn("tst-0000", "dev", note=None)
+
+    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/LOG.md") == (
+        log + "\n\n## 5 · human · turn\nTurn: none → dev.\n".encode()
+    )
+
+
+def test_hand_on_turn_replaces_a_linked_turn_and_writes_nothing_outside(origin_dir, git_env, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.write_text("keep\n")
+    edit_notes(
+        origin_dir,
+        git_env,
+        write={".agent/tasks/open/tst-0000/LOG.md": LOG},
+        symlink={".agent/tasks/open/tst-0000/TURN": str(outside)},
+    )
+
+    change = project_tasks_of(origin_dir, git_env).hand_on_turn("tst-0000", "dev", note=None)
+
+    assert change.before == str(outside)
+    assert outside.read_text() == "keep\n"
+    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/TURN") == b"dev\n"
+    mode = git(git_env, f"--git-dir={origin_dir}", "ls-tree", task.NOTES_BRANCH, ".agent/tasks/open/tst-0000/TURN")
+    assert mode.startswith("100644 blob ")
+
+
+@pytest.mark.parametrize(
+    "task_id, edits, message",
+    [
+        ("tst-0009", {}, r"^task tst-0009 doesn't exist: "),
+        ("cls-0000", {}, r"^task cls-0000 is closed: reopen it first, with foundry task reopen$"),
+        (
+            "tst-0000",
+            {"write": {".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/tst-0000/LOG.md": LOG}},
+            r"^task tst-0000's turn is already dev$",
+        ),
+        (
+            "tst-0000",
+            {},
+            r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
+        ),
+        (
+            "tst-0000",
+            {"write": {".agent/tasks/open/tst-0000/LOG.md/x": "x\n"}},
+            r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
+        ),
+        (
+            "tst-0000",
+            {"write": {".agent/LOG.md": LOG}, "symlink": {".agent/tasks/open/tst-0000/LOG.md": "../../../LOG.md"}},
+            r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
+        ),
+    ],
+    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
+)
+def test_hand_on_turn_refuses_and_pushes_nothing(origin_dir, git_env, task_id, edits, message) -> None:
+    if edits:
+        edit_notes(origin_dir, git_env, **edits)
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+
+    with pytest.raises(FoundryError, match=message):
+        project_tasks_of(origin_dir, git_env).hand_on_turn(task_id, "dev", note=None)
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
+
+
+def test_without_a_signing_key_hand_on_turn_pushes_nothing(origin_dir, git_env) -> None:
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/LOG.md": LOG})
+    write_gitconfig(Path(git_env["HOME"]), signing_key=None)
+    notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
+
+    with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
+        project_tasks_of(origin_dir, git_env).hand_on_turn("tst-0000", "dev", note=None)
+    assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
 # --- list_open_task_summaries -----------------------------------------------------------
