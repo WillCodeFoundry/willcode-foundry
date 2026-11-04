@@ -35,3 +35,22 @@ repositories. Two changes to `ProjectClone` the byte-for-byte criterion needed, 
 `ProjectTasks` seam: a new `read` of the checked-out file, exact; and `write` replacing a link rather than
 writing through it.
 Next: step 4, the command in `commands/task.py`.
+
+## 4 · dev · ready-for-review
+Done: every acceptance criterion in TASK.md, in 48ffcc6, 889c2a6, 6e5dc3c and 0fdb66d; draft PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/46, CI passing (lint, mypy, host tier on 3.11 and 3.14,
+sandbox-image, ci-gate). Merged origin/HEAD at the start and the end: up to date both times, no conflicts.
+- [x] `turn` writes `ROLE\n` to `TURN`, appends one entry, one signed commit `Turn of task <id>: <old> → <new>`.
+- [x] ROLE, project, task id and `--note` refused by `require_turn_arguments` before any git.
+- [x] Refusals: not found / both (from `get_task_by_id`), closed, same turn, no `LOG.md` or not a file (dir or
+  link), no signing key; each pushes nothing; end to end shows `error:` on stderr and nothing on stdout.
+- [x] `<old>` is `none` for a missing or blank `TURN`; entry format, numbering after the last heading, stdout lines.
+- [x] `task.LOG_FILE`, held to `git_hooks.LOG_FILE` in `tests/test_task_contract.py`.
+- [x] README table, `TURN` paragraph (and the signing sentence), ARCHITECTURE codemap, GLOSSARY "Log",
+  `agent-kit/AGENTS.md`'s `LOG.md` section.
+- [x] Host tier, ruff, mypy.
+For the reviewer: two changes to `ProjectClone` beyond TASK.md's list, see LEARNINGS.md: a new `read` that keeps
+the log byte for byte, and `write` replacing a link instead of writing through it.
+Next (reviewer): review PR 46. Suggested follow-ups, not in this task: replace `log_with_turn_entry`'s numbering
+with wcf-0030's log module once both merge; `ProjectClone.exists` follows links, so a linked notes dir counts as
+a task.
