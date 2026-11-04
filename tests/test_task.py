@@ -2,7 +2,6 @@
 and arguments."""
 
 import os
-import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -65,7 +64,8 @@ def git(env: dict[str, str], *args: str) -> str:
 
 @pytest.fixture
 def origin_dir(tmp_path: Path, git_env) -> Path:
-    """A project repository with one commit on main, and agent-notes holding an open task t0 and a closed one c0."""
+    """A project repository with one commit on main, and agent-notes holding an open task tst-0000 and a closed one
+    cls-0000."""
     origin_dir = tmp_path / "origin.git"
     seed_dir = tmp_path / "seed"
     git(git_env, "init", "--quiet", "--bare", "--initial-branch=main", str(origin_dir))
@@ -74,7 +74,7 @@ def origin_dir(tmp_path: Path, git_env) -> Path:
     git(git_env, "-C", str(seed_dir), "add", ".")
     git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "init")
     git(git_env, "-C", str(seed_dir), "switch", "--quiet", "--orphan", task.NOTES_BRANCH)
-    for status_dir, task_id in (("open", "t0"), ("closed", "c0")):
+    for status_dir, task_id in (("open", "tst-0000"), ("closed", "cls-0000")):
         (seed_dir / ".agent" / "tasks" / status_dir / task_id).mkdir(parents=True)
         (seed_dir / ".agent" / "tasks" / status_dir / task_id / "TASK.md").write_text(f"{task_id}\n")
     git(git_env, "-C", str(seed_dir), "add", ".agent")
@@ -93,7 +93,7 @@ def project_tasks_of(origin_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
     return ProjectTasks(clone_in(origin_dir.parent, git_env, str(origin_dir)))
 
 
-def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "T1") -> Task:
+def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "tst-0001") -> Task:
     return project_tasks_of(origin_dir, git_env).create_task(task_id, TEMPLATE)
 
 
@@ -114,8 +114,8 @@ def assert_notes_signed_with_your_key(origin_dir: Path, git_env: dict[str, str])
 # --- Task -----------------------------------------------------------------------
 
 
-def test_an_open_task_is_its_lowercased_id_its_branch_and_its_task_notes_dir_under_open() -> None:
-    a_task = Task.as_open("WCF-0042")
+def test_an_open_task_is_its_id_its_branch_and_its_task_notes_dir_under_open() -> None:
+    a_task = Task.as_open("wcf-0042")
     assert (a_task.id, a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file) == (
         "wcf-0042",
         "task/wcf-0042",
@@ -127,7 +127,7 @@ def test_an_open_task_is_its_lowercased_id_its_branch_and_its_task_notes_dir_und
 
 
 def test_a_closed_task_s_task_notes_dir_is_under_closed() -> None:
-    a_task = Task.as_closed("WCF-0042")
+    a_task = Task.as_closed("wcf-0042")
     assert (a_task.branch, a_task.task_notes_dir, a_task.task_file, a_task.turn_file) == (
         "task/wcf-0042",
         ".agent/tasks/closed/wcf-0042",
@@ -136,24 +136,44 @@ def test_a_closed_task_s_task_notes_dir_is_under_closed() -> None:
     )
 
 
-@pytest.mark.parametrize("task_id", ["WCF-0042", "fix-login.2", "t_1", "7"])
-def test_valid_task_ids(task_id: str) -> None:
-    assert Task.as_open(task_id).id == task_id.lower()
+@pytest.mark.parametrize("task_id", ["wcf-0042", "a-0000", "wcf-10000"])
+@pytest.mark.parametrize("build", [Task.as_open, Task.as_closed, lambda task_id: Task(task_id, Status.OPEN)])
+def test_valid_task_ids_are_kept_as_given(build, task_id: str) -> None:
+    assert build(task_id).id == task_id
+
+
+# U+212A, the Kelvin sign, lowercases to an ASCII k.
+KELVIN = "\u212a"
 
 
 @pytest.mark.parametrize(
-    "task_id", ["", "-x", ".x", "feat/x", "a b", "a..b", "x.", "x.lock", "X.LOCK", "ü", "x~1", "x:y", "\u212a1"]
+    "task_id",
+    [
+        "WCF-0042",
+        "Wcf-0042",
+        "wcf-042",
+        "wcf0042",
+        "wcf-",
+        "-0042",
+        "w2-0042",
+        "wcf_0042",
+        "wcf-0042.lock",
+        "fix-login.2",
+        "t1",
+        "7",
+        f"{KELVIN}cf-0042",
+        "",
+        "wcf-0042\n",
+        "wcf-\u0664\u0662\u0660\u0660",  # Arabic-Indic digits
+    ],
 )
-def test_task_ids_that_are_not_valid_branch_names_are_refused(task_id: str) -> None:
-    with pytest.raises(
-        FoundryError, match=re.escape(f"task id {(task_id.lower() if task_id.isascii() else task_id)!r} is not valid")
-    ):
-        Task.as_open(task_id)
-
-
-def test_an_invalid_task_id_is_told_letters_must_be_lowercase() -> None:
-    with pytest.raises(FoundryError, match=re.escape("use lowercase letters, digits, '.', '_' and '-'")):
-        Task("WCF-1", Status.OPEN)
+@pytest.mark.parametrize("build", [Task.as_open, Task.as_closed, lambda task_id: Task(task_id, Status.OPEN)])
+def test_task_ids_not_matching_the_pattern_are_refused_as_given(build, task_id: str) -> None:
+    with pytest.raises(FoundryError) as error:
+        build(task_id)
+    assert str(error.value) == (
+        f"task id {task_id!r} is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)"
+    )
 
 
 # --- create ---------------------------------------------------------------------
@@ -164,14 +184,14 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_ta
 ) -> None:
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
-    assert create(origin_dir, git_env) == Task.as_open("t1")
+    assert create(origin_dir, git_env) == Task.as_open("tst-0001")
 
-    assert head(origin_dir, git_env, "task/t1") == head(origin_dir, git_env, "main")
+    assert head(origin_dir, git_env, "task/tst-0001") == head(origin_dir, git_env, "main")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
-        ".agent/tasks/closed/c0/TASK.md": "c0\n",
-        ".agent/tasks/open/t0/TASK.md": "t0\n",
-        ".agent/tasks/open/t1/PROGRESS.md": "# Progress\n",
-        ".agent/tasks/open/t1/TASK.md": "# Task <id>: <title>\n",
+        ".agent/tasks/closed/cls-0000/TASK.md": "cls-0000\n",
+        ".agent/tasks/open/tst-0000/TASK.md": "tst-0000\n",
+        ".agent/tasks/open/tst-0001/PROGRESS.md": "# Progress\n",
+        ".agent/tasks/open/tst-0001/TASK.md": "# Task <id>: <title>\n",
     }
     notes_parent = git(git_env, f"--git-dir={origin_dir}", "rev-parse", f"{task.NOTES_BRANCH}^")
     assert notes_parent == notes_before
@@ -183,8 +203,8 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
     create(origin_dir, git_env)
 
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
-        ".agent/tasks/open/t1/PROGRESS.md": "# Progress\n",
-        ".agent/tasks/open/t1/TASK.md": "# Task <id>: <title>\n",
+        ".agent/tasks/open/tst-0001/PROGRESS.md": "# Progress\n",
+        ".agent/tasks/open/tst-0001/TASK.md": "# Task <id>: <title>\n",
     }
     assert git(git_env, f"--git-dir={origin_dir}", "rev-list", "--count", task.NOTES_BRANCH) == "1"
 
@@ -204,43 +224,43 @@ def test_without_a_signing_key_nothing_is_pushed(origin_dir, git_env) -> None:
     ):
         create(origin_dir, git_env)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
-    assert "task/t1" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
+    assert "task/tst-0001" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
 
 
 def test_an_existing_task_branch_is_refused_and_nothing_is_written(origin_dir, git_env) -> None:
-    git(git_env, f"--git-dir={origin_dir}", "branch", "task/t1", "main")
+    git(git_env, f"--git-dir={origin_dir}", "branch", "task/tst-0001", "main")
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
-    with pytest.raises(FoundryError, match=r"^task t1 already exists: there is a task/t1 branch$"):
+    with pytest.raises(FoundryError, match=r"^task tst-0001 already exists: there is a task/tst-0001 branch$"):
         create(origin_dir, git_env)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
-@pytest.mark.parametrize("task_id, found", [("T0", "open/t0"), ("C0", "closed/c0")])
+@pytest.mark.parametrize("task_id, found", [("tst-0000", "open/tst-0000"), ("cls-0000", "closed/cls-0000")])
 def test_an_existing_task_notes_dir_open_or_closed_is_refused_and_nothing_is_pushed(
     origin_dir, git_env, task_id: str, found: str
 ) -> None:
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
-    with pytest.raises(
-        FoundryError, match=rf"^task {task_id.lower()} already exists: agent-notes has .agent/tasks/{found}/$"
-    ):
+    with pytest.raises(FoundryError, match=rf"^task {task_id} already exists: agent-notes has .agent/tasks/{found}/$"):
         create(origin_dir, git_env, task_id)
-    assert f"task/{task_id.lower()}" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
+    assert f"task/{task_id}" not in git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
 def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_task_notes_dir(origin_dir, git_env) -> None:
-    git(git_env, f"--git-dir={origin_dir}", "branch", "task/c0", "main")
+    git(git_env, f"--git-dir={origin_dir}", "branch", "task/cls-0000", "main")
 
-    with pytest.raises(FoundryError, match=r"^task c0 already exists: agent-notes has .agent/tasks/closed/c0/$"):
-        create(origin_dir, git_env, "c0")
+    with pytest.raises(
+        FoundryError, match=r"^task cls-0000 already exists: agent-notes has .agent/tasks/closed/cls-0000/$"
+    ):
+        create(origin_dir, git_env, "cls-0000")
 
 
 def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> None:
     empty_dir = tmp_path / "empty.git"
     git(git_env, "init", "--quiet", "--bare", str(empty_dir))
 
-    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/t1 from$"):
+    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
         create(empty_dir, git_env)
 
 
@@ -283,9 +303,21 @@ def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "outcome, changed, lines",
     [
-        (CREATED, Task.as_open("t1"), ["created task t1 in store", "run it with: foundry run store t1"]),
-        (CLOSED, Task.as_closed("t1"), ["closed task t1 in store", "reopen it with: foundry task reopen store t1"]),
-        (REOPENED, Task.as_open("t1"), ["reopened task t1 in store", "run it with: foundry run store t1"]),
+        (
+            CREATED,
+            Task.as_open("tst-0001"),
+            ["created task tst-0001 in store", "run it with: foundry run store tst-0001"],
+        ),
+        (
+            CLOSED,
+            Task.as_closed("tst-0001"),
+            ["closed task tst-0001 in store", "reopen it with: foundry task reopen store tst-0001"],
+        ),
+        (
+            REOPENED,
+            Task.as_open("tst-0001"),
+            ["reopened task tst-0001 in store", "run it with: foundry run store tst-0001"],
+        ),
     ],
 )
 def test_the_report_says_what_was_done_and_what_comes_next(outcome: Outcome, changed: Task, lines: list[str]) -> None:
@@ -293,14 +325,14 @@ def test_the_report_says_what_was_done_and_what_comes_next(outcome: Outcome, cha
 
 
 def test_create_takes_a_project_and_a_task() -> None:
-    args = cli.build_parser().parse_args(["task", "create", "store", "T1"])
-    assert (args.project_name, args.task_id) == ("store", "T1")
+    args = cli.build_parser().parse_args(["task", "create", "store", "tst-0001"])
+    assert (args.project_name, args.task_id) == ("store", "tst-0001")
 
 
 @pytest.mark.parametrize("action", ["close", "reopen"])
 def test_close_and_reopen_take_a_project_and_a_task(action: str) -> None:
-    args = cli.build_parser().parse_args(["task", action, "store", "T1"])
-    assert (args.project_name, args.task_id) == ("store", "T1")
+    args = cli.build_parser().parse_args(["task", action, "store", "tst-0001"])
+    assert (args.project_name, args.task_id) == ("store", "tst-0001")
 
 
 # --- ProjectClone: what ProjectTasks can't reach ----------------------------------------
@@ -337,8 +369,8 @@ def test_fetch_branch_refuses_a_branch_the_remote_lacks(origin_dir, git_env) -> 
 
 def test_fetched_list_dir_lists_only_the_directories_in_a_fetched_branch(origin_dir, git_env) -> None:
     clone = fetched_clone(origin_dir, git_env)
-    assert clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR) == ["t0"]
-    assert clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0") == []  # TASK.md is a file
+    assert clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR) == ["tst-0000"]
+    assert clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000") == []  # TASK.md is a file
 
 
 def test_fetched_list_dir_of_a_missing_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
@@ -346,14 +378,14 @@ def test_fetched_list_dir_of_a_missing_dir_raises_the_narrow_error(origin_dir, g
     with pytest.raises(NotOnBranchError):
         clone.fetched_list_dir(task.NOTES_BRANCH, ".agent/tasks/nope")
     with pytest.raises(NotOnBranchError):  # a file is not a dir
-        clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md")
+        clone.fetched_list_dir(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md")
 
 
 def test_fetched_reads_of_an_unfetched_branch_raise_something_broader(origin_dir, git_env) -> None:
     clone = clone_in(origin_dir.parent, git_env, str(origin_dir))
     for call in (
         lambda: clone.fetched_list_dir(task.NOTES_BRANCH, task.OPEN_DIR),
-        lambda: clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md"),
+        lambda: clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md"),
     ):
         with pytest.raises(FoundryError, match=r"agent-notes isn't fetched") as raised:
             call()
@@ -363,20 +395,20 @@ def test_fetched_reads_of_an_unfetched_branch_raise_something_broader(origin_dir
 def test_fetched_read_reads_a_file_and_a_link_as_its_target_name(origin_dir, git_env, tmp_path: Path) -> None:
     seed_dir = tmp_path / "seed2"
     git(git_env, "clone", "--quiet", "--branch", task.NOTES_BRANCH, str(origin_dir), str(seed_dir))
-    (seed_dir / ".agent/tasks/open/t0/LINK").symlink_to("/etc/hostname")
+    (seed_dir / ".agent/tasks/open/tst-0000/LINK").symlink_to("/etc/hostname")
     git(git_env, "-C", str(seed_dir), "add", ".")
     git(git_env, "-C", str(seed_dir), "commit", "--quiet", "-m", "link")
     git(git_env, "-C", str(seed_dir), "push", "--quiet", "origin", task.NOTES_BRANCH)
 
     clone = fetched_clone(origin_dir, git_env)
 
-    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/TASK.md") == "t0\n"
-    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/t0/LINK") == "/etc/hostname"
+    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/TASK.md") == "tst-0000\n"
+    assert clone.fetched_read(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000/LINK") == "/etc/hostname"
 
 
 def test_fetched_read_of_a_missing_file_or_a_dir_raises_the_narrow_error(origin_dir, git_env) -> None:
     clone = fetched_clone(origin_dir, git_env)
-    for path in (f"{task.OPEN_DIR}/t0/NOPE", f"{task.OPEN_DIR}/t0"):
+    for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000"):
         with pytest.raises(NotOnBranchError):
             clone.fetched_read(task.NOTES_BRANCH, path)
 
@@ -389,31 +421,37 @@ def turn_of(origin_dir: Path, git_env: dict[str, str], task_id: str) -> str:
 
 
 def test_a_new_task_s_turn_is_the_template_s(origin_dir, git_env) -> None:
-    project_tasks_of(origin_dir, git_env).create_task("T1", {**TEMPLATE, "TURN": "dev\n"})
+    project_tasks_of(origin_dir, git_env).create_task("tst-0001", {**TEMPLATE, "TURN": "dev\n"})
 
-    assert turn_of(origin_dir, git_env, "T1") == "dev"
+    assert turn_of(origin_dir, git_env, "tst-0001") == "dev"
 
 
 def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env) -> None:
-    with pytest.raises(FoundryError, match=r"task t0 has no turn: agent-notes has no .agent/tasks/open/t0/TURN.*Name"):
-        turn_of(origin_dir, git_env, "t0")
+    with pytest.raises(
+        FoundryError, match=r"task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN.*Name"
+    ):
+        turn_of(origin_dir, git_env, "tst-0000")
 
 
 def test_a_dir_at_turn_is_no_turn(origin_dir, git_env) -> None:
-    push_notes(origin_dir, git_env, {".agent/tasks/open/t0/TURN/dev": "dev\n"})
+    push_notes(origin_dir, git_env, {".agent/tasks/open/tst-0000/TURN/dev": "dev\n"})
 
-    with pytest.raises(FoundryError, match=r"^task t0 has no turn: agent-notes has no .agent/tasks/open/t0/TURN"):
-        turn_of(origin_dir, git_env, "t0")
+    with pytest.raises(
+        FoundryError, match=r"^task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN"
+    ):
+        turn_of(origin_dir, git_env, "tst-0000")
 
 
 def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(origin_dir, git_env) -> None:
-    with pytest.raises(FoundryError, match=r"task c0 has no turn: agent-notes has no .agent/tasks/closed/c0/TURN"):
-        turn_of(origin_dir, git_env, "c0")
+    with pytest.raises(
+        FoundryError, match=r"task cls-0000 has no turn: agent-notes has no .agent/tasks/closed/cls-0000/TURN"
+    ):
+        turn_of(origin_dir, git_env, "cls-0000")
 
 
 def test_a_task_that_doesn_t_exist_has_no_turn_to_read(origin_dir, git_env) -> None:
     with pytest.raises(TaskNotFoundError):
-        turn_of(origin_dir, git_env, "t9")
+        turn_of(origin_dir, git_env, "tst-0009")
 
 
 def test_the_task_template_starts_with_the_planner_s_turn() -> None:
@@ -424,7 +462,9 @@ def test_the_task_template_starts_with_the_planner_s_turn() -> None:
 # --- get_task_by_id ---------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("task_id, found", [("T0", Task.as_open("t0")), ("c0", Task.as_closed("c0"))])
+@pytest.mark.parametrize(
+    "task_id, found", [("tst-0000", Task.as_open("tst-0000")), ("cls-0000", Task.as_closed("cls-0000"))]
+)
 def test_a_task_has_the_status_of_the_dir_holding_its_notes(origin_dir, git_env, task_id: str, found) -> None:
     assert project_tasks_of(origin_dir, git_env).get_task_by_id(task_id) == found
 
@@ -432,23 +472,28 @@ def test_a_task_has_the_status_of_the_dir_holding_its_notes(origin_dir, git_env,
 def test_a_task_in_neither_dir_is_not_found_naming_both(origin_dir, git_env) -> None:
     with pytest.raises(
         TaskNotFoundError,
-        match=r"^task t9 doesn't exist: agent-notes has neither .agent/tasks/open/t9/ nor .agent/tasks/closed/t9/$",
+        match=(
+            r"^task tst-0009 doesn't exist: "
+            r"agent-notes has neither .agent/tasks/open/tst-0009/ nor .agent/tasks/closed/tst-0009/$"
+        ),
     ):
-        project_tasks_of(origin_dir, git_env).get_task_by_id("t9")
+        project_tasks_of(origin_dir, git_env).get_task_by_id("tst-0009")
 
 
 def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_env) -> None:
     origin_dir = tmp_path / "bare.git"
     git(git_env, "init", "--quiet", "--bare", str(origin_dir))
     with pytest.raises(TaskNotFoundError):
-        project_tasks_of(origin_dir, git_env).get_task_by_id("t1")
+        project_tasks_of(origin_dir, git_env).get_task_by_id("tst-0001")
 
 
 def test_a_task_in_both_dirs_is_refused_naming_both(origin_dir, git_env) -> None:
-    push_notes(origin_dir, git_env, {".agent/tasks/closed/t0/TASK.md": "t0\n"})
+    push_notes(origin_dir, git_env, {".agent/tasks/closed/tst-0000/TASK.md": "tst-0000\n"})
 
-    with pytest.raises(FoundryError, match=r"^task t0 is both open and closed: .*open/t0/ and .*closed/t0/$") as error:
-        project_tasks_of(origin_dir, git_env).get_task_by_id("t0")
+    with pytest.raises(
+        FoundryError, match=r"^task tst-0000 is both open and closed: .*open/tst-0000/ and .*closed/tst-0000/$"
+    ) as error:
+        project_tasks_of(origin_dir, git_env).get_task_by_id("tst-0000")
     assert not isinstance(error.value, TaskNotFoundError)
 
 
@@ -491,22 +536,22 @@ def test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit(origin_di
         origin_dir,
         git_env,
         {
-            ".agent/tasks/open/t0/sub/NOTE.md": "n\n",
-            ".agent/tasks/open/t0/PROGRESS.md": "p\n",
-            ".agent/tasks/open/t01/TASK.md": "t01\n",
+            ".agent/tasks/open/tst-0000/sub/NOTE.md": "n\n",
+            ".agent/tasks/open/tst-0000/PROGRESS.md": "p\n",
+            ".agent/tasks/open/tst-00001/TASK.md": "tst-00001\n",
         },
     )
     before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     commits_before = len(notes_commits(origin_dir, git_env))
     branches_before = git(git_env, f"--git-dir={origin_dir}", "branch", "--list")
 
-    assert project_tasks_of(origin_dir, git_env).close_task("T0") == Task.as_closed("t0")
+    assert project_tasks_of(origin_dir, git_env).close_task("tst-0000") == Task.as_closed("tst-0000")
 
-    expected = moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
+    expected = moved(before, ".agent/tasks/open/tst-0000", ".agent/tasks/closed/tst-0000")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
-    assert ".agent/tasks/closed/t0/sub/NOTE.md" in expected
-    assert ".agent/tasks/open/t01/TASK.md" in expected
-    assert notes_commits(origin_dir, git_env)[0] == "Close task t0"
+    assert ".agent/tasks/closed/tst-0000/sub/NOTE.md" in expected
+    assert ".agent/tasks/open/tst-00001/TASK.md" in expected
+    assert notes_commits(origin_dir, git_env)[0] == "Close task tst-0000"
     assert len(notes_commits(origin_dir, git_env)) == commits_before + 1
     assert_notes_signed_with_your_key(origin_dir, git_env)
     assert git(git_env, f"--git-dir={origin_dir}", "branch", "--list") == branches_before
@@ -515,11 +560,11 @@ def test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit(origin_di
 def test_reopen_makes_the_reverse_move_in_one_signed_commit(origin_dir, git_env) -> None:
     before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
 
-    assert project_tasks_of(origin_dir, git_env).reopen_task("C0") == Task.as_open("c0")
+    assert project_tasks_of(origin_dir, git_env).reopen_task("cls-0000") == Task.as_open("cls-0000")
 
-    expected = moved(before, ".agent/tasks/closed/c0", ".agent/tasks/open/c0")
+    expected = moved(before, ".agent/tasks/closed/cls-0000", ".agent/tasks/open/cls-0000")
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == expected
-    assert notes_commits(origin_dir, git_env)[0] == "Reopen task c0"
+    assert notes_commits(origin_dir, git_env)[0] == "Reopen task cls-0000"
     assert_notes_signed_with_your_key(origin_dir, git_env)
 
 
@@ -527,7 +572,7 @@ def test_a_move_keeps_files_your_git_config_would_ignore_or_convert(origin_dir, 
     push_notes(
         origin_dir,
         git_env,
-        {".agent/tasks/open/t0/run.log": "log\n", ".agent/tasks/open/t0/crlf.md": "a\r\nb\r\n"},
+        {".agent/tasks/open/tst-0000/run.log": "log\n", ".agent/tasks/open/tst-0000/crlf.md": "a\r\nb\r\n"},
     )
     home_dir = Path(git_env["HOME"])
     (home_dir / "excludes").write_text("*.log\n")
@@ -535,18 +580,18 @@ def test_a_move_keeps_files_your_git_config_would_ignore_or_convert(origin_dir, 
         gitconfig.write(f"[core]\n\texcludesFile = {home_dir / 'excludes'}\n\tautocrlf = input\n")
     before = tree(origin_dir, git_env)
 
-    project_tasks_of(origin_dir, git_env).close_task("t0")
+    project_tasks_of(origin_dir, git_env).close_task("tst-0000")
 
-    assert tree(origin_dir, git_env) == moved(before, ".agent/tasks/open/t0", ".agent/tasks/closed/t0")
+    assert tree(origin_dir, git_env) == moved(before, ".agent/tasks/open/tst-0000", ".agent/tasks/closed/tst-0000")
 
 
 @pytest.mark.parametrize(
     "operation, task_id, message",
     [
-        (ProjectTasks.close_task, "c0", "^task c0 is already closed$"),
-        (ProjectTasks.close_task, "t9", r"^task t9 doesn't exist: "),
-        (ProjectTasks.reopen_task, "t0", "^task t0 is already open$"),
-        (ProjectTasks.reopen_task, "t9", r"^task t9 doesn't exist: "),
+        (ProjectTasks.close_task, "cls-0000", "^task cls-0000 is already closed$"),
+        (ProjectTasks.close_task, "tst-0009", r"^task tst-0009 doesn't exist: "),
+        (ProjectTasks.reopen_task, "tst-0000", "^task tst-0000 is already open$"),
+        (ProjectTasks.reopen_task, "tst-0009", r"^task tst-0009 doesn't exist: "),
     ],
 )
 def test_close_and_reopen_refuse_and_push_nothing(origin_dir, git_env, operation, task_id, message) -> None:
@@ -558,7 +603,9 @@ def test_close_and_reopen_refuse_and_push_nothing(origin_dir, git_env, operation
 
 
 @pytest.mark.parametrize(
-    "operation, task_id", [(ProjectTasks.close_task, "t0"), (ProjectTasks.reopen_task, "c0")], ids=["close", "reopen"]
+    "operation, task_id",
+    [(ProjectTasks.close_task, "tst-0000"), (ProjectTasks.reopen_task, "cls-0000")],
+    ids=["close", "reopen"],
 )
 def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env, operation, task_id) -> None:
     write_gitconfig(Path(git_env["HOME"]), signing_key=None)
@@ -600,22 +647,22 @@ def test_open_tasks_are_listed_in_id_order_with_their_stripped_turns(origin_dir,
         origin_dir,
         git_env,
         write={
-            ".agent/tasks/open/t0/TURN": "dev\n",
-            ".agent/tasks/open/b1/TURN": "  human \n\n",
-            ".agent/tasks/open/a2/TURN": "reviewer",
-            ".agent/tasks/closed/c0/TURN": "dev\n",  # closed: left out
+            ".agent/tasks/open/tst-0000/TURN": "dev\n",
+            ".agent/tasks/open/bbb-0001/TURN": "  human \n\n",
+            ".agent/tasks/open/aaa-0002/TURN": "reviewer",
+            ".agent/tasks/closed/cls-0000/TURN": "dev\n",  # closed: left out
             ".agent/tasks/open/stray.txt": "not a task\n",  # a file: ignored
         },
     )
 
-    assert summaries_of(origin_dir, git_env) == [("a2", "reviewer"), ("b1", "human"), ("t0", "dev")]
+    assert summaries_of(origin_dir, git_env) == [("aaa-0002", "reviewer"), ("bbb-0001", "human"), ("tst-0000", "dev")]
     assert isinstance(project_tasks_of(origin_dir, git_env).list_open_task_summaries()[0], TaskSummary)
 
 
 def test_a_symlinked_turn_shows_the_link_s_target_name_and_reads_nothing_outside(origin_dir, git_env) -> None:
-    edit_notes(origin_dir, git_env, symlink={".agent/tasks/open/t0/TURN": "/etc/hostname"})
+    edit_notes(origin_dir, git_env, symlink={".agent/tasks/open/tst-0000/TURN": "/etc/hostname"})
 
-    assert summaries_of(origin_dir, git_env) == [("t0", "/etc/hostname")]
+    assert summaries_of(origin_dir, git_env) == [("tst-0000", "/etc/hostname")]
 
 
 def test_no_open_dir_after_the_last_task_closed_lists_nothing(origin_dir, git_env) -> None:
@@ -626,22 +673,23 @@ def test_no_open_dir_after_the_last_task_closed_lists_nothing(origin_dir, git_en
 
 @pytest.mark.parametrize(
     "files",
-    [{}, {".agent/tasks/open/t0/TURN": " \n"}, {".agent/tasks/open/t0/TURN/x": "x"}],
+    [{}, {".agent/tasks/open/tst-0000/TURN": " \n"}, {".agent/tasks/open/tst-0000/TURN/x": "x"}],
     ids=["missing", "empty", "directory"],
 )
 def test_a_missing_empty_or_directory_turn_fails_naming_the_task(origin_dir, git_env, files) -> None:
-    if files:  # t0 starts without a TURN
+    if files:  # tst-0000 starts without a TURN
         edit_notes(origin_dir, git_env, write=files)
 
     with pytest.raises(
-        FoundryError, match=r"^task t0 has no turn: agent-notes has no .*TURN.*Write the next role's name in it\.$"
+        FoundryError,
+        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*Write the next role's name in it\.$",
     ):
         summaries_of(origin_dir, git_env)
 
 
 def test_a_dir_that_is_not_a_task_id_fails_naming_it(origin_dir, git_env) -> None:
     edit_notes(
-        origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n", ".agent/tasks/open/Bad Dir/TURN": "dev"}
+        origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/Bad Dir/TURN": "dev"}
     )
 
     with pytest.raises(FoundryError, match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id.*Rename or remove it"):
@@ -673,7 +721,7 @@ def test_listing_an_unreachable_repository_fails_with_gits_message(tmp_path: Pat
 
 
 def test_listing_costs_one_fetch_however_many_tasks(origin_dir, git_env, tmp_path: Path) -> None:
-    edit_notes(origin_dir, git_env, write={f".agent/tasks/open/t{n}/TURN": "dev\n" for n in range(0, 6)})
+    edit_notes(origin_dir, git_env, write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(0, 6)})
     log = tmp_path / "git-calls.log"
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
@@ -698,23 +746,25 @@ def listing(name: str, *turns: tuple[str, str], error: str | None = None) -> Pro
 
 def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
     stdout, stderr = listing_lines(
-        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t1", "reviewer"))], turn=None
+        [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))],
+        turn=None,
     )
 
     assert stdout == [
         "store  wcf-0007  dev",
         "store  wcf-0010  human",
-        "a      t1        reviewer",
+        "a      t-0001    reviewer",
     ]
     assert stderr == []
 
 
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     stdout, _ = listing_lines(
-        [listing("store", ("t1", "dev"), ("t2", "developer"), ("t3", "dev"), ("t4", "Dev"))], turn="dev"
+        [listing("store", ("tst-0001", "dev"), ("tst-0002", "developer"), ("tst-0003", "dev"), ("tst-0004", "Dev"))],
+        turn="dev",
     )
 
-    assert stdout == ["store  t1  dev", "store  t3  dev"]
+    assert stdout == ["store  tst-0001  dev", "store  tst-0003  dev"]
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
@@ -724,15 +774,15 @@ def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
 
 
 def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
-    stdout, _ = listing_lines([listing("store", ("t1", "dev")), listing("empty")], turn="human")
+    stdout, _ = listing_lines([listing("store", ("tst-0001", "dev")), listing("empty")], turn="human")
 
     assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
 
 
 def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
-    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("t1", "dev"))], turn=None)
+    stdout, stderr = listing_lines([listing("bad", error="boom"), listing("store", ("tst-0001", "dev"))], turn=None)
 
-    assert (stdout, stderr) == (["store  t1  dev"], ["error: bad: boom"])
+    assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
 
 
 def test_list_takes_optional_projects_and_a_turn() -> None:
@@ -757,12 +807,12 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
 
 def test_a_project_s_listing_holds_its_tasks_or_the_reason_it_failed(origin_dir, git_env, tmp_path: Path) -> None:
-    edit_notes(origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n"})
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
 
     good = read_project_listing(Project("store", str(origin_dir)), git_env)
     bad = read_project_listing(Project("gone", str(tmp_path / "missing.git")), git_env)
 
-    assert good == ProjectListing("store", [TaskSummary(Task.as_open("t0"), "dev")], None)
+    assert good == ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")], None)
     assert (bad.project_name, bad.summaries) == ("gone", [])
     assert bad.error is not None and "does not appear to be a git repo" in bad.error
 
@@ -771,7 +821,7 @@ def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_f
     origin_dir, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry instance of its own: one project lists, the other can't be reached."""
-    edit_notes(origin_dir, git_env, write={".agent/tasks/open/t0/TURN": "dev\n"})
+    edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
     foundry_root = tmp_path / "foundry"
     (foundry_root / "config").mkdir(parents=True)
     (foundry_root / "config" / "foundry.yaml").write_text(
@@ -784,8 +834,35 @@ def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_f
 
     assert cli.main(["task", "list"]) == 1
     printed = capsys.readouterr()
-    assert printed.out == "store  t0  dev\n"
+    assert printed.out == "store  tst-0000  dev\n"
     assert printed.err.startswith("error: gone: ") and printed.err.count("error: ") == 1
 
     assert cli.main(["task", "list", "store"]) == 0
-    assert capsys.readouterr() == ("store  t0  dev\n", "")
+    assert capsys.readouterr() == ("store  tst-0000  dev\n", "")
+
+
+# --- an id given in uppercase ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "operation, task_id",
+    [
+        (ProjectTasks.create_task, "TST-0001"),
+        (ProjectTasks.create_task, "TST-0000"),
+        (ProjectTasks.close_task, "TST-0000"),
+        (ProjectTasks.reopen_task, "CLS-0000"),
+        (ProjectTasks.get_task_by_id, "TST-0000"),
+    ],
+    ids=["create", "create-existing", "close", "reopen", "get"],
+)
+def test_an_uppercase_id_is_refused_not_lowercased_and_nothing_is_pushed(
+    origin_dir, git_env, operation, task_id: str
+) -> None:
+    project_tasks = project_tasks_of(origin_dir, git_env)
+    args = (task_id, TEMPLATE) if operation is ProjectTasks.create_task else (task_id,)
+    refs_before = git(git_env, f"--git-dir={origin_dir}", "for-each-ref")
+
+    with pytest.raises(FoundryError, match=rf"^task id '{task_id}' is not valid: ") as error:
+        operation(project_tasks, *args)
+    assert not isinstance(error.value, TaskNotFoundError)
+    assert git(git_env, f"--git-dir={origin_dir}", "for-each-ref") == refs_before

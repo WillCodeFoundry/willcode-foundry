@@ -28,11 +28,9 @@ TURN_FILE: Final = "TURN"
 # The turn that no role takes: the task waits for you.
 HUMAN: Final = "human"
 
-# A task id becomes the git branch task/<id>, so it must be a valid ref
-# component as well as readable: wcf-0042, fix-login.2. The constructor
-# matches the id as given; Task.from_id_and_status, and as_open and as_closed
-# through it, lowercase a typed id first.
-_TASK_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
+# A task id: lowercase ASCII letters, '-', then four or more digits, such as wcf-0042. It is also a valid ref
+# component, so task/<id> is always a valid branch.
+_TASK_ID = re.compile(r"[a-z]+-[0-9]{4,}")
 
 
 class Status(Enum):
@@ -48,35 +46,29 @@ _STATUS_DIRS: Final = {Status.OPEN: OPEN_DIR, Status.CLOSED: CLOSED_DIR}
 
 @dataclass(frozen=True)
 class Task:
-    """A task, named by its id and its status: Task.from_id_and_status("WCF-0042", Status.OPEN).
+    """A task, named by its id and its status: Task("wcf-0042", Status.OPEN).
 
-    The id must be lowercase and ASCII, letters, digits, '.', '_' or '-', and make a valid branch name; otherwise
-    FoundryError. ProjectTasks gives a task the status its repository says it has.
+    The id must match _TASK_ID as given, never lowercased; otherwise FoundryError. ProjectTasks gives a task the
+    status its repository says it has.
     """
 
     id: str
     status: Status
 
     def __post_init__(self) -> None:
-        if not _TASK_ID.fullmatch(self.id) or ".." in self.id or self.id.endswith((".", ".lock")):
+        if not _TASK_ID.fullmatch(self.id):
             raise FoundryError(
-                f"task id {self.id!r} is not valid: use lowercase letters, digits, '.', '_' and '-', "
-                "starting with a letter or digit (e.g. wcf-0042)"
+                f"task id {self.id!r} is not valid: "
+                "use lowercase letters, '-', then four or more digits (e.g. wcf-0042)"
             )
 
     @classmethod
-    def from_id_and_status(cls, task_id: str, status: Status) -> "Task":
-        """The task named ``task_id``, lowercased if it is ASCII (a few other letters lowercase into ASCII ones, so
-        a non-ASCII id is refused as it is)."""
-        return cls(task_id.lower() if task_id.isascii() else task_id, status)
-
-    @classmethod
     def as_open(cls, task_id: str) -> "Task":
-        return cls.from_id_and_status(task_id, Status.OPEN)
+        return cls(task_id, Status.OPEN)
 
     @classmethod
     def as_closed(cls, task_id: str) -> "Task":
-        return cls.from_id_and_status(task_id, Status.CLOSED)
+        return cls(task_id, Status.CLOSED)
 
     @property
     def branch(self) -> str:
