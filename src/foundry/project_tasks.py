@@ -28,7 +28,7 @@ class TaskNotFoundError(FoundryError):
     """The task's notes dir is on neither side: it isn't open and it isn't closed."""
 
 
-class MissingTurnFileError(FoundryError):
+class MissingTurnError(FoundryError):
     """The task's TURN_FILE is missing, not a file, or holds only blanks."""
 
 
@@ -128,7 +128,7 @@ class ProjectTasks:
     def read_task_turn(self, task_id: str) -> str:
         """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
 
-        MissingTurnFileError when the file is missing, not a file or empty.
+        MissingTurnError when the file is missing, not a file or empty.
         """
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task)
@@ -149,7 +149,7 @@ class ProjectTasks:
             )
         try:
             before = self._read_fetched_turn(task)
-        except MissingTurnFileError:
+        except MissingTurnError:
             before = _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
@@ -181,7 +181,7 @@ class ProjectTasks:
     def _read_fetched_turn(self, task: Task) -> str:
         """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
 
-        MissingTurnFileError, saying how to hand the task off, when the file is missing, not a file, or holds only
+        MissingTurnError, saying how to hand the task off, when the file is missing, not a file, or holds only
         blanks.
         """
         try:
@@ -189,7 +189,7 @@ class ProjectTasks:
         except NotOnBranchError:
             turn = ""
         if not turn:
-            raise MissingTurnFileError(
+            raise MissingTurnError(
                 f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
                 f"Hand it off with `foundry task handoff {self._project_name} {task.id} ROLE`."
             )

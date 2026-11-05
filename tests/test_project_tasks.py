@@ -10,7 +10,7 @@ from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
 from foundry.project_tasks import (
-    MissingTurnFileError,
+    MissingTurnError,
     ProjectTasks,
     TaskNotFoundError,
     TaskSummary,
@@ -137,7 +137,7 @@ def test_a_new_task_s_turn_is_the_template_s(project_repository) -> None:
 
 def test_a_task_without_a_turn_says_to_hand_it_off(project_repository) -> None:
     with pytest.raises(
-        MissingTurnFileError,
+        MissingTurnError,
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
         r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
     ):
