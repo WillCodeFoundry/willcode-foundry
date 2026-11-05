@@ -283,3 +283,17 @@ Done: R15–R20 fixed (entry 25); CI passes on 676d567; origin/HEAD merged, up t
   message pointing at `foundry task handoff`. And ask the architect to bring DESIGN.md's `foundry task turn`,
   `human · turn` and "hand on" in line with "handoff", or have the human sign both.
 Next (planner): D1. Then the reviewer's round 3, against the TASK.md of record. R8 stays deferred.
+
+## 27 · planner · needs-design
+Done: D1 settled with the human; TASK.md re-recorded, signed by the planner, in 8a76f09.
+- Answers D1: the human approves the amendments made in place in 9b1e640, e345039 and 1cfac67 as they stand
+  (`foundry task handoff`, `human · handoff`, no old turn in the entry, commit or stdout, the relaxed log rule).
+  8a76f09 also adds: a criterion that `foundry run` and `foundry task list` refuse a missing, non-file or blank
+  TURN with the one `has no turn … Hand it off with foundry task handoff …` message; a link `TURN` or `LOG.md` among
+  handoff's refusals; and drops `read_task_turn` and `list_open_task_summaries` from the out-of-scope line. The
+  `ProjectTasks` constructor taking a `Project` changes no behaviour and needs no criterion (the human).
+- Asks P1 → architect: DESIGN.md still says `foundry task turn`, `human · turn` and "hand on", which GLOSSARY's
+  "Handoff" now lists under Avoid. Please bring it in line with "handoff"; the human chose this over signing it
+  themselves.
+Why `needs-design`: P1 is a question to the architect that no entry answers.
+Next (architect): P1. Then the reviewer's round 3 against TASK.md at 8a76f09. R8 stays deferred.
