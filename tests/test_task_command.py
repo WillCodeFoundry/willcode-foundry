@@ -1,6 +1,5 @@
 """The `foundry task` commands: their reports, arguments and checks, and end to end through cli.main."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -24,11 +23,7 @@ from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import TaskSummary
 from foundry.task import Task
-
-
-def git(env: dict[str, str], *args: str) -> str:
-    return subprocess.run(["git", *args], env=env, capture_output=True, text=True, check=True).stdout.strip()
-
+from tests.support.project_repository import git_output
 
 # --- the command ------------------------------------------------------------------
 
@@ -152,7 +147,7 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
 def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, git_env, tmp_path: Path) -> None:
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
-    git(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: a FoundryError
+    git_output(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: a FoundryError
     projects = [
         Project("bare", str(tmp_path / "bare.git")),
         Project("gone", str(tmp_path / "missing.git")),  # unreachable: git's GitError

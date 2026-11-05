@@ -1,6 +1,5 @@
 """ProjectClone, where ProjectTasks can't reach it, against real repositories on disk."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -8,12 +7,7 @@ import pytest
 from foundry import task
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-
-
-def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClone:
-    """A ProjectClone of ``url`` in a new folder in ``parent_dir``."""
-    return ProjectClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
-
+from tests.support.project_repository import clone_in
 
 # --- ProjectClone: what ProjectTasks can't reach ----------------------------------------
 

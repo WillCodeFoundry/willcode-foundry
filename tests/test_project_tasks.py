@@ -2,7 +2,6 @@
 and reading and listing their turns."""
 
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -10,31 +9,17 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
 from foundry.project_tasks import NoTurnError, ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
 from foundry.task import Status, Task
+from tests.support.project_repository import git_output, project_tasks_of
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
-
-
-def git(env: dict[str, str], *args: str) -> str:
-    return subprocess.run(["git", *args], env=env, capture_output=True, text=True, check=True).stdout.strip()
-
-
-def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClone:
-    """A ProjectClone of ``url`` in a new folder in ``parent_dir``."""
-    return ProjectClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
-
-
-def project_tasks_of(repository_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
-    """The tasks of the repository at ``repository_dir``, as the project store, through a clone of their own."""
-    return ProjectTasks(clone_in(repository_dir.parent, git_env, str(repository_dir)), "store")
 
 
 @pytest.fixture
 def no_signing_key(git_env) -> None:
     """Your git config, without a signing key."""
-    git(git_env, "config", "--global", "--unset", "user.signingkey")
+    git_output(git_env, "config", "--global", "--unset", "user.signingkey")
 
 
 def create(project_tasks: ProjectTasks, task_id: str = "tst-0001") -> Task:
@@ -122,7 +107,7 @@ def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_task_notes_dir
 
 def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> None:
     empty_dir = tmp_path / "empty.git"
-    git(git_env, "init", "--quiet", "--bare", str(empty_dir))
+    git_output(git_env, "init", "--quiet", "--bare", str(empty_dir))
 
     with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
         create(project_tasks_of(empty_dir, git_env))
@@ -202,7 +187,7 @@ def test_a_task_in_neither_dir_is_not_found_naming_both(project_repository) -> N
 
 def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_env) -> None:
     bare_dir = tmp_path / "bare.git"
-    git(git_env, "init", "--quiet", "--bare", str(bare_dir))
+    git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
     with pytest.raises(TaskNotFoundError):
         project_tasks_of(bare_dir, git_env).get_task_by_id("tst-0001")
 
@@ -512,7 +497,7 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(project_repository) -> None
 
 def test_listing_a_repository_without_a_notes_branch_names_agent_notes(tmp_path: Path, git_env) -> None:
     bare_dir = tmp_path / "bare.git"
-    git(git_env, "init", "--quiet", "--bare", str(bare_dir))
+    git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
 
     with pytest.raises(FoundryError, match=r"^the repository has no agent-notes branch$"):
         summaries_of(project_tasks_of(bare_dir, git_env))
