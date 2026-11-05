@@ -30,10 +30,15 @@ commit.
       or is both open and closed (the messages `get_task_by_id` gives); the
       task is closed, with a message saying to reopen it first; `TURN` already
       says ROLE, with a message saying so; the task has no `LOG.md`, or it
-      isn't a file, with a message naming the task and the file; no signing
-      key (as `close` without one).
+      isn't a file, with a message naming the task and the file; `TURN` or
+      `LOG.md` is a link, with a message naming it; no signing key (as `close`
+      without one).
 - [ ] A task whose `TURN` is missing, empty or only blanks is not refused:
       the command writes its `TURN`.
+- [ ] `foundry run` and `foundry task list` refuse a task whose `TURN` is
+      missing, not a file, or only blanks, with one message:
+      ``task <id> has no turn: agent-notes has no <path of TURN>, or it is
+      empty. Hand it off with `foundry task handoff <PROJECT> <id> ROLE`.``
 - [ ] The entry appended to `LOG.md` follows its existing text, which is
       kept but for the whitespace at the file's end and its line endings.
       After one blank line (none when the log holds only blanks) comes:
@@ -73,8 +78,7 @@ commit.
 - Retrying when the push is refused because someone pushed first: the error
   says so, and you run the command again.
 - Starting the role, or answering questions in the log.
-- Changing `get_task_by_id`, `read_task_turn`, `list_open_task_summaries`,
-  `close_task` or `reopen_task`'s behaviour.
+- Changing `get_task_by_id`, `close_task` or `reopen_task`'s behaviour.
 - A new ADR.
 
 ## Context
