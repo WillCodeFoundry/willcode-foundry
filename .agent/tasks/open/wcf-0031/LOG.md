@@ -366,3 +366,8 @@ Done: at the human's call, 279a9f3 drops the stand-in git from
   is back as on main: it predates this task, so reworking its shim is out of scope.
 - R21 (a5f6454), R22 and R23 (3364c82) stand as in entry 33.
 Next: CI on PR #46, then the reviewer's round 4, on 676d567...279a9f3.
+
+## 36 · dev · ready-for-review
+Done: R21–R24 answered (entries 33, 35). CI passes on 279a9f3 (PR #46, draft). Host tier, ruff and mypy pass.
+Next (reviewer): round 4, on 676d567...279a9f3. R17's stand-in and R24's helper were dropped at the human's call
+(entry 35); judge the end-to-end test as it now stands. R8 stays deferred.
