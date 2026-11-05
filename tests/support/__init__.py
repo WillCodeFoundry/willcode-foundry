@@ -28,15 +28,6 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
-def path_with_stand_in(directory: Path, name: str, script: str, path: str) -> str:
-    """``path`` with ``directory`` first, after writing there an executable ``name`` that runs ``script`` in sh."""
-    directory.mkdir()
-    command = directory / name
-    command.write_text(f"#!/bin/sh\n{script}")
-    command.chmod(0o755)
-    return f"{directory}{os.pathsep}{path}"
-
-
 def run_pytest(*args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     """pytest in a process of its own, in this repository, with this one's environment plus ``env``."""
     return subprocess.run(
