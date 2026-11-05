@@ -48,8 +48,8 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "doesn't exist.",
     )
     reopen.set_defaults(func=reopen_main)
-    turn = actions.add_parser(
-        "turn",
+    handoff = actions.add_parser(
+        "handoff",
         parents=[task_arguments],
         help=f"write ROLE to the open task's {task.TURN_FILE} on {task.NOTES_BRANCH}, "
         f"and say so in its {task.LOG_FILE}",
@@ -57,9 +57,9 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         f"key. Refuses a task that is closed or doesn't exist, whose turn is already ROLE, or that has no "
         f"{task.LOG_FILE}. Starts nothing: run the role with foundry run.",
     )
-    turn.add_argument("turn", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
-    turn.add_argument("--note", metavar="TEXT", help=f"one line to add to the {task.LOG_FILE} entry")
-    turn.set_defaults(func=turn_main)
+    handoff.add_argument("turn", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
+    handoff.add_argument("--note", metavar="TEXT", help=f"one line to add to the {task.LOG_FILE} entry")
+    handoff.set_defaults(func=handoff_main)
     list_parser = actions.add_parser(
         "list",
         help=f"list the open tasks and whose turn each is, from {task.TURN_FILE} on {task.NOTES_BRANCH}",
@@ -105,7 +105,7 @@ def reopen_main(args: argparse.Namespace) -> int:
     return 0
 
 
-def turn_main(args: argparse.Namespace) -> int:
+def handoff_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
     foundry_config = config.load(paths.find_foundry_root())
     project = foundry_config.project(args.project_name)
@@ -164,8 +164,8 @@ def require_valid_handoff_args(foundry_config: Config, *, task_id: str, turn: st
 
 
 def handoff_lines(project_name: str, task_id: str, *, before: str, after: str) -> list[str]:
-    """What turn prints: the handoff, then how to run the task, unless it now waits for you."""
-    lines = [f"task {task_id} in {project_name}: turn {before} → {after}"]
+    """What handoff prints: the handoff, then how to run the task, unless it now waits for you."""
+    lines = [f"task {task_id} in {project_name}: handoff {before} → {after}"]
     if after != task.HUMAN:
         lines.append(f"run it with: foundry run {project_name} {task_id}")
     return lines

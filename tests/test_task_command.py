@@ -190,9 +190,9 @@ def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_f
     assert capsys.readouterr() == ("store  no open tasks with turn human\n", "")
 
 
-# --- foundry task turn ------------------------------------------------------------------
+# --- foundry task handoff ---------------------------------------------------------------
 
-TURN_CONFIG = Config(
+HANDOFF_CONFIG = Config(
     "f",
     {"store": Project("store", "url")},
     {name: Role(name, Path(f"/secrets/ssh/{name}"), None) for name in ("reviewer", "dev")},
@@ -202,7 +202,7 @@ TURN_CONFIG = Config(
 @pytest.mark.parametrize("turn", ["dev", "human"])
 @pytest.mark.parametrize("note", [None, "see R2", "  padded  "])
 def test_handoff_args_that_check_out_pass(turn: str, note: str | None) -> None:
-    require_valid_handoff_args(TURN_CONFIG, task_id="tst-0001", turn=turn, note=note)
+    require_valid_handoff_args(HANDOFF_CONFIG, task_id="tst-0001", turn=turn, note=note)
 
 
 @pytest.mark.parametrize(
@@ -233,7 +233,7 @@ def test_handoff_args_that_check_out_pass(turn: str, note: str | None) -> None:
 def test_handoff_args_are_refused_before_any_git(arguments, message) -> None:
     valid = {"task_id": "tst-0001", "turn": "dev", "note": None}
     with pytest.raises(FoundryError, match=message):
-        require_valid_handoff_args(TURN_CONFIG, **{**valid, **arguments})
+        require_valid_handoff_args(HANDOFF_CONFIG, **{**valid, **arguments})
 
 
 def test_a_config_without_roles_knows_only_human() -> None:
@@ -246,21 +246,21 @@ def test_a_config_without_roles_knows_only_human() -> None:
 @pytest.mark.parametrize(
     "after, lines",
     [
-        ("dev", ["task tst-0001 in store: turn none → dev", "run it with: foundry run store tst-0001"]),
-        ("human", ["task tst-0001 in store: turn none → human"]),
+        ("dev", ["task tst-0001 in store: handoff none → dev", "run it with: foundry run store tst-0001"]),
+        ("human", ["task tst-0001 in store: handoff none → human"]),
     ],
 )
 def test_the_handoff_lines_say_how_to_run_the_task_unless_it_waits_for_you(after: str, lines: list[str]) -> None:
     assert handoff_lines("store", "tst-0001", before="none", after=after) == lines
 
 
-def test_turn_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
-    args = cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "dev", "--note", "see R2"])
+def test_handoff_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
+    args = cli.build_parser().parse_args(["task", "handoff", "store", "tst-0001", "dev", "--note", "see R2"])
     assert (args.project_name, args.task_id, args.turn, args.note) == ("store", "tst-0001", "dev", "see R2")
-    assert cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "human"]).note is None
+    assert cli.build_parser().parse_args(["task", "handoff", "store", "tst-0001", "human"]).note is None
 
 
-def test_turn_prints_the_handoff_or_an_error_and_exits_accordingly(
+def test_handoff_prints_the_turns_or_an_error_and_exits_accordingly(
     project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry instance of its own with one role, dev."""
@@ -278,21 +278,21 @@ def test_turn_prints_the_handoff_or_an_error_and_exits_accordingly(
     for name, value in git_env.items():
         monkeypatch.setenv(name, value)
 
-    assert cli.main(["task", "turn", "store", "tst-0000", "dev", "--note", "go"]) == 0
+    assert cli.main(["task", "handoff", "store", "tst-0000", "dev", "--note", "go"]) == 0
     assert capsys.readouterr() == (
-        "task tst-0000 in store: turn none → dev\nrun it with: foundry run store tst-0000\n",
+        "task tst-0000 in store: handoff none → dev\nrun it with: foundry run store tst-0000\n",
         "",
     )
-    assert project_repository.notes_commits()[0] == "Turn of task tst-0000: none → dev"
+    assert project_repository.notes_commits()[0] == "Handoff of task tst-0000: none → dev"
 
     notes_before = project_repository.head()
-    assert cli.main(["task", "turn", "store", "tst-0000", "dev"]) == 1
+    assert cli.main(["task", "handoff", "store", "tst-0000", "dev"]) == 1
     assert capsys.readouterr() == ("", "error: task tst-0000's turn is already dev\n")
-    assert cli.main(["task", "turn", "store", "tst-0000", "planner"]) == 1
+    assert cli.main(["task", "handoff", "store", "tst-0000", "planner"]) == 1
     assert capsys.readouterr() == ("", "error: 'planner' is not a role; known: dev, or human\n")
-    assert cli.main(["task", "turn", "nope", "tst-0000", "dev"]) == 1
+    assert cli.main(["task", "handoff", "nope", "tst-0000", "dev"]) == 1
     assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: store\n")
     assert project_repository.head() == notes_before
 
-    assert cli.main(["task", "turn", "store", "tst-0000", "human"]) == 0
-    assert capsys.readouterr() == ("task tst-0000 in store: turn dev → human\n", "")
+    assert cli.main(["task", "handoff", "store", "tst-0000", "human"]) == 0
+    assert capsys.readouterr() == ("task tst-0000 in store: handoff dev → human\n", "")

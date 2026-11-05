@@ -9,7 +9,7 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_tasks import NoTurnError, ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
+from foundry.project_tasks import NoTurnError, ProjectTasks, TaskNotFoundError, TaskSummary, log_with_handoff_entry
 from foundry.task import Status, Task
 from tests.support.project_repository import git_output, project_tasks_of
 
@@ -133,7 +133,7 @@ def test_a_task_without_a_turn_says_to_hand_it_off(project_repository) -> None:
     with pytest.raises(
         NoTurnError,
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
-        r"Hand it off with `foundry task turn store tst-0000 ROLE`\.$",
+        r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
     ):
         project_repository.project_tasks().read_task_turn("tst-0000")
 
@@ -296,33 +296,33 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(
     assert project_repository.head() == notes_before
 
 
-# --- log_with_turn_entry -----------------------------------------------------------------
+# --- log_with_handoff_entry -----------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "log, note, expected",
     [
-        ("", None, "## 1 · human · turn\nTurn: none → dev.\n"),
-        (" \n\n", None, "## 1 · human · turn\nTurn: none → dev.\n"),
-        ("# Log\n", None, "# Log\n\n## 1 · human · turn\nTurn: none → dev.\n"),
-        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · turn\nTurn: none → dev.\n"),
+        ("", None, "## 1 · human · handoff\nTurn: none → dev.\n"),
+        (" \n\n", None, "## 1 · human · handoff\nTurn: none → dev.\n"),
+        ("# Log\n", None, "# Log\n\n## 1 · human · handoff\nTurn: none → dev.\n"),
+        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · handoff\nTurn: none → dev.\n"),
         (
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n",
             "  look at R3  ",
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n"
-            "\n## 3 · human · turn\nTurn: none → dev.\nNote: look at R3\n",
+            "\n## 3 · human · handoff\nTurn: none → dev.\nNote: look at R3\n",
         ),
         (
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.",
             None,
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.\n"
-            "\n## 5 · human · turn\nTurn: none → dev.\n",
+            "\n## 5 · human · handoff\nTurn: none → dev.\n",
         ),
         (
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n",
             None,
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n"
-            "\n## 12 · human · turn\nTurn: none → dev.\n",
+            "\n## 12 · human · handoff\nTurn: none → dev.\n",
         ),
     ],
     ids=[
@@ -335,14 +335,16 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(
         "headings-only",
     ],
 )
-def test_the_turn_entry_follows_the_log_after_one_blank_line_numbered_after_its_last_entry(log, note, expected) -> None:
+def test_the_handoff_entry_follows_the_log_after_one_blank_line_numbered_after_its_last_entry(
+    log, note, expected
+) -> None:
     """The log's text is kept, but for the whitespace at its end."""
-    assert log_with_turn_entry(log, before="none", after="dev", note=note) == expected
+    assert log_with_handoff_entry(log, before="none", after="dev", note=note) == expected
 
 
-def test_the_turn_entry_names_both_turns() -> None:
-    assert log_with_turn_entry("# Log\n", before="reviewer", after="human", note=None).endswith(
-        "\n\n## 1 · human · turn\nTurn: reviewer → human.\n"
+def test_the_handoff_entry_names_both_turns() -> None:
+    assert log_with_handoff_entry("# Log\n", before="reviewer", after="human", note=None).endswith(
+        "\n\n## 1 · human · handoff\nTurn: reviewer → human.\n"
     )
 
 
@@ -368,13 +370,13 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     commits_before = len(project_repository.notes_commits())
 
     assert project_repository.project_tasks().handoff("tst-0000", "dev", note=" see R2 ") == before
-    expected_log = LOG + f"\n## 2 · human · turn\nTurn: {before} → dev.\nNote: see R2\n"
+    expected_log = LOG + f"\n## 2 · human · handoff\nTurn: {before} → dev.\nNote: see R2\n"
     assert project_repository.notes_files() == {
         **files_before,
         ".agent/tasks/open/tst-0000/TURN": "dev\n",
         ".agent/tasks/open/tst-0000/LOG.md": expected_log,
     }
-    assert project_repository.notes_commits()[0] == f"Turn of task tst-0000: {before} → dev"
+    assert project_repository.notes_commits()[0] == f"Handoff of task tst-0000: {before} → dev"
     assert len(project_repository.notes_commits()) == commits_before + 1
     assert project_repository.notes_signed_with_your_key()
 
@@ -477,7 +479,7 @@ def test_a_missing_empty_or_directory_turn_fails_naming_the_task(project_reposit
 
     with pytest.raises(
         FoundryError,
-        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*`foundry task turn store tst-0000 ROLE`\.$",
+        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*`foundry task handoff store tst-0000 ROLE`\.$",
     ):
         summaries_of(project_repository.project_tasks())
 

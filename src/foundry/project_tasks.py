@@ -157,10 +157,10 @@ class ProjectTasks:
         self._clone.write(
             {
                 task.turn_file: f"{turn}\n",
-                task.log_file: log_with_turn_entry(log, before=before, after=turn, note=note),
+                task.log_file: log_with_handoff_entry(log, before=before, after=turn, note=note),
             }
         )
-        self._commit_and_push(f"Turn of task {task.id}: {before} → {turn}")
+        self._commit_and_push(f"Handoff of task {task.id}: {before} → {turn}")
         return before
 
     def list_open_task_summaries(self) -> list[TaskSummary]:
@@ -190,7 +190,7 @@ class ProjectTasks:
         if not turn:
             raise NoTurnError(
                 f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-                f"Hand it off with `foundry task turn {self._project_name} {task.id} ROLE`."
+                f"Hand it off with `foundry task handoff {self._project_name} {task.id} ROLE`."
             )
         return turn
 
@@ -229,7 +229,7 @@ def _open_task_for_dir(dir_name: str) -> Task:
         raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
 
 
-def log_with_turn_entry(log: str, *, before: str, after: str, note: str | None) -> str:
+def log_with_handoff_entry(log: str, *, before: str, after: str, note: str | None) -> str:
     """``log``, then a blank line and an entry saying you handed the task off from ``before`` to ``after``.
 
     The log's text is kept, but for the whitespace at its end; a blank log gets no blank line. The entry is numbered
@@ -238,7 +238,7 @@ def log_with_turn_entry(log: str, *, before: str, after: str, note: str | None) 
     """
     numbers = [match[1] for line in log.split("\n") if (match := _LOG_HEADING.match(line))]
     number = int(numbers[-1]) + 1 if numbers else 1
-    entry = [f"## {number} · {HUMAN} · turn", f"Turn: {before} → {after}."]
+    entry = [f"## {number} · {HUMAN} · handoff", f"Turn: {before} → {after}."]
     if note is not None:
         entry.append(f"Note: {note.strip()}")
     kept = log.rstrip()
