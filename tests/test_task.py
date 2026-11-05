@@ -93,8 +93,9 @@ def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClon
 
 
 def project_tasks_of(origin_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
-    """The tasks of ``origin_dir``, through a clone of their own, so each sees the repository as it is now."""
-    return ProjectTasks(clone_in(origin_dir.parent, git_env, str(origin_dir)))
+    """The tasks of ``origin_dir``, as the project store, through a clone of their own, so each sees the repository as
+    it is now."""
+    return ProjectTasks(clone_in(origin_dir.parent, git_env, str(origin_dir)), "store")
 
 
 def create(origin_dir: Path, git_env: dict[str, str], task_id: str = "tst-0001") -> Task:

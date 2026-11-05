@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from foundry.config import Project
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
@@ -46,20 +47,22 @@ class TurnChange:
 
 
 class ProjectTasks:
-    """The operations on a project's tasks, through its ProjectClone. Holds no state of its own."""
+    """The operations on a project's tasks, through its ProjectClone. Holds no state of its own, besides the
+    project's name, which its messages give in the commands they suggest."""
 
-    def __init__(self, clone: ProjectClone) -> None:
+    def __init__(self, clone: ProjectClone, project_name: str) -> None:
         self._clone = clone
+        self._project_name = project_name
 
     @classmethod
     @contextmanager
-    def in_scratch_clone(cls, url: str, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
-        """The tasks of the repository at ``url``, through a clone in a temporary folder removed afterwards.
+    def in_scratch_clone(cls, project: Project, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
+        """The tasks of ``project``'s repository, through a clone in a temporary folder removed afterwards.
 
         ``env`` is the environment git runs in, as for ProjectClone.
         """
         with tempfile.TemporaryDirectory(prefix="foundry-clone-") as scratch_dir:
-            yield cls(ProjectClone.init(url, Path(scratch_dir), env))
+            yield cls(ProjectClone.init(project.url, Path(scratch_dir), env), project.name)
 
     def get_task_by_id(self, task_id: str) -> Task:
         """The task named ``task_id``, with the status of the dir on NOTES_BRANCH that holds its notes.
