@@ -23,3 +23,6 @@
 | Handoff | glossary term | `GLOSSARY.md` | New. Clash: `agent_runtime/session_init.py` says "handoff to root" for root mode; flagged in GLOSSARY, not renamed. |
 
 `TurnChange` and its `turn_change` locals are removed: `handoff` returns the turn before.
+| `project_repository`, `ProjectRepository` | fixture, class | `tests/conftest.py` | The human's choice (LOG.md, entry 13). Stands in for "the GitHub repository behind a project", which GLOSSARY's "Project" allows calling a repository; pairs with `ProjectClone`. Rejected: `origin` (taken by a conftest fixture, and unclear), `remote_repository`, `project_repo` (GLOSSARY avoids "repo"). |
+| `no_signing_key` | fixture | `tests/test_project_tasks.py` | Says the state the test runs in; only that module uses it. |
+| `test_project_clone.py`, `test_project_tasks.py`, `test_task_command.py` | test modules | `tests/` | Named for the module each tests, as `test_task.py` is for `task.py`. |

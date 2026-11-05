@@ -155,3 +155,20 @@ Done: two more decisions by the human, to be made in PR 46.
   conftest, and no shared test module is added.
 Next: the relaxed rule, then the fixture, each its own commit. Suggested follow-up: split `tests/test_task.py`
 by module, in a PR of its own.
+
+## 14 · dev · ready-for-review
+Done: entry 13's decisions, and the split the human then asked for in this PR. Commits 9a88578, 658ae1d and
+0d77ef7. CI passes on 0d77ef7, and origin/HEAD merged up to date.
+- 9a88578: `log_with_turn_entry` keeps the log but for its trailing whitespace; a blank log gets no blank line.
+  The byte-level checks go.
+- 658ae1d: the tests use one `project_repository` fixture, plus `no_signing_key`. No test changes what it checks.
+- 0d77ef7: `tests/test_task.py` is split into `test_task.py`, `test_project_clone.py`, `test_project_tasks.py`
+  and `test_task_command.py`. All 171 tests kept. `git_env` and `project_repository` go in conftest, since
+  several modules use them; everything else stays in its module.
+Note for the reviewer: since round 1, the human decided these changes in session, beyond TASK.md and round 1's
+findings (entries 11 and 13): handoff naming, `ProjectTasks` built from the `Project`, one "has no turn"
+message, the relaxed log rule, the fixture and the split. Round 2 should review 62665d2..0d77ef7 against those
+entries. Entry 10's answers to R1–R13 still stand, with names since changed again (NAMES.md).
+Next (reviewer): round 2 on PR 46. Suggested follow-ups: R4 (a TURN with more than one line), R8 (one
+known-roles helper), `commands/repo.py`'s `change`, and `test_run.py`'s own origin setup, which could move to
+`project_repository`.

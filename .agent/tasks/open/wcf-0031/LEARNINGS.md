@@ -20,3 +20,12 @@
   duplicate entry numbers).
 - 2026-11-04 [decision] — R4 (a multi-line TURN) deferred, not fixed: TASK.md fixes `<old>` as TURN's stripped
   text, so treating it as `none` or refusing it both change an acceptance criterion. That is the planner's call.
+- 2026-11-05 [decision] — The human relaxed "byte for byte": `log_with_turn_entry` keeps the log's text but for
+  the whitespace at its end. Checked against `pre-commit`'s `_require_log_only_added_to`: it compares an agent's
+  staged LOG.md with origin's, which after a handoff is foundry's normalised text, so agents still pass.
+- 2026-11-05 [testing] — `tests/test_project_tasks.py` imports `ProjectRepository` from `tests.conftest` under
+  `TYPE_CHECKING` only, for its helpers' annotations: mypy rejects returning Any from an untyped fixture.
+  Rejected: dropping the helpers (19 call sites), or a shared test module (the human wants none).
+- 2026-11-05 [decision] — Proposed `OPEN_TASK`-style constants for the seeded tasks' paths, then didn't replace
+  the literals: `project_repository.open_task.log_file` is no shorter than `".agent/tasks/open/tst-0000/LOG.md"`,
+  and reads less directly. `ProjectRepository.open_task` and `closed_task` seed the fixture only.
