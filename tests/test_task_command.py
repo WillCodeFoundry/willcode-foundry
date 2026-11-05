@@ -265,12 +265,14 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     """The real command, in a foundry instance of its own with one role, dev: its output and exit code, for a
     handoff and for each argument it refuses, which pushes nothing.
 
-    That handoff_main checks the arguments before it opens the repository is shown by reading it, not tested."""
+    The refusals are made on project gone, whose repository doesn't exist. An argument checked after the repository
+    is read would fail with git's error instead."""
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/LOG.md": "# Log\n"})
     foundry_root = tmp_path / "foundry"
     (foundry_root / "config").mkdir(parents=True)
     (foundry_root / "config" / "foundry.yaml").write_text(
-        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\nroles:\n  dev: {{}}\n"
+        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\n"
+        f"  gone: {{url: '{tmp_path / 'gone.git'}'}}\nroles:\n  dev: {{}}\n"
     )
     role_dir = foundry_root / "agent-kit" / "roles" / "dev"
     role_dir.mkdir(parents=True)
@@ -296,8 +298,8 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
             "task id 'x' is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)",
         ),
     ]:
-        assert cli.main(["task", "handoff", "store", *arguments]) == 1
+        assert cli.main(["task", "handoff", "gone", *arguments]) == 1
         assert capsys.readouterr() == ("", f"error: {error}\n")
     assert cli.main(["task", "handoff", "nope", "tst-0000", "dev"]) == 1
-    assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: store\n")
+    assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: gone, store\n")
     assert project_repository.notes_head() == notes_before
