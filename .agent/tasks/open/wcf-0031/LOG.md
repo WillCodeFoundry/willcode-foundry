@@ -228,3 +228,21 @@ call (entries 16, 20, 21): the command is `foundry task handoff`, the entry head
 is dropped from the entry, commit and stdout, and "byte for byte" is relaxed. The other decisions beyond TASK.md
 are in entries 11, 13 and 15.
 Next (reviewer): round 2. Follow-ups still listed: R4 (a multi-line TURN), R8 (a shared known-roles helper).
+
+## 22 · dev · ready-for-review
+Done: at the human's call, after reviewing the PR's tests with me, in fc0c99c:
+- The no-turn cases (missing, blank, directory) are tested once, through `read_task_turn`, with the exact
+  message; listing keeps one case to show the error comes through. The duplication came from merging the TURN
+  readers in entry 11.
+- `log_with_handoff_entry`'s turn is a parametrized column with one `human` case; the leftover
+  `test_the_handoff_entry_names_the_new_turn` goes.
+- The end-to-end test keeps the success and the refusals only its wiring shows (an unknown role, an unknown
+  project, nothing pushed); the same-turn and `human` calls repeated other tests.
+- The handoff-args pass test is 3 cases, not a 2×3 cross product. Names that no longer said what they check are
+  renamed (NAMES.md). The `same-turn` case says why it writes a LOG.md.
+- The template test moves to `tests/test_task.py`, beside `load_template`, where entry 14's split should have
+  put it.
+CI passes on fc0c99c; origin/HEAD merged, up to date. Round 2 covers 62665d2..fc0c99c; entry 21's note stands.
+Next (reviewer): round 2. Suggested follow-ups, tests from before this PR: `test_a_closed_task_s_turn_is_read_from
+_its_closed_task_notes_dir` proves the path only through an error; `test_open_tasks_are_listed_…` asserts a type
+mypy checks; `summaries_of` hides an assertion. Still listed: R4, R8.
