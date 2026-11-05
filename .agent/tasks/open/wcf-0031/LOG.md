@@ -218,3 +218,13 @@ earlier entries say who had the turn. README's list of signing commands now name
 TASK.md amended in place, as the human allowed: the Goal, the commit message, the `<old>` criterion (now: a task
 with no turn is not refused), the entry format and stdout. Checks pass, and CI passes on 04a60a8.
 Next: `ready-for-review`.
+
+## 21 · dev · ready-for-review
+Done: TASK.md's log criterion amended in place, as the human allowed: the existing text is kept but for the
+whitespace at the file's end and its line endings, as entry 13 decided and `log_with_handoff_entry` does. No code
+change. CI passes on 04a60a8; origin/HEAD merged, up to date. PR: https://github.com/WillCodeFoundry/willcode-foundry/pull/46
+Note for the reviewer: round 2 covers 62665d2..04a60a8. TASK.md was amended in place this session at the human's
+call (entries 16, 20, 21): the command is `foundry task handoff`, the entry heading `human · handoff`, the old turn
+is dropped from the entry, commit and stdout, and "byte for byte" is relaxed. The other decisions beyond TASK.md
+are in entries 11, 13 and 15.
+Next (reviewer): round 2. Follow-ups still listed: R4 (a multi-line TURN), R8 (a shared known-roles helper).

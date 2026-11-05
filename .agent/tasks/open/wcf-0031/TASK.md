@@ -34,9 +34,9 @@ commit.
       key (as `close` without one).
 - [ ] A task whose `TURN` is missing, empty or only blanks is not refused:
       the command writes its `TURN`.
-- [ ] The entry appended to `LOG.md` is, after the existing text unchanged
-      byte for byte (a newline added first if the file didn't end with one),
-      a blank line, then:
+- [ ] The entry appended to `LOG.md` follows its existing text, which is
+      kept but for the whitespace at the file's end and its line endings.
+      After one blank line (none when the log holds only blanks) comes:
       ```
       ## <n> · human · handoff
       Turn: <ROLE>.
