@@ -11,7 +11,7 @@ from agent_runtime.git import GitError
 from foundry import config, paths, task
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
-from foundry.project_tasks import ProjectTasks, TaskSummary, TurnChange
+from foundry.project_tasks import ProjectTasks, TaskSummary
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -107,18 +107,12 @@ def reopen_main(args: argparse.Namespace) -> int:
 
 def turn_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repository, in a scratch clone."""
-    project = require_project_and_turn_arguments(
-        config.load(paths.find_foundry_root()),
-        project_name=args.project_name,
-        task_id=args.task_id,
-        turn=args.turn,
-        note=args.note,
-    )
+    foundry_config = config.load(paths.find_foundry_root())
+    project = foundry_config.project(args.project_name)
+    require_valid_handoff_args(foundry_config, task_id=args.task_id, turn=args.turn, note=args.note)
     with ProjectTasks.in_scratch_clone(project, os.environ) as project_tasks:
-        turn_change = hand_on_open_task_turn(
-            project_tasks, project_name=project.name, task_id=args.task_id, turn=args.turn, note=args.note
-        )
-    print("\n".join(turn_report(project.name, turn_change)))
+        before = project_tasks.handoff(args.task_id, args.turn, note=args.note)
+    print("\n".join(handoff_lines(project.name, args.task_id, before=before, after=args.turn)))
     return 0
 
 
@@ -153,15 +147,12 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
     ]
 
 
-def require_project_and_turn_arguments(
-    foundry_config: Config, *, project_name: str, task_id: str, turn: str, note: str | None
-) -> Project:
-    """The project to hand a turn on in, once each argument checks out, so none that doesn't reaches git.
+def require_valid_handoff_args(foundry_config: Config, *, task_id: str, turn: str, note: str | None) -> None:
+    """Refuse a handoff's arguments that don't check out, so none reaches git.
 
-    FoundryError for an unknown project, an invalid task id, a ``turn`` that is neither a role in ``foundry_config``
-    nor HUMAN, or a ``note`` that is blank or more than one line.
+    FoundryError for an invalid task id, a ``turn`` that is neither a role in ``foundry_config`` nor HUMAN, or a
+    ``note`` that is blank or more than one line.
     """
-    project = foundry_config.project(project_name)
     task.Task.as_open(task_id)  # refuses an invalid id as create does
     if turn != task.HUMAN and turn not in foundry_config.roles:
         known = ", ".join(sorted(foundry_config.roles)) or "none"
@@ -170,27 +161,13 @@ def require_project_and_turn_arguments(
         raise FoundryError("--note is empty: give it text, or leave it out")
     if note is not None and note.splitlines() != [note]:
         raise FoundryError("--note holds a line break: give it one line")
-    return project
 
 
-def hand_on_open_task_turn(
-    project_tasks: ProjectTasks, *, project_name: str, task_id: str, turn: str, note: str | None
-) -> TurnChange:
-    """Hand the open task's turn on to ``turn``, as ProjectTasks.hand_on_turn does.
-
-    FoundryError when the task doesn't exist, or is closed (saying how to reopen it), before anything is written.
-    """
-    found = project_tasks.get_task_by_id(task_id)
-    if found.status is task.Status.CLOSED:
-        raise FoundryError(f"task {found.id} is closed: reopen it with `foundry task reopen {project_name} {found.id}`")
-    return project_tasks.hand_on_turn(found, turn, note=note)
-
-
-def turn_report(project_name: str, turn_change: TurnChange) -> list[str]:
-    """What turn prints: the hand-off, then how to run the task, unless it now waits for you."""
-    lines = [f"task {turn_change.task.id} in {project_name}: turn {turn_change.before} → {turn_change.after}"]
-    if turn_change.after != task.HUMAN:
-        lines.append(f"run it with: foundry run {project_name} {turn_change.task.id}")
+def handoff_lines(project_name: str, task_id: str, *, before: str, after: str) -> list[str]:
+    """What turn prints: the handoff, then how to run the task, unless it now waits for you."""
+    lines = [f"task {task_id} in {project_name}: turn {before} → {after}"]
+    if after != task.HUMAN:
+        lines.append(f"run it with: foundry run {project_name} {task_id}")
     return lines
 
 

@@ -1,10 +1,9 @@
 """ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, reading their
-turn and handing it on, and listing the open ones with their turns.
+turn and handing them off, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every operation on one task goes through it. Callers pass task ids, and get Tasks back. hand_on_turn is the exception
-that takes the Task get_task_by_id gave, so a caller can check it first without a second fetch. Listing is another:
-it reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
+every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
+reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
 import re
@@ -19,7 +18,7 @@ from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
-# The turn a task has when its TURN_FILE is missing, empty or only blanks, as a hand-off names it.
+# The turn a task has when its TURN_FILE is missing, empty or only blanks, as a handoff names it.
 _NO_TURN = "none"
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
@@ -35,15 +34,6 @@ class TaskSummary:
 
     task: Task
     turn: str
-
-
-@dataclass(frozen=True)
-class TurnChange:
-    """A task whose turn you handed on: its turn ``before``, as hand_on_turn read it, and ``after``."""
-
-    task: Task
-    before: str
-    after: str
 
 
 class ProjectTasks:
@@ -139,16 +129,20 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task, fix="Name the role to run instead.")
 
-    def hand_on_turn(self, task: Task, turn: str, *, note: str | None) -> TurnChange:
-        """Write ``turn`` to the open ``task``'s TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when
-        it isn't None. One commit, pushed to NOTES_BRANCH.
+    def handoff(self, task_id: str, turn: str, *, note: str | None) -> str:
+        """Hand the open task off to ``turn``, and return the turn before.
 
-        Relies on get_task_by_id having just found ``task`` open. It checked out NOTES_BRANCH, which the change is
-        made on. The turn before is TURN_FILE's text stripped, or "none" when it is
-        missing or blank. Refuses a task whose turn is already ``turn``, that has no LOG_FILE, or whose TURN_FILE or
-        LOG_FILE is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
+        Writes ``turn`` to the task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it isn't
+        None. One commit, pushed to NOTES_BRANCH. The turn before is TURN_FILE's text stripped, or "none" when it is
+        missing or blank. Refuses a task that doesn't exist or is closed, whose turn is already ``turn``, or that has
+        no LOG_FILE. Refuses a TURN_FILE or LOG_FILE that is a link, as ProjectClone.write does. Checks nothing about
+        ``turn``: the caller does.
         """
-        assert task.status is Status.OPEN, "hand_on_turn needs an open task"  # a programming error
+        task = self.get_task_by_id(task_id)
+        if task.status is Status.CLOSED:
+            raise FoundryError(
+                f"task {task.id} is closed: reopen it with `foundry task reopen {self._project_name} {task.id}`"
+            )
         before = self._read_fetched_turn_or_empty(task) or _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
@@ -160,7 +154,7 @@ class ProjectTasks:
             }
         )
         self._commit_and_push(f"Turn of task {task.id}: {before} → {turn}")
-        return TurnChange(task, before=before, after=turn)
+        return before
 
     def list_open_task_summaries(self) -> list[TaskSummary]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.

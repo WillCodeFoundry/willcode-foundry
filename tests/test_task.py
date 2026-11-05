@@ -18,17 +18,16 @@ from foundry.commands.task import (
     ProjectListing,
     chosen_projects,
     filter_project_listing,
-    hand_on_open_task_turn,
+    handoff_lines,
     listing_lines,
     read_listings_and_errors,
     report,
-    require_project_and_turn_arguments,
-    turn_report,
+    require_valid_handoff_args,
 )
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, TurnChange, log_with_turn_entry
+from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
 from foundry.task import Status, Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -659,16 +658,14 @@ def test_the_turn_entry_names_both_turns() -> None:
     )
 
 
-# --- hand_on_turn -------------------------------------------------------------------------
+# --- handoff ------------------------------------------------------------------------------
 
 LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
 
 
-def hand_on(origin_dir: Path, git_env: dict[str, str], task_id: str, *, note: str | None = None) -> TurnChange:
-    """Hand ``task_id``'s turn in the project store to dev, through a clone of its own."""
-    return hand_on_open_task_turn(
-        project_tasks_of(origin_dir, git_env), project_name="store", task_id=task_id, turn="dev", note=note
-    )
+def handoff(origin_dir: Path, git_env: dict[str, str], task_id: str, *, note: str | None = None) -> str:
+    """Hand ``task_id`` off to dev, through a clone of its own; the turn before."""
+    return project_tasks_of(origin_dir, git_env).handoff(task_id, "dev", note=note)
 
 
 def notes_file(origin_dir: Path, git_env: dict[str, str], path: str) -> bytes:
@@ -690,16 +687,14 @@ def notes_file(origin_dir: Path, git_env: dict[str, str], path: str) -> bytes:
     ],
     ids=["a-turn", "no-turn", "blank-turn"],
 )
-def test_hand_on_turn_writes_turn_and_appends_to_the_log_in_one_signed_commit(
+def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     origin_dir, git_env, turn_files, before
 ) -> None:
     edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/LOG.md": LOG, **turn_files})
     files_before = branch_files(origin_dir, git_env, task.NOTES_BRANCH)
     commits_before = len(notes_commits(origin_dir, git_env))
 
-    turn_change = hand_on(origin_dir, git_env, "tst-0000", note=" see R2 ")
-
-    assert turn_change == TurnChange(Task.as_open("tst-0000"), before=before, after="dev")
+    assert handoff(origin_dir, git_env, "tst-0000", note=" see R2 ") == before
     expected_log = LOG + f"\n## 2 · human · turn\nTurn: {before} → dev.\nNote: see R2\n"
     assert branch_files(origin_dir, git_env, task.NOTES_BRANCH) == {
         **files_before,
@@ -749,23 +744,23 @@ def test_hand_on_turn_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     ],
     ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link", "turn-is-a-link"],
 )
-def test_hand_on_turn_refuses_and_pushes_nothing(origin_dir, git_env, task_id, edits, message) -> None:
+def test_handoff_refuses_and_pushes_nothing(origin_dir, git_env, task_id, edits, message) -> None:
     if edits:
         edit_notes(origin_dir, git_env, **edits)
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     with pytest.raises(FoundryError, match=message):
-        hand_on(origin_dir, git_env, task_id)
+        handoff(origin_dir, git_env, task_id)
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
-def test_without_a_signing_key_hand_on_turn_pushes_nothing(origin_dir, git_env) -> None:
+def test_without_a_signing_key_handoff_pushes_nothing(origin_dir, git_env) -> None:
     edit_notes(origin_dir, git_env, write={".agent/tasks/open/tst-0000/LOG.md": LOG})
     write_gitconfig(Path(git_env["HOME"]), signing_key=None)
     notes_before = head(origin_dir, git_env, task.NOTES_BRANCH)
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
-        hand_on(origin_dir, git_env, "tst-0000")
+        handoff(origin_dir, git_env, "tst-0000")
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
 
@@ -1020,10 +1015,8 @@ TURN_CONFIG = Config(
 
 @pytest.mark.parametrize("turn", ["dev", "human"])
 @pytest.mark.parametrize("note", [None, "see R2", "  padded  "])
-def test_turn_arguments_that_check_out_give_the_project(turn: str, note: str | None) -> None:
-    assert require_project_and_turn_arguments(
-        TURN_CONFIG, project_name="store", task_id="tst-0001", turn=turn, note=note
-    ) == Project("store", "url")
+def test_handoff_args_that_check_out_pass(turn: str, note: str | None) -> None:
+    require_valid_handoff_args(TURN_CONFIG, task_id="tst-0001", turn=turn, note=note)
 
 
 @pytest.mark.parametrize(
@@ -1037,7 +1030,6 @@ def test_turn_arguments_that_check_out_give_the_project(turn: str, note: str | N
         ({"note": "one\ntwo"}, r"^--note holds a line break: give it one line$"),
         ({"note": "one\r"}, r"^--note holds a line break: give it one line$"),
         ({"note": "one\u2028two"}, r"^--note holds a line break: give it one line$"),
-        ({"project_name": "nope"}, r"^unknown project 'nope'; known: store$"),
         ({"task_id": "TST-0001"}, r"^task id 'TST-0001' is not valid: "),
     ],
     ids=[
@@ -1049,24 +1041,19 @@ def test_turn_arguments_that_check_out_give_the_project(turn: str, note: str | N
         "note-newline",
         "note-return",
         "note-line-separator",
-        "unknown-project",
         "invalid-task-id",
     ],
 )
-def test_turn_arguments_are_refused_before_any_git(arguments, message) -> None:
-    valid = {"project_name": "store", "task_id": "tst-0001", "turn": "dev", "note": None}
+def test_handoff_args_are_refused_before_any_git(arguments, message) -> None:
+    valid = {"task_id": "tst-0001", "turn": "dev", "note": None}
     with pytest.raises(FoundryError, match=message):
-        require_project_and_turn_arguments(TURN_CONFIG, **{**valid, **arguments})
+        require_valid_handoff_args(TURN_CONFIG, **{**valid, **arguments})
 
 
 def test_a_config_without_roles_knows_only_human() -> None:
     with pytest.raises(FoundryError, match=r"^'dev' is not a role; known: none, or human$"):
-        require_project_and_turn_arguments(
-            Config("f", {"store": Project("store", "url")}, {}),
-            project_name="store",
-            task_id="tst-0001",
-            turn="dev",
-            note=None,
+        require_valid_handoff_args(
+            Config("f", {"store": Project("store", "url")}, {}), task_id="tst-0001", turn="dev", note=None
         )
 
 
@@ -1077,8 +1064,8 @@ def test_a_config_without_roles_knows_only_human() -> None:
         ("human", ["task tst-0001 in store: turn none → human"]),
     ],
 )
-def test_the_turn_report_says_how_to_run_the_task_unless_it_waits_for_you(after: str, lines: list[str]) -> None:
-    assert turn_report("store", TurnChange(Task.as_open("tst-0001"), before="none", after=after)) == lines
+def test_the_handoff_lines_say_how_to_run_the_task_unless_it_waits_for_you(after: str, lines: list[str]) -> None:
+    assert handoff_lines("store", "tst-0001", before="none", after=after) == lines
 
 
 def test_turn_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
@@ -1087,7 +1074,7 @@ def test_turn_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
     assert cli.build_parser().parse_args(["task", "turn", "store", "tst-0001", "human"]).note is None
 
 
-def test_turn_prints_the_hand_off_or_an_error_and_exits_accordingly(
+def test_turn_prints_the_handoff_or_an_error_and_exits_accordingly(
     origin_dir, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry instance of its own with one role, dev."""
@@ -1117,6 +1104,8 @@ def test_turn_prints_the_hand_off_or_an_error_and_exits_accordingly(
     assert capsys.readouterr() == ("", "error: task tst-0000's turn is already dev\n")
     assert cli.main(["task", "turn", "store", "tst-0000", "planner"]) == 1
     assert capsys.readouterr() == ("", "error: 'planner' is not a role; known: dev, or human\n")
+    assert cli.main(["task", "turn", "nope", "tst-0000", "dev"]) == 1
+    assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: store\n")
     assert head(origin_dir, git_env, task.NOTES_BRANCH) == notes_before
 
     assert cli.main(["task", "turn", "store", "tst-0000", "human"]) == 0
