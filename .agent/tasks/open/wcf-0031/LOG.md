@@ -113,3 +113,19 @@ The merge of origin/HEAD was up to date at the start and the end. Renames are re
 Next (reviewer): round 2 on PR 46. Suggested follow-ups, not in this task: R4 (multi-line TURN), R8 (one
 known-roles helper), `commands/repo.py`'s `change` for a `RulesetChange` (R10's older drift), and the earlier
 ones in entry 4.
+
+## 11 · dev · progress
+Done: the human reviewed the code with me after entry 10, and decided these simplifications, to be made in PR 46.
+- "Handoff" is the word for changing a task's turn. `hand_on_turn` becomes `ProjectTasks.handoff`, the report
+  `handoff_lines`, and the argument check `require_valid_handoff_args`, which returns nothing. GLOSSARY gains
+  "Handoff". The command stays `foundry task turn` and the entry heading `human · turn`, as TASK.md fixes them.
+- `ProjectTasks` is built from the `Project`, so it knows the project's name. `handoff` takes a task id and
+  refuses a closed task itself, as `close_task` does. `hand_on_open_task_turn` and the `assert` go.
+- `TurnChange` goes. `handoff` returns the turn before.
+- One TURN reader: `_read_fetched_turn` raises `NoTurnError` for a missing or blank TURN, and its `fix`
+  parameter goes. `foundry run` and `foundry task list` then give one message, which says to hand the task off
+  with `foundry task turn`. This overrides TASK.md's out-of-scope line on `read_task_turn` and
+  `list_open_task_summaries` (the human).
+- `run.py` spells `LOG.md` as `task.LOG_FILE`. The link refusal is tested on `ProjectClone`, plus one case
+  through `handoff`.
+Next: make these in small commits, then CI, then `ready-for-review`. Mocks for external components come after.
