@@ -38,7 +38,7 @@ def create(project_tasks: ProjectTasks, task_id: str = "tst-0001") -> Task:
 def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_task_notes_dir(
     project_repository,
 ) -> None:
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     assert create(project_repository.project_tasks()) == Task.as_open("tst-0001")
 
@@ -72,34 +72,34 @@ def test_the_tasks_notes_commit_is_signed_with_your_signing_key(project_reposito
 
 
 def test_without_a_signing_key_nothing_is_pushed(project_repository, no_signing_key) -> None:
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(
         GitError, match=r"(?s)^git -C \S+ commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"
     ):
         create(project_repository.project_tasks())
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
     assert "task/tst-0001" not in project_repository.git("branch", "--list")
 
 
 def test_an_existing_task_branch_is_refused_and_nothing_is_written(project_repository) -> None:
     project_repository.git("branch", "task/tst-0001", "main")
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(FoundryError, match=r"^task tst-0001 already exists: there is a task/tst-0001 branch$"):
         create(project_repository.project_tasks())
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 @pytest.mark.parametrize("task_id, found", [("tst-0000", "open/tst-0000"), ("cls-0000", "closed/cls-0000")])
 def test_an_existing_task_notes_dir_open_or_closed_is_refused_and_nothing_is_pushed(
     project_repository, task_id: str, found: str
 ) -> None:
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
     with pytest.raises(FoundryError, match=rf"^task {task_id} already exists: agent-notes has .agent/tasks/{found}/$"):
         create(project_repository.project_tasks(), task_id)
     assert f"task/{task_id}" not in project_repository.git("branch", "--list")
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_task_notes_dir(project_repository) -> None:
@@ -274,11 +274,11 @@ def test_a_move_keeps_files_your_git_config_would_ignore_or_convert(project_repo
     ],
 )
 def test_close_and_reopen_refuse_and_push_nothing(project_repository, operation, task_id, message) -> None:
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(FoundryError, match=message):
         operation(project_repository.project_tasks(), task_id)
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 @pytest.mark.parametrize(
@@ -289,11 +289,11 @@ def test_close_and_reopen_refuse_and_push_nothing(project_repository, operation,
 def test_without_a_signing_key_close_and_reopen_push_nothing(
     project_repository, no_signing_key, operation, task_id
 ) -> None:
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
         operation(project_repository.project_tasks(), task_id)
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 # --- log_with_handoff_entry -----------------------------------------------------------------
@@ -376,6 +376,11 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
     "task_id, edits, message",
     [
         ("tst-0009", {}, r"^task tst-0009 doesn't exist: "),
+        (
+            "tst-0000",
+            {"write": {".agent/tasks/closed/tst-0000/TASK.md": "tst-0000\n"}},
+            r"^task tst-0000 is both open and closed: ",
+        ),
         ("cls-0000", {}, r"^task cls-0000 is closed: reopen it with `foundry task reopen store cls-0000`$"),
         (
             "tst-0000",
@@ -399,25 +404,25 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
             r"^\.agent/tasks/open/tst-0000/LOG\.md is a link: foundry writes only files$",
         ),
     ],
-    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
+    ids=["not-found", "open-and-closed", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
 )
 def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, message) -> None:
     if edits:
         project_repository.edit_notes(**edits)
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(FoundryError, match=message):
         project_repository.project_tasks().handoff(task_id, "dev", note=None)
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 def test_without_a_signing_key_handoff_pushes_nothing(project_repository, no_signing_key) -> None:
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/LOG.md": LOG})
-    notes_before = project_repository.head()
+    notes_before = project_repository.notes_head()
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
         project_repository.project_tasks().handoff("tst-0000", "dev", note=None)
-    assert project_repository.head() == notes_before
+    assert project_repository.notes_head() == notes_before
 
 
 # --- list_open_task_summaries -----------------------------------------------------------

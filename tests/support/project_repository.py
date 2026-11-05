@@ -83,7 +83,7 @@ class ProjectRepository:
 
     def project_tasks(self, env: dict[str, str] | None = None) -> ProjectTasks:
         """Its tasks, through a clone of their own, with git run in ``env``, or ``git_env``."""
-        return ProjectTasks(self.clone(env), "store")
+        return project_tasks_of(self.path, env or self.git_env)
 
     def edit_notes(self, *, write=None, symlink=None, remove=()) -> None:
         """Commit to agent-notes and push it, as an agent would: files to ``write``, links to ``symlink`` (path ->
@@ -119,8 +119,13 @@ class ProjectRepository:
         """The subject of each commit on agent-notes, newest first."""
         return self.git("log", "--format=%s", NOTES_BRANCH).splitlines()
 
-    def head(self, branch: str = NOTES_BRANCH) -> str:
+    def head(self, branch: str) -> str:
+        """The commit at ``branch``'s tip."""
         return self.git("rev-parse", f"refs/heads/{branch}")
+
+    def notes_head(self) -> str:
+        """The commit at agent-notes' tip."""
+        return self.head(NOTES_BRANCH)
 
     def notes_signed_with_your_key(self) -> bool:
         """Whether agent-notes' last commit is signed with SIGNING_KEY."""

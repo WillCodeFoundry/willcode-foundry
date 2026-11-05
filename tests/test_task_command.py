@@ -1,5 +1,6 @@
 """The `foundry task` commands: their reports, arguments and checks, and end to end through cli.main."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -263,7 +264,9 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry instance of its own with one role, dev. The refusals are the ones only
-    handoff_main's wiring can show: the arguments and the project are checked before git is touched."""
+    handoff_main's wiring can show: the arguments and the project are checked before git is touched.
+
+    For the refusals, PATH's git is a stand-in that leaves a mark, so a refusal made after git ran fails."""
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/LOG.md": "# Log\n"})
     foundry_root = tmp_path / "foundry"
     (foundry_root / "config").mkdir(parents=True)
@@ -285,9 +288,23 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     )
     assert project_repository.notes_commits()[0] == "Handoff of task tst-0000 to dev"
 
-    notes_before = project_repository.head()
-    assert cli.main(["task", "handoff", "store", "tst-0000", "planner"]) == 1
-    assert capsys.readouterr() == ("", "error: 'planner' is not a role; known: dev, or human\n")
+    notes_before = project_repository.notes_head()
+    stand_in_dir, git_ran = tmp_path / "stand-in", tmp_path / "git-ran"
+    stand_in_dir.mkdir()
+    (stand_in_dir / "git").write_text(f"#!/bin/sh\ntouch {git_ran}\nexit 1\n")
+    (stand_in_dir / "git").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stand_in_dir}{os.pathsep}{os.environ['PATH']}")
+    for arguments, error in [
+        (["tst-0000", "planner"], "'planner' is not a role; known: dev, or human"),
+        (["tst-0000", "dev", "--note", " "], "--note is empty: give it text, or leave it out"),
+        (
+            ["x", "dev"],
+            "task id 'x' is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)",
+        ),
+    ]:
+        assert cli.main(["task", "handoff", "store", *arguments]) == 1
+        assert capsys.readouterr() == ("", f"error: {error}\n")
     assert cli.main(["task", "handoff", "nope", "tst-0000", "dev"]) == 1
     assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: store\n")
-    assert project_repository.head() == notes_before
+    assert not git_ran.exists()
+    assert project_repository.notes_head() == notes_before
