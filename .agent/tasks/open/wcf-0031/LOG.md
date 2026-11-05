@@ -143,3 +143,15 @@ origin/HEAD merged, up to date. The diff since 62665d2 is 132 lines added, 153 r
 Note for the reviewer: two of these change behaviour outside TASK.md, at the human's call (entry 11). The
 "has no turn" message of `foundry run` and `task list` changed, and ProjectTasks' constructor changed.
 Next: the human wants to discuss allowing mocks for external components in tests. Then `ready-for-review`.
+
+## 13 · dev · progress
+Done: two more decisions by the human, to be made in PR 46.
+- "Byte for byte" is relaxed: the log's entries keep their text, but trailing whitespace at its end and line
+  endings may change. The entry follows after one blank line, and the file ends with a newline. This overrides
+  TASK.md's criterion (the human).
+- The tests in `tests/test_task.py` move onto one `project_repository` fixture (a `ProjectRepository`: the GitHub
+  repository behind a project, as a bare repository), in place of the `(origin_dir, git_env, …)` helpers. That
+  includes tests from earlier tasks (the human). Fixtures used by one module stay in it; only shared ones go in
+  conftest, and no shared test module is added.
+Next: the relaxed rule, then the fixture, each its own commit. Suggested follow-up: split `tests/test_task.py`
+by module, in a PR of its own.
