@@ -178,8 +178,8 @@ Together they (`git -C "$AGENT_NOTES_DIR" diff f2a97c5 1cfac67 -- .agent/tasks/o
 
 Design rules 1, 2, 3, 6 and 7 hold. So do `CONTRIBUTING.md`'s test layout (helpers in `tests/support/`, fixtures only in the conftests, no patching) and `DESIGN.md`'s "leave alone" list. The docs match the code: the README command table and signing sentence, GLOSSARY "Handoff" and "Log", the ARCHITECTURE codemap, `--help`, and the "has no turn" message.
 
-- **R15 (Follow-up).** `src/foundry/project_tasks.py:137-140`, the `handoff` docstring. Its second paragraph has six sentences, against "paragraphs to three sentences" in `AGENTS.md` "Writing". It also lists five refusals in running prose, against "Use a table or a list for anything shaped like one". Whoever needs to know what `handoff` refuses meets it on every read. Direction: put the refusals in a short list, apart from what it writes.
-- **R16 (Follow-up).** `src/foundry/project_tasks.py:5`, the module docstring, still says "Callers pass task ids, and get Tasks back", but `handoff` returns `None`. The harm is small. Direction: soften the sentence, or accept as is.
+- **R15 (Blocking, at the human's call).** `src/foundry/project_tasks.py:137-140`, the `handoff` docstring. Its second paragraph has six sentences, against "paragraphs to three sentences" in `AGENTS.md` "Writing". It also lists five refusals in running prose, against "Use a table or a list for anything shaped like one". Whoever needs to know what `handoff` refuses meets it on every read. Direction: put the refusals in a short list, apart from what it writes.
+- **R16 (Blocking, at the human's call).** `src/foundry/project_tasks.py:5`, the module docstring, still says "Callers pass task ids, and get Tasks back", but `handoff` returns `None`. Direction: say that `handoff` takes a task id and returns nothing.
 
 ### Spec
 
@@ -200,8 +200,8 @@ Against f2a97c5: see R14. Against the dev's amended `TASK.md`, every criterion i
 
 `DESIGN.md`'s README sentence is present. Beyond R14, no scope creep was found that the log doesn't attribute to the human.
 
-- **R17 (Follow-up).** "refused … before the repository is read" (ROLE, note, task id) holds only by the order of lines in `handoff_main` (`src/foundry/commands/task.py:112-115`). The end-to-end test checks only that nothing was pushed, so moving `require_valid_handoff_args` inside the `with` would still pass. It is a Follow-up, not Blocking: round 1 accepted the same shape, and `TASK.md`'s seam asks for the check "called with plain values and the config", which it is. Direction: accept as is, since design rule 7's composition root is read in place.
-- **R18 (Follow-up).** "the task … is both open and closed (the messages `get_task_by_id` gives)" has no `handoff` case. Only `get_task_by_id`'s own test covers it. `handoff` calls `get_task_by_id` first, so this is shown by reading the code. Direction: accept as is, or add the case to `test_handoff_refuses_and_pushes_nothing`.
+- **R17 (Blocking, at the human's call).** "refused … before the repository is read" (ROLE, note, task id) holds only by the order of lines in `handoff_main` (`src/foundry/commands/task.py:112-115`). The end-to-end test checks only that nothing was pushed, so moving `require_valid_handoff_args` inside the `with` would still pass. Direction: an end-to-end case that shows a bad ROLE, note or task id is refused before any git runs, for example against a project whose repository doesn't exist.
+- **R18 (Blocking, at the human's call).** "the task … is both open and closed (the messages `get_task_by_id` gives)" has no `handoff` case. Only `get_task_by_id`'s own test covers it. `handoff` calls `get_task_by_id` first, so this is shown by reading the code. Direction: add the case to `test_handoff_refuses_and_pushes_nothing`.
 
 ### Behaviour
 
@@ -235,7 +235,7 @@ No new findings.
 | `tests/conftest.py`: `git_env`, `project_repository` | clean |
 | the tests in `test_project_tasks.py`, `test_task_command.py`, `test_project_clone.py`, `test_task.py`, `test_run.py` | clean |
 
-- **R19 (Follow-up), possible Duplicated Code.** `tests/support/project_repository.py:53` (`project_tasks_of`) and `:86` (`ProjectRepository.project_tasks`) each build `ProjectTasks(<clone>, "store")`, with the project name spelled twice. The sub-agent labelled it Blocking. It is downgraded here because mypy flags both sites when the constructor changes, as a49fc8c did, so only the literal can drift. That name appears only in hint messages, which tests match by pattern. Direction: have one build through the other, or name the project once.
+- **R19 (Blocking, at the human's call), possible Duplicated Code.** `tests/support/project_repository.py:53` (`project_tasks_of`) and `:86` (`ProjectRepository.project_tasks`) each build `ProjectTasks(<clone>, "store")`, with the project name spelled twice. mypy flags both sites when the constructor changes, as a49fc8c did, so only the literal can drift. Direction: have one build through the other, or name the project once.
 
 ### Names
 
@@ -267,12 +267,14 @@ Summary:
 | Axis | Findings | Blocking | Worst |
 |---|---|---|---|
 | TASK.md changed | 1 | 1 | R14, the code meets a `TASK.md` only the dev wrote |
-| Standards | 2 | 0 | R15, `handoff`'s docstring |
-| Spec | 2 | 0 | R17, the order of checks is shown only by reading |
+| Standards | 2 | 2 | R15, `handoff`'s docstring |
+| Spec | 2 | 2 | R17, the order of checks is shown only by reading |
 | Behaviour | 0 | 0 | |
-| Smells | 1 | 0 | R19, the duplicated `"store"` build |
+| Smells | 1 | 1 | R19, the duplicated `"store"` build |
 | Names | 1 | 1 | R20, `head()` for agent-notes |
 
 No design questions are open.
+
+At the human's request, after the round was pushed, R15–R19 were relabelled from Follow-up to Blocking and their directions changed from "accept as is" to a fix.
 
 Verdict: changes needed

@@ -252,3 +252,7 @@ Done: round 2 of REVIEW.md, reviewing fc0c99c (fix diff 7b35b61...fc0c99c) again
 - R14: TASK.md was changed by the dev in 9b1e640, e345039 and 1cfac67, which no allowed signer wrote. The code meets that amended version, not f2a97c5. Entries 11, 17 and 18 also changed `read_task_turn` and the listing, which even the amended TASK.md still lists as out of scope. No code change is needed. The dev asks the planner (`task-question`) to record the amended TASK.md with the human, and the architect to bring DESIGN.md's `turn`/`hand on` words in line; or the human signs them.
 - R20: `ProjectRepository.head()` defaults to agent-notes. Its name reads as main's tip.
 Next (dev): R20, then raise R14 with the planner as a task-question. Follow-ups are R15–R19, and R8 is still deferred.
+
+## 24 · reviewer · changes-needed
+Done: at the human's request, round 2 in REVIEW.md was amended in place: R15–R19 are now Blocking, not Follow-ups. Where a direction was "accept as is", it now names a fix. R17 needs an end-to-end case that shows a bad ROLE, note or task id is refused before any git runs. R18 needs a both-open-and-closed case in `test_handoff_refuses_and_pushes_nothing`. R16 needs the module docstring to say `handoff` returns nothing. Blocking findings are now R14–R20. R8 stays deferred and R9 accepted as is, from round 1.
+Next (dev): R15–R20, then raise R14 with the planner as a task-question.
