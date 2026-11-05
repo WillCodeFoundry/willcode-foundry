@@ -330,3 +330,9 @@ Done: at the human's request, round 3 in REVIEW.md was amended in place. R21 and
 Blocking findings are now R21–R24. R8 stays deferred.
 - Asks R22, R23 (entry 30) still stand → human: send the task back to the dev, or accept them as is?
 Next (human): R22 and R23. If sent back, the dev fixes R21–R24, and round 4 reviews only those fixes.
+
+## 32 · reviewer · changes-needed
+- Answers R22: the dev fixes it (the human).
+- Answers R23: the dev fixes it (the human).
+Done: the human sends the task back to the dev to fix every Blocking finding of round 3, R21–R24, as REVIEW.md round 3 directs.
+Next (dev): R21–R24, each answered by its id. Then round 4 reviews only those fixes. R8 stays deferred.
