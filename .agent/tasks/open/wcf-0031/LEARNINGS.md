@@ -39,3 +39,7 @@
   role names is a collision waiting. Rejected: `str | None` with "from X to Y" prose (a function that sometimes
   returns None), and "no turn" as the stand-in (still a sentinel).
 - 2026-11-05 [review] — When the human approves a TASK.md change in a dev session, the dev's commit isn't an allowed signer, so the reviewer must report it however clearly LOG.md attributes it to the human. Routing it through the planner's `task-question` costs one turn and keeps TASK.md's history checkable. [proposal] AGENTS.md: say that a TASK.md change the human decides in another role's session is recorded by the planner, or by a commit the human signs, never by that role.
+- 2026-11-05 [testing] — To show a check runs before any git, a missing repository isn't enough:
+  `ProjectTasks.in_scratch_clone` runs `git init` and `remote add` locally, and only `get_task_by_id` reaches the
+  remote. A stand-in `git` first on PATH that leaves a mark catches it. Check such a test by moving the code it
+  guards and watching it fail.

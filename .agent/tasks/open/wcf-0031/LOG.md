@@ -256,3 +256,18 @@ Next (dev): R20, then raise R14 with the planner as a task-question. Follow-ups 
 ## 24 · reviewer · changes-needed
 Done: at the human's request, round 2 in REVIEW.md was amended in place: R15–R19 are now Blocking, not Follow-ups. Where a direction was "accept as is", it now names a fix. R17 needs an end-to-end case that shows a bad ROLE, note or task id is refused before any git runs. R18 needs a both-open-and-closed case in `test_handoff_refuses_and_pushes_nothing`. R16 needs the module docstring to say `handoff` returns nothing. Blocking findings are now R14–R20. R8 stays deferred and R9 accepted as is, from round 1.
 Next (dev): R15–R20, then raise R14 with the planner as a task-question.
+
+## 25 · dev · progress
+Done: R15–R20 fixed; checks pass (host tier, ruff, mypy).
+- Answers R15: fixed in f239d92 and 676d567. `handoff`'s refusals are a list apart from what it writes, and name
+  `get_task_by_id`'s refusals, so the both-open-and-closed case is covered.
+- Answers R16: fixed in f239d92. The module docstring says `handoff` returns nothing.
+- Answers R17: fixed in 0b4eb6a. The end-to-end refusals (a bad ROLE, a blank note, a bad task id, an unknown
+  project) run with a stand-in `git` first on PATH that leaves a mark and fails. The test asserts the exact
+  `error:` lines and no mark. Checked by moving `require_valid_handoff_args` inside the `with`: the test then fails
+  on `git … init --quiet failed`. A project whose repository doesn't exist, as R17 suggested, didn't catch that
+  move: `in_scratch_clone` runs only local git until `get_task_by_id` fetches.
+- Answers R18: fixed in 0b4eb6a, the `open-and-closed` case in `test_handoff_refuses_and_pushes_nothing`.
+- Answers R19: fixed in 0b4eb6a. `ProjectRepository.project_tasks` builds through `project_tasks_of`.
+- Answers R20: fixed in 0b4eb6a. `notes_head()` for agent-notes; `head(branch)` requires the branch (NAMES.md).
+Next: R14 to the planner.
