@@ -1,4 +1,4 @@
-"""foundry task: create a task on a project, ready for foundry run, close and reopen it, hand its turn on, and list
+"""foundry task: create a task on a project, ready for foundry run, close and reopen it, hand it off, and list
 whose turn each is."""
 
 import argparse
@@ -15,7 +15,7 @@ from foundry.project_tasks import ProjectTasks, TaskSummary
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    parser = subparsers.add_parser("task", help="create, close, reopen, hand on and list tasks on projects")
+    parser = subparsers.add_parser("task", help="create, close, reopen, hand off and list tasks on projects")
     actions = parser.add_subparsers(dest="action", required=True)
     # The arguments every action takes.
     task_arguments = argparse.ArgumentParser(add_help=False)

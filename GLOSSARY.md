@@ -55,8 +55,12 @@ A task is open when its notes dir is under `.agent/tasks/open/`, and closed when
 Which role works on a task next, or `human` when it waits for you. The task's `TURN` file holds it, and each role writes the next one when its turn ends.
 _Avoid_: task state, lifecycle
 
+**Handoff**:
+A task's turn passing to another role, or to `human`. Each role hands off when its turn ends, by writing `TURN`. You hand off with `foundry task turn`.
+_Avoid_: hand on, pass the turn
+
 **Log**:
-A task's `LOG.md`: everything its roles tell each other, as numbered entries each role appends and none changes once pushed. Its progress, questions (`Asks D1 → planner`), answers (`Answers D1`) and outcomes. You can hand the turn on with `foundry task turn`, which appends an entry headed `human · turn`.
+A task's `LOG.md`: everything its roles tell each other, as numbered entries each role appends and none changes once pushed. Its progress, questions (`Asks D1 → planner`), answers (`Answers D1`) and outcomes. Your handoff with `foundry task turn` appends an entry headed `human · turn`.
 
 **Outcome**:
 How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed` or `task-question`. The routing table in `agent-kit/AGENTS.md` maps a role and its outcome to the next turn.
@@ -170,3 +174,4 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 - "notes dir" meant both a task's dir on the notes branch and the notes checkout. Resolved: **task notes dir** and **notes checkout**.
 - "launcher" meant both the whole foundry and `agent_sandbox/launcher.py`. Resolved: **foundry** for the whole.
 - "template" meant both the task template and the template image. Resolved: always say which.
+- "handoff" means a task's turn passing on, but `agent_runtime/session_init.py` uses it for root mode handing over to the agent. Resolved: **handoff** is the turn's; the runtime's says "handoff to root".

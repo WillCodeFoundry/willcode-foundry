@@ -34,11 +34,11 @@ A task id is lowercase ASCII letters, `-`, then four or more digits, such as `wc
 
 A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once.
 
-To hand a task on yourself, run `foundry task turn`. It writes `TURN` and appends an entry to the task's `LOG.md`, so the next role sees why. Naming the role to `foundry run` instead starts it once and leaves `TURN` as it was.
+To hand a task off yourself, run `foundry task turn`. It writes `TURN` and appends an entry to the task's `LOG.md`, so the next role sees why. Naming the role to `foundry run` instead starts it once and leaves `TURN` as it was.
 
-Hand a task on only while its role isn't running: stop the session, or let it finish its turn. The role writes `TURN` when its turn ends, which would undo yours. Its log entries would also conflict with your entry.
+Hand a task off only while its role isn't running: stop the session, or let it finish its turn. The role writes `TURN` when its turn ends, which would undo yours. Its log entries would also conflict with your entry.
 
-When you write `TASK.md` yourself, you take the planner's place. Hand the turn to the role its `planned` or `needs-design` row leads to with `foundry task turn`, or the planner starts.
+When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` or `needs-design` row leads to with `foundry task turn`, or the planner starts.
 
 | Command | What it does |
 |---|---|
@@ -46,7 +46,7 @@ When you write `TASK.md` yourself, you take the planner's place. Hand the turn t
 | `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. |
 | `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
 | `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
-| `foundry task turn PROJECT TASK ROLE` | Hands the open task's turn to ROLE, or `human`: writes `TURN` and appends a `human · turn` entry to `LOG.md`. `--note TEXT` adds one line to it. |
+| `foundry task turn PROJECT TASK ROLE` | Hands the open task off to ROLE, or `human`: writes `TURN` and appends a `human · turn` entry to `LOG.md`. `--note TEXT` adds one line to it. |
 | `foundry task list [PROJECT ...]` | Lists the open tasks of the projects named, or of all, with whose turn each is. `--turn human` shows those waiting for you. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry run` does this too. |
