@@ -43,3 +43,5 @@
   `ProjectTasks.in_scratch_clone` runs `git init` and `remote add` locally, and only `get_task_by_id` reaches the
   remote. A stand-in `git` first on PATH that leaves a mark catches it. Check such a test by moving the code it
   guards and watching it fail.
+- 2026-11-05 [decision] — Reworded DESIGN.md for "handoff" (P1) without a new grilling round: GLOSSARY's
+  Avoid list ruled out the old words, and no decision changed.

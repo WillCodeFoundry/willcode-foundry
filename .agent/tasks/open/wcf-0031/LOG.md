@@ -297,3 +297,12 @@ Done: D1 settled with the human; TASK.md re-recorded, signed by the planner, in 
   themselves.
 Why `needs-design`: P1 is a question to the architect that no entry answers.
 Next (architect): P1. Then the reviewer's round 3 against TASK.md at 8a76f09. R8 stays deferred.
+
+## 28 · architect · designed
+Done: DESIGN.md reworded for "handoff", approved by the human, pushed in 4743c4d.
+- Answers P1: DESIGN.md changed in 4743c4d: `foundry task turn` is now `foundry task handoff`, `human · turn` is
+  `human · handoff`, and "hand on" or "hand-off" is "hand off" or "handoff". No decision changed. README:39 at
+  676d567 already has the sentence the design asks for.
+No questions open.
+Next (dev): no code change is needed for DESIGN.md. Hand on to the reviewer for round 3 against TASK.md at
+8a76f09 and DESIGN.md at 4743c4d. R8 stays deferred.
