@@ -307,7 +307,7 @@ No new commit. The dev's commits 9b1e640, e345039 and 1cfac67 are still in the f
 
 Design rule 3 holds. The stand-in `git` goes on `PATH` through `monkeypatch.setenv`, as `CONTRIBUTING.md:42` allows, and no code is patched. The new docstrings keep `AGENTS.md`'s "Writing" rules.
 
-- **R21 (Follow-up).** `src/foundry/project_tasks.py:5-6` now names `handoff` as the only exception to "Callers pass task ids, and get Tasks back". But `read_task_turn` (`:127`) returns a `str`, and it did before this task. A reader who reads the docstring for return types is corrected at once by `-> str`. Direction: accept as is, or drop the return-type claim when this module next changes.
+- **R21 (Blocking, at the human's call).** `src/foundry/project_tasks.py:5-6` now names `handoff` as the only exception to "Callers pass task ids, and get Tasks back". But `read_task_turn` (`:127`) returns a `str`, and it did before this task. The fix made an inexact sentence look complete. Who hits it: anyone who reads the module docstring for what its methods return. Direction: make the sentence true of every method, or drop the return-type claim.
 
 ### Spec
 
@@ -344,7 +344,7 @@ No new findings. The stand-in `git` does prove that no git ran:
 | `tests/test_project_tasks.py:test_handoff_refuses_and_pushes_nothing` | clean |
 | `tests/test_task_command.py:test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` | R24 |
 
-- **R24 (Follow-up), possible Duplicated Code.** `tests/test_task_command.py:292-296` builds a stand-in git by hand: a dir, a `#!/bin/sh` script, `chmod`, then the dir first on PATH. The same shape is already in `test_listing_costs_one_fetch_however_many_tasks` (`tests/test_project_tasks.py:503-509`), and in `launch` in `tests/agent_kit/test_session_init.py`. The copies already differ in how they join PATH. The sub-agent marked this Blocking. It is a Follow-up because the shape was already copied before this task, and one shared helper would mean changing more than one or two functions, across test tiers. Who hits it: the next dev to add a stand-in on PATH. Direction: a stand-in helper in `tests/support/`, in its own change.
+- **R24 (Blocking, at the human's call), possible Duplicated Code.** `tests/test_task_command.py:292-296` builds a stand-in git by hand: a dir, a `#!/bin/sh` script, `chmod`, then the dir first on PATH. The same shape is already in `test_listing_costs_one_fetch_however_many_tasks` (`tests/test_project_tasks.py:503-509`), and in `launch` in `tests/agent_kit/test_session_init.py`. The copies already differ in how they join PATH. The diff adds a copy, and the next dev to add a stand-in on PATH would copy one of the variants. Direction: add a helper in `tests/support/` that writes an executable stand-in and returns its dir for PATH, and use it at both sites in the foundry tests (`tests/test_task_command.py` and `tests/test_project_tasks.py`). Moving `tests/agent_kit/test_session_init.py`'s `sudo` stand-in to the helper is optional.
 
 ### Names
 
@@ -367,12 +367,14 @@ Summary:
 | Axis | Findings | Blocking | Worst |
 |---|---|---|---|
 | TASK.md changed | 0 new | 0 | R14 closed by 8a76f09 |
-| Standards | 1 | 0 | R21, a docstring's return-type claim |
+| Standards | 1 | 1 | R21, a docstring's return-type claim |
 | Spec | 2 | 2 | R22, no test for a link `TURN` |
 | Behaviour | 0 | 0 | |
-| Smells | 1 | 0 | R24, stand-in setup copied |
+| Smells | 1 | 1 | R24, stand-in setup copied |
 | Names | 0 | 0 | |
 
-No design questions are open. R8, R21 and R24 are open Follow-ups.
+No design questions are open. R8 is an open Follow-up.
+
+At the human's request, after the round was pushed, R21 and R24 were relabelled from Follow-up to Blocking, and their directions changed to a fix.
 
 Verdict: changes needed

@@ -322,3 +322,11 @@ Why `no-agreement`: ROLE.md says a Blocking finding still open after round 3 goe
 - Asks R22 → human: handoff refuses a `TURN` that is a link (a probe shows it), but no test shows it; only a link `LOG.md` is tested. I marked it Blocking by R18's precedent. Send the task back to the dev to add the case, or accept it as is?
 - Asks R23 → human: the listing's test covers only a missing `TURN`, by prefix, and leaves out blank and directory and the full message. They share the reader that `read_task_turn`'s test covers in full. Blocking by the same precedent: send it back, or accept it as is?
 Next (human): R22 and R23. If sent back, the dev adds both cases, and round 4 reviews only them. Follow-ups: R8 (deferred), R21, R24.
+
+## 31 · reviewer · no-agreement
+Done: at the human's request, round 3 in REVIEW.md was amended in place. R21 and R24 are now Blocking, not Follow-ups, and each direction now names a fix:
+- R21: make the module docstring's "get Tasks back" sentence true of every method (`read_task_turn` returns a `str`), or drop it.
+- R24: a stand-in helper in `tests/support/`, used by `tests/test_task_command.py` and `test_listing_costs_one_fetch_however_many_tasks`.
+Blocking findings are now R21–R24. R8 stays deferred.
+- Asks R22, R23 (entry 30) still stand → human: send the task back to the dev, or accept them as is?
+Next (human): R22 and R23. If sent back, the dev fixes R21–R24, and round 4 reviews only those fixes.
