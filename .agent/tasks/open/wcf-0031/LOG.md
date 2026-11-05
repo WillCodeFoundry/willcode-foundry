@@ -172,3 +172,14 @@ entries. Entry 10's answers to R1–R13 still stand, with names since changed ag
 Next (reviewer): round 2 on PR 46. Suggested follow-ups: R4 (a TURN with more than one line), R8 (one
 known-roles helper), `commands/repo.py`'s `change`, and `test_run.py`'s own origin setup, which could move to
 `project_repository`.
+
+## 15 · dev · progress
+Done: at the human's request, in f5715ef and 703df1d.
+- f5715ef: `create` takes a `ProjectTasks`; the `turn_of` and `handoff` wrappers go, so no test imports from
+  conftest.
+- 703df1d: corrects entry 13's "no shared test module". CONTRIBUTING.md:42 says shared helpers go in
+  `tests/support/` and conftests hold only fixtures, and the human chose to follow it. `ProjectRepository`, the
+  signer and the git helpers moved to `tests/support/project_repository.py`; the helpers repeated in the test
+  modules are imported from it. 171 tests, as before.
+Next: CI on 703df1d. The human wants to discuss next how this workflow should handle changes to TASK.md, and a
+per-task decision record. TURN stays reviewer.

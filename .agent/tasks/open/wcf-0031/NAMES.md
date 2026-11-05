@@ -26,3 +26,6 @@
 | `project_repository`, `ProjectRepository` | fixture, class | `tests/conftest.py` | The human's choice (LOG.md, entry 13). Stands in for "the GitHub repository behind a project", which GLOSSARY's "Project" allows calling a repository; pairs with `ProjectClone`. Rejected: `origin` (taken by a conftest fixture, and unclear), `remote_repository`, `project_repo` (GLOSSARY avoids "repo"). |
 | `no_signing_key` | fixture | `tests/test_project_tasks.py` | Says the state the test runs in; only that module uses it. |
 | `test_project_clone.py`, `test_project_tasks.py`, `test_task_command.py` | test modules | `tests/` | Named for the module each tests, as `test_task.py` is for `task.py`. |
+| `tests/support/project_repository.py` | test module | `tests/support/` | Named for the class it holds, as CONTRIBUTING.md puts shared helpers in `tests/support/`. |
+| `git_output` | function | `tests/support/project_repository.py` | git's stripped output, run in an env. Not `git`: `tests/support`'s `git(cwd, …)` returns a CompletedProcess. |
+| `make_git_env`, `ProjectRepository.seed` | function, classmethod | `tests/support/project_repository.py` | What the conftest fixtures `git_env` and `project_repository` build from. |

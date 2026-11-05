@@ -29,3 +29,8 @@
 - 2026-11-05 [decision] — Proposed `OPEN_TASK`-style constants for the seeded tasks' paths, then didn't replace
   the literals: `project_repository.open_task.log_file` is no shorter than `".agent/tasks/open/tst-0000/LOG.md"`,
   and reads less directly. `ProjectRepository.open_task` and `closed_task` seed the fixture only.
+- 2026-11-05 [testing] — Replaces the TYPE_CHECKING entry above. CONTRIBUTING.md:42 already says shared test
+  helpers live in `tests/support/` and the conftests hold only fixtures and hooks; I missed it when splitting.
+  The human chose to follow it: `ProjectRepository` and the git helpers are in `tests/support/project_repository.py`.
+  The task helpers take `ProjectTasks`, so no test imports from conftest. Read CONTRIBUTING's test section before
+  moving test code.
