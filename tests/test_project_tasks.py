@@ -17,6 +17,7 @@ from foundry.project_tasks import (
     log_with_handoff_entry,
 )
 from foundry.task import Status, Task
+from tests.support import path_with_stand_in
 from tests.support.project_repository import git_output, project_tasks_of
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -403,8 +404,26 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
             {"write": {".agent/LOG.md": LOG}, "symlink": {".agent/tasks/open/tst-0000/LOG.md": "../../../LOG.md"}},
             r"^\.agent/tasks/open/tst-0000/LOG\.md is a link: foundry writes only files$",
         ),
+        (
+            "tst-0000",
+            # with a LOG.md, so the link TURN is what is refused
+            {
+                "write": {".agent/TURN": "human\n", ".agent/tasks/open/tst-0000/LOG.md": LOG},
+                "symlink": {".agent/tasks/open/tst-0000/TURN": "../../../TURN"},
+            },
+            r"^\.agent/tasks/open/tst-0000/TURN is a link: foundry writes only files$",
+        ),
     ],
-    ids=["not-found", "open-and-closed", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
+    ids=[
+        "not-found",
+        "open-and-closed",
+        "closed",
+        "same-turn",
+        "no-log",
+        "log-is-a-dir",
+        "log-is-a-link",
+        "turn-is-a-link",
+    ],
 )
 def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, message) -> None:
     if edits:
@@ -465,9 +484,20 @@ def test_no_open_dir_after_the_last_task_closed_lists_nothing(project_repository
     assert summaries_of(project_repository.project_tasks()) == []
 
 
-def test_listing_fails_on_a_task_without_a_turn(project_repository) -> None:
-    """tst-0000 starts without a TURN; read_task_turn's tests cover the other ways to have none."""
-    with pytest.raises(MissingTurnError, match=r"^task tst-0000 has no turn: "):
+@pytest.mark.parametrize(
+    "files",
+    [{}, {".agent/tasks/open/tst-0000/TURN": " \n\t"}, {".agent/tasks/open/tst-0000/TURN/dev": "dev\n"}],
+    ids=["missing", "blank", "directory"],
+)
+def test_listing_fails_on_a_task_without_a_turn(project_repository, files) -> None:
+    if files:  # tst-0000 starts without a TURN
+        project_repository.edit_notes(write=files)
+
+    with pytest.raises(
+        MissingTurnError,
+        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
+        r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
+    ):
         summaries_of(project_repository.project_tasks())
 
 
@@ -500,13 +530,11 @@ def test_listing_an_unreachable_repository_fails_with_gits_message(tmp_path: Pat
 def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env, tmp_path: Path) -> None:
     project_repository.edit_notes(write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(0, 6)})
     log = tmp_path / "git-calls.log"
-    shim_dir = tmp_path / "shim"
-    shim_dir.mkdir()
     real_git = subprocess.run(["which", "git"], env=git_env, capture_output=True, text=True, check=True).stdout.strip()
-    shim = shim_dir / "git"
-    shim.write_text(f'#!/bin/sh\necho "$*" >> {log}\nexec {real_git} "$@"\n')
-    shim.chmod(0o755)
-    counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
+    counting_path = path_with_stand_in(
+        tmp_path / "shim", "git", f'echo "$*" >> {log}\nexec {real_git} "$@"\n', git_env["PATH"]
+    )
+    counting_env = {**git_env, "PATH": counting_path}
 
     found = project_repository.project_tasks(env=counting_env).list_open_task_summaries()
 
