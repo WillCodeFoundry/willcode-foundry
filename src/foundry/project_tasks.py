@@ -139,7 +139,7 @@ class ProjectTasks:
         None. A task with no turn is handed off like any other. The caller checks ``turn``.
 
         FoundryError, with nothing pushed, when:
-        - the task doesn't exist, or is closed;
+        - get_task_by_id refuses the task id, or the task is closed;
         - its turn is already ``turn``;
         - it has no LOG_FILE;
         - its TURN_FILE or LOG_FILE is a link, as ProjectClone.write refuses.
