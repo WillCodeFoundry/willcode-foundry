@@ -208,3 +208,13 @@ Next: CI, then `ready-for-review`.
 Done: at the human's call, `_NO_TURN` goes, in f4e16f3: `handoff` writes `"none"` in its `except MissingTurnError`
 branch, the only place it is used. Checks pass.
 Next: CI, then `ready-for-review`.
+
+## 20 · dev · progress
+Done: at the human's call, `handoff` no longer reads or returns the turn before, in 04a60a8. It reads TURN only to
+refuse handing a task to the turn it has, under `suppress(MissingTurnError)`. The entry says `Turn: <ROLE>.`,
+the commit `Handoff of task <id> to <ROLE>`, stdout `task <id> in <PROJECT>: handoff to <ROLE>`. This removes
+the `"none"` stand-in, which a role named `none` would have matched: config accepts any role name. The log's
+earlier entries say who had the turn. README's list of signing commands now names `handoff`, missed in 8aee1ea.
+TASK.md amended in place, as the human allowed: the Goal, the commit message, the `<old>` criterion (now: a task
+with no turn is not refused), the entry format and stdout. Checks pass, and CI passes on 04a60a8.
+Next: `ready-for-review`.
