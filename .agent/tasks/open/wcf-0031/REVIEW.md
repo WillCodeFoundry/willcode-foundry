@@ -278,3 +278,101 @@ No design questions are open.
 At the human's request, after the round was pushed, R15–R19 were relabelled from Follow-up to Blocking and their directions changed from "accept as is" to a fix.
 
 Verdict: changes needed
+
+## Round 3 (reviewing 676d567)
+
+This round reviews the fix diff `git diff fc0c99c...HEAD`, the commits f239d92, 0b4eb6a and 676d567. It judges round 2's findings by `LOG.md` entries 25–29. The spec of record is `TASK.md` as of 8a76f09, signed by the planner's identity, which the architect shares. `DESIGN.md` is as of 4743c4d, signed by the architect's identity. The criteria that 8a76f09 added are checked against the full diff, `994be5e...HEAD`.
+
+Checks run at 676d567 in a throwaway clone: the host tier (746 passed), `ruff check`, `ruff format --check` and mypy all pass.
+
+### TASK.md changed by another role
+
+No new commit. The dev's commits 9b1e640, e345039 and 1cfac67 are still in the file's history, as R14 reported. 8a76f09, signed by the planner's identity (shared with the architect), now records them with the human's approval (`LOG.md` entry 27). That is the version this round reviews against. `DESIGN.md` was changed only by the architect's identity (9b086e2, 4743c4d).
+
+### Earlier findings
+
+| Finding | Verdict | Why |
+|---|---|---|
+| R8 | deferred | Unchanged; deferred by the dev. |
+| R9 | accepted as is | From round 1. |
+| R14 | closed | `TASK.md` re-recorded in 8a76f09 and `DESIGN.md` reworded in 4743c4d. The code meets both (see Spec). |
+| R15 | closed | `project_tasks.py:136-145`: the first line gives the point, the paragraph has three sentences, and the refusals are a list. |
+| R16 | closed | `project_tasks.py:5-6` says `handoff` returns nothing. |
+| R17 | closed | `tests/test_task_command.py:291-310`: a stand-in `git` first on `PATH` leaves a mark and fails. A bad ROLE, a blank note, a bad task id and an unknown project each give exactly `("", "error: …\n")` and leave no mark. Behaviour moved `require_valid_handoff_args` inside the `with`, and the test then failed. |
+| R18 | closed | The `open-and-closed` case is at `tests/test_project_tasks.py:379-383`. |
+| R19 | closed | `ProjectRepository.project_tasks` builds through `project_tasks_of` (`tests/support/project_repository.py:86`). |
+| R20 | closed | `head(branch)` requires the branch (`:122`), and `notes_head()` (`:126`) replaces every call that gave none. |
+
+### Standards
+
+Design rule 3 holds. The stand-in `git` goes on `PATH` through `monkeypatch.setenv`, as `CONTRIBUTING.md:42` allows, and no code is patched. The new docstrings keep `AGENTS.md`'s "Writing" rules.
+
+- **R21 (Follow-up).** `src/foundry/project_tasks.py:5-6` now names `handoff` as the only exception to "Callers pass task ids, and get Tasks back". But `read_task_turn` (`:127`) returns a `str`, and it did before this task. A reader who reads the docstring for return types is corrected at once by `-> str`. Direction: accept as is, or drop the return-type claim when this module next changes.
+
+### Spec
+
+`TASK.md` at 8a76f09 drops `read_task_turn` and the listing from out of scope, and the human approved the earlier amendments. So the code has no scope creep. `DESIGN.md` at 4743c4d is met: `README.md:39` says to hand a task off only while its role isn't running. Every criterion round 2 tabled is still met. These are the criteria 8a76f09 added:
+
+| Criterion | Shown by |
+|---|---|
+| `foundry run` refuses a missing, blank or directory `TURN` with the one message | `run.py` → `read_task_turn` → `_read_fetched_turn` (`project_tasks.py:179-194`). `test_a_task_without_a_turn_says_to_hand_it_off` (`tests/test_project_tasks.py:138-152`) covers all three with the full message. |
+| `foundry task list` does the same | `project_tasks.py:177`. The test covers only a missing `TURN`, by prefix: R23. |
+| handoff refuses a `LOG.md` that is a link | the `log-is-a-link` case, `tests/test_project_tasks.py:401-405` |
+| handoff refuses a `TURN` that is a link | `ProjectClone.write`, reached at `project_tasks.py:156-161`. No test covers it: R22. |
+
+- **R22 (Blocking).** The spec says "`TURN` or `LOG.md` is a link, with a message naming it". `test_handoff_refuses_and_pushes_nothing` (`tests/test_project_tasks.py:375-407`) covers only a link `LOG.md`. A probe in a throwaway clone shows the code works: `….agent/tasks/open/tst-0000/TURN is a link: foundry writes only files`, with nothing pushed. But no test in the suite shows it, so a later change to the order of reads and writes could drop it unnoticed. That is the same gap R18 had, which the human made Blocking. Direction: add a `turn-is-a-link` case, with a `LOG.md` present, to that parametrize.
+- **R23 (Blocking).** The spec says "`foundry run` and `foundry task list` refuse a task whose `TURN` is missing, not a file, or only blanks, with one message". `test_listing_fails_on_a_task_without_a_turn` (`tests/test_project_tasks.py:468-471`) checks only a missing `TURN`, and only the message's prefix. A probe shows that blank and directory both give the full message. The listing shares its reader with `read_task_turn`, so this is shown only by reading the code, like R18. Who hits it: whoever gives the listing its own reader. Direction: give the listing test the same three cases and the full message.
+
+### Behaviour
+
+No new findings. The stand-in `git` does prove that no git ran:
+- `handoff_main` passes the live `os.environ`, and `src/foundry` never resolves git to a fixed path.
+- Moving the check inside the `with` made the test fail.
+- The PATH change is undone after the test, and the test files pass three runs in a row and in reverse order.
+
+`project_tasks()` through `project_tasks_of` builds the same clone as before.
+
+### Smells
+
+| Function | Status |
+|---|---|
+| `project_tasks.py`: module docstring, `ProjectTasks.handoff` (docstring only) | clean |
+| `tests/support/project_repository.py:ProjectRepository.project_tasks` | clean (R19 closed) |
+| `tests/support/project_repository.py:ProjectRepository.head` | clean |
+| `tests/support/project_repository.py:ProjectRepository.notes_head` | new, clean |
+| `tests/test_project_tasks.py`: the 8 tests moved from `head()` to `notes_head()` | clean |
+| `tests/test_project_tasks.py:test_handoff_refuses_and_pushes_nothing` | clean |
+| `tests/test_task_command.py:test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` | R24 |
+
+- **R24 (Follow-up), possible Duplicated Code.** `tests/test_task_command.py:292-296` builds a stand-in git by hand: a dir, a `#!/bin/sh` script, `chmod`, then the dir first on PATH. The same shape is already in `test_listing_costs_one_fetch_however_many_tasks` (`tests/test_project_tasks.py:503-509`), and in `launch` in `tests/agent_kit/test_session_init.py`. The copies already differ in how they join PATH. The sub-agent marked this Blocking. It is a Follow-up because the shape was already copied before this task, and one shared helper would mean changing more than one or two functions, across test tiers. Who hits it: the next dev to add a stand-in on PATH. Direction: a stand-in helper in `tests/support/`, in its own change.
+
+### Names
+
+R20 is closed (see above). No new findings.
+
+Clean:
+- `ProjectRepository.notes_head` and `head(branch)`;
+- `project_tasks`, whose body changed but whose result didn't;
+- `stand_in_dir` ("stand-in" is the code's word, as in `tests/support/machine.py` and `CONTRIBUTING.md:42`) and `git_ran`;
+- the test id `open-and-closed`, and the reworded `handoff` docstring.
+
+The added prose uses no word GLOSSARY lists under _Avoid_. `DESIGN.md` at 4743c4d adds no names and agrees with GLOSSARY "Handoff". "hand on" appears nowhere outside GLOSSARY's own _Avoid_ line.
+
+### Design questions
+
+None open.
+
+Summary:
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| TASK.md changed | 0 new | 0 | R14 closed by 8a76f09 |
+| Standards | 1 | 0 | R21, a docstring's return-type claim |
+| Spec | 2 | 2 | R22, no test for a link `TURN` |
+| Behaviour | 0 | 0 | |
+| Smells | 1 | 0 | R24, stand-in setup copied |
+| Names | 0 | 0 | |
+
+No design questions are open. R8, R21 and R24 are open Follow-ups.
+
+Verdict: changes needed

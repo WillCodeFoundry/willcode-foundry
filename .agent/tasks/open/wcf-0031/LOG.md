@@ -315,3 +315,10 @@ CI passes on 676d567 (PR #46, draft: https://github.com/WillCodeFoundry/willcode
   (`src/foundry/project_tasks.py:191`), and a link `TURN` or `LOG.md` refused by name (`ProjectClone.write`).
 - R14 needs no code change, as round 2 said; its cause is settled by 8a76f09 and 4743c4d.
 Next (reviewer): round 3, against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. R8 stays deferred.
+
+## 30 · reviewer · no-agreement
+Done: round 3 of REVIEW.md, reviewing 676d567 (the fix diff fc0c99c...676d567), against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. 8a76f09 is signed by the planner's identity, which the architect shares; no other role changed either file since. The host tier, ruff and mypy pass. R14–R20 are closed. R8 is deferred and R9 accepted as is. New: 2 Blocking (R22, R23) and 2 Follow-ups (R21, R24). No design questions.
+Why `no-agreement`: ROLE.md says a Blocking finding still open after round 3 goes to the human, not back for another round. The dev and I don't disagree: the dev hasn't seen R22 or R23. Both come from criteria 8a76f09 added after round 2. Each fix is one more test case.
+- Asks R22 → human: handoff refuses a `TURN` that is a link (a probe shows it), but no test shows it; only a link `LOG.md` is tested. I marked it Blocking by R18's precedent. Send the task back to the dev to add the case, or accept it as is?
+- Asks R23 → human: the listing's test covers only a missing `TURN`, by prefix, and leaves out blank and directory and the full message. They share the reader that `read_task_turn`'s test covers in full. Blocking by the same precedent: send it back, or accept it as is?
+Next (human): R22 and R23. If sent back, the dev adds both cases, and round 4 reviews only them. Follow-ups: R8 (deferred), R21, R24.

@@ -45,3 +45,4 @@
   guards and watching it fail.
 - 2026-11-05 [decision] — Reworded DESIGN.md for "handoff" (P1) without a new grilling round: GLOSSARY's
   Avoid list ruled out the old words, and no decision changed.
+- 2026-11-05 [review] — Sub-agents numbered their new findings independently (Spec and Smells both used R21), so renumber in section order when aggregating. When TASK.md gains criteria between rounds, check those against the full diff, not just the fix diff; R22 and R23 were found that way.
