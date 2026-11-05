@@ -49,3 +49,7 @@
 - 2026-11-05 [git] — `git add <file>` after editing one file for two commits stages both edits: 3364c82 carries
   the `path_with_stand_in` import that only 4d32648 defines, so 3364c82 alone fails to import. Commit each fix
   before starting the next one in the same file, or stage with `git add -p`.
+- 2026-11-05 [decision] — The human rejected both ways to test that handoff_main checks before it clones: a
+  stand-in git on PATH (fakes a binary) and an injected `open_tasks` opener (a seam only a test needs). The
+  check is tested directly; the order in a short composition root is left to reading. Before proving an order
+  in `main`, ask whether reading it is enough.

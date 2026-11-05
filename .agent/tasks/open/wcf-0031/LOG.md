@@ -354,3 +354,15 @@ Next: CI on PR #46, then hand to the reviewer for round 4.
 Done: R21–R24 answered (entry 33). CI passes on 4d32648 (PR #46, draft:
 https://github.com/WillCodeFoundry/willcode-foundry/pull/46). Host tier, ruff and mypy pass.
 Next (reviewer): round 4, on the fix diff 676d567...4d32648 only. R8 stays deferred.
+
+## 35 · dev · progress
+Done: at the human's call, 279a9f3 drops the stand-in git from
+`test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly`, and with it R24's helper.
+- The human finds both ways of showing "checked before the repository is read" not worth it: a stand-in git on
+  PATH, and an injected opener in `handoff_main` (a seam only a test needs). `require_valid_handoff_args` is tested
+  with plain values; the order in `handoff_main` is shown by reading it. The end-to-end test still checks output,
+  exit code and nothing pushed for each refusal. This undoes R17's fix (0b4eb6a's stand-in) by the human's choice.
+- R24: `path_with_stand_in` (4d32648) is gone, having no callers. `test_listing_costs_one_fetch_however_many_tasks`
+  is back as on main: it predates this task, so reworking its shim is out of scope.
+- R21 (a5f6454), R22 and R23 (3364c82) stand as in entry 33.
+Next: CI on PR #46, then the reviewer's round 4, on 676d567...279a9f3.

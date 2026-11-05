@@ -39,3 +39,4 @@
 | `stand_in_dir`, `git_ran` | locals | `tests/test_task_command.py` | R17: the folder of the stand-in git on PATH, and the mark it leaves when run. |
 | `path_with_stand_in` | function | `tests/support/__init__.py` | R24: returns a PATH value, with the stand-in's folder first, so the name leads with what it returns. "Stand-in" is the tests' word (`tests/support/machine.py`'s `stand_in`, CONTRIBUTING.md:42). Rejected: `stand_in_dir` (the dir alone leaves each caller joining PATH its own way, which R24 found). |
 | `stand_in_path` (replaces `stand_in_dir`), `counting_path` | locals | `tests/test_task_command.py`, `tests/test_project_tasks.py` | The PATH values `path_with_stand_in` returns. |
+| `path_with_stand_in`, `stand_in_path`, `counting_path`, `stand_in_dir`, `git_ran` | removed | `tests/` | 279a9f3: the human dropped the stand-in git; the one-fetch test is back as on main. Replaces the rows for these above. |
