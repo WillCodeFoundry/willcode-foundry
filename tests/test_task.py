@@ -640,8 +640,10 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env
 @pytest.mark.parametrize(
     "log, note, expected",
     [
-        ("", None, "\n## 1 · human · turn\nTurn: none → dev.\n"),
+        ("", None, "## 1 · human · turn\nTurn: none → dev.\n"),
+        (" \n\n", None, "## 1 · human · turn\nTurn: none → dev.\n"),
         ("# Log\n", None, "# Log\n\n## 1 · human · turn\nTurn: none → dev.\n"),
+        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · turn\nTurn: none → dev.\n"),
         (
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n",
             "  look at R3  ",
@@ -661,9 +663,18 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(origin_dir, git_env
             "\n## 12 · human · turn\nTurn: none → dev.\n",
         ),
     ],
-    ids=["empty", "no-entries", "entries-with-note", "last-heading-not-highest-no-final-newline", "headings-only"],
+    ids=[
+        "empty",
+        "blank",
+        "no-entries",
+        "trailing-blank-lines",
+        "entries-with-note",
+        "last-heading-not-highest-no-final-newline",
+        "headings-only",
+    ],
 )
-def test_the_turn_entry_follows_the_log_unchanged_numbered_after_its_last_entry(log, note, expected) -> None:
+def test_the_turn_entry_follows_the_log_after_one_blank_line_numbered_after_its_last_entry(log, note, expected) -> None:
+    """The log's text is kept, but for the whitespace at its end."""
     assert log_with_turn_entry(log, before="none", after="dev", note=note) == expected
 
 
@@ -681,16 +692,6 @@ LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
 def handoff(origin_dir: Path, git_env: dict[str, str], task_id: str, *, note: str | None = None) -> str:
     """Hand ``task_id`` off to dev, through a clone of its own; the turn before."""
     return project_tasks_of(origin_dir, git_env).handoff(task_id, "dev", note=note)
-
-
-def notes_file(origin_dir: Path, git_env: dict[str, str], path: str) -> bytes:
-    """The file at ``path`` on agent-notes, byte for byte."""
-    return subprocess.run(
-        ["git", f"--git-dir={origin_dir}", "show", f"{task.NOTES_BRANCH}:{path}"],
-        env=git_env,
-        capture_output=True,
-        check=True,
-    ).stdout
 
 
 @pytest.mark.parametrize(
@@ -716,8 +717,6 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
         ".agent/tasks/open/tst-0000/TURN": "dev\n",
         ".agent/tasks/open/tst-0000/LOG.md": expected_log,
     }
-    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/TURN") == b"dev\n"
-    assert notes_file(origin_dir, git_env, ".agent/tasks/open/tst-0000/LOG.md") == expected_log.encode()
     assert notes_commits(origin_dir, git_env)[0] == f"Turn of task tst-0000: {before} → dev"
     assert len(notes_commits(origin_dir, git_env)) == commits_before + 1
     assert_notes_signed_with_your_key(origin_dir, git_env)

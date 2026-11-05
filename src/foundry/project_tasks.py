@@ -230,15 +230,16 @@ def _open_task_for_dir(dir_name: str) -> Task:
 
 
 def log_with_turn_entry(log: str, *, before: str, after: str, note: str | None) -> str:
-    """``log``, unchanged, then a blank line and an entry saying you handed the turn from ``before`` to ``after``.
+    """``log``, then a blank line and an entry saying you handed the task off from ``before`` to ``after``.
 
-    The entry is numbered one more than the last line that starts as a heading, or 1. Its Note line holds ``note``
-    stripped, and is left out when ``note`` is None. A newline is added after non-empty ``log`` that lacks one.
+    The log's text is kept, but for the whitespace at its end; a blank log gets no blank line. The entry is numbered
+    one more than the last line that starts as a heading, or 1. Its Note line holds ``note`` stripped, and is left
+    out when ``note`` is None.
     """
     numbers = [match[1] for line in log.split("\n") if (match := _LOG_HEADING.match(line))]
     number = int(numbers[-1]) + 1 if numbers else 1
     entry = [f"## {number} · {HUMAN} · turn", f"Turn: {before} → {after}."]
     if note is not None:
         entry.append(f"Note: {note.strip()}")
-    separator = "\n" if log and not log.endswith("\n") else ""
-    return log + separator + "\n" + "\n".join(entry) + "\n"
+    kept = log.rstrip()
+    return (f"{kept}\n\n" if kept else "") + "\n".join(entry) + "\n"
