@@ -4,7 +4,6 @@ and reading and listing their turns."""
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,9 +13,6 @@ from foundry.errors import FoundryError
 from foundry.project_clone import ProjectClone
 from foundry.project_tasks import NoTurnError, ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
 from foundry.task import Status, Task
-
-if TYPE_CHECKING:
-    from tests.conftest import ProjectRepository  # the project_repository fixture's type
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
 
@@ -41,8 +37,8 @@ def no_signing_key(git_env) -> None:
     git(git_env, "config", "--global", "--unset", "user.signingkey")
 
 
-def create(project_repository: "ProjectRepository", task_id: str = "tst-0001") -> Task:
-    return project_repository.project_tasks().create_task(task_id, TEMPLATE)
+def create(project_tasks: ProjectTasks, task_id: str = "tst-0001") -> Task:
+    return project_tasks.create_task(task_id, TEMPLATE)
 
 
 # --- create ---------------------------------------------------------------------
@@ -53,7 +49,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_ta
 ) -> None:
     notes_before = project_repository.head()
 
-    assert create(project_repository) == Task.as_open("tst-0001")
+    assert create(project_repository.project_tasks()) == Task.as_open("tst-0001")
 
     assert project_repository.head("task/tst-0001") == project_repository.head("main")
     assert project_repository.notes_files() == {
@@ -69,7 +65,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_ta
 def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(project_repository) -> None:
     project_repository.git("branch", "--quiet", "-D", task.NOTES_BRANCH)
 
-    create(project_repository)
+    create(project_repository.project_tasks())
 
     assert project_repository.notes_files() == {
         ".agent/tasks/open/tst-0001/PROGRESS.md": "# Progress\n",
@@ -79,7 +75,7 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
 
 
 def test_the_tasks_notes_commit_is_signed_with_your_signing_key(project_repository) -> None:
-    create(project_repository)
+    create(project_repository.project_tasks())
 
     assert project_repository.notes_signed_with_your_key()
 
@@ -90,7 +86,7 @@ def test_without_a_signing_key_nothing_is_pushed(project_repository, no_signing_
     with pytest.raises(
         GitError, match=r"(?s)^git -C \S+ commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"
     ):
-        create(project_repository)
+        create(project_repository.project_tasks())
     assert project_repository.head() == notes_before
     assert "task/tst-0001" not in project_repository.git("branch", "--list")
 
@@ -100,7 +96,7 @@ def test_an_existing_task_branch_is_refused_and_nothing_is_written(project_repos
     notes_before = project_repository.head()
 
     with pytest.raises(FoundryError, match=r"^task tst-0001 already exists: there is a task/tst-0001 branch$"):
-        create(project_repository)
+        create(project_repository.project_tasks())
     assert project_repository.head() == notes_before
 
 
@@ -110,7 +106,7 @@ def test_an_existing_task_notes_dir_open_or_closed_is_refused_and_nothing_is_pus
 ) -> None:
     notes_before = project_repository.head()
     with pytest.raises(FoundryError, match=rf"^task {task_id} already exists: agent-notes has .agent/tasks/{found}/$"):
-        create(project_repository, task_id)
+        create(project_repository.project_tasks(), task_id)
     assert f"task/{task_id}" not in project_repository.git("branch", "--list")
     assert project_repository.head() == notes_before
 
@@ -121,7 +117,7 @@ def test_a_closed_task_that_kept_its_branch_is_refused_naming_its_task_notes_dir
     with pytest.raises(
         FoundryError, match=r"^task cls-0000 already exists: agent-notes has .agent/tasks/closed/cls-0000/$"
     ):
-        create(project_repository, "cls-0000")
+        create(project_repository.project_tasks(), "cls-0000")
 
 
 def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> None:
@@ -129,27 +125,23 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> Non
     git(git_env, "init", "--quiet", "--bare", str(empty_dir))
 
     with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
-        project_tasks_of(empty_dir, git_env).create_task("tst-0001", TEMPLATE)
+        create(project_tasks_of(empty_dir, git_env))
 
 
 def test_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
     with pytest.raises(
         GitError, match=r"^git -C \S+ ls-remote --heads origin failed: .*does not appear to be a git repo"
     ):
-        project_tasks_of(tmp_path / "missing.git", git_env).create_task("tst-0001", TEMPLATE)
+        create(project_tasks_of(tmp_path / "missing.git", git_env))
 
 
 # --- read_task_turn ---------------------------------------------------------------------
 
 
-def turn_of(project_repository: "ProjectRepository", task_id: str) -> str:
-    return project_repository.project_tasks().read_task_turn(task_id)
-
-
 def test_a_new_task_s_turn_is_the_template_s(project_repository) -> None:
     project_repository.project_tasks().create_task("tst-0001", {**TEMPLATE, "TURN": "dev\n"})
 
-    assert turn_of(project_repository, "tst-0001") == "dev"
+    assert project_repository.project_tasks().read_task_turn("tst-0001") == "dev"
 
 
 def test_a_task_without_a_turn_says_to_hand_it_off(project_repository) -> None:
@@ -158,7 +150,7 @@ def test_a_task_without_a_turn_says_to_hand_it_off(project_repository) -> None:
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
         r"Hand it off with `foundry task turn store tst-0000 ROLE`\.$",
     ):
-        turn_of(project_repository, "tst-0000")
+        project_repository.project_tasks().read_task_turn("tst-0000")
 
 
 def test_a_dir_at_turn_is_no_turn(project_repository) -> None:
@@ -167,19 +159,19 @@ def test_a_dir_at_turn_is_no_turn(project_repository) -> None:
     with pytest.raises(
         FoundryError, match=r"^task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN"
     ):
-        turn_of(project_repository, "tst-0000")
+        project_repository.project_tasks().read_task_turn("tst-0000")
 
 
 def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(project_repository) -> None:
     with pytest.raises(
         FoundryError, match=r"task cls-0000 has no turn: agent-notes has no .agent/tasks/closed/cls-0000/TURN"
     ):
-        turn_of(project_repository, "cls-0000")
+        project_repository.project_tasks().read_task_turn("cls-0000")
 
 
 def test_a_task_that_doesn_t_exist_has_no_turn_to_read(project_repository) -> None:
     with pytest.raises(TaskNotFoundError):
-        turn_of(project_repository, "tst-0009")
+        project_repository.project_tasks().read_task_turn("tst-0009")
 
 
 def test_the_task_template_starts_with_the_planner_s_turn() -> None:
@@ -374,11 +366,6 @@ def test_the_turn_entry_names_both_turns() -> None:
 LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
 
 
-def handoff(project_repository: "ProjectRepository", task_id: str, *, note: str | None = None) -> str:
-    """Hand ``task_id`` off to dev, through a clone of its own; the turn before."""
-    return project_repository.project_tasks().handoff(task_id, "dev", note=note)
-
-
 @pytest.mark.parametrize(
     "turn_files, before",
     [
@@ -395,7 +382,7 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
     files_before = project_repository.notes_files()
     commits_before = len(project_repository.notes_commits())
 
-    assert handoff(project_repository, "tst-0000", note=" see R2 ") == before
+    assert project_repository.project_tasks().handoff("tst-0000", "dev", note=" see R2 ") == before
     expected_log = LOG + f"\n## 2 · human · turn\nTurn: {before} → dev.\nNote: see R2\n"
     assert project_repository.notes_files() == {
         **files_before,
@@ -441,7 +428,7 @@ def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, 
     notes_before = project_repository.head()
 
     with pytest.raises(FoundryError, match=message):
-        handoff(project_repository, task_id)
+        project_repository.project_tasks().handoff(task_id, "dev", note=None)
     assert project_repository.head() == notes_before
 
 
@@ -450,7 +437,7 @@ def test_without_a_signing_key_handoff_pushes_nothing(project_repository, no_sig
     notes_before = project_repository.head()
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
-        handoff(project_repository, "tst-0000")
+        project_repository.project_tasks().handoff("tst-0000", "dev", note=None)
     assert project_repository.head() == notes_before
 
 
