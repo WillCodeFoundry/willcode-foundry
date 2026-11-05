@@ -28,6 +28,10 @@ class TaskNotFoundError(FoundryError):
     """The task's notes dir is on neither side: it isn't open and it isn't closed."""
 
 
+class NoTurnError(FoundryError):
+    """The task's TURN_FILE is missing, not a file, or holds only blanks."""
+
+
 @dataclass(frozen=True)
 class TaskSummary:
     """A task and whose turn it is: the stripped text of its TURN_FILE."""
@@ -124,10 +128,10 @@ class ProjectTasks:
     def read_task_turn(self, task_id: str) -> str:
         """Whose turn it is on the task, as its TURN_FILE on NOTES_BRANCH says: a role's name, or HUMAN.
 
-        FoundryError when the file is missing, not a file or empty, saying to name the role instead.
+        NoTurnError when the file is missing, not a file or empty.
         """
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
-        return self._read_fetched_turn(task, fix="Name the role to run instead.")
+        return self._read_fetched_turn(task)
 
     def handoff(self, task_id: str, turn: str, *, note: str | None) -> str:
         """Hand the open task off to ``turn``, and return the turn before.
@@ -143,7 +147,10 @@ class ProjectTasks:
             raise FoundryError(
                 f"task {task.id} is closed: reopen it with `foundry task reopen {self._project_name} {task.id}`"
             )
-        before = self._read_fetched_turn_or_empty(task) or _NO_TURN
+        try:
+            before = self._read_fetched_turn(task)
+        except NoTurnError:
+            before = _NO_TURN
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
         log = self._read_fetched_log(task)
@@ -169,28 +176,23 @@ class ProjectTasks:
         except NotOnBranchError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
         tasks = [_open_task_for_dir(name) for name in sorted(names)]
-        return [
-            TaskSummary(task, self._read_fetched_turn(task, fix="Write the next role's name in it.")) for task in tasks
-        ]
+        return [TaskSummary(task, self._read_fetched_turn(task)) for task in tasks]
 
-    def _read_fetched_turn(self, task: Task, *, fix: str) -> str:
+    def _read_fetched_turn(self, task: Task) -> str:
         """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
 
-        FoundryError, ending with ``fix``, when the file is missing, not a file, or holds only blanks.
+        NoTurnError, saying how to hand the task off, when the file is missing, not a file, or holds only blanks.
         """
-        turn = self._read_fetched_turn_or_empty(task)
+        try:
+            turn = self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
+        except NotOnBranchError:
+            turn = ""
         if not turn:
-            raise FoundryError(
-                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. {fix}"
+            raise NoTurnError(
+                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
+                f"Hand it off with `foundry task turn {self._project_name} {task.id} ROLE`."
             )
         return turn
-
-    def _read_fetched_turn_or_empty(self, task: Task) -> str:
-        """``task``'s TURN_FILE on NOTES_BRANCH as last fetched, stripped; empty when it is missing or not a file."""
-        try:
-            return self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
-        except NotOnBranchError:
-            return ""
 
     def _read_fetched_log(self, task: Task) -> str:
         """``task``'s LOG_FILE on NOTES_BRANCH as last fetched; FoundryError, naming the file, when it is missing or

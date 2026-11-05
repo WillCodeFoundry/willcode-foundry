@@ -27,7 +27,7 @@ from foundry.commands.task import (
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
+from foundry.project_tasks import NoTurnError, ProjectTasks, TaskNotFoundError, TaskSummary, log_with_turn_entry
 from foundry.task import Status, Task
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -429,9 +429,11 @@ def test_a_new_task_s_turn_is_the_template_s(origin_dir, git_env) -> None:
     assert turn_of(origin_dir, git_env, "tst-0001") == "dev"
 
 
-def test_a_task_without_a_turn_says_to_name_the_role(origin_dir, git_env) -> None:
+def test_a_task_without_a_turn_says_to_hand_it_off(origin_dir, git_env) -> None:
     with pytest.raises(
-        FoundryError, match=r"task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN.*Name"
+        NoTurnError,
+        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
+        r"Hand it off with `foundry task turn store tst-0000 ROLE`\.$",
     ):
         turn_of(origin_dir, git_env, "tst-0000")
 
@@ -830,7 +832,7 @@ def test_a_missing_empty_or_directory_turn_fails_naming_the_task(origin_dir, git
 
     with pytest.raises(
         FoundryError,
-        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*Write the next role's name in it\.$",
+        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*`foundry task turn store tst-0000 ROLE`\.$",
     ):
         summaries_of(origin_dir, git_env)
 
