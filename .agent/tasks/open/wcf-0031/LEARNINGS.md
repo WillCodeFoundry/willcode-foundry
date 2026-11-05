@@ -38,3 +38,4 @@
   no turn, "none", could be a role's name, since config/foundry.yaml accepts any; a sentinel string in a field of
   role names is a collision waiting. Rejected: `str | None` with "from X to Y" prose (a function that sometimes
   returns None), and "no turn" as the stand-in (still a sentinel).
+- 2026-11-05 [review] — When the human approves a TASK.md change in a dev session, the dev's commit isn't an allowed signer, so the reviewer must report it however clearly LOG.md attributes it to the human. Routing it through the planner's `task-question` costs one turn and keeps TASK.md's history checkable. [proposal] AGENTS.md: say that a TASK.md change the human decides in another role's session is recorded by the planner, or by a commit the human signs, never by that role.

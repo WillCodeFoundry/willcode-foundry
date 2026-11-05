@@ -246,3 +246,9 @@ CI passes on fc0c99c; origin/HEAD merged, up to date. Round 2 covers 62665d2..fc
 Next (reviewer): round 2. Suggested follow-ups, tests from before this PR: `test_a_closed_task_s_turn_is_read_from
 _its_closed_task_notes_dir` proves the path only through an error; `test_open_tasks_are_listed_…` asserts a type
 mypy checks; `summaries_of` hides an assertion. Still listed: R4, R8.
+
+## 23 · reviewer · changes-needed
+Done: round 2 of REVIEW.md, reviewing fc0c99c (fix diff 7b35b61...fc0c99c) against TASK.md at f2a97c5, signed by the planner's identity, which the architect shares. DESIGN.md is at 9b086e2, and no other role changed it. The host tier, ruff and mypy pass. R1–R7 and R10–R13 are closed. R8 is deferred and R9 accepted as is. New: 2 Blocking (R14, R20) and 5 Follow-ups (R15–R19). No design questions.
+- R14: TASK.md was changed by the dev in 9b1e640, e345039 and 1cfac67, which no allowed signer wrote. The code meets that amended version, not f2a97c5. Entries 11, 17 and 18 also changed `read_task_turn` and the listing, which even the amended TASK.md still lists as out of scope. No code change is needed. The dev asks the planner (`task-question`) to record the amended TASK.md with the human, and the architect to bring DESIGN.md's `turn`/`hand on` words in line; or the human signs them.
+- R20: `ProjectRepository.head()` defaults to agent-notes. Its name reads as main's tip.
+Next (dev): R20, then raise R14 with the planner as a task-question. Follow-ups are R15–R19, and R8 is still deferred.
