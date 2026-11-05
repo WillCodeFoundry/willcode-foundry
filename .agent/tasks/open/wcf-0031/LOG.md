@@ -183,3 +183,13 @@ Done: at the human's request, in f5715ef and 703df1d.
   modules are imported from it. 171 tests, as before.
 Next: CI on 703df1d. The human wants to discuss next how this workflow should handle changes to TASK.md, and a
 per-task decision record. TURN stays reviewer.
+
+## 16 · dev · progress
+Done: at the human's call, "handoff" names the act wherever "turn" did, in 8aee1ea. The command is
+`foundry task handoff`, the log entry is headed `human · handoff`, the commit says `Handoff of task <id>: <old> →
+<new>` and stdout says `handoff <old> → <new>`. `log_with_turn_entry` is `log_with_handoff_entry`, and
+`TURN_CONFIG` is `HANDOFF_CONFIG`. TURN, the `turn` argument, `NoTurnError` and the `Turn:` line keep "turn": they
+name the state. README, GLOSSARY and agent-kit/AGENTS.md follow. The human had me amend TASK.md in place to match,
+this once: the title, Goal, criteria, out of scope, Context, seams and terms. ADR 0011's "hand-off" is left as
+written. Checks pass; origin/HEAD merged, up to date.
+Next: CI on 8aee1ea, then `ready-for-review`.

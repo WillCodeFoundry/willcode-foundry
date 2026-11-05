@@ -1,4 +1,4 @@
-# Task wcf-0031: Hand a task's turn on with a command, logged
+# Task wcf-0031: Hand a task off with a command, logged
 
 ## Goal
 Today, to hand a task to another role you check out `agent-notes`, edit the
@@ -6,17 +6,17 @@ task's `TURN` by hand, then commit and push. Nothing checks what you write, so a
 typo shows up only at the next `foundry run`. Naming the role to `foundry run`
 instead starts it once but leaves `TURN`, and so `task list`, saying the old
 turn. Nothing in the task's `LOG.md` says the human moved the turn, so the next
-role can't see why it is its turn. Add `foundry task turn PROJECT TASK ROLE`.
+role can't see why it is its turn. Add `foundry task handoff PROJECT TASK ROLE`.
 It checks ROLE, writes it to `TURN`, appends an entry to `LOG.md` saying who
 had the turn and who has it now, with an optional note, and pushes both in one
 commit.
 
 ## Acceptance criteria
-- [ ] `foundry task turn PROJECT TASK ROLE [--note TEXT]` on an open task
+- [ ] `foundry task handoff PROJECT TASK ROLE [--note TEXT]` on an open task
       writes `ROLE` followed by a newline to the task's `TURN`, appends one
       entry to its `LOG.md`, and pushes both to `agent-notes` in one commit
       signed with your key, as `close` does. The commit message is
-      `Turn of task <id>: <old> → <new>`.
+      `Handoff of task <id>: <old> → <new>`.
 - [ ] ROLE must be a role in `config/foundry.yaml` or `human`. Anything else
       is refused with exit 1, before the repository is read, with a message
       that names ROLE and lists the known roles and `human`.
@@ -39,7 +39,7 @@ commit.
       byte for byte (a newline added first if the file didn't end with one),
       a blank line, then:
       ```
-      ## <n> · human · turn
+      ## <n> · human · handoff
       Turn: <old> → <new>.
       Note: <text>
       ```
@@ -47,18 +47,18 @@ commit.
       stripped. The file ends with a newline.
 - [ ] `<n>` is one more than the number in the last line of `LOG.md` that
       starts `## <digits> · `, or `1` when no line does.
-- [ ] On success it prints on stdout `task <id> in <PROJECT>: turn <old> →
+- [ ] On success it prints on stdout `task <id> in <PROJECT>: handoff <old> →
       <new>`, then `run it with: foundry run <PROJECT> <id>`. The second line
       is left out when the new turn is `human`. It exits 0.
 - [ ] `LOG.md` is spelled once on foundry's side, as `LOG_FILE` in
       `src/foundry/task.py`, and a test in `tests/test_task_contract.py` holds
       it equal to `LOG_FILE` in `src/agent_runtime/git_hooks.py`.
-- [ ] The README's command table lists `foundry task turn PROJECT TASK ROLE`,
+- [ ] The README's command table lists `foundry task handoff PROJECT TASK ROLE`,
       so `tests/test_docs.py` passes. The README paragraph on `TURN` names the
       command where it now says to edit `TURN`. `ARCHITECTURE.md`'s codemap
-      row for `project_tasks.py` mentions handing on the turn.
+      row for `project_tasks.py` mentions handing a task off.
 - [ ] `agent-kit/AGENTS.md`'s "`LOG.md`" section has one sentence saying an
-      entry headed `human · turn` is the human handing the turn on.
+      entry headed `human · handoff` is the human handing the task off.
 - [ ] The host tier, ruff and mypy pass.
 
 ## Out of scope
@@ -66,9 +66,9 @@ commit.
   `LOG_FILE` in `src/foundry/task.py`: whichever merges second reuses the
   other's. Replacing this task's entry-number helper with wcf-0030's log module
   is a follow-up.
-- Checking that a hand-off is allowed by the outcome table in
+- Checking that a handoff is allowed by the outcome table in
   `agent-kit/AGENTS.md`: any role or `human` may follow any other (ADR 0011).
-- Handing on a closed task, or several tasks at once.
+- Handing off a closed task, or several tasks at once.
 - Creating a `LOG.md` for a task that has none (tasks begun with
   `PROGRESS.md`).
 - Retrying when the push is refused because someone pushed first: the error
@@ -79,7 +79,7 @@ commit.
 - A new ADR.
 
 ## Context
-- `src/foundry/commands/task.py`: add `turn` beside `create`, `close`,
+- `src/foundry/commands/task.py`: add `handoff` beside `create`, `close`,
   `reopen` and `list`, taking the shared `task_arguments` plus `ROLE` and
   `--note`. Update the `task` help text and the module docstring. Its `main`
   is a composition root that only builds and passes (design rule 7 in
@@ -108,7 +108,7 @@ commit.
   it append-only in sandboxes; foundry's scratch clone has no hooks, so the
   append-only rule is this task's to keep.
 - `docs/adr/0011-turn-is-one-line.md`: `TURN` is one line, and nothing checks
-  a hand-off. This command checks only that ROLE is a role or `human`.
+  a handoff. This command checks only that ROLE is a role or `human`.
 - `tests/test_task.py`: real repositories in temporary folders (`origin_dir`,
   `git_env`, `project_tasks_of`), signed-commit and push-nothing tests for
   `close` (`test_close_moves_the_task_notes_dir_unchanged_in_one_signed_commit`,
@@ -134,15 +134,15 @@ commit.
   reaching git.
 - The function that turns the result into stdout lines: with and without the
   `run it with` line. Catches formatting bugs.
-- The parser: `task turn` takes a project, a task, a role and an optional
+- The parser: `task handoff` takes a project, a task, a role and an optional
   `--note`, as `test_close_and_reopen_take_a_project_and_a_task` checks.
 - End to end through `cli.main`: stdout, stderr and the exit code for a
-  hand-off and for a refusal.
+  handoff and for a refusal.
 - The contract test: `task.LOG_FILE` equals `git_hooks.LOG_FILE`.
 
 ## Terms and decisions
-- GLOSSARY.md, "Log": add that the human can hand the turn on with
-  `foundry task turn`, which appends an entry headed `human · turn`.
+- GLOSSARY.md, "Log": add that the human can hand a task off with
+  `foundry task handoff`, which appends an entry headed `human · handoff`.
 
 ## Open questions
 - None.
