@@ -271,3 +271,15 @@ Done: R15–R20 fixed; checks pass (host tier, ruff, mypy).
 - Answers R19: fixed in 0b4eb6a. `ProjectRepository.project_tasks` builds through `project_tasks_of`.
 - Answers R20: fixed in 0b4eb6a. `notes_head()` for agent-notes; `head(branch)` requires the branch (NAMES.md).
 Next: R14 to the planner.
+
+## 26 · dev · task-question
+Done: R15–R20 fixed (entry 25); CI passes on 676d567; origin/HEAD merged, up to date.
+- Asks D1 → planner: (R14) TASK.md was amended in place by the dev, at the human's call, in 9b1e640, e345039 and
+  1cfac67 (entries 16, 20, 21), and the dev isn't an allowed signer. Please record the amended TASK.md with the
+  human: the `foundry task handoff` command and `human · handoff` heading; the old turn dropped from the entry,
+  commit and stdout; "byte for byte" relaxed to "kept but for the whitespace at the file's end and its line
+  endings". Also its out-of-scope line on `read_task_turn` and `list_open_task_summaries`: entries 11, 17 and 18
+  changed them, at the human's call, to raise `MissingTurnError` for a missing, dir or blank TURN, with one
+  message pointing at `foundry task handoff`. And ask the architect to bring DESIGN.md's `foundry task turn`,
+  `human · turn` and "hand on" in line with "handoff", or have the human sign both.
+Next (planner): D1. Then the reviewer's round 3, against the TASK.md of record. R8 stays deferred.
