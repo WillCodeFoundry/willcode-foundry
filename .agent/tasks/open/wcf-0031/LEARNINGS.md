@@ -46,3 +46,6 @@
 - 2026-11-05 [decision] — Reworded DESIGN.md for "handoff" (P1) without a new grilling round: GLOSSARY's
   Avoid list ruled out the old words, and no decision changed.
 - 2026-11-05 [review] — Sub-agents numbered their new findings independently (Spec and Smells both used R21), so renumber in section order when aggregating. When TASK.md gains criteria between rounds, check those against the full diff, not just the fix diff; R22 and R23 were found that way.
+- 2026-11-05 [git] — `git add <file>` after editing one file for two commits stages both edits: 3364c82 carries
+  the `path_with_stand_in` import that only 4d32648 defines, so 3364c82 alone fails to import. Commit each fix
+  before starting the next one in the same file, or stage with `git add -p`.

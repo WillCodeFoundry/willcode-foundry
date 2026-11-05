@@ -336,3 +336,16 @@ Next (human): R22 and R23. If sent back, the dev fixes R21–R24, and round 4 re
 - Answers R23: the dev fixes it (the human).
 Done: the human sends the task back to the dev to fix every Blocking finding of round 3, R21–R24, as REVIEW.md round 3 directs.
 Next (dev): R21–R24, each answered by its id. Then round 4 reviews only those fixes. R8 stays deferred.
+
+## 33 · dev · progress
+Done: R21–R24 fixed; host tier, ruff and mypy pass on 4d32648. origin/HEAD merged, already up to date.
+- Answers R21: fixed in a5f6454. The module docstring drops "get Tasks back"; it says only that callers pass task ids.
+- Answers R22: fixed in 3364c82, the `turn-is-a-link` case, with a `LOG.md` present, in
+  `test_handoff_refuses_and_pushes_nothing`.
+- Answers R23: fixed in 3364c82. `test_listing_fails_on_a_task_without_a_turn` takes missing, blank and directory,
+  and matches the full message.
+- Answers R24: fixed in 4d32648. `path_with_stand_in` in `tests/support/__init__.py` writes the stand-in and returns
+  PATH with its dir first; both foundry sites use it. `test_session_init.py`'s `sudo` left as is (optional, and it
+  replaces PATH rather than prefixing it).
+- 3364c82 alone doesn't import: it already holds 4d32648's import (LEARNINGS). The pushed tip is whole.
+Next: CI on PR #46, then hand to the reviewer for round 4.
