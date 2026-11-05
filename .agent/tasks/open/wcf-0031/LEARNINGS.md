@@ -34,3 +34,7 @@
   The human chose to follow it: `ProjectRepository` and the git helpers are in `tests/support/project_repository.py`.
   The task helpers take `ProjectTasks`, so no test imports from conftest. Read CONTRIBUTING's test section before
   moving test code.
+- 2026-11-05 [decision] — The human dropped the old turn from a handoff's entry, commit and stdout. Its stand-in for
+  no turn, "none", could be a role's name, since config/foundry.yaml accepts any; a sentinel string in a field of
+  role names is a collision waiting. Rejected: `str | None` with "from X to Y" prose (a function that sometimes
+  returns None), and "no turn" as the stand-in (still a sentinel).

@@ -8,7 +8,7 @@ instead starts it once but leaves `TURN`, and so `task list`, saying the old
 turn. Nothing in the task's `LOG.md` says the human moved the turn, so the next
 role can't see why it is its turn. Add `foundry task handoff PROJECT TASK ROLE`.
 It checks ROLE, writes it to `TURN`, appends an entry to `LOG.md` saying who
-had the turn and who has it now, with an optional note, and pushes both in one
+has the turn now, with an optional note, and pushes both in one
 commit.
 
 ## Acceptance criteria
@@ -16,7 +16,7 @@ commit.
       writes `ROLE` followed by a newline to the task's `TURN`, appends one
       entry to its `LOG.md`, and pushes both to `agent-notes` in one commit
       signed with your key, as `close` does. The commit message is
-      `Handoff of task <id>: <old> → <new>`.
+      `Handoff of task <id> to <ROLE>`.
 - [ ] ROLE must be a role in `config/foundry.yaml` or `human`. Anything else
       is refused with exit 1, before the repository is read, with a message
       that names ROLE and lists the known roles and `human`.
@@ -32,24 +32,23 @@ commit.
       says ROLE, with a message saying so; the task has no `LOG.md`, or it
       isn't a file, with a message naming the task and the file; no signing
       key (as `close` without one).
-- [ ] `<old>` is the stripped text of `TURN`, or `none` when `TURN` is
-      missing, empty or only blanks. Such a task is not refused: the command
-      writes its `TURN`.
+- [ ] A task whose `TURN` is missing, empty or only blanks is not refused:
+      the command writes its `TURN`.
 - [ ] The entry appended to `LOG.md` is, after the existing text unchanged
       byte for byte (a newline added first if the file didn't end with one),
       a blank line, then:
       ```
       ## <n> · human · handoff
-      Turn: <old> → <new>.
+      Turn: <ROLE>.
       Note: <text>
       ```
       The `Note:` line is there only when `--note` was given, with its text
       stripped. The file ends with a newline.
 - [ ] `<n>` is one more than the number in the last line of `LOG.md` that
       starts `## <digits> · `, or `1` when no line does.
-- [ ] On success it prints on stdout `task <id> in <PROJECT>: handoff <old> →
-      <new>`, then `run it with: foundry run <PROJECT> <id>`. The second line
-      is left out when the new turn is `human`. It exits 0.
+- [ ] On success it prints on stdout `task <id> in <PROJECT>: handoff to
+      <ROLE>`, then `run it with: foundry run <PROJECT> <id>`. The second line
+      is left out when ROLE is `human`. It exits 0.
 - [ ] `LOG.md` is spelled once on foundry's side, as `LOG_FILE` in
       `src/foundry/task.py`, and a test in `tests/test_task_contract.py` holds
       it equal to `LOG_FILE` in `src/agent_runtime/git_hooks.py`.
