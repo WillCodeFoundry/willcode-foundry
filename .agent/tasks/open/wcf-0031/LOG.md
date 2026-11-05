@@ -193,3 +193,8 @@ name the state. README, GLOSSARY and agent-kit/AGENTS.md follow. The human had m
 this once: the title, Goal, criteria, out of scope, Context, seams and terms. ADR 0011's "hand-off" is left as
 written. Checks pass; origin/HEAD merged, up to date.
 Next: CI on 8aee1ea, then `ready-for-review`.
+
+## 17 · dev · progress
+Done: at the human's call, `NoTurnError` is `MissingTurnFileError`, in a35ebbc. It is also raised
+for a TURN that is a dir or holds only blanks, as its docstring says; the message is unchanged. Checks pass.
+Next: CI, then `ready-for-review`.
