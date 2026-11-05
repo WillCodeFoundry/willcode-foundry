@@ -308,27 +308,27 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(
 @pytest.mark.parametrize(
     "log, note, expected",
     [
-        ("", None, "## 1 · human · handoff\nTurn: none → dev.\n"),
-        (" \n\n", None, "## 1 · human · handoff\nTurn: none → dev.\n"),
-        ("# Log\n", None, "# Log\n\n## 1 · human · handoff\nTurn: none → dev.\n"),
-        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · handoff\nTurn: none → dev.\n"),
+        ("", None, "## 1 · human · handoff\nTurn: dev.\n"),
+        (" \n\n", None, "## 1 · human · handoff\nTurn: dev.\n"),
+        ("# Log\n", None, "# Log\n\n## 1 · human · handoff\nTurn: dev.\n"),
+        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · handoff\nTurn: dev.\n"),
         (
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n",
             "  look at R3  ",
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n"
-            "\n## 3 · human · handoff\nTurn: none → dev.\nNote: look at R3\n",
+            "\n## 3 · human · handoff\nTurn: dev.\nNote: look at R3\n",
         ),
         (
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.",
             None,
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.\n"
-            "\n## 5 · human · handoff\nTurn: none → dev.\n",
+            "\n## 5 · human · handoff\nTurn: dev.\n",
         ),
         (
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n",
             None,
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n"
-            "\n## 12 · human · handoff\nTurn: none → dev.\n",
+            "\n## 12 · human · handoff\nTurn: dev.\n",
         ),
     ],
     ids=[
@@ -345,12 +345,12 @@ def test_the_handoff_entry_follows_the_log_after_one_blank_line_numbered_after_i
     log, note, expected
 ) -> None:
     """The log's text is kept, but for the whitespace at its end."""
-    assert log_with_handoff_entry(log, before="none", after="dev", note=note) == expected
+    assert log_with_handoff_entry(log, turn="dev", note=note) == expected
 
 
-def test_the_handoff_entry_names_both_turns() -> None:
-    assert log_with_handoff_entry("# Log\n", before="reviewer", after="human", note=None).endswith(
-        "\n\n## 1 · human · handoff\nTurn: reviewer → human.\n"
+def test_the_handoff_entry_names_the_new_turn() -> None:
+    assert log_with_handoff_entry("# Log\n", turn="human", note=None).endswith(
+        "\n\n## 1 · human · handoff\nTurn: human.\n"
     )
 
 
@@ -360,29 +360,23 @@ LOG = "# Log\n\n## 1 · planner · planned\nDone.\n"
 
 
 @pytest.mark.parametrize(
-    "turn_files, before",
-    [
-        ({".agent/tasks/open/tst-0000/TURN": " reviewer \n"}, "reviewer"),
-        ({}, "none"),
-        ({".agent/tasks/open/tst-0000/TURN": " \n\t"}, "none"),
-    ],
+    "turn_files",
+    [{".agent/tasks/open/tst-0000/TURN": " reviewer \n"}, {}, {".agent/tasks/open/tst-0000/TURN": " \n\t"}],
     ids=["a-turn", "no-turn", "blank-turn"],
 )
-def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
-    project_repository, turn_files, before
-) -> None:
+def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project_repository, turn_files) -> None:
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/LOG.md": LOG, **turn_files})
     files_before = project_repository.notes_files()
     commits_before = len(project_repository.notes_commits())
 
-    assert project_repository.project_tasks().handoff("tst-0000", "dev", note=" see R2 ") == before
-    expected_log = LOG + f"\n## 2 · human · handoff\nTurn: {before} → dev.\nNote: see R2\n"
+    project_repository.project_tasks().handoff("tst-0000", "dev", note=" see R2 ")
+    expected_log = LOG + "\n## 2 · human · handoff\nTurn: dev.\nNote: see R2\n"
     assert project_repository.notes_files() == {
         **files_before,
         ".agent/tasks/open/tst-0000/TURN": "dev\n",
         ".agent/tasks/open/tst-0000/LOG.md": expected_log,
     }
-    assert project_repository.notes_commits()[0] == f"Handoff of task tst-0000: {before} → dev"
+    assert project_repository.notes_commits()[0] == "Handoff of task tst-0000 to dev"
     assert len(project_repository.notes_commits()) == commits_before + 1
     assert project_repository.notes_signed_with_your_key()
 

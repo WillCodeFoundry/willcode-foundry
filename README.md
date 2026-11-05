@@ -63,7 +63,7 @@ Agents write nothing to this repository. Their work goes to the project's reposi
 | `task/<task>` | Code and project documentation | dev, qa |
 | `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `DESIGN.md`, `REVIEW.md`, `NAMES.md`, `LOG.md`, `LEARNINGS.md` | every role, each only in its own task's dir |
 
-`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close`, `reopen` and `turn` always sign their commit with your key, and refuse if they can't:
+`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close`, `reopen` and `handoff` always sign their commit with your key, and refuse if they can't:
 
 ```console
 $ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in allowed_signers; its private half in your ssh-agent

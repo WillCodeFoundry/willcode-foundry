@@ -244,14 +244,14 @@ def test_a_config_without_roles_knows_only_human() -> None:
 
 
 @pytest.mark.parametrize(
-    "after, lines",
+    "turn, lines",
     [
-        ("dev", ["task tst-0001 in store: handoff none → dev", "run it with: foundry run store tst-0001"]),
-        ("human", ["task tst-0001 in store: handoff none → human"]),
+        ("dev", ["task tst-0001 in store: handoff to dev", "run it with: foundry run store tst-0001"]),
+        ("human", ["task tst-0001 in store: handoff to human"]),
     ],
 )
-def test_the_handoff_lines_say_how_to_run_the_task_unless_it_waits_for_you(after: str, lines: list[str]) -> None:
-    assert handoff_lines("store", "tst-0001", before="none", after=after) == lines
+def test_the_handoff_lines_say_how_to_run_the_task_unless_it_waits_for_you(turn: str, lines: list[str]) -> None:
+    assert handoff_lines("store", "tst-0001", turn=turn) == lines
 
 
 def test_handoff_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
@@ -280,10 +280,10 @@ def test_handoff_prints_the_turns_or_an_error_and_exits_accordingly(
 
     assert cli.main(["task", "handoff", "store", "tst-0000", "dev", "--note", "go"]) == 0
     assert capsys.readouterr() == (
-        "task tst-0000 in store: handoff none → dev\nrun it with: foundry run store tst-0000\n",
+        "task tst-0000 in store: handoff to dev\nrun it with: foundry run store tst-0000\n",
         "",
     )
-    assert project_repository.notes_commits()[0] == "Handoff of task tst-0000: none → dev"
+    assert project_repository.notes_commits()[0] == "Handoff of task tst-0000 to dev"
 
     notes_before = project_repository.head()
     assert cli.main(["task", "handoff", "store", "tst-0000", "dev"]) == 1
@@ -295,4 +295,4 @@ def test_handoff_prints_the_turns_or_an_error_and_exits_accordingly(
     assert project_repository.head() == notes_before
 
     assert cli.main(["task", "handoff", "store", "tst-0000", "human"]) == 0
-    assert capsys.readouterr() == ("task tst-0000 in store: handoff dev → human\n", "")
+    assert capsys.readouterr() == ("task tst-0000 in store: handoff to human\n", "")

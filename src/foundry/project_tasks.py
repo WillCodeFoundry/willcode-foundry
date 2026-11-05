@@ -9,7 +9,7 @@ reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch 
 import re
 import tempfile
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -131,35 +131,30 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task)
 
-    def handoff(self, task_id: str, turn: str, *, note: str | None) -> str:
-        """Hand the open task off to ``turn``, and return the turn before.
+    def handoff(self, task_id: str, turn: str, *, note: str | None) -> None:
+        """Hand the open task off to ``turn``.
 
         Writes ``turn`` to the task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it isn't
-        None. One commit, pushed to NOTES_BRANCH. The turn before is TURN_FILE's text stripped, or "none" when it is
-        missing or blank. Refuses a task that doesn't exist or is closed, whose turn is already ``turn``, or that has
-        no LOG_FILE. Refuses a TURN_FILE or LOG_FILE that is a link, as ProjectClone.write does. Checks nothing about
-        ``turn``: the caller does.
+        None. One commit, pushed to NOTES_BRANCH. A task with no turn is handed off like any other. Refuses a task
+        that doesn't exist or is closed, whose turn is already ``turn``, or that has no LOG_FILE. Refuses a TURN_FILE
+        or LOG_FILE that is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
         """
         task = self.get_task_by_id(task_id)
         if task.status is Status.CLOSED:
             raise FoundryError(
                 f"task {task.id} is closed: reopen it with `foundry task reopen {self._project_name} {task.id}`"
             )
-        try:
-            before = self._read_fetched_turn(task)
-        except MissingTurnError:
-            before = "none"
-        if before == turn:
-            raise FoundryError(f"task {task.id}'s turn is already {turn}")
+        with suppress(MissingTurnError):
+            if self._read_fetched_turn(task) == turn:
+                raise FoundryError(f"task {task.id}'s turn is already {turn}")
         log = self._read_fetched_log(task)
         self._clone.write(
             {
                 task.turn_file: f"{turn}\n",
-                task.log_file: log_with_handoff_entry(log, before=before, after=turn, note=note),
+                task.log_file: log_with_handoff_entry(log, turn=turn, note=note),
             }
         )
-        self._commit_and_push(f"Handoff of task {task.id}: {before} → {turn}")
-        return before
+        self._commit_and_push(f"Handoff of task {task.id} to {turn}")
 
     def list_open_task_summaries(self) -> list[TaskSummary]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
@@ -228,8 +223,8 @@ def _open_task_for_dir(dir_name: str) -> Task:
         raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
 
 
-def log_with_handoff_entry(log: str, *, before: str, after: str, note: str | None) -> str:
-    """``log``, then a blank line and an entry saying you handed the task off from ``before`` to ``after``.
+def log_with_handoff_entry(log: str, *, turn: str, note: str | None) -> str:
+    """``log``, then a blank line and an entry saying you handed the task off to ``turn``.
 
     The log's text is kept, but for the whitespace at its end; a blank log gets no blank line. The entry is numbered
     one more than the last line that starts as a heading, or 1. Its Note line holds ``note`` stripped, and is left
@@ -237,7 +232,7 @@ def log_with_handoff_entry(log: str, *, before: str, after: str, note: str | Non
     """
     numbers = [match[1] for line in log.split("\n") if (match := _LOG_HEADING.match(line))]
     number = int(numbers[-1]) + 1 if numbers else 1
-    entry = [f"## {number} · {HUMAN} · handoff", f"Turn: {before} → {after}."]
+    entry = [f"## {number} · {HUMAN} · handoff", f"Turn: {turn}."]
     if note is not None:
         entry.append(f"Note: {note.strip()}")
     kept = log.rstrip()

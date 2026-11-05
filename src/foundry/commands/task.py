@@ -111,8 +111,8 @@ def handoff_main(args: argparse.Namespace) -> int:
     project = foundry_config.project(args.project_name)
     require_valid_handoff_args(foundry_config, task_id=args.task_id, turn=args.turn, note=args.note)
     with ProjectTasks.in_scratch_clone(project, os.environ) as project_tasks:
-        before = project_tasks.handoff(args.task_id, args.turn, note=args.note)
-    print("\n".join(handoff_lines(project.name, args.task_id, before=before, after=args.turn)))
+        project_tasks.handoff(args.task_id, args.turn, note=args.note)
+    print("\n".join(handoff_lines(project.name, args.task_id, turn=args.turn)))
     return 0
 
 
@@ -163,10 +163,10 @@ def require_valid_handoff_args(foundry_config: Config, *, task_id: str, turn: st
         raise FoundryError("--note holds a line break: give it one line")
 
 
-def handoff_lines(project_name: str, task_id: str, *, before: str, after: str) -> list[str]:
+def handoff_lines(project_name: str, task_id: str, *, turn: str) -> list[str]:
     """What handoff prints: the handoff, then how to run the task, unless it now waits for you."""
-    lines = [f"task {task_id} in {project_name}: handoff {before} → {after}"]
-    if after != task.HUMAN:
+    lines = [f"task {task_id} in {project_name}: handoff to {turn}"]
+    if turn != task.HUMAN:
         lines.append(f"run it with: foundry run {project_name} {task_id}")
     return lines
 
