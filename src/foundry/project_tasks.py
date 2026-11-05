@@ -2,8 +2,9 @@
 turn and handing them off, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every operation on one task goes through it. Callers pass task ids, and get Tasks back. Listing is the exception: it
-reads every dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
+every operation on one task goes through it. Callers pass task ids, and get Tasks back, but for handoff, which
+returns nothing. Listing is the exception: it reads every dir under OPEN_DIR from one fetch, since get_task_by_id
+would fetch once per task.
 """
 
 import re
@@ -132,12 +133,16 @@ class ProjectTasks:
         return self._read_fetched_turn(task)
 
     def handoff(self, task_id: str, turn: str, *, note: str | None) -> None:
-        """Hand the open task off to ``turn``.
+        """Hand the open task off to ``turn``, in one commit pushed to NOTES_BRANCH.
 
         Writes ``turn`` to the task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it isn't
-        None. One commit, pushed to NOTES_BRANCH. A task with no turn is handed off like any other. Refuses a task
-        that doesn't exist or is closed, whose turn is already ``turn``, or that has no LOG_FILE. Refuses a TURN_FILE
-        or LOG_FILE that is a link, as ProjectClone.write does. Checks nothing about ``turn``: the caller does.
+        None. A task with no turn is handed off like any other. The caller checks ``turn``.
+
+        FoundryError, with nothing pushed, when:
+        - the task doesn't exist, or is closed;
+        - its turn is already ``turn``;
+        - it has no LOG_FILE;
+        - its TURN_FILE or LOG_FILE is a link, as ProjectClone.write refuses.
         """
         task = self.get_task_by_id(task_id)
         if task.status is Status.CLOSED:
