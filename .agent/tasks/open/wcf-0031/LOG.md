@@ -203,3 +203,8 @@ Next: CI, then `ready-for-review`.
 Done: at the human's call, `MissingTurnFileError` is `MissingTurnError`, in ec90be4: the error covers a TURN
 that is missing, a dir or blank, and in each case the task has no turn. Checks pass.
 Next: CI, then `ready-for-review`.
+
+## 19 · dev · progress
+Done: at the human's call, `_NO_TURN` goes, in f4e16f3: `handoff` writes `"none"` in its `except MissingTurnError`
+branch, the only place it is used. Checks pass.
+Next: CI, then `ready-for-review`.
