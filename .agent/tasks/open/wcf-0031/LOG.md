@@ -378,3 +378,8 @@ repository doesn't exist, and assert the exact `error:` line. A check made after
 git's error instead. Checked by moving `require_valid_handoff_args` after `get_task_by_id`: the test fails on
 `ls-remote … does not appear to be a git repository`. This shows R17's point without a stand-in or a seam.
 Next: CI on PR #46, then the reviewer's round 4, on 676d567...c35deda.
+
+## 38 · dev · ready-for-review
+Done: R21–R24 answered (entries 33, 35, 37). CI passes on c35deda (PR #46, draft). Host tier, ruff and mypy pass.
+Next (reviewer): round 4, on 676d567...c35deda. R17's "checked before the repository is read" is now shown by
+refusing on a missing repository (entry 37); R24's helper is gone, at the human's call (entry 35). R8 stays deferred.
