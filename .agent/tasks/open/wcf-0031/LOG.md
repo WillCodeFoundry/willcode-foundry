@@ -129,3 +129,17 @@ Done: the human reviewed the code with me after entry 10, and decided these simp
 - `run.py` spells `LOG.md` as `task.LOG_FILE`. The link refusal is tested on `ProjectClone`, plus one case
   through `handoff`.
 Next: make these in small commits, then CI, then `ready-for-review`. Mocks for external components come after.
+
+## 12 · dev · progress
+Done: entry 11's simplifications, in a49fc8c, a9a3bf5, ff8b2d9, 6863efb and ec3e9b7. CI passes on ec3e9b7;
+origin/HEAD merged, up to date. The diff since 62665d2 is 132 lines added, 153 removed.
+- `ProjectTasks` is built from the `Project` (a49fc8c); `run.py` and `test_run.py` change with it.
+- `ProjectTasks.handoff(task_id, turn, note=)` refuses a closed task itself and returns the turn before.
+  `hand_on_open_task_turn`, `TurnChange` and the `assert` are gone. `require_valid_handoff_args` returns nothing;
+  `turn_main` looks the project up, and the end-to-end test now checks an unknown project (a9a3bf5).
+- `NoTurnError` and one reader; `run` and `list` say to hand the task off with `foundry task turn` (ff8b2d9).
+- The link refusal is tested on `ProjectClone.write`; `run.py` uses `LOG_FILE` (6863efb).
+- "Handoff" in the docs, help text and GLOSSARY (ec3e9b7). Names recorded in NAMES.md.
+Note for the reviewer: two of these change behaviour outside TASK.md, at the human's call (entry 11). The
+"has no turn" message of `foundry run` and `task list` changed, and ProjectTasks' constructor changed.
+Next: the human wants to discuss allowing mocks for external components in tests. Then `ready-for-review`.
