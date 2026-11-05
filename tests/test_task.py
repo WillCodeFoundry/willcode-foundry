@@ -357,6 +357,19 @@ def test_move_dir_refuses_an_existing_destination(tmp_path: Path, git_env) -> No
         clone.move_dir("a", "b")
 
 
+def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_env) -> None:
+    work_dir = tmp_path / "clone"
+    work_dir.mkdir()
+    clone = ProjectClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside\n")
+    (work_dir / "link.md").symlink_to(outside)
+
+    with pytest.raises(FoundryError, match=r"^link\.md is a link: foundry writes only files$"):
+        clone.write({"link.md": "2\n"})
+    assert outside.read_text() == "outside\n"
+
+
 # --- ProjectClone: fetch_branch, fetched_list_dir, fetched_read -------------------------
 
 
@@ -735,16 +748,8 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(
             {"write": {".agent/LOG.md": LOG}, "symlink": {".agent/tasks/open/tst-0000/LOG.md": "../../../LOG.md"}},
             r"^\.agent/tasks/open/tst-0000/LOG\.md is a link: foundry writes only files$",
         ),
-        (
-            "tst-0000",
-            {
-                "write": {".agent/tasks/open/tst-0000/LOG.md": LOG, ".agent/TURN": "dev\n"},
-                "symlink": {".agent/tasks/open/tst-0000/TURN": "../../../TURN"},
-            },
-            r"^\.agent/tasks/open/tst-0000/TURN is a link: foundry writes only files$",
-        ),
     ],
-    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link", "turn-is-a-link"],
+    ids=["not-found", "closed", "same-turn", "no-log", "log-is-a-dir", "log-is-a-link"],
 )
 def test_handoff_refuses_and_pushes_nothing(origin_dir, git_env, task_id, edits, message) -> None:
     if edits:

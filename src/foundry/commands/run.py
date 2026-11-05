@@ -12,7 +12,7 @@ from foundry import agent_sandbox, config, paths, session
 from foundry.errors import FoundryError
 from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
-from foundry.task import HUMAN, NOTES_BRANCH, Status, Task
+from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, Status, Task
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -70,7 +70,7 @@ def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task:
     names no role in ``roles``."""
     override = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
     if turn == HUMAN:
-        raise FoundryError(f"task {task.id} is waiting for you: see the last entry in its LOG.md. {override}")
+        raise FoundryError(f"task {task.id} is waiting for you: see the last entry in its {LOG_FILE}. {override}")
     if turn not in roles:
         known = ", ".join(sorted(roles)) or "none"
         raise FoundryError(
