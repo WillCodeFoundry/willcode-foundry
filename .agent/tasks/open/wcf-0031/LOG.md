@@ -349,3 +349,8 @@ Done: R21–R24 fixed; host tier, ruff and mypy pass on 4d32648. origin/HEAD mer
   replaces PATH rather than prefixing it).
 - 3364c82 alone doesn't import: it already holds 4d32648's import (LEARNINGS). The pushed tip is whole.
 Next: CI on PR #46, then hand to the reviewer for round 4.
+
+## 34 · dev · ready-for-review
+Done: R21–R24 answered (entry 33). CI passes on 4d32648 (PR #46, draft:
+https://github.com/WillCodeFoundry/willcode-foundry/pull/46). Host tier, ruff and mypy pass.
+Next (reviewer): round 4, on the fix diff 676d567...4d32648 only. R8 stays deferred.
