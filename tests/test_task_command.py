@@ -24,6 +24,7 @@ from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import TaskSummary
 from foundry.task import Task
+from tests.support import path_with_stand_in
 from tests.support.project_repository import git_output
 
 # --- the command ------------------------------------------------------------------
@@ -289,11 +290,9 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     assert project_repository.notes_commits()[0] == "Handoff of task tst-0000 to dev"
 
     notes_before = project_repository.notes_head()
-    stand_in_dir, git_ran = tmp_path / "stand-in", tmp_path / "git-ran"
-    stand_in_dir.mkdir()
-    (stand_in_dir / "git").write_text(f"#!/bin/sh\ntouch {git_ran}\nexit 1\n")
-    (stand_in_dir / "git").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{stand_in_dir}{os.pathsep}{os.environ['PATH']}")
+    git_ran = tmp_path / "git-ran"
+    stand_in_path = path_with_stand_in(tmp_path / "stand-in", "git", f"touch {git_ran}\nexit 1\n", os.environ["PATH"])
+    monkeypatch.setenv("PATH", stand_in_path)
     for arguments, error in [
         (["tst-0000", "planner"], "'planner' is not a role; known: dev, or human"),
         (["tst-0000", "dev", "--note", " "], "--note is empty: give it text, or leave it out"),
