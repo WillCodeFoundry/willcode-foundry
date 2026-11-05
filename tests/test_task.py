@@ -98,3 +98,8 @@ def test_a_template_without_a_task_md_is_refused(tmp_path: Path) -> None:
 def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match=r"task-template is missing$"):
         task.load_template(tmp_path / "task-template")
+
+
+def test_the_task_template_starts_with_the_planner_s_turn() -> None:
+    template = task.load_template(Path(__file__).parents[1] / "config" / "task-template")
+    assert template[task.TURN_FILE].strip() == "planner"

@@ -135,20 +135,19 @@ def test_a_new_task_s_turn_is_the_template_s(project_repository) -> None:
     assert project_repository.project_tasks().read_task_turn("tst-0001") == "dev"
 
 
-def test_a_task_without_a_turn_says_to_hand_it_off(project_repository) -> None:
+@pytest.mark.parametrize(
+    "files",
+    [{}, {".agent/tasks/open/tst-0000/TURN": " \n\t"}, {".agent/tasks/open/tst-0000/TURN/dev": "dev\n"}],
+    ids=["missing", "blank", "directory"],
+)
+def test_a_task_without_a_turn_says_to_hand_it_off(project_repository, files) -> None:
+    if files:  # tst-0000 starts without a TURN
+        project_repository.edit_notes(write=files)
+
     with pytest.raises(
         MissingTurnError,
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
         r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
-    ):
-        project_repository.project_tasks().read_task_turn("tst-0000")
-
-
-def test_a_dir_at_turn_is_no_turn(project_repository) -> None:
-    project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN/dev": "dev\n"})
-
-    with pytest.raises(
-        FoundryError, match=r"^task tst-0000 has no turn: agent-notes has no .agent/tasks/open/tst-0000/TURN"
     ):
         project_repository.project_tasks().read_task_turn("tst-0000")
 
@@ -163,11 +162,6 @@ def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(project_rep
 def test_a_task_that_doesn_t_exist_has_no_turn_to_read(project_repository) -> None:
     with pytest.raises(TaskNotFoundError):
         project_repository.project_tasks().read_task_turn("tst-0009")
-
-
-def test_the_task_template_starts_with_the_planner_s_turn() -> None:
-    template = task.load_template(Path(__file__).parents[1] / "config" / "task-template")
-    assert template[task.TURN_FILE].strip() == "planner"
 
 
 # --- get_task_by_id ---------------------------------------------------------------------
@@ -306,26 +300,29 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(
 
 
 @pytest.mark.parametrize(
-    "log, note, expected",
+    "log, turn, note, expected",
     [
-        ("", None, "## 1 · human · handoff\nTurn: dev.\n"),
-        (" \n\n", None, "## 1 · human · handoff\nTurn: dev.\n"),
-        ("# Log\n", None, "# Log\n\n## 1 · human · handoff\nTurn: dev.\n"),
-        ("# Log\n\n\n \t\n", None, "# Log\n\n## 1 · human · handoff\nTurn: dev.\n"),
+        ("", "dev", None, "## 1 · human · handoff\nTurn: dev.\n"),
+        (" \n\n", "dev", None, "## 1 · human · handoff\nTurn: dev.\n"),
+        ("# Log\n", "human", None, "# Log\n\n## 1 · human · handoff\nTurn: human.\n"),
+        ("# Log\n\n\n \t\n", "dev", None, "# Log\n\n## 1 · human · handoff\nTurn: dev.\n"),
         (
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n",
+            "dev",
             "  look at R3  ",
             "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone.\n"
             "\n## 3 · human · handoff\nTurn: dev.\nNote: look at R3\n",
         ),
         (
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.",
+            "dev",
             None,
             "# Log\n\n## 12 · dev · progress\n\n## 4 · reviewer · changes-needed\nSee REVIEW.md.\n"
             "\n## 5 · human · handoff\nTurn: dev.\n",
         ),
         (
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n",
+            "dev",
             None,
             "# Log\n\n## 7 · dev · progress\n  ## 9 · dev · indented\n## 10 · \n## 11 · x\n## x · dev\n"
             "\n## 12 · human · handoff\nTurn: dev.\n",
@@ -334,24 +331,18 @@ def test_without_a_signing_key_close_and_reopen_push_nothing(
     ids=[
         "empty",
         "blank",
-        "no-entries",
+        "no-entries-to-human",
         "trailing-blank-lines",
         "entries-with-note",
         "last-heading-not-highest-no-final-newline",
-        "headings-only",
+        "only-numbered-headings-at-line-start-count",
     ],
 )
 def test_the_handoff_entry_follows_the_log_after_one_blank_line_numbered_after_its_last_entry(
-    log, note, expected
+    log, turn, note, expected
 ) -> None:
     """The log's text is kept, but for the whitespace at its end."""
-    assert log_with_handoff_entry(log, turn="dev", note=note) == expected
-
-
-def test_the_handoff_entry_names_the_new_turn() -> None:
-    assert log_with_handoff_entry("# Log\n", turn="human", note=None).endswith(
-        "\n\n## 1 · human · handoff\nTurn: human.\n"
-    )
+    assert log_with_handoff_entry(log, turn=turn, note=note) == expected
 
 
 # --- handoff ------------------------------------------------------------------------------
@@ -388,6 +379,7 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
         ("cls-0000", {}, r"^task cls-0000 is closed: reopen it with `foundry task reopen store cls-0000`$"),
         (
             "tst-0000",
+            # with a LOG.md, so the turn is what is refused, whatever order the checks run in
             {"write": {".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/tst-0000/LOG.md": LOG}},
             r"^task tst-0000's turn is already dev$",
         ),
@@ -468,19 +460,9 @@ def test_no_open_dir_after_the_last_task_closed_lists_nothing(project_repository
     assert summaries_of(project_repository.project_tasks()) == []
 
 
-@pytest.mark.parametrize(
-    "files",
-    [{}, {".agent/tasks/open/tst-0000/TURN": " \n"}, {".agent/tasks/open/tst-0000/TURN/x": "x"}],
-    ids=["missing", "empty", "directory"],
-)
-def test_a_missing_empty_or_directory_turn_fails_naming_the_task(project_repository, files) -> None:
-    if files:  # tst-0000 starts without a TURN
-        project_repository.edit_notes(write=files)
-
-    with pytest.raises(
-        FoundryError,
-        match=r"^task tst-0000 has no turn: agent-notes has no .*TURN.*`foundry task handoff store tst-0000 ROLE`\.$",
-    ):
+def test_listing_fails_on_a_task_without_a_turn(project_repository) -> None:
+    """tst-0000 starts without a TURN; read_task_turn's tests cover the other ways to have none."""
+    with pytest.raises(MissingTurnError, match=r"^task tst-0000 has no turn: "):
         summaries_of(project_repository.project_tasks())
 
 
