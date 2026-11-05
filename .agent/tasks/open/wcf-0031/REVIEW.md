@@ -378,3 +378,88 @@ No design questions are open. R8 is an open Follow-up.
 At the human's request, after the round was pushed, R21 and R24 were relabelled from Follow-up to Blocking, and their directions changed to a fix.
 
 Verdict: changes needed
+
+## Round 4 (reviewing c35deda)
+
+This round reviews the fix diff `git diff 676d567...HEAD`, the commits a5f6454, 3364c82, 4d32648, 279a9f3 and c35deda. It judges round 3's findings by `LOG.md` entries 33, 35 and 37. The spec of record is still `TASK.md` as of 8a76f09, signed by the planner's identity, which the architect shares. `DESIGN.md` is as of 4743c4d, signed by the architect's identity.
+
+Checks run at c35deda in a throwaway clone, after `uv sync --group dev`: the host tier, `ruff check`, `ruff format --check` and mypy all pass. `tests/test_project_tasks.py` and `tests/test_task_command.py` pass three runs in a row, swapped, and with the test ids reversed.
+
+### TASK.md changed by another role
+
+No new commit to either file since round 3. The dev's commits 9b1e640, e345039 and 1cfac67 are still in `TASK.md`'s history. 8a76f09 re-recorded them with the human's approval, as round 3 said.
+
+### Earlier findings
+
+| Finding | Verdict | Why |
+|---|---|---|
+| R8 | deferred | Unchanged; deferred by the dev. |
+| R9 | accepted as is | From round 1. |
+| R21 | closed | `src/foundry/project_tasks.py:4-6` now says only that "every operation on one task goes through it, and callers pass task ids". That holds for every method that takes a task, and listing is named as the exception. Nothing is left to say what the methods return. |
+| R22 | closed | The `turn-is-a-link` case at `tests/test_project_tasks.py:406-414` writes a `LOG.md` and matches the full message, so only `TURN` can be what is refused. Behaviour skipped `ProjectClone.write`'s link check for `TURN` alone, and the case failed. |
+| R23 | closed | `tests/test_project_tasks.py:486-500` runs the missing, blank and directory cases, with the full message anchored at both ends. Behaviour removed `.strip()` and the case `blank` failed. It removed the blob-type check and `missing` and `directory` failed. |
+| R24 | closed | The hand-built stand-in git is gone from `tests/test_task_command.py`, at the human's call (entry 35). The helper was added in 4d32648 and removed in 279a9f3, so none is left. `test_listing_costs_one_fetch_however_many_tasks` is as on main. No copy of the stand-in shape is left in the task's diff. |
+
+R17's point still holds, shown another way (c35deda). The ROLE, note and task-id refusals now run on project `gone`, whose repository doesn't exist (`tests/test_task_command.py:268-304`). Each must print exactly `error: <message>` and nothing else. A check made after the repository is read would print git's error instead. Behaviour checked this by moving each check after `get_task_by_id` one at a time:
+- the whole call;
+- the role check alone;
+- the note check alone;
+- the task-id check (dropped).
+
+All four failed the test. Moving the call inside the `with`, before `handoff`, passes, and that is correct: `ProjectClone.init` only runs `git init` and local config, and doesn't read the repository. `make_git_env` gives git a throwaway `HOME` and `GIT_CONFIG_NOSYSTEM=1`, so nothing in the developer's git config can make `gone` resolve.
+
+### Standards
+
+No new findings. The rewritten module docstring keeps `AGENTS.md`'s "Writing" rules. With the stand-in gone, the test no longer sets `PATH`, so design rule 3 holds trivially.
+
+### Spec
+
+No new findings: nothing missing or partial, and no scope creep. Each criterion that round 3 tabled as partial now has a test: R22 for a link `TURN`, R23 for the listing. The stand-in was dropped at the human's call. Its criterion, "refused … before the repository is read", is shown by the `gone` project, as above. `handoff_main` at `src/foundry/commands/task.py:110-113` makes both checks before `ProjectTasks.in_scratch_clone`.
+
+### Behaviour
+
+No new findings. See R17's point, R22 and R23 above for what each mutation showed.
+
+### Smells
+
+| Function | Status |
+|---|---|
+| `src/foundry/project_tasks.py`: module docstring | clean (R21 closed) |
+| `tests/test_project_tasks.py:test_handoff_refuses_and_pushes_nothing` | clean |
+| `tests/test_project_tasks.py:test_listing_fails_on_a_task_without_a_turn` | clean, see below |
+| `tests/test_task_command.py:test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` | clean, and shorter (R24 closed) |
+
+The sub-agent raised possible Duplicated Code. `test_listing_fails_on_a_task_without_a_turn` (`:486-500`) has the same three cases and message as `test_a_task_without_a_turn_says_to_hand_it_off` (`:138-152`). I dropped it, because it is exactly what R23's direction asked for. The two tests are of two entry points, and the duplication is what lets either one get its own reader later.
+
+### Names
+
+Clean:
+- `turn-is-a-link`, which matches `log-is-a-link`;
+- the reflowed ids;
+- `files`, which matches `:139`;
+- `missing` and `blank`;
+- the project name `gone`, which is true of it, with the docstring at `:268` explaining it;
+- the prose in `project_tasks.py:4-6` and in the end-to-end docstring.
+
+The added prose uses no word GLOSSARY lists under _Avoid_.
+
+The sub-agent raised the id `directory` (`:489`) as a synonym for "dir" (`log-is-a-dir`, `:422`). I dropped it, for two reasons. It copies the sibling test's ids at `:141`, which came in 0d77ef7 and which round 3 reviewed. And GLOSSARY doesn't list "directory" under _Avoid_. Under python-naming's bar, it could be better but doesn't break an agreed word.
+
+### Design questions
+
+None open.
+
+Summary:
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| TASK.md changed | 0 new | 0 | |
+| Standards | 0 | 0 | |
+| Spec | 0 | 0 | |
+| Behaviour | 0 | 0 | |
+| Smells | 0 | 0 | |
+| Names | 0 | 0 | |
+
+R21–R24 are closed. No design questions are open. R8 is an open Follow-up, deferred.
+
+Verdict: approved

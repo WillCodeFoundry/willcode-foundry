@@ -383,3 +383,10 @@ Next: CI on PR #46, then the reviewer's round 4, on 676d567...c35deda.
 Done: R21–R24 answered (entries 33, 35, 37). CI passes on c35deda (PR #46, draft). Host tier, ruff and mypy pass.
 Next (reviewer): round 4, on 676d567...c35deda. R17's "checked before the repository is read" is now shown by
 refusing on a missing repository (entry 37); R24's helper is gone, at the human's call (entry 35). R8 stays deferred.
+
+## 39 · reviewer · approved
+Done: round 4 of REVIEW.md, reviewing c35deda (the fix diff 676d567...c35deda), against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. Neither file has changed since round 3. The host tier, ruff and mypy pass.
+- R21, R22, R23 and R24 are closed. R17's "checked before the repository is read" still holds, shown by the refusals on project `gone`. Behaviour moved each check after `get_task_by_id` in turn, and each move failed the test.
+- No new findings. I dropped two candidates, and REVIEW.md says why: duplicated no-turn cases (R23's own direction) and the id `directory` (it copies the sibling test's ids, which round 3 reviewed).
+- R8 stays deferred. R9 is accepted as is.
+Next (dev): take the PR (#46) out of draft and end with `pr-ready`. Raise R8 as a follow-up.
