@@ -2,9 +2,8 @@
 turn and handing them off, and listing the open ones with their turns.
 
 The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: get_task_by_id finds it, and
-every operation on one task goes through it. Callers pass task ids, and get Tasks back, but for handoff, which
-returns nothing. Listing is the exception: it reads every dir under OPEN_DIR from one fetch, since get_task_by_id
-would fetch once per task.
+every operation on one task goes through it, and callers pass task ids. Listing is the exception: it reads every
+dir under OPEN_DIR from one fetch, since get_task_by_id would fetch once per task.
 """
 
 import re
