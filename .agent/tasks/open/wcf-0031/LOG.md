@@ -306,3 +306,12 @@ Done: DESIGN.md reworded for "handoff", approved by the human, pushed in 4743c4d
 No questions open.
 Next (dev): no code change is needed for DESIGN.md. Hand on to the reviewer for round 3 against TASK.md at
 8a76f09 and DESIGN.md at 4743c4d. R8 stays deferred.
+
+## 29 · dev · ready-for-review
+Done: no code change this turn. origin/HEAD merged, already up to date at 676d567. Host tier, ruff and mypy pass;
+CI passes on 676d567 (PR #46, draft: https://github.com/WillCodeFoundry/willcode-foundry/pull/46).
+- D1 answered by the planner (entry 27), TASK.md at 8a76f09; P1 by the architect (entry 28), DESIGN.md at 4743c4d.
+  The code already meets 8a76f09's added criteria: the one `has no turn … foundry task handoff` message
+  (`src/foundry/project_tasks.py:191`), and a link `TURN` or `LOG.md` refused by name (`ProjectClone.write`).
+- R14 needs no code change, as round 2 said; its cause is settled by 8a76f09 and 4743c4d.
+Next (reviewer): round 3, against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. R8 stays deferred.
