@@ -18,8 +18,6 @@ from foundry.errors import FoundryError
 from foundry.project_clone import NotOnBranchError, ProjectClone
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
-# The turn a task has when its TURN_FILE is missing, empty or only blanks, as a handoff names it.
-_NO_TURN = "none"
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
 
@@ -150,7 +148,7 @@ class ProjectTasks:
         try:
             before = self._read_fetched_turn(task)
         except MissingTurnError:
-            before = _NO_TURN
+            before = "none"
         if before == turn:
             raise FoundryError(f"task {task.id}'s turn is already {turn}")
         log = self._read_fetched_log(task)
