@@ -53,3 +53,8 @@
   stand-in git on PATH (fakes a binary) and an injected `open_tasks` opener (a seam only a test needs). The
   check is tested directly; the order in a short composition root is left to reading. Before proving an order
   in `main`, ask whether reading it is enough.
+- 2026-11-05 [testing] — Replaces the "missing repository isn't enough" entry above: it is enough for TASK.md's
+  "before the repository is read". A refusal on a project whose repository doesn't exist gives git's ls-remote
+  error if the check runs after get_task_by_id. Only local `git init` and `remote add` run first, and they read
+  nothing. No stand-in or seam needed (the human's idea). A `.git` check can't work: the scratch clone is a
+  TemporaryDirectory, gone after the command.

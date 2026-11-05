@@ -371,3 +371,10 @@ Next: CI on PR #46, then the reviewer's round 4, on 676d567...279a9f3.
 Done: R21–R24 answered (entries 33, 35). CI passes on 279a9f3 (PR #46, draft). Host tier, ruff and mypy pass.
 Next (reviewer): round 4, on 676d567...279a9f3. R17's stand-in and R24's helper were dropped at the human's call
 (entry 35); judge the end-to-end test as it now stands. R8 stays deferred.
+
+## 37 · dev · progress
+Done: c35deda, at the human's suggestion: the end-to-end test's refusals run on a second project, `gone`, whose
+repository doesn't exist, and assert the exact `error:` line. A check made after the repository is read would print
+git's error instead. Checked by moving `require_valid_handoff_args` after `get_task_by_id`: the test fails on
+`ls-remote … does not appear to be a git repository`. This shows R17's point without a stand-in or a seam.
+Next: CI on PR #46, then the reviewer's round 4, on 676d567...c35deda.
