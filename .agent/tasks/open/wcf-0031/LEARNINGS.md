@@ -62,3 +62,8 @@
 - 2026-11-05 [review] — A test can show that a check comes before git reads the repository without a stand-in git or a test-only seam: point the command at a project whose repository doesn't exist and assert the exact error. Its blind spot: a git call that succeeds before the check, which `ProjectClone.init` does, though harmlessly.
 - 2026-11-06 [testing] — An end-to-end test that passes an option should read where the option lands, not only
   stdout: R25's `--note` could be dropped by `handoff_main` with every test passing. Check by breaking the wiring.
+- 2026-11-06 [decision] — At the human's call, after approval: domain code (`ProjectTasks`) says what is wrong,
+  and the command layer says what to run. `suggesting_fixes` adds the command to `ClosedTaskError` and
+  `MissingTurnError` at the edge. Rejected: a try/except in each `main` (logic in a composition root, rule 7), and
+  each caller checking the status first (entry 11 had `handoff` refuse a closed task itself). Elsewhere on main,
+  `agent_runtime/session_setup.py` names `foundry task create` from inside the sandbox; left as is, out of scope.

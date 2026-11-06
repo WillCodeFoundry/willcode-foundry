@@ -439,3 +439,15 @@ Next: `ProjectTasks` raises `ClosedTaskError` and `MissingTurnError` carrying th
 wrong. A context manager in `commands/task.py` adds the command to run, for `run`, `task list` and `handoff`. That
 also removes `run.py`'s copy of the closed-task message. Then `ProjectTasks` goes back to taking a URL, as on main.
 `handoff` still refuses a closed task itself, as entry 11 decided. The messages stay as TASK.md fixes them.
+
+## 46 · dev · progress
+Done: the change of entry 45, in d501ddd and 69e1f5f. Host tier (752 passed), ruff and mypy pass.
+- d501ddd: `ProjectTasks` raises `ClosedTaskError` (new) and `MissingTurnError`, each carrying the task and saying
+  only what is wrong. `suggesting_fixes(project_name)`, in `commands/task.py`, re-raises them ending with the
+  command that fixes them. It wraps `handoff_main`'s handoff, `read_project_listing` and `run.py`'s
+  `require_open_task_and_role`, whose own copy of the closed-task message goes. The messages are as before, as
+  TASK.md fixes them. Tests: `suggesting_fixes` with plain errors; one test per wiring, a closed `handoff` through
+  `cli.main`, a listing and a `run` of a task without a turn. Checked by removing each wiring: its test fails.
+- 69e1f5f: `ProjectTasks` takes a URL again, as on main, undoing a49fc8c (entry 11), whose only reason was these
+  messages. `handoff` still refuses a closed task itself.
+Next: CI on PR #46, then the reviewer: a round on 37ee769...69e1f5f only.
