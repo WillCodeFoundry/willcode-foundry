@@ -115,6 +115,17 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> Non
         create(project_tasks_of(empty_dir, git_env))
 
 
+def test_a_default_branch_that_is_not_a_branch_is_refused_and_nothing_is_pushed(project_repository) -> None:
+    """HEAD points at a tag: the repository has a default, but no branch of that name to start the task from."""
+    project_repository.git("tag", "v1", "main")
+    project_repository.git("symbolic-ref", "HEAD", "refs/tags/v1")
+    refs_before = project_repository.git("for-each-ref")
+
+    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
+        create(project_repository.project_tasks())
+    assert project_repository.git("for-each-ref") == refs_before
+
+
 def test_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
     with pytest.raises(
         GitError, match=r"^git -C \S+ ls-remote --heads origin failed: .*does not appear to be a git repo"
