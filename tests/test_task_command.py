@@ -163,9 +163,9 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
     ids=["closed", "no-turn"],
 )
 def test_a_closed_task_or_one_without_a_turn_is_refused_saying_how_to_fix_it(error, message) -> None:
-    with pytest.raises(FoundryError) as refusal, suggesting_fixes("store"):
+    with pytest.raises(FoundryError) as raised, suggesting_fixes("store"):
         raise error
-    assert str(refusal.value) == message
+    assert str(raised.value) == message
 
 
 def test_a_listing_refuses_a_task_without_a_turn_saying_how_to_hand_it_off(project_repository, git_env) -> None:

@@ -423,9 +423,9 @@ def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, 
         project_repository.edit_notes(**edits)
     notes_before = project_repository.notes_head()
 
-    with pytest.raises(FoundryError, match=message) as refusal:
+    with pytest.raises(FoundryError, match=message) as raised:
         project_repository.project_tasks().handoff(task_id, "dev", note=None)
-    assert isinstance(refusal.value, ClosedTaskError) == (task_id == "cls-0000")
+    assert isinstance(raised.value, ClosedTaskError) == (task_id == "cls-0000")
     assert project_repository.notes_head() == notes_before
 
 
