@@ -1,6 +1,6 @@
 # 8. Narrating instead of naming
 
-Comments and docstrings that repeat the code, describe who calls it, or retell how it came to be. The foundry's `AGENTS.md` asks the opposite: name the module or file instead of retelling what it does.
+Comments and docstrings that repeat the code, describe who calls it, retell how it came to be, or promise what it doesn't do. The foundry's `AGENTS.md` asks the opposite: name the module or file instead of retelling what it does.
 
 ## 8.1 Comments that restate the code
 
@@ -56,3 +56,43 @@ def reserve(sku: str, quantity: int) -> None:
 - **Why:** callers, history and plans change without anyone editing the docstring. The bug story belongs in the commit message and its test.
 - **Fine when:** the history explains a choice that looks wrong but isn't, in one sentence that names the constraint.
 - **Spot it:** docstrings that name other private functions, issue numbers, plan steps, or "for the call sites that".
+
+## 8.3 Docs that promise what the code doesn't keep
+
+A docstring or comment states an invariant that the body, or something it calls, breaks.
+
+Bad:
+
+```python
+@dataclass(frozen=True)
+class Refund:
+    """Everything a refund needs, checked: issuing it can't fail before money moves."""
+
+    order: Order
+    amount: Money
+
+
+def issue(refund: Refund) -> None:
+    card = payments.fetch_card(refund.order)  # a network read that can fail first
+    payments.send(card, refund.amount)
+```
+
+Better:
+
+```python
+@dataclass(frozen=True)
+class Refund:
+    """Everything a refund needs, checked: issuing it can't fail before money moves."""
+
+    order: Order
+    amount: Money
+    card: Card  # fetched when the refund is made
+
+
+def issue(refund: Refund) -> None:
+    payments.send(refund.card, refund.amount)
+```
+
+- **Why:** readers trust the stated invariant and stop checking, so the doc hides the very case it rules out.
+- **Fine when:** never. Change the code or the sentence.
+- **Spot it:** docstrings that say "never", "always", "only", "can't" or "nothing". Check each against the body and the functions it calls.

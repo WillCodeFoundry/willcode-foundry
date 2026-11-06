@@ -25,12 +25,12 @@ Read a reference file only when a question points to it. Its examples are invent
 |---|---|---|
 | 1 | Does every new function, parameter, branch and case have a caller or a requirement today? | [Building for nobody](references/building-for-nobody.md) |
 | 2 | Do I re-check, widen or cast what a type already guarantees? | [Distrusting your own types](references/distrusting-types.md) |
-| 3 | When something is wrong, does the code repair it, fall back, swallow it, or mark it with a fake value? | [Hiding failure](references/hiding-failure.md) |
-| 4 | Is each rule enforced where its state lives, and on every path to that state? | [Rules in the wrong place](references/rules-in-the-wrong-place.md) |
+| 3 | When something is wrong, does the code repair it, swallow it, fake a value, misreport it, or leave the caller guessing? | [Hiding failure](references/hiding-failure.md) |
+| 4 | Is each rule enforced in one place, where its state lives, on every path, and on the value actually used? | [Rules in the wrong place](references/rules-in-the-wrong-place.md) |
 | 5 | Does each function do one job that its name and signature say? | [Functions that do two jobs](references/functions-that-do-two-jobs.md) |
-| 6 | Did I copy something that exists, or go around a helper or base class made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |
+| 6 | Did I copy or rebuild something that exists, or go around a helper, a name or a parser made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |
 | 7 | Did I add one more branch, flag or case to code that every change already edits? | [Growing by accretion](references/growing-by-accretion.md) |
-| 8 | Does a comment or docstring repeat the code, describe callers, or retell history or a plan? | [Narrating instead of naming](references/narrating-instead-of-naming.md) |
+| 8 | Does a comment or docstring repeat the code, describe callers or history, or promise what the code doesn't do? | [Narrating instead of naming](references/narrating-instead-of-naming.md) |
 | 9 | Does anything rebuild a constant per call, or block an event loop? | [Hidden costs](references/hidden-costs.md) |
 | 10 | Would each new test fail if the behaviour it names broke? | [Tests that prove nothing](references/tests-that-prove-nothing.md) |
 | 11 | Did I reshape clear code only to satisfy a checker, a budget or a reviewer's request? | [Obeying the letter of a rule](references/obeying-the-letter.md) |

@@ -123,3 +123,54 @@ class ShopApp(App):
 - **Why:** the local copy skips the framework's error handling and checks, and shared code grows special cases for it.
 - **Fine when:** the framework's helper can't do what you need, and you say why next to the code.
 - **Spot it:** before writing a helper, grep the base class and the framework docs for one that exists.
+
+## 6.5 Reading a format one way, writing it another
+
+A file read with a real parser, then edited with a regex or string splicing that assumes its layout.
+
+Bad:
+
+```python
+def supplier_of(listing: Path) -> str:
+    return yaml.safe_load(listing.read_text())["supplier"]["name"]
+
+
+def change_supplier(listing: Path, old: str, new: str) -> None:
+    pattern = re.compile(rf"^  name: {re.escape(old)}$", flags=re.MULTILINE)  # assumes two-space indents
+    listing.write_text(pattern.sub(f"  name: {new}", listing.read_text()))
+```
+
+Better:
+
+```python
+def change_supplier(listing: Path, new: str) -> None:
+    data = yaml.safe_load(listing.read_text())
+    data["supplier"]["name"] = new
+    listing.write_text(yaml.safe_dump(data, sort_keys=False))
+```
+
+- **Why:** a file the reader accepts, with other indents or quotes, makes the writer miss or edit the wrong line.
+- **Fine when:** the file must keep comments or text the parser drops. Then parse the edited text and check it holds the new value.
+- **Spot it:** `yaml`, `json` or `tomllib` reading a file in one function, and `re` or `str.replace` editing it in another.
+
+## 6.6 Rebuilding a place the code already names
+
+A path worked out by hops from a nearby file, where an object already names the place.
+
+Bad:
+
+```python
+def save_cover(book: Book, image: bytes) -> None:
+    (book.manifest.parent.parent / "covers" / f"{book.isbn}.jpg").write_bytes(image)
+```
+
+Better:
+
+```python
+def save_cover(shop: Shop, book: Book, image: bytes) -> None:
+    (shop.covers_dir / f"{book.isbn}.jpg").write_bytes(image)
+```
+
+- **Why:** the hops encode a layout only its owner should know, and they break silently when a folder moves.
+- **Fine when:** nothing names the place yet, and this is its only use.
+- **Spot it:** `.parent.parent`, `"../.."` or nested `os.path.dirname`. A path built from a sibling file's location.
