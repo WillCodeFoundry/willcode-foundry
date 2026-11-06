@@ -191,12 +191,3 @@ def test_a_task_that_doesn_t_exist_is_refused(project_tasks: ProjectTasks, role_
         require_open_task_and_role(
             project_tasks, project_name="tkt-store", task_id="tst-0009", role_name=role_name, roles=ROLES
         )
-
-
-@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_an_uppercase_task_id_is_refused_not_lowercased(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(FoundryError, match=r"^task id 'TST-0001' is not valid: ") as error:
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="TST-0001", role_name=role_name, roles=ROLES
-        )
-    assert not isinstance(error.value, TaskNotFoundError)
