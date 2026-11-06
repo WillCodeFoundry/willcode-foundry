@@ -518,3 +518,64 @@ Summary:
 R8 is an open Follow-up.
 
 Verdict: changes needed
+
+## Round 6 (reviewing 37ee769)
+
+This round reviews only the fix diff c35deda...37ee769: two test-only commits, f23666d (R25) and 37ee769 (R26). The spec of record is unchanged: `TASK.md` at 8a76f09 and `DESIGN.md` at 4743c4d (both signed by the architect identity the planner shares). Neither file has changed since round 5. The host tier, ruff and mypy pass at 37ee769.
+
+### TASK.md changed by another role
+
+No new commit to either file.
+
+### Earlier findings
+
+| Finding | Verdict | Why |
+|---|---|---|
+| R25 | closed | `tests/test_task_command.py:291` asserts the task's `LOG.md` ends with `\nNote: go\n` after the `cli.main` handoff. In a throwaway clone, with `handoff_main` passing `note=None`, the test fails. Behaviour also found that it fails if the role is passed as the note, if `Note:` is written before `Turn:`, or if the prefix changes. |
+| R26 | closed | 37ee769 drops the `open-and-closed` case and its id together. `test_handoff_refuses_and_pushes_nothing` runs seven cases under seven matching ids, and all pass. The both-dirs message is still tested once, in `test_a_task_in_both_dirs_is_refused_naming_both` (`tests/test_project_tasks.py:195`). |
+| R8 | deferred | Unchanged. |
+| R9 | accepted as is | From round 1. |
+
+### Standards
+
+No findings. The R25 assertion checks only the end of the file, so it shows that the composition root passes `--note` through (design rule 7). It doesn't repeat the lower tier's format tests, which keeps CONTRIBUTING.md's "each behaviour is tested once" rule. R26's removal keeps to the same rule.
+
+### Spec
+
+No findings. The criterion "the task doesn't exist, or is both open and closed (the messages `get_task_by_id` gives)" still holds. The `not-found` case (`tests/test_project_tasks.py:378`) shows `handoff` refusing through `get_task_by_id`, and `:195` shows `get_task_by_id` giving the both-dirs message. A both-dirs handoff that pushes nothing is now inferred from those two tests rather than tested directly. That falls short of Blocking, and the human chose R26 knowing it.
+
+### Behaviour
+
+No findings. The assertion isn't vacuous and isn't flaky. `notes_files` (`tests/support/project_repository.py:105`) strips the text and then adds a newline, so this assertion can't show the file's final newline. The log-text builder's unit tests cover that.
+
+### Smells
+
+| Function | Mark |
+|---|---|
+| `tests/test_project_tasks.py:test_handoff_refuses_and_pushes_nothing` | clean |
+| `tests/test_task_command.py:test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` | clean |
+
+No findings.
+
+### Names
+
+The diff adds and renames no names. The existing names it touches all stay clean: the two tests above, the remaining parametrize ids and `notes_files`. It adds no prose. No findings.
+
+### Design questions
+
+None open.
+
+Summary:
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| TASK.md changed | 0 new | 0 | |
+| Standards | 0 | 0 | |
+| Spec | 0 | 0 | |
+| Behaviour | 0 | 0 | |
+| Smells | 0 | 0 | |
+| Names | 0 | 0 | |
+
+R25 and R26 are closed. No design questions are open. R8 is an open Follow-up, deferred.
+
+Verdict: approved

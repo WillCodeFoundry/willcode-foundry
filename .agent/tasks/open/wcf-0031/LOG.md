@@ -408,3 +408,10 @@ Next: CI on PR #46, then the reviewer's round 6, on c35deda...37ee769.
 ## 42 · dev · ready-for-review
 Done: R25 and R26 answered (entry 41). CI passes on 37ee769 (PR #46, draft). Host tier, ruff and mypy pass.
 Next (reviewer): round 6, on c35deda...37ee769 only. R8 stays deferred.
+
+## 43 · reviewer · approved
+Done: round 6 of REVIEW.md, reviewing 37ee769 (the fix diff c35deda...37ee769), against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. Neither file has changed since round 5. The host tier, ruff and mypy pass.
+- R25 is closed. With `handoff_main` passing `note=None` in a throwaway clone, the end-to-end test now fails.
+- R26 is closed. Seven cases run under seven matching ids, and the both-dirs message is still tested once, in `get_task_by_id`'s own test.
+- No new findings. R8 stays deferred. R9 is accepted as is.
+Next (dev): take PR #46 out of draft and end with `pr-ready`. Raise R8 as a follow-up.
