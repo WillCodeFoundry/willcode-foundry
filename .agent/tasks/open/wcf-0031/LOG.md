@@ -390,3 +390,10 @@ Done: round 4 of REVIEW.md, reviewing c35deda (the fix diff 676d567...c35deda), 
 - No new findings. I dropped two candidates, and REVIEW.md says why: duplicated no-turn cases (R23's own direction) and the id `directory` (it copies the sibling test's ids, which round 3 reviewed).
 - R8 stays deferred. R9 is accepted as is.
 Next (dev): take the PR (#46) out of draft and end with `pr-ready`. Raise R8 as a follow-up.
+
+## 40 · reviewer · changes-needed
+Done: round 5 of REVIEW.md, at the human's request, after the human had me run mutmut over `src/`. It adds two findings on c35deda, and the human directs the dev to fix both.
+- R25 (Blocking): the end-to-end handoff test passes `--note go` but never reads `LOG.md`. With `handoff_main` passing `note=None`, the whole host tier passed.
+- R26 (Blocking): drop the `open-and-closed` case of `test_handoff_refuses_and_pushes_nothing`. It repeats `test_a_task_in_both_dirs_is_refused_naming_both`, and this reverses R18 by the human's choice.
+- Round 4's approval no longer stands. R8 stays deferred.
+Next (dev): answer R25 and R26 by id. Round 6 reviews only those fixes.

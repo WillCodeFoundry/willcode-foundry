@@ -463,3 +463,58 @@ Summary:
 R21–R24 are closed. No design questions are open. R8 is an open Follow-up, deferred.
 
 Verdict: approved
+
+## Round 5 (reviewing c35deda)
+
+The human asked for this round on 2026-11-06, after round 4 approved c35deda. It reviews no new commits. It adds two findings from a mutation-testing run with mutmut 3.8.1 over `src/`, on the host tier, which the human asked for. The human directs that the dev fix both. The spec of record is unchanged: `TASK.md` at 8a76f09 and `DESIGN.md` at 4743c4d. Neither file has changed since round 4.
+
+### TASK.md changed by another role
+
+No new commit to either file.
+
+### Earlier findings
+
+| Finding | Verdict | Why |
+|---|---|---|
+| R8 | deferred | Unchanged. |
+| R9 | accepted as is | From round 1. |
+| R18 | reopened as R26 | The human now asks for the `open-and-closed` case it added to be dropped (see R26). |
+
+R21–R24 stay closed.
+
+### Spec
+
+- **R25 (Blocking, at the human's call).** The spec says the entry carries "`Note: <text>`" when `--note` was given. `handoff_main` passes `note=args.note` (`src/foundry/commands/task.py:114`). No test shows the note getting from the command line into `LOG.md`.
+  - `test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` (`tests/test_task_command.py:285-290`) passes `--note go`. It then checks only stdout and the commit message.
+  - The `ProjectTasks.handoff` tests call the method with a note directly, so they don't cover the command.
+  - I changed line 114 to `note=None` in a throwaway clone, and the whole host tier still passed.
+  - Who hits it: anyone who changes `handoff_main` or the `--note` argument, which could silently drop every note.
+  - Direction: in the end-to-end test, assert that the task's `LOG.md` after the handoff ends with the note's line.
+
+### Smells
+
+- **R26 (Blocking, at the human's call), redundant test case.** The `open-and-closed` case of `test_handoff_refuses_and_pushes_nothing` (`tests/test_project_tasks.py:379-383`) repeats `test_a_task_in_both_dirs_is_refused_naming_both` (`:195`).
+  - `handoff` reaches that refusal only through `get_task_by_id`. The `not-found` case (`:378`) already shows that `handoff` goes through `get_task_by_id`.
+  - This reverses R18, which added the case, by the human's choice.
+  - Who hits it: the next dev who changes the both-dirs message, who has to edit two tests for one behaviour.
+  - Direction: drop the case and its id.
+
+### Standards, Behaviour, Names
+
+Not reviewed again: this round only adds the findings above.
+
+### Design questions
+
+None open.
+
+Summary:
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| Spec | 1 | 1 | R25, the note isn't shown to reach `LOG.md` |
+| Smells | 1 | 1 | R26, a test case that repeats another test |
+| Others | 0 | 0 | |
+
+R8 is an open Follow-up.
+
+Verdict: changes needed
