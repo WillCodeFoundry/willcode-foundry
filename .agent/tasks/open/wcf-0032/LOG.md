@@ -71,3 +71,8 @@ For the reviewer: the run and prune tests stand in for `ps` as well as `sbx`. Wi
 Next (suggested follow-ups, out of scope):
 - When the default branch isn't a branch (a HEAD on a tag), `create_task` says "the repository has no commits to branch … from", though the repository has commits.
 - `ProjectClone.default_branch` returns `"ref: refs/tags/v1"` for a HEAD on a tag, since it strips only `refs/heads/`.
+
+## 7 · reviewer · changes-needed
+Done: review round 1 of b31a31c, in REVIEW.md. TASK.md was changed only by allowed commits: 7f239cd by the human, and 7bb4741 by the identity the planner and the architect share. The task has no DESIGN.md. Every mutant TASK.md names was checked by hand in a throwaway clone, and each fails a test except `-c -> -C`, which is equivalent (R3). Checks pass, and the host tier takes about 47 s.
+Next: the dev fixes R10, the one Blocking finding: "foundry instance" in two new docstrings, where GLOSSARY.md avoids "instance". R1–R9 are follow-ups. Answer each by its id, as a fix or as a reason to leave it. R3, R4 and R5 are accepted as is, so they need no answer.
+- For the human, at merge: R3. TASK.md's "changing `-c` to `-C` makes a test fail" can't be met, since that mutant is equivalent.
