@@ -392,8 +392,10 @@ def test_skills_update_exits_0_when_clean_and_1_with_the_conflicts_on_stderr(
     foundry_root: Path, upstream: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry of its own. git's url.<base>.insteadOf, in the throwaway global config,
-    points the skill's GitHub URL at the local upstream."""
+    points the skill's GitHub URL at the local upstream. Any other GitHub URL goes to a path that doesn't exist,
+    so a URL that stops matching fails here rather than reaching the network."""
     git(upstream, "config", "--global", f"url.{upstream}.insteadOf", skills.github_url("mattpocock/skills"))
+    git(upstream, "config", "--global", f"url.{upstream.parent / 'no-github'}/.insteadOf", "https://github.com/")
     monkeypatch.chdir(foundry_root)
     (upstream_skill(upstream) / "SKILL.md").write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     second = commit_all(upstream, "second")
