@@ -68,3 +68,9 @@
   each caller checking the status first (entry 11 had `handoff` refuse a closed task itself). Elsewhere on main,
   `agent_runtime/session_setup.py` names `foundry task create` from inside the sandbox; left as is, out of scope.
 - 2026-11-06 [proposal] — reviewer ROLE.md: `no-agreement` fires on any Blocking finding open after round 3. That includes a finding raised for the first time in a late round, where the dev and the reviewer don't disagree at all (round 7, R30, a test-local rename). The outcome's wording ("saying where you and the dev disagree") doesn't fit that case. Proposal: apply `no-agreement` only to findings that have already had one dev answer, and let a new Blocking finding go to the dev as `changes-needed`.
+- 2026-11-06 [decision] — Replaces the `suggesting_fixes` entry of 2026-11-06 above, at the human's call: an
+  exception raised deep in a module says only what went wrong, and only the entry point may add how to fix it
+  (design rule 6, relaxed in 4fbc526). The human called `suggesting_fixes` likely a smell: an exception type that
+  catches errors to rewrite their text. Kept: `run.py`'s own closed-task refusal, raised in the entry point, still
+  names `foundry task reopen`. Rejected: moving `suggesting_fixes` to `commands/fixes.py` (R27), done and dropped
+  before commit.

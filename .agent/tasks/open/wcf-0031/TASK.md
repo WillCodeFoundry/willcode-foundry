@@ -28,7 +28,7 @@ commit.
 - [ ] Each of these is refused with exit 1, an `error: <message>` line on
       stderr, nothing on stdout, and no commit or push: the task doesn't exist,
       or is both open and closed (the messages `get_task_by_id` gives); the
-      task is closed, with a message saying to reopen it first; `TURN` already
+      task is closed (`task <id> is closed`); `TURN` already
       says ROLE, with a message saying so; the task has no `LOG.md`, or it
       isn't a file, with a message naming the task and the file; `TURN` or
       `LOG.md` is a link, with a message naming it; no signing key (as `close`
@@ -37,8 +37,9 @@ commit.
       the command writes its `TURN`.
 - [ ] `foundry run` and `foundry task list` refuse a task whose `TURN` is
       missing, not a file, or only blanks, with one message:
-      ``task <id> has no turn: agent-notes has no <path of TURN>, or it is
-      empty. Hand it off with `foundry task handoff <PROJECT> <id> ROLE`.``
+      `task <id> has no turn: agent-notes has no <path of TURN>, or it is
+      empty.` The message says only what is wrong, as design rule 6 says of
+      an exception raised deep in a module.
 - [ ] The entry appended to `LOG.md` follows its existing text, which is
       kept but for the whitespace at the file's end and its line endings.
       After one blank line (none when the log holds only blanks) comes:

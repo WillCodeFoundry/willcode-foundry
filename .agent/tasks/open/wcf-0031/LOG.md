@@ -478,3 +478,27 @@ Done: the human widened entry 49's answer: the dev fixes the Follow-ups R27–R2
 - Answers R27, R28, R29: include them; fix each in this round (the human)
 - Directions, from REVIEW.md round 7. R27: move `suggesting_fixes` into a small shared module in `commands/`, so `run.py` no longer imports `commands/task.py`. R28: a comment in `suggesting_fixes` naming its dependency on how each message ends. R29: make the expected error type a column of `test_handoff_refuses_and_pushes_nothing`'s parametrize table.
 Next (dev): fix R30 and R27–R29 test-first, answering each by id. Round 8 reviews only those fixes. R8 stays deferred.
+
+## 51 · dev · progress
+Done: round 7's findings, and the human's change of the no-advice rule. origin/HEAD merged, already up to date.
+Host tier, ruff and mypy pass on 4fbc526.
+- Answers R30: fixed in a1c230f. The `ExceptionInfo` locals are named `raised`, as the sibling tests name theirs.
+- Answers R29: fixed in 3013f7d. The expected error type is a column of the table, asserted with
+  `type(raised.value) is error`. Checked: with `handoff` raising a plain `FoundryError` for a closed task, the
+  `closed` case fails.
+- In this session the human said an exception raised deep in a module should say only what went wrong, and only
+  the entry point may give advice, and that `suggesting_fixes` is likely a smell.
+- Asks D2 → human: drop the advice from the closed-task and no-turn errors, which changes two of TASK.md's
+  criteria? And who records that in TASK.md?
+- Answers D2: drop it; the dev amends TASK.md's two criteria in this session (the human).
+- 4fbc526: `suggesting_fixes` goes. `handoff`, `run` and `task list` print `ClosedTaskError` and `MissingTurnError`
+  as `ProjectTasks` raises them: `task <id> is closed`, and `task <id> has no turn: agent-notes has no <path>, or it
+  is empty.` `run`'s own closed-task refusal is raised in its entry point, so it keeps naming `foundry task
+  reopen`, unchanged from main. ARCHITECTURE.md's design rule 6 now says that a deep exception says only what went
+  wrong, and the entry point may add the fix. The tests of the removed wiring go: `suggesting_fixes`' own test, and
+  the listing's command-level test. `test_listing_fails_on_a_task_without_a_turn` still covers the listing.
+- TASK.md amended at the human's call (D2): the closed-task criterion reads `task <id> is closed`, and the no-turn
+  message loses "Hand it off with …".
+- Answers R27: fixed in 4fbc526. `suggesting_fixes` is gone, so `run.py` no longer imports `commands/task.py`.
+- Answers R28: fixed in 4fbc526. No join is left to depend on how a message ends.
+Next: CI on PR #46, then the reviewer: round 8 on 69e1f5f...4fbc526, and TASK.md's two amended criteria.
