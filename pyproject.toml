@@ -70,7 +70,7 @@ ignore = [
 "src/foundry/cli.py" = ["T20"]
 "src/foundry/commands/*" = ["T20"]
 "src/foundry/agent_sandbox/launcher.py" = ["T20"]
-"src/agent_runtime/__main__.py" = ["T20"]
+"src/agent_runtime/__main__.py" = ["T20", "E402"]  # E402: its imports follow the version check
 "src/agent_runtime/session_init.py" = ["T20"]
 "src/agent_runtime/session_setup.py" = ["T20"]
 

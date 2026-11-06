@@ -120,15 +120,21 @@ def _harden_managed_settings(agent_kit: AgentKit, machine: Machine) -> None:
     atomic_write(machine.managed_settings, agent_kit.managed_settings.read_bytes(), owner=machine.root_owner)
 
 
-def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:  # noqa: PLR0911  one return per check, stopping at the first that fails
+def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
     """Settings and their folder must be root-owned and unwritable, and match the kit: whoever can write the
-    folder can swap the file, and an older kit's settings mean older hooks. Each hook must run the runtime
-    through the link, which proves the settings and the link agree on this machine."""
+    folder can swap the file."""
     installed = machine.managed_settings
     if failures := _check_owned_read_only(installed, machine, label="Claude's managed settings"):
         return failures
     if failures := _check_root_folder(installed.parent, machine, label="Claude's managed settings"):
         return failures
+    return _check_settings_match_kit(agent_kit, machine)
+
+
+def _check_settings_match_kit(agent_kit: AgentKit, machine: Machine) -> list[str]:
+    """The installed settings must equal the kit's, since an older kit's settings mean older hooks. Each hook must
+    run the runtime through the link, which proves the settings and the link agree on this machine."""
+    installed = machine.managed_settings
     try:
         kit_settings = _read_settings(agent_kit.managed_settings)
         installed_settings = _read_settings(installed)
@@ -142,7 +148,7 @@ def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
     try:
         commands = [(command, shlex.split(command)) for command in _hook_commands(kit_settings)]
     except ValueError as error:
-        return [f"run hooks the check can't read: {machine.managed_settings} ({error})"]
+        return [f"run hooks the check can't read: {installed} ({error})"]
     return [
         f"run a hook that skips the runtime's link, {link}: {command}"
         for command, words in commands
