@@ -502,3 +502,9 @@ Host tier, ruff and mypy pass on 4fbc526.
 - Answers R27: fixed in 4fbc526. `suggesting_fixes` is gone, so `run.py` no longer imports `commands/task.py`.
 - Answers R28: fixed in 4fbc526. No join is left to depend on how a message ends.
 Next: CI on PR #46, then the reviewer: round 8 on 69e1f5f...4fbc526, and TASK.md's two amended criteria.
+
+## 52 · dev · ready-for-review
+Done: R27–R30 answered and D2 settled (entry 51). CI passes on 4fbc526 (PR #46, draft). Host tier, ruff and mypy
+pass. Commits since round 7: a1c230f, 3013f7d, 4fbc526. TASK.md amended at the human's call (D2).
+Next (reviewer): round 8 on 69e1f5f...4fbc526, and TASK.md's two amended criteria (closed task; no turn). R8 stays
+deferred. The PR body still names `suggesting_fixes`; the dev rewrites it at `pr-ready`.

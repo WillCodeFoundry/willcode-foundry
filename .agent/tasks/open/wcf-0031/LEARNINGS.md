@@ -74,3 +74,5 @@
   catches errors to rewrite their text. Kept: `run.py`'s own closed-task refusal, raised in the entry point, still
   names `foundry task reopen`. Rejected: moving `suggesting_fixes` to `commands/fixes.py` (R27), done and dropped
   before commit.
+- 2026-11-06 [decision] — Correction to the entry above: `suggesting_fixes` was a context manager, not an exception
+  type. It caught errors from `ProjectTasks` to rewrite their text.
