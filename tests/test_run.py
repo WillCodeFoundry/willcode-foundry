@@ -116,7 +116,11 @@ def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None
 @pytest.mark.parametrize("turn", ["Human", "dev\nreviewer", "qa"])
 def test_a_turn_that_names_no_role_is_refused_naming_the_turn_file(turn: str) -> None:
     with pytest.raises(
-        FoundryError, match=r"\.agent/tasks/open/tst-0001/TURN on agent-notes names .*not a role.*ROLE tst-0001"
+        FoundryError,
+        match=(
+            r"\.agent/tasks/open/tst-0001/TURN on agent-notes names .*, which is not a role; "
+            rf"known: dev, reviewer, or {HUMAN}\. To start a role anyway: foundry run tkt-store ROLE tst-0001$"
+        ),
     ):
         role_for_turn(turn, ROLES, project_name="tkt-store", task=Task.as_open("tst-0001"))
 
