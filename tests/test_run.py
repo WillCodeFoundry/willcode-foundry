@@ -98,6 +98,38 @@ def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_
         prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task.as_open("tst-0001"))
 
 
+def test_run_prints_the_turn_and_the_new_session_then_hands_over_to_the_launcher(
+    project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.
+
+    sbx and ps are stand-ins that list no sandbox and no process, since the launcher prunes before that check. What
+    comes after it needs a real sandbox: the sbx tier's."""
+    project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        CONFIG.replace('"git@github.com:o/tkt-store.git"', f"'{project_repository.path}'")
+    )
+    stand_ins = foundry_root / "stand-ins"
+    stand_ins.mkdir()
+    for name, script in {"sbx": "echo '{\"sandboxes\": []}'", "ps": "exit 0"}.items():
+        (stand_ins / name).write_text(f"#!/bin/sh\n{script}\n")
+        (stand_ins / name).chmod(0o755)
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("PATH", f"{stand_ins}:{git_env['PATH']}")
+
+    assert cli.main(["run", "tkt-store", "tst-0000"]) == 1
+
+    ssh_key_path = foundry_root / "secrets" / "ssh" / "dev"
+    assert capsys.readouterr() == (
+        "",
+        "==> turn:      dev\n"
+        f"==> session:   {foundry_root / 'sessions' / 'dev-tkt-store-tst-0000'} (new)\n"
+        f"error: ssh key {str(ssh_key_path)!r} is not a file\n",
+    )
+
+
 # --- whose turn -----------------------------------------------------------------------
 
 
