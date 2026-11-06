@@ -25,9 +25,9 @@ def test_nothing_to_prune_says_so() -> None:
 def test_prune_prints_what_it_killed_or_an_error_and_exits_accordingly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real command, with stand-ins on PATH: sbx lists no live sandbox, and ps lists one process, a sleep
-    of the test's own, under the command line of a sandbox's ssh-agent. The real ps would list a developer's
-    ssh-agents, for prune to kill."""
+    """The real command, with stand-ins on PATH: sbx lists no live sandbox, and ps lists one process. That
+    process is a sleep of the test's own, under the command line of a sandbox's ssh-agent. The real ps would
+    list a developer's ssh-agents, for prune to kill."""
     sleeping = subprocess.Popen(["sleep", "60"])
     stand_ins = {
         "sbx": "echo '{\"sandboxes\": []}'",
