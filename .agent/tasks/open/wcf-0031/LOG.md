@@ -429,3 +429,13 @@ and its contract test; README, ARCHITECTURE.md, AGENTS.md and GLOSSARY; host tie
 Next (human): review and merge PR #46. Suggested follow-ups: R8 (one helper for the known-roles listing, shared
 by `role_for_turn` and `require_valid_handoff_args`); replacing `log_with_handoff_entry`'s entry numbering with
 wcf-0030's log module, once both merge.
+
+## 45 · dev · progress
+Done: after entry 44, the human asked which errors deep in the code tell the user what command to run. On main
+`ProjectTasks` names none; this branch added two: the closed-task refusal of `handoff`, and the no-turn message.
+That is why a49fc8c gave `ProjectTasks` the project's name. The human chose to fix it in this PR. PR #46 is back
+in draft, which undoes entry 44's `pr-ready`.
+Next: `ProjectTasks` raises `ClosedTaskError` and `MissingTurnError` carrying the task and saying only what is
+wrong. A context manager in `commands/task.py` adds the command to run, for `run`, `task list` and `handoff`. That
+also removes `run.py`'s copy of the closed-task message. Then `ProjectTasks` goes back to taking a URL, as on main.
+`handoff` still refuses a closed task itself, as entry 11 decided. The messages stay as TASK.md fixes them.
