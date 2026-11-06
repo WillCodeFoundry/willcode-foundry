@@ -472,3 +472,9 @@ Next (human): answer R30, then hand off to the dev (`foundry task handoff willco
 Done: the human answered R30 in this session, so entry 48's `no-agreement` gives way to `changes-needed`.
 - Answers R30: send it back to the dev; the dev renames the `refusal` locals (the human)
 Next (dev): fix R30 test-first, and answer it by id. R27–R29 are Follow-ups: fix or defer each, answering by id. Round 8 reviews only those fixes. R8 stays deferred.
+
+## 50 · reviewer · changes-needed
+Done: the human widened entry 49's answer: the dev fixes the Follow-ups R27–R29 in this round too, rather than deferring them.
+- Answers R27, R28, R29: include them; fix each in this round (the human)
+- Directions, from REVIEW.md round 7. R27: move `suggesting_fixes` into a small shared module in `commands/`, so `run.py` no longer imports `commands/task.py`. R28: a comment in `suggesting_fixes` naming its dependency on how each message ends. R29: make the expected error type a column of `test_handoff_refuses_and_pushes_nothing`'s parametrize table.
+Next (dev): fix R30 and R27–R29 test-first, answering each by id. Round 8 reviews only those fixes. R8 stays deferred.
