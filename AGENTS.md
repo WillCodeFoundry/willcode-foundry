@@ -8,7 +8,7 @@ Read the design rules in [ARCHITECTURE.md](ARCHITECTURE.md#design-rules), and fo
 
 ## Checks
 
-Run the host tier and the static checks before every commit, as an ordinary user, never as root. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too.
+Run ruff before every commit, and the host tier and the other static checks before every push, as an ordinary user, never as root. `.pre-commit-config.yaml` runs them for you once installed. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too.
 
 The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything else that runs in a sandbox is the runtime, in Python.
 
