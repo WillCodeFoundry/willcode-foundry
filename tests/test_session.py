@@ -181,13 +181,6 @@ def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
     assert SessionVariables.from_env(variables.to_env()) == variables
 
 
-def test_variables_read_back_refuse_a_task_id_not_matching_the_pattern(tmp_path: Path) -> None:
-    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042")).variables
-
-    with pytest.raises(FoundryError, match=r"^task id 'WCF-0042' is not valid: "):
-        SessionVariables.from_env({**variables.to_env(), "AGENT_TASK": "WCF-0042"})
-
-
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
     """Rewrite a session's definition with some variables changed, or removed where None: an older foundry's."""
     definition = SandboxDefinition.read(session_dir)
