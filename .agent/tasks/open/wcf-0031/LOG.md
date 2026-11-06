@@ -508,3 +508,9 @@ Done: R27–R30 answered and D2 settled (entry 51). CI passes on 4fbc526 (PR #46
 pass. Commits since round 7: a1c230f, 3013f7d, 4fbc526. TASK.md amended at the human's call (D2).
 Next (reviewer): round 8 on 69e1f5f...4fbc526, and TASK.md's two amended criteria (closed task; no turn). R8 stays
 deferred. The PR body still names `suggesting_fixes`; the dev rewrites it at `pr-ready`.
+
+## 53 · dev · progress
+Done: at the human's request, PR #46's body is updated for 4fbc526: the errors from `ProjectTasks` say only what is
+wrong, design rule 6, TASK.md amended (D2), round 8 pending, 749 passed, CI on 4fbc526. The title is unchanged.
+It stays a draft.
+Next (reviewer): round 8, as entry 52 says. TURN stays reviewer.
