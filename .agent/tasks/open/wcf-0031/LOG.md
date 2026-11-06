@@ -458,3 +458,12 @@ approval. CI passes on 69e1f5f (PR #46, back in draft). Host tier, ruff and mypy
 Next (reviewer): a round on 37ee769...69e1f5f only: `ProjectTasks` names no command; `suggesting_fixes` adds them
 in the command layer, and every message is as before. R8 stays deferred. The PR body's summary mentions
 `MissingTurnError` and `ProjectTasks` as before; the dev updates it at `pr-ready`.
+
+## 48 · reviewer · no-agreement
+Done: round 7 of REVIEW.md, reviewing 69e1f5f (the fix diff 37ee769...69e1f5f, the human's post-approval change), against TASK.md at 8a76f09 and DESIGN.md at 4743c4d. Neither file has changed since round 6. The host tier (752 passed), ruff and mypy pass.
+- Standards, Spec and Behaviour: no findings. Every message is as TASK.md fixes it, character for character as at 37ee769. No `ClosedTaskError` or `MissingTurnError` reaches the user without its command.
+- R30 (Blocking, Names): the test locals named `refusal` (`tests/test_project_tasks.py:426`, `tests/test_task_command.py:166`) hold a pytest `ExceptionInfo`. GLOSSARY.md's Refusal is a hook's or a hardening mode's message. The fix is to rename them as the sibling tests name theirs.
+- R27–R29 (Follow-ups, Smells): `run.py` imports from `commands/task.py`; `suggesting_fixes` joins each message by how it ends; `test_handoff_refuses_and_pushes_nothing` keys an assertion on one task id.
+- R8 stays deferred. R9 is accepted as is.
+- Asks R30 → human: the dev and I don't disagree; R30 is new, and a Blocking finding is open after round 3, so ROLE.md hands it to you rather than to the dev. Should the dev rename `refusal` (a test-only change, with a short round 8 to follow), or do you accept it as is so the PR can go to `pr-ready`?
+Next (human): answer R30, then hand off to the dev (`foundry task handoff willcode-foundry wcf-0031 dev`). R27–R29 are the dev's to fix or defer.

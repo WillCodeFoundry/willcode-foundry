@@ -579,3 +579,122 @@ Summary:
 R25 and R26 are closed. No design questions are open. R8 is an open Follow-up, deferred.
 
 Verdict: approved
+
+## Round 7 (reviewing 69e1f5f)
+
+This round reviews only the fix diff 37ee769...69e1f5f. The human asked for this change after round 6's approval (LOG entries 45–47). It has two commits:
+- d501ddd: `ProjectTasks` raises `ClosedTaskError` and `MissingTurnError` and names no command. `suggesting_fixes` in `commands/task.py` adds the command.
+- 69e1f5f: `ProjectTasks.in_scratch_clone` takes a URL again, as on main.
+
+The spec of record hasn't changed: `TASK.md` at 8a76f09 and `DESIGN.md` at 4743c4d, both signed by the architect identity the planner shares. Neither file has changed since round 6. The host tier (752 passed), ruff and mypy pass at 69e1f5f.
+
+### TASK.md changed by another role
+
+No new commit to either file.
+
+### Earlier findings
+
+| Finding | Verdict | Why |
+|---|---|---|
+| R8 | deferred | Unchanged. `run.py` now imports from `commands/task.py`, so a shared roles listing could use the same import when R8 is taken up. |
+| R9 | accepted as is | From round 1. |
+
+R1–R7 and R10–R26 stay closed.
+
+### Standards
+
+No findings.
+- `commands/run.py:12` imports `suggesting_fixes` from `commands/task.py`. Design rule 2 limits imports only between foundry, the runtime and `agent_sandbox`, and this import makes no cycle.
+- `handoff_main` adding `suggesting_fixes(project.name)` to its `with` (`commands/task.py:114`) still only builds and passes (design rule 7).
+- `ClosedTaskError` and `MissingTurnError` are `FoundryError`s (design rule 6). The two errors are raised in three places, and `suggesting_fixes` wraps all three: `handoff_main`, `read_project_listing` and `require_open_task_and_role`.
+- Every docstring the diff touches matches the code.
+
+### Spec
+
+No findings. Each message the diff re-routes is still exactly what TASK.md fixes, and a test shows each one:
+- **No turn:** `test_a_closed_task_or_one_without_a_turn_is_refused_saying_how_to_fix_it` compares the whole string with `==`. Its wiring is shown by `tests/test_run.py:178` and `tests/test_task_command.py:171`.
+- **Closed, through `run`:** `tests/test_run.py:169`.
+- **Closed, through `handoff`:** checked end to end through `cli.main`.
+
+The diff leaves `get_task_by_id`, `close_task` and `reopen_task` untouched, as TASK.md's out-of-scope list requires. No scope creep.
+
+### Behaviour
+
+No findings. Reproduced in a throwaway clone:
+- No `ClosedTaskError` or `MissingTurnError` reaches the user without its command. `read_task_turn` and `list_open_task_summaries` each have one caller, and it is wrapped. `foundry task list` over several projects goes through the wrapped `read_project_listing`. `run` with an explicit role checks for a closed task inside the wrapped block.
+- `suggesting_fixes` is the inner context manager in both combined `with` statements. The error is turned into its message before the scratch clone is removed, and cleanup errors pass through unchanged.
+- Both messages are identical, character for character, to 37ee769's.
+- The unknown-project refusal still comes before any clone.
+
+### Smells
+
+| Function | Mark |
+|---|---|
+| `src/foundry/project_tasks.py:ClosedTaskError.__init__` | new; R28 |
+| `src/foundry/project_tasks.py:MissingTurnError.__init__` | new; R28 |
+| `src/foundry/project_tasks.py:ProjectTasks.__init__` | clean, simpler |
+| `src/foundry/project_tasks.py:ProjectTasks.in_scratch_clone` | clean, back to main's shape |
+| `src/foundry/project_tasks.py:ProjectTasks.handoff` | clean, simpler |
+| `src/foundry/project_tasks.py:ProjectTasks._read_fetched_turn` | clean, simpler |
+| `src/foundry/commands/task.py:suggesting_fixes` | new; R27, R28 |
+| `src/foundry/commands/task.py:create_main`, `close_main`, `reopen_main`, `handoff_main`, `read_project_listing` | clean |
+| `src/foundry/commands/run.py:main` | clean |
+| `src/foundry/commands/run.py:require_open_task_and_role` | clean, simpler: its copy of the closed-task message is gone |
+| `tests/support/project_repository.py:project_tasks_of` | clean |
+| `tests/test_project_tasks.py:test_a_task_without_a_turn_is_refused_naming_its_turn_file`, `test_listing_fails_on_a_task_without_a_turn` | clean |
+| `tests/test_project_tasks.py:test_handoff_refuses_and_pushes_nothing` | R29 |
+| `tests/test_run.py:project_tasks` (fixture), `test_a_task_without_a_turn_is_refused_saying_how_to_hand_it_off` | clean |
+| `tests/test_task_command.py:test_a_closed_task_or_one_without_a_turn_is_refused_saying_how_to_fix_it`, `test_a_listing_refuses_a_task_without_a_turn_saying_how_to_hand_it_off`, `test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly` | clean |
+
+- **R27 (Follow-up), possible Divergent Change.**
+  - Where: `src/foundry/commands/run.py:12` imports `suggesting_fixes` from `commands/task.py`. No other command module imports a sibling, and ARCHITECTURE.md's codemap gives `commands/` "one module per subcommand", so `commands/task.py` now also changes for `run`'s sake.
+  - Who hits it: the next dev who changes `run`'s refusals or splits `commands/task.py`, now and then.
+  - Direction: accept as is, or move `suggesting_fixes` into a small shared module in `commands/`.
+- **R28 (Follow-up), possible Feature Envy.**
+  - Where: `src/foundry/commands/task.py:158` and `:161` join each error's message to its fix. How each joins depends on how the message ends in `src/foundry/project_tasks.py:32` and `:40`: `": "` after `ClosedTaskError`'s, which has no full stop, and `" "` after `MissingTurnError`'s, which ends in one. Rewording either message means editing both files.
+  - Who hits it: the next dev who rewords a refusal, rarely.
+  - Direction: accept as is, since TASK.md fixes both messages; or add a comment in `suggesting_fixes` naming the dependency.
+- **R29 (Follow-up), test logic keyed on one case.**
+  - Where: `tests/test_project_tasks.py:428` asserts `isinstance(…, ClosedTaskError) == (task_id == "cls-0000")`, which ties the shared body to one case's task id. A second closed-task case under another id would quietly flip what the assertion checks.
+  - Who hits it: the next dev who adds a refusal case, occasionally.
+  - Direction: make the expected error type a column of the parametrize table.
+
+### Names
+
+| Name | Mark |
+|---|---|
+| `ClosedTaskError` | clean: GLOSSARY's "Closed task", beside `TaskNotFoundError` and `MissingTurnError` |
+| `suggesting_fixes` | clean: reads well at `with …, suggesting_fixes(project.name):`, with no homonym |
+| `url` (parameter of `in_scratch_clone`; local in `run.py:main`) | clean: as on main |
+| `in_scratch_clone`, `MissingTurnError`, `ProjectTasks`, `require_open_task_and_role` (behaviour changed) | clean: each name still fits |
+| `error` (in `suggesting_fixes`), `turn` (`run.py:66`) | clean |
+| `refusal` (test locals) | R30 |
+| `test_a_task_without_a_turn_is_refused_naming_its_turn_file`, `test_a_task_without_a_turn_is_refused_saying_how_to_hand_it_off`, `test_a_closed_task_or_one_without_a_turn_is_refused_saying_how_to_fix_it`, `test_a_listing_refuses_a_task_without_a_turn_saying_how_to_hand_it_off` | clean |
+
+- **R30 (Blocking), homonym.**
+  - Where: `refusal` names a pytest `ExceptionInfo` around a `FoundryError` at `tests/test_project_tasks.py:426` (used at `:428`) and `tests/test_task_command.py:166` (used at `:168`).
+  - The clash: GLOSSARY.md defines **Refusal** as "What a hook or a hardening mode says when it stops something". `tests/agent_runtime/test_git_hooks.py:96` and `:213` use `refusal` that way, for a hook's message string. NAMES.md itself turned "Refusal" down for `suggesting_fixes` for that reason.
+  - The agreed word: the tests name other `ExceptionInfo`s `raised`, at `tests/test_project_clone.py:73`, `tests/test_skills.py:206` and `tests/agent_runtime/test_git.py:81`.
+  - Who hits it: the next reader of these two tests, who reads `refusal.value` as a hook's message.
+  - Direction: name both locals as the sibling tests do.
+
+The added prose uses the glossary's words. No findings in it.
+
+### Design questions
+
+None open.
+
+Summary:
+
+| Axis | Findings | Blocking | Worst |
+|---|---|---|---|
+| TASK.md changed | 0 new | 0 | |
+| Standards | 0 | 0 | |
+| Spec | 0 | 0 | |
+| Behaviour | 0 | 0 | |
+| Smells | 3 | 0 | R27, `run.py` importing from `commands/task.py` |
+| Names | 1 | 1 | R30, `refusal` as a homonym of the glossary's Refusal |
+
+R30 blocks. R27–R29 are Follow-ups. No design questions are open. R8 is deferred.
+
+Verdict: changes needed
