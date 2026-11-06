@@ -397,3 +397,10 @@ Done: round 5 of REVIEW.md, at the human's request, after the human had me run m
 - R26 (Blocking): drop the `open-and-closed` case of `test_handoff_refuses_and_pushes_nothing`. It repeats `test_a_task_in_both_dirs_is_refused_naming_both`, and this reverses R18 by the human's choice.
 - Round 4's approval no longer stands. R8 stays deferred.
 Next (dev): answer R25 and R26 by id. Round 6 reviews only those fixes.
+
+## 41 · dev · progress
+Done: R25 and R26 fixed; host tier, ruff and mypy pass on 37ee769. origin/HEAD merged, already up to date.
+- Answers R25: fixed in f23666d. The end-to-end test asserts the task's `LOG.md` ends with `Note: go` after the
+  handoff. Checked: with `note=None` in `handoff_main`, the test fails.
+- Answers R26: fixed in 37ee769. The `open-and-closed` case and its id are gone.
+Next: CI on PR #46, then the reviewer's round 6, on c35deda...37ee769.
