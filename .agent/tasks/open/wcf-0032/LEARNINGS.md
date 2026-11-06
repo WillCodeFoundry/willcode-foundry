@@ -1,2 +1,7 @@
 # Learnings
 - 2026-11-06 [testing] — When mutating `src/` by hand and rerunning pytest within the same second, a mutant of the same byte size as the one before can run from a stale `__pycache__` .pyc (CPython checks source mtime in seconds and size). Set `PYTHONDONTWRITEBYTECODE=1` and remove `src/**/__pycache__` before each mutant run.
+- 2026-11-06 [testing] — `cli.main` tests that reach `agent_sandbox` (run, prune) need stand-ins for `ps` as well as `sbx`. `SshAgentRegistry.prune` kills every listed ssh-agent that `sbx ls` doesn't call live, so a real `ps` could let a test kill a developer's own agents.
+- 2026-11-06 [testing] — `skills.update_main` uses the real GitHub URL. `git config --global url.<local path>.insteadOf https://github.com/<repo>.git`, in git_identity's throwaway HOME, points it at a local upstream with no patching.
+- 2026-11-06 [testing] — git hides a dangling HEAD from `ls-remote --symref`, so a "default branch not among the branches" case needs a bare repository whose HEAD points at a tag (`git symbolic-ref HEAD refs/tags/v1`).
+- 2026-11-06 [tools] — The guard-bash hook refuses any shell command whose text sets the hooks-path config key with `-c`, even a heredoc that only writes test code or notes. Make such edits with the Edit tool.
+- 2026-11-06 [proposal] — guard-bash matches the hooks-path key anywhere in a command's text, so writing a test file that uses it, as `tests/agent_runtime/test_claude_hooks.py` already does, is refused. It could check only the git commands the shell would run.

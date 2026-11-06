@@ -34,3 +34,40 @@ Done: item 3's first bullet, end-to-end tests through `cli.main`, one commit per
 - Left to the sbx tier: what `run` does after the launcher's first check (ssh-agent, sandbox, attach).
 - `test_prune_is_a_command` judged again and deleted (ca99a65): the new prune test now catches `set_defaults(func=None)`.
 Next: the rest of item 3, from `git_hooks.pre_push`.
+
+## 6 · dev · ready-for-review
+Done: every TASK.md item, each commit naming its mutants and, for a deletion, the test that failed. Item 3's first bullet is one commit per command. Main merged (already up to date). Host tier, ruff, ruff format and mypy pass. The host tier takes ~49 s here, against ~45 s before. `git diff --stat origin/main...HEAD` lists only `tests/`. Draft PR: https://github.com/WillCodeFoundry/willcode-foundry/pull/50, and its CI passes.
+- [x] Each deletion hand-checked with the test deselected; each new or stronger test fails against its mutants.
+- [x] One commit per item, with the checks passing before each; only `tests/` changed.
+- [x] No Docker, sandbox, GitHub or network in the new tests, and no patching. They use stand-in `sbx`, `ps` and `gh` executables on PATH, and git's `url.<base>.insteadOf`.
+- [x] No new test exposed a `src/` bug that needed a stop (two oddities are listed under Next).
+
+Deleted:
+- `test_paths_are_built_without_touching_the_filesystem` (1da7f07)
+- `test_an_uppercase_task_id_is_refused_not_lowercased` (60123ce)
+- `test_the_runtime_is_built_into_the_kit` (1899fcd)
+- `test_a_task_that_doesn_t_exist_is_refused` (fdd65d1)
+- `test_the_tasks_notes_commit_is_signed_with_your_signing_key`, merged as one assert into the create test (a9a4f6b). TASK.md describes "the one about the commit the task's notes get", which is the create test, not the orphan test that sits just before it.
+- Judged, deleted: `test_variables_read_back_refuse_a_task_id_not_matching_the_pattern` (3db50b4). `from_env` builds the task only through `Task.as_open`, and other tests catch both mutants of Task's check.
+- Judged, deleted: `test_prune_is_a_command` (ca99a65), once the end-to-end prune test caught `func=None`. Before that test, no other test caught it, so it had been kept.
+
+Strengthened: `test_invalid_shapes` (942ebf5); `test_unknown_project_and_role_are_reported` (d268615); new `test_load_s_errors_name_the_config_file` (4218c68); the known roles in the turn test (524ea22).
+
+Added:
+- Through `cli.main`: task create/close/reopen (9f2a560), run (a7f5263), prune (86e327b), repo check (8c9632d), skills update (b397398).
+- `pre_push` with a blank and a malformed line (498ed65); `_is_under` for a file whose parent is the root (30cb21e); `create_task` with a default that isn't a branch (b47828d); session_setup's upstreams (9a01731); `GhCli.file_text` for a folder or link (4d2b481); the github line of `launch_summary` (166f3ed); a file as the session path (9bb439a); the fetch in `_unpushed` (b31a31c).
+- `tests/agent_kit/test_stop_hook.py` didn't show the fetch: it passes with the fetch removed, so a test was added.
+
+Mutants that survive, judged equivalent:
+- `switch -c` -> `-C` in session_setup. That line runs only when the local branch doesn't exist, where `-C` does what `-c` does.
+- Dropping `--track` changes nothing under git's default `branch.autoSetupMerge`. The test sets it to false, so dropping either `--track` fails it.
+
+Left to other tiers:
+- Everything `foundry run` does after the launcher's first check (ssh-agent, sandbox, attach) belongs to the sbx tier. The test stops at the missing SSH key.
+- `repo check --fix` is not run through `cli.main`. With the test's empty rulesets it prints the same as a check, and `tests/test_repo_policy.py` covers `fix_project`.
+
+For the reviewer: the run and prune tests stand in for `ps` as well as `sbx`. With the real `ps`, prune would kill a developer's own foundry ssh-agents.
+
+Next (suggested follow-ups, out of scope):
+- When the default branch isn't a branch (a HEAD on a tag), `create_task` says "the repository has no commits to branch … from", though the repository has commits.
+- `ProjectClone.default_branch` returns `"ref: refs/tags/v1"` for a HEAD on a tag, since it strips only `refs/heads/`.
