@@ -67,3 +67,4 @@
   `MissingTurnError` at the edge. Rejected: a try/except in each `main` (logic in a composition root, rule 7), and
   each caller checking the status first (entry 11 had `handoff` refuse a closed task itself). Elsewhere on main,
   `agent_runtime/session_setup.py` names `foundry task create` from inside the sandbox; left as is, out of scope.
+- 2026-11-06 [proposal] — reviewer ROLE.md: `no-agreement` fires on any Blocking finding open after round 3. That includes a finding raised for the first time in a late round, where the dev and the reviewer don't disagree at all (round 7, R30, a test-local rename). The outcome's wording ("saying where you and the dev disagree") doesn't fit that case. Proposal: apply `no-agreement` only to findings that have already had one dev answer, and let a new Blocking finding go to the dev as `changes-needed`.
