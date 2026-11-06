@@ -19,7 +19,7 @@ Check every name a diff adds or renames, of every kind below. Check too each exi
 | prose word | a concept named in a doc, docstring, message, comment or instruction |
 | test name | a test function, read as a sentence about the behaviour it shows |
 
-Leave case and builtin shadowing to ruff's `N` and `A` rules.
+Leave case style and builtin shadowing to ruff's `N` and `A` rules. Neither flags two names that differ only in case.
 
 ## How to check
 
@@ -42,6 +42,7 @@ Leave case and builtin shadowing to ruff's `N` and `A` rules.
 | A dict named like a list | `prices` for a dict of SKU to price | `price_by_sku` | The name hides the key. |
 | A boolean that doesn't ask | `shipping` for a bool, `check_stock` for a bool | `is_shipped`, `has_stock` | It reads as a value or an action, not a yes or no. |
 | Grammar that doesn't match the kind | `def invoice(order)` that sends it, `is_status = "paid"` | `send_invoice(order)`, `status = "paid"` | A function is a verb, a value a noun, and only booleans start with is, has, can or should. |
+| Names that differ only in case | a function `_draft()` that returns a `_Draft` | `_draft_order()` returning a `_Draft` | Read aloud, the two are one word, so readers mix up the call and the class. An instance `draft = _Draft()` is fine. |
 | An exception named for the fix | `RetryLaterError` | `CourierUnavailable` | An exception names what happened, in the glossary's words when it has one. |
 
 ## Smells at the uses
@@ -139,7 +140,7 @@ The project's agreed word for a concept is, in order: the glossary's (`GLOSSARY.
 |---|---|---|---|
 | A synonym | `basket` where the glossary says `cart` | `cart` | search for the other words a reader might use |
 | An avoided word | a word `GLOSSARY.md` lists under _Avoid_ for the concept | the glossary's term | search the glossary's _Avoid_ lists |
-| A homonym | `session` for a checkout, where `session` already means a login | `checkout` | search for the name; check each hit means the same thing |
+| A homonym | `session` for a checkout, where `session` already means a login; `Supplier.shop` for the supplier's shop beside `shop_dir` for ours | `checkout`; `Supplier.storefront` | search for the name; check each hit means the same thing, attributes and parts of longer names included |
 | An instance named otherwise | `repo = OrderRepository()` | `order_repository = OrderRepository()` | an instance named neither for its class nor for its role |
 
 An instance may be named for its role instead of its class only when the scope holds two of the type, such as `recorded` and `wanted`, or when its role is what the reader needs, such as `destination`.
