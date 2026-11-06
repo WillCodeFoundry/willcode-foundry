@@ -54,9 +54,10 @@ code the task extends was replaced.
   `GLOSSARY.md` (never a word it lists under _Avoid_), `DESIGN.md`, the code
   already there, then a new word. Name an instance for its class, unless the
   scope holds two of the type or its role is what the reader needs.
-- A concept the glossary lacks goes in `LEARNINGS.md` as a `[proposal]`
-  entry, as the `domain-modeling` skill says. Don't add it to `GLOSSARY.md`
-  unless `TASK.md` or `DESIGN.md` lists it.
+- A concept the glossary lacks, or a word you find meaning two things, goes
+  in `LEARNINGS.md` as a `[proposal]` entry, as the `domain-modeling` skill
+  says. Don't add it to `GLOSSARY.md` unless `TASK.md` or `DESIGN.md` lists
+  it.
 - Before each commit, check every name the staged diff (`git diff --cached`)
   adds or renames, and each existing name whose behaviour it changes, with the
   `python-naming-smells` skill. Fix any that fails.
@@ -66,24 +67,8 @@ code the task extends was replaced.
   to; otherwise ask the planner.
 - An existing name you find drifting from the agreed word isn't yours to
   rename in this task. List it under `Next` in `LOG.md`.
-- Record in the task's `NAMES.md` the naming decisions the code can't show,
-  and commit it with the step's `LOG.md` entry. A name gets a row only when it
-  is a new word, a rename, or the search found a synonym, homonym or drift for
-  it. Keep each row current, and remove the row of a name the code no longer
-  has:
-
-  ```markdown
-  # Names
-
-  | Name | Kind | Where | Why |
-  |---|---|---|---|
-  | `relaunch` | function | `src/app/run.py` | New word. No synonym found for: restart, resume, reopen. |
-  | `close` (was `finish`) | method | `src/app/task.py` | GLOSSARY.md: Closed task. Not `finish`, which already means a session ending, `session.py:88`. |
-  ```
-
-  **Why** holds the decision: for a new word, the words you searched for;
-  for a rename, why; for a clash, the word you turned down and where it
-  already means something else.
+- A word you considered and turned down needs no record. If a review
+  suggests it, answer the finding `disagree, because <why>`.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
@@ -106,8 +91,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
 - Fix a name finding as "Names" above says: check the new name with the
-  `python-naming-smells` skill at every use in the repository, and record the
-  rename in `NAMES.md`.
+  `python-naming-smells` skill at every use in the repository.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a
