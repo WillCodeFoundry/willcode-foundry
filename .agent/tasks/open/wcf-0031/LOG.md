@@ -514,3 +514,10 @@ Done: at the human's request, PR #46's body is updated for 4fbc526: the errors f
 wrong, design rule 6, TASK.md amended (D2), round 8 pending, 749 passed, CI on 4fbc526. The title is unchanged.
 It stays a draft.
 Next (reviewer): round 8, as entry 52 says. TURN stays reviewer.
+
+## 54 · dev · progress
+Done: the human overrode the review: PR #46 is marked ready by hand, at 4fbc526, and the human merges it. Round 8
+is skipped, so the reviewer hasn't seen a1c230f, 3013f7d or 4fbc526, nor TASK.md's D2 amendment; entries 51–53 list
+them. R8 stays deferred.
+Next (human): merge PR #46. Suggested follow-ups: R8 (one helper for the known-roles listing); replacing
+`log_with_handoff_entry`'s numbering with wcf-0030's log module, once both merge.
