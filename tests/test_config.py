@@ -88,9 +88,18 @@ def test_role_options_must_be_a_mapping(tmp_path: Path) -> None:
         config.parse({"name": "x", "roles": {"dev": "opus"}}, foundry_root=tmp_path)
 
 
-@pytest.mark.parametrize("raw", [[], "x", {}, {"name": ""}, {"name": "x", "projects": {"p": {}}}])
-def test_invalid_shapes(tmp_path: Path, raw: object) -> None:
-    with pytest.raises(FoundryError):
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ([], "^config: top level must be a mapping$"),
+        ("x", "^config: top level must be a mapping$"),
+        ({}, "^config: 'name' is required$"),
+        ({"name": ""}, "^config: 'name' is required$"),
+        ({"name": "x", "projects": {"p": {}}}, "^config: projects.p needs a 'url'$"),
+    ],
+)
+def test_invalid_shapes(tmp_path: Path, raw: object, message: str) -> None:
+    with pytest.raises(FoundryError, match=message):
         config.parse(raw, foundry_root=tmp_path)
 
 
