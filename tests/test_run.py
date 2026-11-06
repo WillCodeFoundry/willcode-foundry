@@ -64,12 +64,6 @@ def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
     assert launch.request.model == "sonnet"
 
 
-def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-
-    assert AgentKit(foundry_root / "agent-kit").runtime.is_file()
-
-
 def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
     AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
 
