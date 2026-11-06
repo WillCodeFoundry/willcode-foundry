@@ -25,9 +25,11 @@ def session_init(
     agent on every launch, with the groups sbx gives it. The launch stops unless the agent can't become root."""
     session = session or contract.read_environ()
     session_setup.session_setup(session)
-    if hardening.can_sudo(machine.sudo):
-        if (returncode := (run_as_root or _through_sudo)(machine, session.agent_kit_dir)) != 0:
-            return returncode
+    if (
+        hardening.can_sudo(machine.sudo)
+        and (returncode := (run_as_root or _through_sudo)(machine, session.agent_kit_dir)) != 0
+    ):
+        return returncode
     return _check_hardening(session.agent_kit_dir, machine)
 
 

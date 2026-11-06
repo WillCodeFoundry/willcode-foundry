@@ -157,7 +157,7 @@ def read_source(skill_md: Path) -> Source | None:
         return None
     try:
         # Every value as a string: a SHA of digits must not become a number.
-        front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}
+        front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}  # noqa: S506  BaseLoader builds only strings, lists and dicts
     except yaml.YAMLError as error:
         raise FoundryError(f"{skill_md}: its front matter is not valid YAML: {error}") from None
     metadata = front.get("metadata", {}) if isinstance(front, dict) else None

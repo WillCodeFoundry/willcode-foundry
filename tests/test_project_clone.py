@@ -14,7 +14,7 @@ from tests.support.project_repository import clone_in
 
 def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
     clone = clone_in(tmp_path, git_env, str(tmp_path / "origin.git"))
-    with pytest.raises(AssertionError, match="at least one branch"):
+    with pytest.raises(ValueError, match="at least one branch"):
         clone.push_atomic(from_remote={}, from_local=[])
 
 
