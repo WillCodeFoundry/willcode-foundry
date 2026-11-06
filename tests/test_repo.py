@@ -79,7 +79,7 @@ CODEOWNERS = "* @o\n"
 def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real command, in a foundry instance of its own, with a stand-in for gh on PATH: store's repository
+    """The real command, in a foundry of its own, with a stand-in for gh on PATH: store's repository
     has exactly the repo policy, and elsewhere's URL isn't GitHub's."""
     foundry_root = tmp_path / "foundry"
     policy_dir = foundry_root / "config" / "repo-policy"

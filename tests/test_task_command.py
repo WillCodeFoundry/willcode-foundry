@@ -66,7 +66,7 @@ def test_close_and_reopen_take_a_project_and_a_task(action: str) -> None:
 def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accordingly(
     project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real commands, in a foundry instance of its own: each one's output and exit code, for a change and for
+    """The real commands, in a foundry of its own: each one's output and exit code, for a change and for
     a refusal."""
     foundry_root = tmp_path / "foundry"
     (foundry_root / "config" / "task-template").mkdir(parents=True)
