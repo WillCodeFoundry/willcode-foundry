@@ -13,6 +13,7 @@ from foundry.runtime_build import build_runtime
 from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git
+from tests.support.project_repository import ProjectRepository, make_git_env
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -155,3 +156,15 @@ def created_task(tmp_path: Path, origin: Path) -> Path:
     git(seed, "commit", "-qm", f"Add task {TASK.id}")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
     return origin
+
+
+@pytest.fixture
+def git_env(tmp_path: Path) -> dict[str, str]:
+    """git with a throwaway identity and your signing key, and none of the developer's own config."""
+    return make_git_env(tmp_path)
+
+
+@pytest.fixture
+def project_repository(tmp_path: Path, git_env) -> ProjectRepository:
+    """The GitHub repository behind the project store, seeded: see ProjectRepository."""
+    return ProjectRepository.seed(tmp_path, git_env)

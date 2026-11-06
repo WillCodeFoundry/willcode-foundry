@@ -27,6 +27,9 @@ TASK_FILE: Final = "TASK.md"
 TURN_FILE: Final = "TURN"
 # The turn that no role takes: the task waits for you.
 HUMAN: Final = "human"
+# The notes file the roles talk through, as numbered entries appended and never changed, as agent-kit/AGENTS.md
+# says. The runtime's git hooks spell it too, as their own LOG_FILE.
+LOG_FILE: Final = "LOG.md"
 
 # A task id: lowercase ASCII letters, '-', then four or more digits, such as wcf-0042. It is also a valid ref
 # component, so task/<id> is always a valid branch.
@@ -89,6 +92,11 @@ class Task:
     def turn_file(self) -> str:
         """The task's TURN_FILE on NOTES_BRANCH, relative to the repository root."""
         return f"{self.task_notes_dir}/{TURN_FILE}"
+
+    @property
+    def log_file(self) -> str:
+        """The task's LOG_FILE on NOTES_BRANCH, relative to the repository root."""
+        return f"{self.task_notes_dir}/{LOG_FILE}"
 
 
 def load_template(template_dir: Path) -> dict[str, str]:

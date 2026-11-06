@@ -1,4 +1,5 @@
-"""foundry task: create a task on a project, ready for foundry run, close and reopen it, and list whose turn each is."""
+"""foundry task: create a task on a project, ready for foundry run, close and reopen it, hand it off, and list
+whose turn each is."""
 
 import argparse
 import os
@@ -14,7 +15,7 @@ from foundry.project_tasks import ProjectTasks, TaskSummary
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    parser = subparsers.add_parser("task", help="create, close, reopen and list tasks on projects")
+    parser = subparsers.add_parser("task", help="create, close, reopen, hand off and list tasks on projects")
     actions = parser.add_subparsers(dest="action", required=True)
     # The arguments every action takes.
     task_arguments = argparse.ArgumentParser(add_help=False)
@@ -47,6 +48,18 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "doesn't exist.",
     )
     reopen.set_defaults(func=reopen_main)
+    handoff = actions.add_parser(
+        "handoff",
+        parents=[task_arguments],
+        help=f"write ROLE to the open task's {task.TURN_FILE} on {task.NOTES_BRANCH}, "
+        f"and say so in its {task.LOG_FILE}",
+        description="Uses git, with your own access to the project's repository, and one commit signed with your "
+        f"key. Refuses a task that is closed or doesn't exist, whose turn is already ROLE, or that has no "
+        f"{task.LOG_FILE}. Starts nothing: run the role with foundry run.",
+    )
+    handoff.add_argument("turn", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
+    handoff.add_argument("--note", metavar="TEXT", help=f"one line to add to the {task.LOG_FILE} entry")
+    handoff.set_defaults(func=handoff_main)
     list_parser = actions.add_parser(
         "list",
         help=f"list the open tasks and whose turn each is, from {task.TURN_FILE} on {task.NOTES_BRANCH}",
@@ -92,6 +105,17 @@ def reopen_main(args: argparse.Namespace) -> int:
     return 0
 
 
+def handoff_main(args: argparse.Namespace) -> int:
+    """Composition root: the real config and repository, in a scratch clone."""
+    foundry_config = config.load(paths.find_foundry_root())
+    project = foundry_config.project(args.project_name)
+    require_valid_handoff_args(foundry_config, task_id=args.task_id, turn=args.turn, note=args.note)
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        project_tasks.handoff(args.task_id, args.turn, note=args.note)
+    print("\n".join(handoff_lines(project.name, args.task_id, turn=args.turn)))
+    return 0
+
+
 def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
@@ -121,6 +145,30 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
         f"{outcome.past_tense} task {changed.id} in {project_name}",
         f"{outcome.next_command} {project_name} {changed.id}",
     ]
+
+
+def require_valid_handoff_args(foundry_config: Config, *, task_id: str, turn: str, note: str | None) -> None:
+    """Refuse a handoff's arguments that don't check out, so none reaches git.
+
+    FoundryError for an invalid task id, a ``turn`` that is neither a role in ``foundry_config`` nor HUMAN, or a
+    ``note`` that is blank or more than one line.
+    """
+    task.Task.as_open(task_id)  # refuses an invalid id as create does
+    if turn != task.HUMAN and turn not in foundry_config.roles:
+        known = ", ".join(sorted(foundry_config.roles)) or "none"
+        raise FoundryError(f"{turn!r} is not a role; known: {known}, or {task.HUMAN}")
+    if note is not None and not note.strip():
+        raise FoundryError("--note is empty: give it text, or leave it out")
+    if note is not None and note.splitlines() != [note]:
+        raise FoundryError("--note holds a line break: give it one line")
+
+
+def handoff_lines(project_name: str, task_id: str, *, turn: str) -> list[str]:
+    """What handoff prints: the handoff, then how to run the task, unless it now waits for you."""
+    lines = [f"task {task_id} in {project_name}: handoff to {turn}"]
+    if turn != task.HUMAN:
+        lines.append(f"run it with: foundry run {project_name} {task_id}")
+    return lines
 
 
 class ProjectListing(NamedTuple):
