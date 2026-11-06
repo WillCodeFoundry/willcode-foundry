@@ -111,7 +111,7 @@ class _Plan:
     licence: bytes
 
 
-def _plan(git: Git, foundry_root: Path, url: str, skill_md: Path, source: Source, new_sha: str) -> _Plan:
+def _plan(git: Git, foundry_root: Path, url: str, skill_md: Path, source: Source, new_sha: str) -> _Plan:  # noqa: PLR0913, PLR0917  the inputs _Plan bundles
     """Every read and check for updating ``skill_md`` to ``new_sha``; writes nothing."""
     skill_md_text = skill_md.read_text()
     git.output("fetch", "--quiet", "--no-tags", url, source.commit)

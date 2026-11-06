@@ -120,7 +120,7 @@ def _harden_managed_settings(agent_kit: AgentKit, machine: Machine) -> None:
     atomic_write(machine.managed_settings, agent_kit.managed_settings.read_bytes(), owner=machine.root_owner)
 
 
-def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:
+def _check_managed_settings(agent_kit: AgentKit, machine: Machine) -> list[str]:  # noqa: PLR0911  one return per check, stopping at the first that fails
     """Settings and their folder must be root-owned and unwritable, and match the kit: whoever can write the
     folder can swap the file, and an older kit's settings mean older hooks. Each hook must run the runtime
     through the link, which proves the settings and the link agree on this machine."""
