@@ -80,3 +80,54 @@ Every name the diff adds or changes is clean, judged at its uses, except for one
 Findings: Standards 2 (none block; worst R1, the network guard depends on an exact URL match). Spec 3 (none block; worst R3, the `-c -> -C` mutant is equivalent, so the criterion's wording can't be met). Behaviour 1 (does not block; R6, an inherited `GIT_CONFIG_GLOBAL`). Smells 3 (none block, one downgraded; worst R7, duplicated foundry setup). Names 1, Blocking (R10, "foundry instance"). No design questions.
 
 Verdict: changes needed
+
+## Round 2 (reviewing 7dd5591)
+
+Reviewed against `TASK.md` as of notes commit 7bb4741, as in round 1. No commit has touched `TASK.md` since. 7bb4741 has a good signature from the identity the planner and the architect share, so it can't be told which of the two made it. The task has no `DESIGN.md`.
+
+Fix diff: `git diff b31a31c...7dd5591`, three commits (2bb57d4, 83edc51, 7dd5591), all under `tests/`. `uv run pytest`, ruff, `ruff format --check` and mypy pass at 7dd5591. The host tier takes about 48 s.
+
+### Earlier findings
+
+- **R1 · closed.** Fixed in 7dd5591. `tests/test_skills.py:398` sends every other `https://github.com/` URL to a `no-github` path that doesn't exist. git uses the longest insteadOf prefix that matches, so the skill's own URL still reaches the local upstream (`:397`). Checked in a throwaway clone by making the specific rule miss. The fetch then fails on `.../no-github/mattpocock/skills.git`, with no network. The rule is written only to the throwaway global config that `git_identity` sets up.
+- **R2 · closed.** The prune docstring is split in 83edc51 (`tests/test_prune.py:28-30`). The colon form in the other three was accepted as is.
+- **R3, R4, R5 · accepted as is**, as in round 1. R3 is still for the human at merge.
+- **R6, R7, R8, R9 · deferred.** The dev's reasons hold. R6's fix belongs in `make_git_env` in `tests/support/`. TASK.md asks for existing helpers rather than new ones (R7). R8 and R9 are refactors of shared stand-in helpers. All four are left to a later task.
+- **R10 · closed.** Fixed in 2bb57d4. No line the task diff adds calls a foundry an "instance". The older uses in `src/foundry/paths.py`, `src/foundry/agent_sandbox/pruning.py` and the list and handoff docstrings in `tests/test_task_command.py` stay as a suggested follow-up.
+
+### Standards
+
+No new findings. The new docstring at `tests/test_skills.py:394-396` gives its reason with "so", in sentences under 25 words. The new config line is git configuration, not a patch, so design rule 3 holds.
+
+### Spec
+
+No new findings. Only `tests/` changed. Each fix commit makes one change and says why. In a throwaway clone, `set_defaults(func=None)` in `src/foundry/commands/skills.py` still fails the skills update test. That test still asserts exit 0 and stdout for a clean update, and exit 1 with the conflict on stderr for a conflicted one.
+
+### Behaviour
+
+No new findings. The skills update test passes on its own, in its file and beside `tests/test_task_command.py`. Run outside the suite with git 2.53.0 and the same two rules:
+- the skill's URL goes to the upstream;
+- any other `https://github.com/` URL, with or without `.git`, fails on the missing path.
+
+The conflicted half's fetch still reaches the local upstream. The real `~/.gitconfig` is untouched.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `tests/test_prune.py:test_prune_prints_what_it_killed_or_an_error_and_exits_accordingly` | clean (docstring only) |
+| `tests/test_repo.py:test_check_prints_each_project_s_result_and_exits_1_unless_all_conform` | clean (docstring only; R9 unchanged) |
+| `tests/test_task_command.py:test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accordingly` | clean (docstring only; R7 unchanged) |
+| `tests/test_skills.py:test_skills_update_exits_0_when_clean_and_1_with_the_conflicts_on_stderr` | clean |
+
+No new findings.
+
+### Names
+
+The one new name, the path segment `no-github` (`tests/test_skills.py:398`), is clean. The added prose uses the glossary's words: "foundry", "sandbox", "upstream" in its Skill sense, and the code's "ssh-agent". No new findings.
+
+### Summary
+
+Findings: Standards 0. Spec 0. Behaviour 0. Smells 0. Names 0. None block. No design questions. R1, R2 and R10 are closed. R6–R9 are deferred, and R3–R5 accepted as is.
+
+Verdict: approved

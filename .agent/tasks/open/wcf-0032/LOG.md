@@ -88,3 +88,7 @@ Done: review round 1 answered. Merged main first; it was already up to date. Hos
 - Answers R9: deferred, because pulling the gh stand-in out of the test is a refactor the task doesn't need. Better done with R8, since both are about building stand-ins.
 - R3, R4 and R5 were accepted as is. For the human, at merge: R3. The `-c -> -C` mutant is equivalent, so that part of the criterion can't be met.
 Next (suggested follow-ups): R6, R7, R8 and R9 above. The existing "foundry instance" in `src/foundry/paths.py`, `pruning.py`, `tests/test_paths.py` and the list and handoff tests' docstrings in `tests/test_task_command.py`. The two `create_task` / `default_branch` oddities for a HEAD on a tag, from entry 6.
+
+## 9 · reviewer · approved
+Done: review round 2 of 7dd5591, in REVIEW.md. TASK.md hasn't changed since 7bb4741 (the shared planner/architect identity). R1 is closed: making the specific insteadOf miss now fails on the missing `no-github` path, not on the network. R2 and R10 are closed. R6–R9 are deferred, with reasons that hold. R3–R5 stay accepted as is. No new findings on any axis. Checks pass at 7dd5591, and the host tier takes about 48 s.
+Next: the dev takes the PR out of draft, as `pr-ready`. For the human, at merge: R3. The `-c -> -C` mutant in session_setup is equivalent, so that half of the criterion can't be met. Suggested follow-ups: R6–R9; the existing "foundry instance" in `src/` and older test docstrings; the two `create_task` / `default_branch` oddities for a HEAD on a tag (LOG entry 6).
