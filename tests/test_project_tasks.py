@@ -52,6 +52,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_ta
     }
     notes_parent = project_repository.git("rev-parse", f"{task.NOTES_BRANCH}^")
     assert notes_parent == notes_before
+    assert project_repository.notes_signed_with_your_key()
 
 
 def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(project_repository) -> None:
@@ -64,12 +65,6 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
         ".agent/tasks/open/tst-0001/TASK.md": "# Task <id>: <title>\n",
     }
     assert project_repository.git("rev-list", "--count", task.NOTES_BRANCH) == "1"
-
-
-def test_the_tasks_notes_commit_is_signed_with_your_signing_key(project_repository) -> None:
-    create(project_repository.project_tasks())
-
-    assert project_repository.notes_signed_with_your_key()
 
 
 def test_without_a_signing_key_nothing_is_pushed(project_repository, no_signing_key) -> None:
