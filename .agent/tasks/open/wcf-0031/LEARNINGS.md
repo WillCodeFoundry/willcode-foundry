@@ -60,3 +60,5 @@
   TemporaryDirectory, gone after the command.
 - 2026-11-05 [testing] — In a throwaway clone, `uv run pytest` fails with "Failed to spawn: pytest", since `default-groups = []`. Run `uv sync --group dev` first, as CONTRIBUTING.md says.
 - 2026-11-05 [review] — A test can show that a check comes before git reads the repository without a stand-in git or a test-only seam: point the command at a project whose repository doesn't exist and assert the exact error. Its blind spot: a git call that succeeds before the check, which `ProjectClone.init` does, though harmlessly.
+- 2026-11-06 [testing] — An end-to-end test that passes an option should read where the option lands, not only
+  stdout: R25's `--note` could be dropped by `handoff_main` with every test passing. Check by breaking the wiring.

@@ -404,3 +404,7 @@ Done: R25 and R26 fixed; host tier, ruff and mypy pass on 37ee769. origin/HEAD m
   handoff. Checked: with `note=None` in `handoff_main`, the test fails.
 - Answers R26: fixed in 37ee769. The `open-and-closed` case and its id are gone.
 Next: CI on PR #46, then the reviewer's round 6, on c35deda...37ee769.
+
+## 42 · dev · ready-for-review
+Done: R25 and R26 answered (entry 41). CI passes on 37ee769 (PR #46, draft). Host tier, ruff and mypy pass.
+Next (reviewer): round 6, on c35deda...37ee769 only. R8 stays deferred.
