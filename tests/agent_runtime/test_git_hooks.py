@@ -11,7 +11,7 @@ import pytest
 
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
-from foundry.task import NOTES_BRANCH, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 from tests.support import TASK, git
 
 ENVIRON = contract.Environ(
@@ -100,7 +100,10 @@ def refusal_of(call: Callable[[], None]) -> str:
     return str(refused.value)
 
 
-@pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md"])
+@pytest.mark.parametrize(
+    "path",
+    [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md", f"{NOTES_ROOT}/PROGRESS.md"],
+)
 def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts, path: str) -> None:
     session, code, _ = checkouts
     stage(code, path)
