@@ -26,3 +26,11 @@ Done: item 2, each test checked against its named mutants (in the commit message
 - New `test_load_s_errors_name_the_config_file` (4218c68).
 - The turn test matches the known roles; fails on `known -> None` (524ea22).
 Next: item 3, starting with the end-to-end `cli.main` tests, then judge `test_prune_is_a_command` again.
+
+## 5 · dev · progress
+Done: item 3's first bullet, end-to-end tests through `cli.main`, one commit per command (each names its mutants):
+- task create, close, reopen (9f2a560); `foundry run` up to the launcher's first check, the missing SSH key (a7f5263); prune (86e327b); repo check (8c9632d).
+- The run and prune tests put stand-ins for `sbx` and `ps` on PATH. The launcher and prune both prune ssh-agents, and a real `ps` would let a test kill a developer's own.
+- Left to the sbx tier: what `run` does after the launcher's first check (ssh-agent, sandbox, attach).
+- `test_prune_is_a_command` judged again and deleted (ca99a65): the new prune test now catches `set_defaults(func=None)`.
+Next: the rest of item 3, from `git_hooks.pre_push`.
