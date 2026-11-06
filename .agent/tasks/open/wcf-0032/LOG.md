@@ -18,3 +18,11 @@ Done: item 1, each deletion hand-checked with the test deselected; the mutants a
 - Judged and deleted `test_variables_read_back_refuse_a_task_id_not_matching_the_pattern` (3db50b4): `from_env` builds the task with `Task.as_open`, so it can't build one without going through `Task`. Both mutants of Task's check fail other tests. A hand-made mutant that lowercases in `from_env` fails no other test, but is still refused by from_env's read-back check, only with another message.
 - Judged `test_prune_is_a_command`: kept for now. With it deselected, `set_defaults(func=None)` in `prune.py` fails no test; the docs test checks only the command's name. To judge again once item 3's end-to-end prune test exists.
 Next: item 2, strengthen `test_config.py` and the turn test in `test_run.py`.
+
+## 4 · dev · progress
+Done: item 2, each test checked against its named mutants (in the commit messages).
+- `test_invalid_shapes` matches each whole message (942ebf5).
+- `test_unknown_project_and_role_are_reported` runs with none, one and several names, for projects and roles (d268615).
+- New `test_load_s_errors_name_the_config_file` (4218c68).
+- The turn test matches the known roles; fails on `known -> None` (524ea22).
+Next: item 3, starting with the end-to-end `cli.main` tests, then judge `test_prune_is_a_command` again.
