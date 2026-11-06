@@ -35,8 +35,8 @@ def main(args: argparse.Namespace) -> NoReturn:
     """Composition root: find the role, prepare the launch from this foundry, say what it created, then hand over."""
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
-    project = foundry_config.project(args.project_name)
-    with ProjectTasks.in_scratch_clone(project, os.environ) as project_tasks:
+    url = foundry_config.project(args.project_name).url
+    with ProjectTasks.in_scratch_clone(url, os.environ) as project_tasks:
         task, role_name = require_open_task_and_role(
             project_tasks,
             project_name=args.project_name,

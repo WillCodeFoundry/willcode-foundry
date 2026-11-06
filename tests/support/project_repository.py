@@ -50,7 +50,7 @@ def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClon
 
 def project_tasks_of(repository_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
     """The tasks of the repository at ``repository_dir``, as the project store, through a clone of their own."""
-    return ProjectTasks(clone_in(repository_dir.parent, git_env, str(repository_dir)), "store")
+    return ProjectTasks(clone_in(repository_dir.parent, git_env, str(repository_dir)))
 
 
 class ProjectRepository:

@@ -11,7 +11,6 @@ from agent_runtime.agent_kit import AgentKit
 from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
-from foundry.config import Project
 from foundry.errors import FoundryError
 from foundry.project_tasks import ProjectTasks, TaskNotFoundError
 from foundry.session import SessionVariables
@@ -153,7 +152,7 @@ def project_tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
     git(seed, "add", ".agent")
     git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
-    with ProjectTasks.in_scratch_clone(Project("store", str(origin)), os.environ) as project_tasks:
+    with ProjectTasks.in_scratch_clone(str(origin), os.environ) as project_tasks:
         yield project_tasks
 
 
