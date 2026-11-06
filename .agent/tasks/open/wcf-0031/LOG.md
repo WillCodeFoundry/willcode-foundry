@@ -451,3 +451,10 @@ Done: the change of entry 45, in d501ddd and 69e1f5f. Host tier (752 passed), ru
 - 69e1f5f: `ProjectTasks` takes a URL again, as on main, undoing a49fc8c (entry 11), whose only reason was these
   messages. `handoff` still refuses a closed task itself.
 Next: CI on PR #46, then the reviewer: a round on 37ee769...69e1f5f only.
+
+## 47 · dev · ready-for-review
+Done: the human's post-approval change (entries 45, 46), in d501ddd and 69e1f5f, both made after round 6's
+approval. CI passes on 69e1f5f (PR #46, back in draft). Host tier, ruff and mypy pass.
+Next (reviewer): a round on 37ee769...69e1f5f only: `ProjectTasks` names no command; `suggesting_fixes` adds them
+in the command layer, and every message is as before. R8 stays deferred. The PR body's summary mentions
+`MissingTurnError` and `ProjectTasks` as before; the dev updates it at `pr-ready`.
