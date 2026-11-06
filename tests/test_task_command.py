@@ -16,12 +16,14 @@ from foundry.commands.task import (
     handoff_lines,
     listing_lines,
     read_listings_and_errors,
+    read_project_listing,
     report,
     require_valid_handoff_args,
+    suggesting_fixes,
 )
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
-from foundry.project_tasks import TaskSummary
+from foundry.project_tasks import ClosedTaskError, MissingTurnError, TaskSummary
 from foundry.task import Task
 from tests.support.project_repository import git_output
 
@@ -143,6 +145,32 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
     with pytest.raises(FoundryError, match=r"^unknown project 'nope'; known: store$"):
         chosen_projects(foundry_config, ["store", "nope"])
+
+
+@pytest.mark.parametrize(
+    "error, message",
+    [
+        (
+            ClosedTaskError(Task.as_closed("tst-0001")),
+            "task tst-0001 is closed: reopen it with `foundry task reopen store tst-0001`",
+        ),
+        (
+            MissingTurnError(Task.as_open("tst-0001")),
+            "task tst-0001 has no turn: agent-notes has no .agent/tasks/open/tst-0001/TURN, or it is empty. "
+            "Hand it off with `foundry task handoff store tst-0001 ROLE`.",
+        ),
+    ],
+    ids=["closed", "no-turn"],
+)
+def test_a_closed_task_or_one_without_a_turn_is_refused_saying_how_to_fix_it(error, message) -> None:
+    with pytest.raises(FoundryError) as refusal, suggesting_fixes("store"):
+        raise error
+    assert str(refusal.value) == message
+
+
+def test_a_listing_refuses_a_task_without_a_turn_saying_how_to_hand_it_off(project_repository, git_env) -> None:
+    with pytest.raises(FoundryError, match=r" Hand it off with `foundry task handoff store tst-0000 ROLE`\.$"):
+        read_project_listing(Project("store", str(project_repository.path)), git_env)  # tst-0000 starts without a TURN
 
 
 def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, git_env, tmp_path: Path) -> None:
@@ -301,6 +329,11 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     ]:
         assert cli.main(["task", "handoff", "gone", *arguments]) == 1
         assert capsys.readouterr() == ("", f"error: {error}\n")
+    assert cli.main(["task", "handoff", "store", "cls-0000", "dev"]) == 1
+    assert capsys.readouterr() == (
+        "",
+        "error: task cls-0000 is closed: reopen it with `foundry task reopen store cls-0000`\n",
+    )
     assert cli.main(["task", "handoff", "nope", "tst-0000", "dev"]) == 1
     assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: gone, store\n")
     assert project_repository.notes_head() == notes_before

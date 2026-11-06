@@ -10,6 +10,7 @@ from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
 from foundry.project_tasks import (
+    ClosedTaskError,
     MissingTurnError,
     ProjectTasks,
     TaskNotFoundError,
@@ -140,14 +141,13 @@ def test_a_new_task_s_turn_is_the_template_s(project_repository) -> None:
     [{}, {".agent/tasks/open/tst-0000/TURN": " \n\t"}, {".agent/tasks/open/tst-0000/TURN/dev": "dev\n"}],
     ids=["missing", "blank", "directory"],
 )
-def test_a_task_without_a_turn_says_to_hand_it_off(project_repository, files) -> None:
+def test_a_task_without_a_turn_is_refused_naming_its_turn_file(project_repository, files) -> None:
     if files:  # tst-0000 starts without a TURN
         project_repository.edit_notes(write=files)
 
     with pytest.raises(
         MissingTurnError,
-        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
-        r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
+        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.$",
     ):
         project_repository.project_tasks().read_task_turn("tst-0000")
 
@@ -376,7 +376,7 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
     "task_id, edits, message",
     [
         ("tst-0009", {}, r"^task tst-0009 doesn't exist: "),
-        ("cls-0000", {}, r"^task cls-0000 is closed: reopen it with `foundry task reopen store cls-0000`$"),
+        ("cls-0000", {}, r"^task cls-0000 is closed$"),
         (
             "tst-0000",
             # with a LOG.md, so the turn is what is refused, whatever order the checks run in
@@ -423,8 +423,9 @@ def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, 
         project_repository.edit_notes(**edits)
     notes_before = project_repository.notes_head()
 
-    with pytest.raises(FoundryError, match=message):
+    with pytest.raises(FoundryError, match=message) as refusal:
         project_repository.project_tasks().handoff(task_id, "dev", note=None)
+    assert isinstance(refusal.value, ClosedTaskError) == (task_id == "cls-0000")
     assert project_repository.notes_head() == notes_before
 
 
@@ -488,8 +489,7 @@ def test_listing_fails_on_a_task_without_a_turn(project_repository, files) -> No
 
     with pytest.raises(
         MissingTurnError,
-        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\. "
-        r"Hand it off with `foundry task handoff store tst-0000 ROLE`\.$",
+        match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.$",
     ):
         summaries_of(project_repository.project_tasks())
 

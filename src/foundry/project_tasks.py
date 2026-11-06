@@ -26,8 +26,20 @@ class TaskNotFoundError(FoundryError):
     """The task's notes dir is on neither side: it isn't open and it isn't closed."""
 
 
+class ClosedTaskError(FoundryError):
+    """The task is closed, so it can't change until it is reopened."""
+
+    def __init__(self, task: Task) -> None:
+        super().__init__(f"task {task.id} is closed")
+        self.task = task
+
+
 class MissingTurnError(FoundryError):
     """The task's TURN_FILE is missing, not a file, or holds only blanks."""
+
+    def __init__(self, task: Task) -> None:
+        super().__init__(f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty.")
+        self.task = task
 
 
 @dataclass(frozen=True)
@@ -138,16 +150,14 @@ class ProjectTasks:
         None. A task with no turn is handed off like any other. The caller checks ``turn``.
 
         FoundryError, with nothing pushed, when:
-        - get_task_by_id refuses the task id, or the task is closed;
+        - get_task_by_id refuses the task id, or the task is closed (ClosedTaskError);
         - its turn is already ``turn``;
         - it has no LOG_FILE;
         - its TURN_FILE or LOG_FILE is a link, as ProjectClone.write refuses.
         """
         task = self.get_task_by_id(task_id)
         if task.status is Status.CLOSED:
-            raise FoundryError(
-                f"task {task.id} is closed: reopen it with `foundry task reopen {self._project_name} {task.id}`"
-            )
+            raise ClosedTaskError(task)
         with suppress(MissingTurnError):
             if self._read_fetched_turn(task) == turn:
                 raise FoundryError(f"task {task.id}'s turn is already {turn}")
@@ -178,18 +188,14 @@ class ProjectTasks:
     def _read_fetched_turn(self, task: Task) -> str:
         """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
 
-        MissingTurnError, saying how to hand the task off, when the file is missing, not a file, or holds only
-        blanks.
+        MissingTurnError when the file is missing, not a file, or holds only blanks.
         """
         try:
             turn = self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
         except NotOnBranchError:
             turn = ""
         if not turn:
-            raise MissingTurnError(
-                f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty. "
-                f"Hand it off with `foundry task handoff {self._project_name} {task.id} ROLE`."
-            )
+            raise MissingTurnError(task)
         return turn
 
     def _read_fetched_log(self, task: Task) -> str:

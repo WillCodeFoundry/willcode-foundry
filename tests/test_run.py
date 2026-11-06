@@ -140,14 +140,16 @@ def test_run_takes_an_optional_role_between_the_project_and_the_task(argv: list[
 
 @pytest.fixture
 def project_tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
-    """The tasks of a repository whose agent-notes holds open tst-0001, whose turn is the reviewer's, and closed
-    tst-0002."""
+    """The tasks of a repository whose agent-notes holds open tst-0001, whose turn is the reviewer's, closed
+    tst-0002, and open tst-0003, which has no turn."""
     seed = tmp_path / "seed"
     git(seed, "switch", "-q", "--orphan", NOTES_BRANCH)
     for a_task in (Task.as_open("tst-0001"), Task.as_closed("tst-0002")):
         (seed / a_task.task_notes_dir).mkdir(parents=True)
         (seed / a_task.task_file).write_text("# Task\n")
         (seed / a_task.turn_file).write_text("reviewer\n")
+    (seed / Task.as_open("tst-0003").task_notes_dir).mkdir(parents=True)
+    (seed / Task.as_open("tst-0003").task_file).write_text("# Task\n")
     git(seed, "add", ".agent")
     git(seed, "commit", "-qm", "notes")
     git(seed, "push", "-q", "origin", NOTES_BRANCH)
@@ -171,6 +173,13 @@ def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: Project
     ):
         require_open_task_and_role(
             project_tasks, project_name="tkt-store", task_id="tst-0002", role_name=role_name, roles=ROLES
+        )
+
+
+def test_a_task_without_a_turn_is_refused_saying_how_to_hand_it_off(project_tasks: ProjectTasks) -> None:
+    with pytest.raises(FoundryError, match=r" Hand it off with `foundry task handoff tkt-store tst-0003 ROLE`\.$"):
+        require_open_task_and_role(
+            project_tasks, project_name="tkt-store", task_id="tst-0003", role_name=None, roles=ROLES
         )
 
 
