@@ -47,13 +47,23 @@ def test_parse_minimal(tmp_path: Path) -> None:
     assert cfg.role("qa").name == "qa"
 
 
-def test_unknown_project_and_role_are_reported(tmp_path: Path) -> None:
-    give_kit_roles(tmp_path, "dev")
-    cfg = config.parse({"name": "x", "projects": {}, "roles": {"dev": {}}}, foundry_root=tmp_path)
-    with pytest.raises(FoundryError, match="unknown project 'p'"):
+@pytest.mark.parametrize(
+    ("names", "known"), [([], "none"), (["dev"], "dev"), (["qa", "dev"], "dev, qa")], ids=["none", "one", "several"]
+)
+def test_unknown_project_and_role_are_reported(tmp_path: Path, names: list[str], known: str) -> None:
+    give_kit_roles(tmp_path, *names)
+    cfg = config.parse(
+        {
+            "name": "x",
+            "projects": {name: {"url": f"git@h:o/{name}.git"} for name in names},
+            "roles": {name: {} for name in names},
+        },
+        foundry_root=tmp_path,
+    )
+    with pytest.raises(FoundryError, match=f"^unknown project 'p'; known: {known}$"):
         cfg.project("p")
-    with pytest.raises(FoundryError, match="unknown role 'qa'; known: dev"):
-        cfg.role("qa")
+    with pytest.raises(FoundryError, match=f"^unknown role 'tester'; known: {known}$"):
+        cfg.role("tester")
 
 
 def test_a_role_without_a_model_runs_on_the_default(tmp_path: Path) -> None:
