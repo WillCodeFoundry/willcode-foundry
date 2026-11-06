@@ -373,29 +373,33 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
 
 
 @pytest.mark.parametrize(
-    "task_id, edits, message",
+    "task_id, edits, error, message",
     [
-        ("tst-0009", {}, r"^task tst-0009 doesn't exist: "),
-        ("cls-0000", {}, r"^task cls-0000 is closed$"),
+        ("tst-0009", {}, TaskNotFoundError, r"^task tst-0009 doesn't exist: "),
+        ("cls-0000", {}, ClosedTaskError, r"^task cls-0000 is closed$"),
         (
             "tst-0000",
             # with a LOG.md, so the turn is what is refused, whatever order the checks run in
             {"write": {".agent/tasks/open/tst-0000/TURN": "dev\n", ".agent/tasks/open/tst-0000/LOG.md": LOG}},
+            FoundryError,
             r"^task tst-0000's turn is already dev$",
         ),
         (
             "tst-0000",
             {},
+            FoundryError,
             r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
         ),
         (
             "tst-0000",
             {"write": {".agent/tasks/open/tst-0000/LOG.md/x": "x\n"}},
+            FoundryError,
             r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$",
         ),
         (
             "tst-0000",
             {"write": {".agent/LOG.md": LOG}, "symlink": {".agent/tasks/open/tst-0000/LOG.md": "../../../LOG.md"}},
+            FoundryError,
             r"^\.agent/tasks/open/tst-0000/LOG\.md is a link: foundry writes only files$",
         ),
         (
@@ -405,6 +409,7 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
                 "write": {".agent/TURN": "human\n", ".agent/tasks/open/tst-0000/LOG.md": LOG},
                 "symlink": {".agent/tasks/open/tst-0000/TURN": "../../../TURN"},
             },
+            FoundryError,
             r"^\.agent/tasks/open/tst-0000/TURN is a link: foundry writes only files$",
         ),
     ],
@@ -418,14 +423,14 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
         "turn-is-a-link",
     ],
 )
-def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, message) -> None:
+def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, error, message) -> None:
     if edits:
         project_repository.edit_notes(**edits)
     notes_before = project_repository.notes_head()
 
-    with pytest.raises(FoundryError, match=message) as raised:
+    with pytest.raises(error, match=message) as raised:
         project_repository.project_tasks().handoff(task_id, "dev", note=None)
-    assert isinstance(raised.value, ClosedTaskError) == (task_id == "cls-0000")
+    assert type(raised.value) is error
     assert project_repository.notes_head() == notes_before
 
 
