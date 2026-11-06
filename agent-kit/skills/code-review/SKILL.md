@@ -66,7 +66,7 @@ When the task has a `DESIGN.md`, the architect's design agreed with the human, i
 
 In this order: the project's own `AGENTS.md` at the repository root first, since it wins for anything about the code (as `AGENTS.md` in the agent kit says); then the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`; then `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Each counts only if present. Where they disagree, the earlier one wins.
 
-The project's `GLOSSARY.md` is a standard for names, if present (or the glossaries a `GLOSSARY-MAP.md` points to). Names are judged on the Names axis alone, by the `python-naming` skill, which takes the glossary's words first.
+The project's `GLOSSARY.md` is a standard for names, if present (or the glossaries a `GLOSSARY-MAP.md` points to). Names are judged on the Names axis alone, by the `python-naming-smells` skill, which takes the glossary's words first.
 
 A change that contradicts a recorded decision is a finding, even if the code is good: the decision changes only through a new ADR that supersedes it, not silently.
 
@@ -102,7 +102,7 @@ Every brief also carries these rules, word for word:
 
 - "Cite each finding as `file:line` at `HEAD`, read from that one file (`git show HEAD:<path> | cat -n`). Never take line numbers from a listing of several files joined together, since every number after the first file is shifted."
 - "Say what is wrong, where, and why it matters. Give the fix as one line of direction at most, never code. The dev fixes each finding test-first, and a ready-made fix skips the failing test."
-- "Label each finding Blocking, Follow-up or Design question, by your axis's bar below and the design-question test after it. Everything that misses the bar is a Follow-up, except on the Names axis, which follows the python-naming skill's bar."
+- "Label each finding Blocking, Follow-up or Design question, by your axis's bar below and the design-question test after it. Everything that misses the bar is a Follow-up, except on the Names axis, where a name that misses its bar isn't reported."
 - "Say who would hit each finding, doing what, and how often. Drop a finding nobody realistic would hit."
 - "Direct the smallest fix. 'Accept as is' is a valid direction. If the only fix you see adds machinery, or instructions that script a recovery, label it a Design question: that is for the architect and the human, not a fix."
 - "Report at most five findings, most important first. Fewer, or none, is a good result."
@@ -114,7 +114,7 @@ The bar for Blocking, each brief carrying its own axis's:
 - **Spec, partial:** a requirement the change doesn't show met, by the code and the test or check that shows it, is Blocking too.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
 - **Smells:** the diff introduces the smell, or makes worse one the code already had, and its fix is local: one or two functions, with no change to an interface `DESIGN.md` decides. A smell the diff only touches is a Follow-up.
-- **Names:** the `python-naming` skill's "Reviewing names" bar. A name that misses it isn't reported.
+- **Names:** the name misleads at a use, by the `python-naming-smells` skill's "Smells at the uses"; or it breaks a word the project already agrees on, by its "Smells against the project's words"; or it renames an existing interface name that neither `TASK.md` nor `DESIGN.md` calls for. A prose word that only reads poorly, or a name that passes but could be better, isn't reported.
 
 Any axis's finding is a **Design question** instead when its fix isn't a fix the dev can make alone:
 
@@ -153,10 +153,10 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Names sub-agent prompt** should include:
 
 - The diff command, the commit list and the fixed point.
-- The `python-naming` skill's body, pasted in full: call the Skill tool with "python-naming" (the sub-agent has no other access to it).
+- The `python-naming-smells` skill's body, pasted in full: call the Skill tool with "python-naming-smells" (the sub-agent has no other access to it).
 - The text of the task's `NAMES.md` from the notes checkout, when the dev wrote one: the naming decisions behind the names.
 - The text of `DESIGN.md` when the task has one, and whether this is the first round since it was written or changed.
-- The brief: "Judge names as the python-naming skill's 'Reviewing names' says, and only by its bar. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Under 400 words."
+- The brief: "Judge names by the python-naming-smells skill's smells, and report only by the Names bar. Where a `NAMES.md` row says a word was turned down, check its reason before suggesting that word. In the first round after `DESIGN.md` is written or changed, also check the names that version adds or changes. A poor name the diff leaves as it was isn't reported, and a missing or thin `NAMES.md` row isn't a finding: judge the name itself. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Smells in prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour and Smells sub-agents and say so. Never skip the Names sub-agent: prose has names too.
 
