@@ -4,15 +4,14 @@ whose turn each is."""
 import argparse
 import os
 import sys
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
 from agent_runtime.git import GitError
 from foundry import config, paths, task
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
-from foundry.project_tasks import ClosedTaskError, MissingTurnError, ProjectTasks, TaskSummary
+from foundry.project_tasks import ProjectTasks, TaskSummary
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -111,7 +110,7 @@ def handoff_main(args: argparse.Namespace) -> int:
     foundry_config = config.load(paths.find_foundry_root())
     project = foundry_config.project(args.project_name)
     require_valid_handoff_args(foundry_config, task_id=args.task_id, turn=args.turn, note=args.note)
-    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks, suggesting_fixes(project.name):
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
         project_tasks.handoff(args.task_id, args.turn, note=args.note)
     print("\n".join(handoff_lines(project.name, args.task_id, turn=args.turn)))
     return 0
@@ -146,20 +145,6 @@ def report(outcome: Outcome, project_name: str, changed: task.Task) -> list[str]
         f"{outcome.past_tense} task {changed.id} in {project_name}",
         f"{outcome.next_command} {project_name} {changed.id}",
     ]
-
-
-@contextmanager
-def suggesting_fixes(project_name: str) -> Iterator[None]:
-    """Re-raise a ClosedTaskError or MissingTurnError from the block as a FoundryError that ends with the command
-    that fixes it, in ``project_name``. ProjectTasks says what is wrong; the commands say what to run."""
-    try:
-        yield
-    except ClosedTaskError as error:
-        raise FoundryError(f"{error}: reopen it with `foundry task reopen {project_name} {error.task.id}`") from error
-    except MissingTurnError as error:
-        raise FoundryError(
-            f"{error} Hand it off with `foundry task handoff {project_name} {error.task.id} ROLE`."
-        ) from error
 
 
 def require_valid_handoff_args(foundry_config: Config, *, task_id: str, turn: str, note: str | None) -> None:
@@ -204,7 +189,7 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
 
     ``env`` is the environment git runs in, as for ProjectClone.
     """
-    with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks, suggesting_fixes(project.name):
+    with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
         return ProjectListing(project.name, project_tasks.list_open_task_summaries())
 
 

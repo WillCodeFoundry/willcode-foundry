@@ -9,9 +9,8 @@ from pathlib import Path
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths, session
-from foundry.commands.task import suggesting_fixes
 from foundry.errors import FoundryError
-from foundry.project_tasks import ClosedTaskError, ProjectTasks
+from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, Status, Task
 
@@ -55,17 +54,15 @@ def require_open_task_and_role(
 ) -> tuple[Task, str]:
     """The open task, and the role to launch on it: ``role_name``, or the turn's when it is None.
 
-    FoundryError, before any sandbox is made, when the task doesn't exist, or is closed or has no turn (saying how
-    to fix it, as suggesting_fixes does).
+    FoundryError, before any sandbox is made, when the task doesn't exist, is closed (saying how to reopen it), or
+    has no turn.
     """
-    with suggesting_fixes(project_name):
-        task = project_tasks.get_task_by_id(task_id)
-        if task.status is Status.CLOSED:
-            raise ClosedTaskError(task)
-        if role_name is None:
-            turn = project_tasks.read_task_turn(task.id)
-            role_name = role_for_turn(turn, roles, project_name=project_name, task=task)
-            print(f"==> turn:      {role_name}", file=sys.stderr)
+    task = project_tasks.get_task_by_id(task_id)
+    if task.status is Status.CLOSED:
+        raise FoundryError(f"task {task.id} is closed: reopen it with `foundry task reopen {project_name} {task.id}`")
+    if role_name is None:
+        role_name = role_for_turn(project_tasks.read_task_turn(task.id), roles, project_name=project_name, task=task)
+        print(f"==> turn:      {role_name}", file=sys.stderr)
     return task, role_name
 
 

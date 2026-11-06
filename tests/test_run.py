@@ -12,7 +12,7 @@ from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
 from foundry.errors import FoundryError
-from foundry.project_tasks import ProjectTasks, TaskNotFoundError
+from foundry.project_tasks import MissingTurnError, ProjectTasks, TaskNotFoundError
 from foundry.session import SessionVariables
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
@@ -175,8 +175,11 @@ def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: Project
         )
 
 
-def test_a_task_without_a_turn_is_refused_saying_how_to_hand_it_off(project_tasks: ProjectTasks) -> None:
-    with pytest.raises(FoundryError, match=r" Hand it off with `foundry task handoff tkt-store tst-0003 ROLE`\.$"):
+def test_a_task_without_a_turn_is_refused(project_tasks: ProjectTasks) -> None:
+    with pytest.raises(
+        MissingTurnError,
+        match=r"^task tst-0003 has no turn: agent-notes has no \.agent/tasks/open/tst-0003/TURN, or it is empty\.$",
+    ):
         require_open_task_and_role(
             project_tasks, project_name="tkt-store", task_id="tst-0003", role_name=None, roles=ROLES
         )
