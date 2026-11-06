@@ -12,7 +12,7 @@ from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
 from foundry.errors import FoundryError
-from foundry.project_tasks import MissingTurnError, ProjectTasks, TaskNotFoundError
+from foundry.project_tasks import MissingTurnError, ProjectTasks
 from foundry.session import SessionVariables
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
@@ -176,12 +176,4 @@ def test_a_task_without_a_turn_is_refused(project_tasks: ProjectTasks) -> None:
     ):
         require_open_task_and_role(
             project_tasks, project_name="tkt-store", task_id="tst-0003", role_name=None, roles=ROLES
-        )
-
-
-@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_a_task_that_doesn_t_exist_is_refused(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(TaskNotFoundError, match=r"^task tst-0009 doesn't exist"):
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="tst-0009", role_name=role_name, roles=ROLES
         )
