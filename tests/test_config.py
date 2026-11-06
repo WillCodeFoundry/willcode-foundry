@@ -1,5 +1,6 @@
 """config/foundry.yaml: its shape through parse, and each role's files through load, under tmp_path."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,14 @@ def test_role_options_must_be_a_mapping(tmp_path: Path) -> None:
 def test_invalid_shapes(tmp_path: Path, raw: object, message: str) -> None:
     with pytest.raises(FoundryError, match=message):
         config.parse(raw, foundry_root=tmp_path)
+
+
+def test_load_s_errors_name_the_config_file(foundry_root: Path) -> None:
+    config_path = foundry_root / "config" / "foundry.yaml"
+    config_path.write_text("name: ''\n")
+
+    with pytest.raises(FoundryError, match=f"^{re.escape(str(config_path))}: 'name' is required$"):
+        config.load(foundry_root)
 
 
 # --- a role's files ------------------------------------------------------------------
