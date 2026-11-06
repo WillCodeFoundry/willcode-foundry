@@ -63,6 +63,47 @@ def test_close_and_reopen_take_a_project_and_a_task(action: str) -> None:
     assert (args.project_name, args.task_id) == ("store", "tst-0001")
 
 
+def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accordingly(
+    project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real commands, in a foundry instance of its own: each one's output and exit code, for a change and for
+    a refusal."""
+    foundry_root = tmp_path / "foundry"
+    (foundry_root / "config" / "task-template").mkdir(parents=True)
+    (foundry_root / "config" / "task-template" / "TASK.md").write_text("# Task\n")
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\nroles: {{}}\n"
+    )
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+
+    assert cli.main(["task", "create", "store", "tst-0001"]) == 0
+    assert capsys.readouterr() == (
+        "created task tst-0001 in store\nrun it with: foundry run store tst-0001\n",
+        "",
+    )
+    assert cli.main(["task", "close", "store", "tst-0001"]) == 0
+    assert capsys.readouterr() == (
+        "closed task tst-0001 in store\nreopen it with: foundry task reopen store tst-0001\n",
+        "",
+    )
+    assert cli.main(["task", "reopen", "store", "tst-0001"]) == 0
+    assert capsys.readouterr() == (
+        "reopened task tst-0001 in store\nrun it with: foundry run store tst-0001\n",
+        "",
+    )
+    assert project_repository.notes_files()[".agent/tasks/open/tst-0001/TASK.md"] == "# Task\n"
+
+    for action, task_id, error in [
+        ("create", "tst-0001", "task tst-0001 already exists: agent-notes has .agent/tasks/open/tst-0001/"),
+        ("close", "cls-0000", "task cls-0000 is already closed"),
+        ("reopen", "tst-0000", "task tst-0000 is already open"),
+    ]:
+        assert cli.main(["task", action, "store", task_id]) == 1
+        assert capsys.readouterr() == ("", f"error: {error}\n")
+
+
 # --- foundry task list: the lines and the arguments -----------------------------------------
 
 
