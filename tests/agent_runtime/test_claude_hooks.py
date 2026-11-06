@@ -161,6 +161,17 @@ def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(ch
     assert f"code checkout has commits not pushed to origin/{TASK.branch}" in block_reason(session)
 
 
+def test_commits_origin_has_but_the_checkout_hasn_t_fetched_count_as_pushed(checkouts: Checkouts) -> None:
+    """Pushed to origin's URL rather than to the remote, so origin/<branch> in the checkout stays behind: the
+    check fetches it before comparing."""
+    session, code, _ = checkouts
+    commit(code, "work.txt", "feat: work")
+    origin_url = git(code, "remote", "get-url", "origin").stdout.strip()
+    git(code, "-c", "core.hooksPath=/dev/null", "push", "-q", origin_url, f"HEAD:refs/heads/{TASK.branch}")
+
+    assert stop(session) == ""
+
+
 def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts) -> None:
     """git failing is no evidence that nothing is unsaved."""
     session, code, _ = checkouts
