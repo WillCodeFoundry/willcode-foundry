@@ -288,6 +288,7 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
         "",
     )
     assert project_repository.notes_commits()[0] == "Handoff of task tst-0000 to dev"
+    assert project_repository.notes_files()[".agent/tasks/open/tst-0000/LOG.md"].endswith("\nNote: go\n")
 
     notes_before = project_repository.notes_head()
     for arguments, error in [
