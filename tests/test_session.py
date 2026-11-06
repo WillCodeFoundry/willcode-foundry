@@ -159,6 +159,16 @@ def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_
     assert not (session_dir / SandboxDefinition.FILE_NAME).exists()
 
 
+def test_a_file_where_the_session_directory_goes_is_refused(tmp_path: Path) -> None:
+    session_path = tmp_path / "sessions" / "dev-tkt-store-wcf-0042"
+    session_path.parent.mkdir()
+    session_path.write_text("x")
+
+    with pytest.raises(FoundryError, match="holds more than an empty workspace"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
+    assert session_path.read_text() == "x"
+
+
 # --- session variables ---------------------------------------------------------
 
 
