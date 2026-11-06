@@ -79,6 +79,18 @@ The projects are in Python. Leave case and builtin shadowing to the linter: ruff
 - An exception is named for what happened, in the glossary's words when it has one.
 - A dict is named for its key and value: `task_by_id`, not `tasks` or `lookup`.
 
+## Names that fail on sight
+
+These shapes fail "The test" often enough to spot without reading the uses. Each row says which part of the test it fails.
+
+| Smell | Bad | Better | Fails because |
+|---|---|---|---|
+| History in the name | `parse_order_v2`, `new_total`, `legacy_client` | `parse_order`, `total_with_tax`, `courier_client` | It says when the thing was written, not what it is. Rename or remove the old one instead. |
+| Numbered siblings | `order1`, `order2` | `original`, `amended` | Only the definition says which is which. |
+| A quantity without its unit | `timeout = 30`, `max_size` | `timeout_seconds = 30`, `max_size_bytes` | Only the definition says seconds or milliseconds. |
+| A negative boolean | `not_shipped`, `disable_retry=False` | `shipped`, `retry=True` | Its negation reads backwards: `if not not_shipped`. |
+| The type in the name | `order_dict`, `sku_list` | `order_by_id`, `skus` | It names the type instead of what the value is. |
+
 ## Interface names
 
 People and agents type interface names, and scripts and instructions name them. Renaming one that exists breaks them. Rename one only when `TASK.md` or `DESIGN.md` says to. Otherwise ask the planner, as "When to stop and ask" in `AGENTS.md` says, since the rename is outside the task's scope. A new one is checked like any other name.
