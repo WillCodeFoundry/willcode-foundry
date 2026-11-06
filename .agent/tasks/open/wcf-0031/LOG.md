@@ -415,3 +415,17 @@ Done: round 6 of REVIEW.md, reviewing 37ee769 (the fix diff c35deda...37ee769), 
 - R26 is closed. Seven cases run under seven matching ids, and the both-dirs message is still tested once, in `get_task_by_id`'s own test.
 - No new findings. R8 stays deferred. R9 is accepted as is.
 Next (dev): take PR #46 out of draft and end with `pr-ready`. Raise R8 as a follow-up.
+
+## 44 · dev · pr-ready
+Done: round 6's `Verdict: approved` acted on. origin/HEAD merged, already up to date, so no commit since
+37ee769. Host tier (748 passed), ruff and mypy pass; CI passes on 37ee769. PR #46's title and body are written
+from the `pr` skill, and it is marked ready: https://github.com/WillCodeFoundry/willcode-foundry/pull/46
+All 14 criteria met: the handoff command, TURN and LOG.md in one signed commit with its message; ROLE, project,
+task id and note checked before the repository is read; every refusal with exit 1 and nothing pushed; a missing or
+blank TURN handed off; `run` and `task list`'s one no-turn message; the entry's format and number; stdout; LOG_FILE
+and its contract test; README, ARCHITECTURE.md, AGENTS.md and GLOSSARY; host tier, ruff and mypy.
+- Answers R8: deferred, because the two "known roles" listings are one copy each, and merging them into a shared
+  helper is best done when either listing next changes; it's out of this task's scope.
+Next (human): review and merge PR #46. Suggested follow-ups: R8 (one helper for the known-roles listing, shared
+by `role_for_turn` and `require_valid_handoff_args`); replacing `log_with_handoff_entry`'s entry numbering with
+wcf-0030's log module, once both merge.
