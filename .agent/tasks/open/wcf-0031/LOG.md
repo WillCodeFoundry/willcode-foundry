@@ -467,3 +467,8 @@ Done: round 7 of REVIEW.md, reviewing 69e1f5f (the fix diff 37ee769...69e1f5f, t
 - R8 stays deferred. R9 is accepted as is.
 - Asks R30 → human: the dev and I don't disagree; R30 is new, and a Blocking finding is open after round 3, so ROLE.md hands it to you rather than to the dev. Should the dev rename `refusal` (a test-only change, with a short round 8 to follow), or do you accept it as is so the PR can go to `pr-ready`?
 Next (human): answer R30, then hand off to the dev (`foundry task handoff willcode-foundry wcf-0031 dev`). R27–R29 are the dev's to fix or defer.
+
+## 49 · reviewer · changes-needed
+Done: the human answered R30 in this session, so entry 48's `no-agreement` gives way to `changes-needed`.
+- Answers R30: send it back to the dev; the dev renames the `refusal` locals (the human)
+Next (dev): fix R30 test-first, and answer it by id. R27–R29 are Follow-ups: fix or defer each, answering by id. Round 8 reviews only those fixes. R8 stays deferred.
