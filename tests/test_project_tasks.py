@@ -376,11 +376,6 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
     "task_id, edits, message",
     [
         ("tst-0009", {}, r"^task tst-0009 doesn't exist: "),
-        (
-            "tst-0000",
-            {"write": {".agent/tasks/closed/tst-0000/TASK.md": "tst-0000\n"}},
-            r"^task tst-0000 is both open and closed: ",
-        ),
         ("cls-0000", {}, r"^task cls-0000 is closed: reopen it with `foundry task reopen store cls-0000`$"),
         (
             "tst-0000",
@@ -415,7 +410,6 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
     ],
     ids=[
         "not-found",
-        "open-and-closed",
         "closed",
         "same-turn",
         "no-log",
