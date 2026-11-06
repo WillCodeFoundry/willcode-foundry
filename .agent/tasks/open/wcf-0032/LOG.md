@@ -92,3 +92,9 @@ Next (suggested follow-ups): R6, R7, R8 and R9 above. The existing "foundry inst
 ## 9 · reviewer · approved
 Done: review round 2 of 7dd5591, in REVIEW.md. TASK.md hasn't changed since 7bb4741 (the shared planner/architect identity). R1 is closed: making the specific insteadOf miss now fails on the missing `no-github` path, not on the network. R2 and R10 are closed. R6–R9 are deferred, with reasons that hold. R3–R5 stay accepted as is. No new findings on any axis. Checks pass at 7dd5591, and the host tier takes about 48 s.
 Next: the dev takes the PR out of draft, as `pr-ready`. For the human, at merge: R3. The `-c -> -C` mutant in session_setup is equivalent, so that half of the criterion can't be met. Suggested follow-ups: R6–R9; the existing "foundry instance" in `src/` and older test docstrings; the two `create_task` / `default_branch` oddities for a HEAD on a tag (LOG entry 6).
+
+## 10 · dev · pr-ready
+Done: merged main (already up to date at 7dd5591). Host tier, ruff, ruff format and mypy pass; CI passes at 7dd5591. Wrote the PR title and body with the `pr` skill and marked https://github.com/WillCodeFoundry/willcode-foundry/pull/50 ready. No commits after the approval.
+- Follow-ups R6–R9 were answered as deferred in entry 8; R3–R5 accepted as is.
+- For the human, at merge: R3. The `-c -> -C` mutant in session_setup is equivalent, so that half of its criterion can't be met; the PR body says so.
+Next (suggested follow-ups): R6–R9; "foundry instance" in `src/foundry/paths.py`, `src/foundry/agent_sandbox/pruning.py` and older docstrings in `tests/test_task_command.py`; the `create_task` / `default_branch` oddities for a HEAD on a tag (entry 6).
