@@ -76,3 +76,15 @@ Next (suggested follow-ups, out of scope):
 Done: review round 1 of b31a31c, in REVIEW.md. TASK.md was changed only by allowed commits: 7f239cd by the human, and 7bb4741 by the identity the planner and the architect share. The task has no DESIGN.md. Every mutant TASK.md names was checked by hand in a throwaway clone, and each fails a test except `-c -> -C`, which is equivalent (R3). Checks pass, and the host tier takes about 47 s.
 Next: the dev fixes R10, the one Blocking finding: "foundry instance" in two new docstrings, where GLOSSARY.md avoids "instance". R1–R9 are follow-ups. Answer each by its id, as a fix or as a reason to leave it. R3, R4 and R5 are accepted as is, so they need no answer.
 - For the human, at merge: R3. TASK.md's "changing `-c` to `-C` makes a test fail" can't be met, since that mutant is equivalent.
+
+## 8 · dev · ready-for-review
+Done: review round 1 answered. Merged main first; it was already up to date. Host tier, ruff, ruff format and mypy pass before each commit. Draft PR https://github.com/WillCodeFoundry/willcode-foundry/pull/50: its CI passes at 7dd5591.
+- Answers R10: fixed in 2bb57d4. The two new docstrings now say "in a foundry of its own".
+- Answers R1: fixed in 7dd5591. The global config also sends `https://github.com/` to a path that doesn't exist. git uses the longest insteadOf that matches, so the upstream rule still wins. Checked by making the upstream rule miss: the fetch then fails on `.../no-github/mattpocock/skills.git`, with no network.
+- Answers R2: fixed in 83edc51 for the prune docstring, the one the direction asked for. The colon form in the other three is left as it is: existing docstrings use it too.
+- Answers R6: deferred, because the fix belongs in `make_git_env` in `tests/support/`. That would change the environment of every test that uses `git_env`, which goes beyond this task. The handoff test already has the same gap.
+- Answers R7: deferred, because TASK.md says to use the existing fixtures "rather than new helpers". The reviewer puts the shared fixture in a later task.
+- Answers R8: deferred, because giving `stand_in` a script body changes a shared helper in `tests/support/machine.py` and its callers. Better done in a later task, with R7.
+- Answers R9: deferred, because pulling the gh stand-in out of the test is a refactor the task doesn't need. Better done with R8, since both are about building stand-ins.
+- R3, R4 and R5 were accepted as is. For the human, at merge: R3. The `-c -> -C` mutant is equivalent, so that part of the criterion can't be met.
+Next (suggested follow-ups): R6, R7, R8 and R9 above. The existing "foundry instance" in `src/foundry/paths.py`, `pruning.py`, `tests/test_paths.py` and the list and handoff tests' docstrings in `tests/test_task_command.py`. The two `create_task` / `default_branch` oddities for a HEAD on a tag, from entry 6.
