@@ -1,4 +1,4 @@
-"""foundry prune: its report, that the command exists, and end to end through cli.main."""
+"""foundry prune: its report, and end to end through cli.main."""
 
 import os
 import subprocess
@@ -20,11 +20,6 @@ def test_each_killed_ssh_agent_is_reported() -> None:
 
 def test_nothing_to_prune_says_so() -> None:
     assert report(Pruned(ssh_agents=[])) == ["nothing to prune"]
-
-
-def test_prune_is_a_command() -> None:
-    args = cli.build_parser().parse_args(["prune"])
-    assert args.func.__module__ == "foundry.commands.prune"
 
 
 def test_prune_prints_what_it_killed_or_an_error_and_exits_accordingly(
