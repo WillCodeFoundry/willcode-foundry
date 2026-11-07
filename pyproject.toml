@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["pyyaml>=6"]
 
 [dependency-groups]
-dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML"]
+dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML", "vulture>=2.14", "pylint>=3.3", "shellcheck-py>=0.10"]
 
 [tool.uv]
 default-groups = []
@@ -38,10 +38,44 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "RUF", "PLW", "TID252", "N", "A"]
-ignore = [
-    "N818",  # an exception is named for what happened, such as a refusal, not always an error
+select = [
+    "E", "F", "W", "I", "UP", "B", "RUF", "PLW", "TID252", "N", "A",
+    # Smells a tool can see. Each catches something that has had to be undone in real code.
+    "ARG",                                    # parameters nobody reads
+    "BLE", "S110", "S112",                    # blanket except, and except that passes or continues (design rule 6)
+    "TRY002", "TRY201", "TRY203", "TRY300", "TRY301", "TRY400",  # raising, re-raising and logging exceptions
+    "S101",                                   # assert in production code, which -O removes
+    "C90", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917",  # functions that every change grows
+    "FBT",                                    # boolean flags that pick a behaviour
+    "SLF",                                    # reaching into another object's private members
+    "T20",                                    # print outside the entry points (design rule 6)
+    "ERA",                                    # commented-out code
+    "PGH",                                    # blanket type: ignore and noqa
+    "ASYNC",                                  # blocking calls in async code
+    "S113", "S301", "S307", "S324", "S501", "S506",  # unsafe calls: no timeout, pickle, eval, weak hashes, no TLS check, yaml.load
+    "PT011", "PT012", "PT015", "PT017", "PT027",  # pytest.raises too broad or too wide, asserts that can't fail
+    "SIM", "RET", "PIE", "C4",                # simpler forms of the same code
+    "TID251",                                 # banned APIs, below
 ]
+ignore = [
+    "N818",    # an exception is named for what happened, such as a refusal, not always an error
+    "ARG005",  # a lambda passed as a callback takes the arguments its caller passes
+    "SIM300",  # flags tests that compare a module constant with its expected value
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test functions take fixtures for their effect, and fakes take the arguments the protocol they stand in for does.
+"tests/**" = ["ARG", "FBT", "S101", "PLR0913", "PLR0917"]
+# The entry points: the only modules that print (design rule 6).
+"src/foundry/cli.py" = ["T20"]
+"src/foundry/commands/*" = ["T20"]
+"src/foundry/agent_sandbox/launcher.py" = ["T20"]
+"src/agent_runtime/__main__.py" = ["T20", "E402"]  # E402: its imports follow the version check
+"src/agent_runtime/session_init.py" = ["T20"]
+"src/agent_runtime/session_setup.py" = ["T20"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock".msg = "Tests never patch: fake the outside system instead, as design rule 3 in ARCHITECTURE.md says."
 
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["input"]   # git.py and tests/support take input= as subprocess.run does
@@ -52,6 +86,18 @@ ban-relative-imports = "all"   # the default, "parents", would still allow `from
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+warn_unreachable = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "truthy-iterable",
+    "possibly-undefined",
+    "unused-awaitable",
+    "redundant-self",
+    "mutable-override",
+    "exhaustive-match",
+]
 
 [[tool.mypy.overrides]]
 # Test functions take fixtures as parameters; annotating each would mean
@@ -66,3 +112,17 @@ check_untyped_defs = true
 # The test doubles themselves stay fully typed.
 module = ["tests.agent_sandbox.conftest"]
 disallow_untyped_defs = true
+
+[tool.vulture]
+# Unused code across the package: functions, classes, attributes and parameters nothing reads.
+paths = ["src"]
+min_confidence = 60
+ignore_names = ["external_attr"]  # runtime_build.py sets it on a ZipInfo, which zipfile reads
+
+[tool.pylint.main]
+# Only the duplicate-code check runs (CONTRIBUTING.md); ruff covers the rest.
+disable = ["all"]
+enable = ["duplicate-code"]
+
+[tool.pylint.similarities]
+min-similarity-lines = 5

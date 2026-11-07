@@ -1,0 +1,49 @@
+# Opt-in git hooks for working on the foundry on your own machine: `uvx pre-commit install`.
+# Ruff runs before each commit; the slower checks and the host tier before each push.
+# Sandboxed agents use agent-kit/hooks instead, so none of this runs there.
+default_install_hook_types: [pre-commit, pre-push]
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+        stages: [pre-commit]
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+        stages: [pre-commit]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: vulture
+        name: vulture
+        entry: uv run vulture
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: pylint-duplicate-code
+        name: pylint duplicate code
+        entry: uv run pylint src
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: shellcheck
+        name: shellcheck the hook stubs
+        entry: uv run shellcheck
+        language: system
+        files: ^agent-kit/hooks/
+        stages: [pre-push]
+      - id: pytest
+        name: pytest, host tier
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

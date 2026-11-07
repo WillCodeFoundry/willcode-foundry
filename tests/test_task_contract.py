@@ -12,10 +12,10 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from agent_runtime import contract
+from agent_runtime import contract, git_hooks
 from foundry import yaml_io
 from foundry.session import SessionVariables
-from foundry.task import HUMAN, NOTES_BRANCH, NOTES_ROOT, TURN_FILE, Task
+from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, NOTES_ROOT, TURN_FILE, Task
 
 REPO_ROOT = Path(__file__).parents[1]
 AGENT_KIT = REPO_ROOT / "agent-kit"
@@ -131,3 +131,8 @@ def test_agents_md_spells_the_turn_file_and_the_human_s_turn_as_task_py_does() -
     agents_md = AGENTS_MD.read_text()
     assert f"`{TURN_FILE}`" in agents_md
     assert f"`{HUMAN}`" in agents_md
+
+
+def test_foundry_spells_the_log_file_as_the_git_hooks_do() -> None:
+    """foundry appends to it, and pre-commit keeps it append-only, so both must mean the same file."""
+    assert LOG_FILE == git_hooks.LOG_FILE

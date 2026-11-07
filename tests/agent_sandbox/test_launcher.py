@@ -160,6 +160,18 @@ def test_the_summary_names_the_model(layout: Layout, model: str | None, line: st
     assert summary.splitlines()[-1] == f"==> model:      {line}"
 
 
+def test_the_summary_says_where_the_github_token_comes_from(layout: Layout, tmp_path: Path) -> None:
+    def github_line(github_token_path: Path | None) -> list[str]:
+        request = LaunchRequest(
+            definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, github_token_path=github_token_path
+        )
+        summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
+        return [line for line in summary.splitlines() if line.startswith("==> github:")]
+
+    assert github_line(tmp_path / "token") == [f"==> github:     token from {tmp_path / 'token'}"]
+    assert github_line(None) == ["==> github:     no token"]
+
+
 # --- layouts prepare refuses, before touching anything ------------------------------
 
 

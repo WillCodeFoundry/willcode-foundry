@@ -57,7 +57,7 @@ def test_a_failed_write_leaves_the_old_file_and_nothing_else(tmp_path: Path) -> 
     target.write_bytes(b"old")
     tmp_path.chmod(0o555)
     try:
-        with pytest.raises(OSError):
+        with pytest.raises(PermissionError):
             atomic_write(target, b"new")
     finally:
         tmp_path.chmod(0o755)

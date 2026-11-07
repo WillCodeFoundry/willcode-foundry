@@ -32,7 +32,13 @@ $ uv run foundry run tkt-store wcf-0042           # start the role whose turn it
 
 A task id is lowercase ASCII letters, `-`, then four or more digits, such as `wcf-0042`. foundry refuses any other id, and never changes its case. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
-A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once. To hand it on yourself, edit `TURN`, or name the role to `foundry run`. When you write `TASK.md` yourself, you take the planner's place: write the role its `planned` or `needs-design` row leads to in `TURN`, or the planner starts.
+A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once.
+
+To hand a task off yourself, run `foundry task handoff`. It writes `TURN` and appends an entry to the task's `LOG.md`, so the next role sees why. Naming the role to `foundry run` instead starts it once and leaves `TURN` as it was.
+
+Hand a task off only while its role isn't running: stop the session, or let it finish its turn. The role writes `TURN` when its turn ends, which would undo yours. Its log entries would also conflict with your entry.
+
+When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` or `needs-design` row leads to with `foundry task handoff`, or the planner starts.
 
 | Command | What it does |
 |---|---|
@@ -40,6 +46,7 @@ A task passes from role to role: planner, dev, reviewer, then back to the dev fo
 | `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. |
 | `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
 | `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
+| `foundry task handoff PROJECT TASK ROLE` | Hands the open task off to ROLE, or `human`: writes `TURN` and appends a `human · handoff` entry to `LOG.md`. `--note TEXT` adds one line to it. |
 | `foundry task list [PROJECT ...]` | Lists the open tasks of the projects named, or of all, with whose turn each is. `--turn human` shows those waiting for you. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry run` does this too. |
@@ -54,9 +61,9 @@ Agents write nothing to this repository. Their work goes to the project's reposi
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `DESIGN.md`, `REVIEW.md`, `NAMES.md`, `LOG.md`, `LEARNINGS.md` | every role, each only in its own task's dir |
+| `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `DESIGN.md`, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` | every role, each only in its own task's dir |
 
-`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close` and `reopen` always sign their commit with your key, and refuse if they can't:
+`TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close`, `reopen` and `handoff` always sign their commit with your key, and refuse if they can't:
 
 ```console
 $ git config --global user.signingkey ~/.ssh/id_ed25519.pub   # your line in allowed_signers; its private half in your ssh-agent

@@ -80,8 +80,8 @@ def test_the_readme_sections_messages_point_to_exist() -> None:
 def subcommands(parser: argparse.ArgumentParser) -> set[str]:
     """Every runnable command under ``parser``, as words: a subcommand, then any argument it limits to choices."""
     found: set[str] = set()
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
+    for action in parser._actions:  # noqa: SLF001  argparse lists subcommands only here
+        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
             for name, child in action.choices.items():
                 found |= {f"{name} {sub}" for sub in subcommands(child)} or {name}
         elif action.choices and not action.option_strings:

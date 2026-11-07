@@ -103,10 +103,12 @@ class ProjectClone:
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
 
-        Nothing is staged or committed.
+        FoundryError when a path is a link, which could point outside the clone. Nothing is staged or committed.
         """
         for path, text in files.items():
             file_path = self._work_dir / path
+            if file_path.is_symlink():
+                raise FoundryError(f"{path} is a link: foundry writes only files")
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(text)
 
@@ -141,7 +143,8 @@ class ProjectClone:
         ``from_remote`` points each new branch on the remote at one of the remote's existing branches:
         {"task/t1": "main"}. ``from_local`` pushes each local branch to the same name on the remote.
         """
-        assert from_remote or from_local, "push_atomic needs at least one branch to push"  # a programming error
+        if not (from_remote or from_local):
+            raise ValueError("push_atomic needs at least one branch to push")  # a programming error
         for source in dict.fromkeys(from_remote.values()):
             self._fetch(source)
         refspecs = [

@@ -54,7 +54,7 @@ REFUSED = [
     ("git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
     ("git config core.HOOKSPATH /tmp/h", "hook configuration"),
     ("GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/tmp'\" git commit -m x", "hook configuration"),
-    # Unparseable, so scanned: still refused.
+    # Unparsable, so scanned: still refused.
     ("ls # it's here\ngit commit --no-verify -m x", "bypassed"),
     ("echo it's; git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
     ("cat <<EOF\nx\nEOF\ngit commit --no-verify -m x", "bypassed"),
@@ -79,7 +79,7 @@ MISSED_ON_PURPOSE = [
     ("git commit --no-ver -m x", 0),
     ('sh -c "git commit --no-verify -m x"', 0),
     ("git config --get core.hooksPath", 2),  # only reads, but refused
-    # Unparseable text that mentions --no-verify, documentation say, is refused.
+    # Unparsable text that mentions --no-verify, documentation say, is refused.
     ('cat > notes.md <<"END"\nNever use --no-verify; it\'s against the rules.\nEND', 2),
     ('git commit -m "(--no-verify)"', 2),  # a message that is exactly that, punctuation stripped
 ]
@@ -159,6 +159,17 @@ def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(ch
     git(code, "switch", "-q", "--detach", f"origin/{TASK.branch}")
 
     assert f"code checkout has commits not pushed to origin/{TASK.branch}" in block_reason(session)
+
+
+def test_commits_origin_has_but_the_checkout_hasn_t_fetched_count_as_pushed(checkouts: Checkouts) -> None:
+    """Pushed to origin's URL rather than to the remote, so origin/<branch> in the checkout stays behind: the
+    check fetches it before comparing."""
+    session, code, _ = checkouts
+    commit(code, "work.txt", "feat: work")
+    origin_url = git(code, "remote", "get-url", "origin").stdout.strip()
+    git(code, "-c", "core.hooksPath=/dev/null", "push", "-q", origin_url, f"HEAD:refs/heads/{TASK.branch}")
+
+    assert stop(session) == ""
 
 
 def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts) -> None:
