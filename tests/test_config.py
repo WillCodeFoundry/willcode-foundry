@@ -1,5 +1,6 @@
 """config/foundry.yaml: its shape through parse, and each role's files through load, under tmp_path."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -47,13 +48,23 @@ def test_parse_minimal(tmp_path: Path) -> None:
     assert cfg.role("qa").name == "qa"
 
 
-def test_unknown_project_and_role_are_reported(tmp_path: Path) -> None:
-    give_kit_roles(tmp_path, "dev")
-    cfg = config.parse({"name": "x", "projects": {}, "roles": {"dev": {}}}, foundry_root=tmp_path)
-    with pytest.raises(FoundryError, match="unknown project 'p'"):
+@pytest.mark.parametrize(
+    ("names", "known"), [([], "none"), (["dev"], "dev"), (["qa", "dev"], "dev, qa")], ids=["none", "one", "several"]
+)
+def test_unknown_project_and_role_are_reported(tmp_path: Path, names: list[str], known: str) -> None:
+    give_kit_roles(tmp_path, *names)
+    cfg = config.parse(
+        {
+            "name": "x",
+            "projects": {name: {"url": f"git@h:o/{name}.git"} for name in names},
+            "roles": {name: {} for name in names},
+        },
+        foundry_root=tmp_path,
+    )
+    with pytest.raises(FoundryError, match=f"^unknown project 'p'; known: {known}$"):
         cfg.project("p")
-    with pytest.raises(FoundryError, match="unknown role 'qa'; known: dev"):
-        cfg.role("qa")
+    with pytest.raises(FoundryError, match=f"^unknown role 'tester'; known: {known}$"):
+        cfg.role("tester")
 
 
 def test_a_role_without_a_model_runs_on_the_default(tmp_path: Path) -> None:
@@ -88,10 +99,27 @@ def test_role_options_must_be_a_mapping(tmp_path: Path) -> None:
         config.parse({"name": "x", "roles": {"dev": "opus"}}, foundry_root=tmp_path)
 
 
-@pytest.mark.parametrize("raw", [[], "x", {}, {"name": ""}, {"name": "x", "projects": {"p": {}}}])
-def test_invalid_shapes(tmp_path: Path, raw: object) -> None:
-    with pytest.raises(FoundryError):
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ([], "^config: top level must be a mapping$"),
+        ("x", "^config: top level must be a mapping$"),
+        ({}, "^config: 'name' is required$"),
+        ({"name": ""}, "^config: 'name' is required$"),
+        ({"name": "x", "projects": {"p": {}}}, "^config: projects.p needs a 'url'$"),
+    ],
+)
+def test_invalid_shapes(tmp_path: Path, raw: object, message: str) -> None:
+    with pytest.raises(FoundryError, match=message):
         config.parse(raw, foundry_root=tmp_path)
+
+
+def test_load_s_errors_name_the_config_file(foundry_root: Path) -> None:
+    config_path = foundry_root / "config" / "foundry.yaml"
+    config_path.write_text("name: ''\n")
+
+    with pytest.raises(FoundryError, match=f"^{re.escape(str(config_path))}: 'name' is required$"):
+        config.load(foundry_root)
 
 
 # --- a role's files ------------------------------------------------------------------

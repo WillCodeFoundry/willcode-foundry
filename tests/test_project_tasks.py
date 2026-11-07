@@ -52,6 +52,7 @@ def test_a_task_is_its_branch_from_the_default_branch_and_the_template_in_its_ta
     }
     notes_parent = project_repository.git("rev-parse", f"{task.NOTES_BRANCH}^")
     assert notes_parent == notes_before
+    assert project_repository.notes_signed_with_your_key()
 
 
 def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(project_repository) -> None:
@@ -64,12 +65,6 @@ def test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files(
         ".agent/tasks/open/tst-0001/TASK.md": "# Task <id>: <title>\n",
     }
     assert project_repository.git("rev-list", "--count", task.NOTES_BRANCH) == "1"
-
-
-def test_the_tasks_notes_commit_is_signed_with_your_signing_key(project_repository) -> None:
-    create(project_repository.project_tasks())
-
-    assert project_repository.notes_signed_with_your_key()
 
 
 def test_without_a_signing_key_nothing_is_pushed(project_repository, no_signing_key) -> None:
@@ -118,6 +113,17 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> Non
 
     with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
         create(project_tasks_of(empty_dir, git_env))
+
+
+def test_a_default_branch_that_is_not_a_branch_is_refused_and_nothing_is_pushed(project_repository) -> None:
+    """HEAD points at a tag: the repository has a default, but no branch of that name to start the task from."""
+    project_repository.git("tag", "v1", "main")
+    project_repository.git("symbolic-ref", "HEAD", "refs/tags/v1")
+    refs_before = project_repository.git("for-each-ref")
+
+    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
+        create(project_repository.project_tasks())
+    assert project_repository.git("for-each-ref") == refs_before
 
 
 def test_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:

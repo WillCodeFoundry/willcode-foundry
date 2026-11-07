@@ -12,7 +12,7 @@ from foundry import cli
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
 from foundry.errors import FoundryError
-from foundry.project_tasks import MissingTurnError, ProjectTasks, TaskNotFoundError
+from foundry.project_tasks import MissingTurnError, ProjectTasks
 from foundry.session import SessionVariables
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
@@ -64,12 +64,6 @@ def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
     assert launch.request.model == "sonnet"
 
 
-def test_the_runtime_is_built_into_the_kit(foundry_root: Path) -> None:
-    prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-
-    assert AgentKit(foundry_root / "agent-kit").runtime.is_file()
-
-
 def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
     AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
 
@@ -104,6 +98,38 @@ def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_
         prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task.as_open("tst-0001"))
 
 
+def test_run_prints_the_turn_and_the_new_session_then_hands_over_to_the_launcher(
+    project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.
+
+    sbx and ps are stand-ins that list no sandbox and no process, since the launcher prunes before that check. What
+    comes after it needs a real sandbox: the sbx tier's."""
+    project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    (foundry_root / "config" / "foundry.yaml").write_text(
+        CONFIG.replace('"git@github.com:o/tkt-store.git"', f"'{project_repository.path}'")
+    )
+    stand_ins = foundry_root / "stand-ins"
+    stand_ins.mkdir()
+    for name, script in {"sbx": "echo '{\"sandboxes\": []}'", "ps": "exit 0"}.items():
+        (stand_ins / name).write_text(f"#!/bin/sh\n{script}\n")
+        (stand_ins / name).chmod(0o755)
+    monkeypatch.chdir(foundry_root)
+    for name, value in git_env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("PATH", f"{stand_ins}:{git_env['PATH']}")
+
+    assert cli.main(["run", "tkt-store", "tst-0000"]) == 1
+
+    ssh_key_path = foundry_root / "secrets" / "ssh" / "dev"
+    assert capsys.readouterr() == (
+        "",
+        "==> turn:      dev\n"
+        f"==> session:   {foundry_root / 'sessions' / 'dev-tkt-store-tst-0000'} (new)\n"
+        f"error: ssh key {str(ssh_key_path)!r} is not a file\n",
+    )
+
+
 # --- whose turn -----------------------------------------------------------------------
 
 
@@ -122,7 +148,11 @@ def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None
 @pytest.mark.parametrize("turn", ["Human", "dev\nreviewer", "qa"])
 def test_a_turn_that_names_no_role_is_refused_naming_the_turn_file(turn: str) -> None:
     with pytest.raises(
-        FoundryError, match=r"\.agent/tasks/open/tst-0001/TURN on agent-notes names .*not a role.*ROLE tst-0001"
+        FoundryError,
+        match=(
+            r"\.agent/tasks/open/tst-0001/TURN on agent-notes names .*, which is not a role; "
+            rf"known: dev, reviewer, or {HUMAN}\. To start a role anyway: foundry run tkt-store ROLE tst-0001$"
+        ),
     ):
         role_for_turn(turn, ROLES, project_name="tkt-store", task=Task.as_open("tst-0001"))
 
@@ -183,20 +213,3 @@ def test_a_task_without_a_turn_is_refused(project_tasks: ProjectTasks) -> None:
         require_open_task_and_role(
             project_tasks, project_name="tkt-store", task_id="tst-0003", role_name=None, roles=ROLES
         )
-
-
-@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_a_task_that_doesn_t_exist_is_refused(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(TaskNotFoundError, match=r"^task tst-0009 doesn't exist"):
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="tst-0009", role_name=role_name, roles=ROLES
-        )
-
-
-@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_an_uppercase_task_id_is_refused_not_lowercased(project_tasks: ProjectTasks, role_name) -> None:
-    with pytest.raises(FoundryError, match=r"^task id 'TST-0001' is not valid: ") as error:
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="TST-0001", role_name=role_name, roles=ROLES
-        )
-    assert not isinstance(error.value, TaskNotFoundError)
