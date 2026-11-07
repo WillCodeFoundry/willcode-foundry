@@ -50,18 +50,29 @@ code the task extends was replaced.
 - Name as "Names" below says.
 
 ## Names
-- Take each name's word from the first of these that has one: the project's
-  `GLOSSARY.md` (never a word it lists under _Avoid_), `DESIGN.md`, the code
-  already there, then a new word. Name an instance for its class, unless the
-  scope holds two of the type or its role is what the reader needs.
+- Take each name's word from the first of these that has one: for a thing
+  from outside, such as a protocol's field or a vendor's parameter, the
+  outside system's own term; then the project's `GLOSSARY.md` (never a word
+  it lists under _Avoid_), `DESIGN.md`, the code already there, then a new
+  word. Name an instance for its class, unless the scope holds two of the
+  type or its role is what the reader needs.
+- Size a name to where it is read. An environment variable, settings field,
+  API model or exported name shares its namespace with code you can't see,
+  so it names the feature that owns it: `RETURNS_COURIER_API_KEY`, not
+  `COURIER_API_KEY`.
+- Name the value itself, not what sits next to it. Look at what the value is
+  built from: titles are `titles`, not `isbns`, and a fact is `is_expensive`,
+  not `needs_review`, the rule that uses it.
+- Name the role, not the implementation. A name callers use leaves out the
+  vendor, backend, library and version: `feature_flags`, not `launchdarkly`.
+  Only the vendor's own adapter names the vendor.
+- Give a word one meaning where it is read. If it already means something
+  there, such as `task` beside `asyncio.Task`, choose another word.
 - A concept the glossary lacks, or a word you find meaning two things, goes
   in `LEARNINGS.md` as a `[proposal]` entry, as the `domain-modeling` skill
   says. Don't add it to `GLOSSARY.md` unless `TASK.md` or `DESIGN.md` lists
   it.
-- Before each commit, check every name the staged diff (`git diff --cached`)
-  adds or renames, and each existing name whose behaviour it changes, with the
-  `python-naming-smells` skill. Fix any that fails.
-- When the fix would change a name `DESIGN.md` gives, ask the architect, as
+- When a name you need would change one `DESIGN.md` gives, ask the architect, as
   "When to stop and ask" in `AGENTS.md` says. Rename an interface name, such
   as a command, flag or config key, only when `TASK.md` or `DESIGN.md` says
   to; otherwise ask the planner.
@@ -78,7 +89,10 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   disagree, because <why>.` A Follow-up may instead get `Answers R<n>:
   deferred, because <why>.`, with it listed under `Next`. Never edit
   `REVIEW.md`.
-- Fix each finding with the smallest change. If the only fix you see adds
+- Fix each finding with the smallest change. A finding that asks for a guard,
+  fallback, helper or test meets the bar your own code does: it needs a caller
+  or a requirement today, and a test must fail when its behaviour breaks.
+  Answer one that doesn't `disagree, because <why>`. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   architect, as "When to stop and ask" in `AGENTS.md` says.
 - A design question, once the architect answers it, is yours to fix like a
@@ -90,8 +104,8 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - To ask the architect about a finding, use your own id and cite the finding:
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
-- Fix a name finding as "Names" above says: check the new name with the
-  `python-naming-smells` skill at every use in the repository.
+- Fix a name finding as "Names" above says, and read the new name at every
+  use in the repository: `git grep -n -w <name>`.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a

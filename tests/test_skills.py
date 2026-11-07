@@ -336,6 +336,7 @@ def test_the_kits_copied_skills_all_have_a_source() -> None:
     assert sorted(name for name, source in sources.items() if source is None) == [
         "git-conventions",
         "python-naming-smells",
+        "python-smells",
     ]
     assert {source.repo for source in sources.values() if source is not None} == {"mattpocock/skills"}
 

@@ -94,6 +94,8 @@ Each smell reads *what it is* → *how to fix*:
 
 Fowler's Mysterious Name isn't in the baseline: names are the Names axis's job.
 
+For Python code, the `python-smells` skill's smells join the baseline. Where the two name the same smell, use the skill's wording and its "Fine when".
+
 ### 5. Spawn the five sub-agents in parallel
 
 Issue all five sub-agent calls together, in the foreground, and aggregate the reports they return.
@@ -147,8 +149,9 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 
 - The diff command, the commit list and the fixed point.
 - The smell baseline from step 4, pasted in full (the sub-agent has no other access to it).
+- When the diff changes Python, the `python-smells` skill's body, pasted in full with its base directory, so the sub-agent can read the `references/` files its checklist points to: call the Skill tool with "python-smells".
 - The text of `TASK.md` and, when the task has one, `DESIGN.md`. `TASK.md` is for one use: to check that something flagged as Speculative Generality isn't what the spec asks for. `DESIGN.md` is for telling a local fix from a design question.
-- The brief: "Read each function the diff adds or changes whole, three ways. At `HEAD`. Against its version at the fixed point (`git show <fixed point>:<path>`), asking whether the change left it simpler or more tangled; a regression counts even when each hunk looks fine. And beside its siblings in the diff, and any existing code whose shape it copies. Match each against the smell baseline. First list every function the diff adds or changes, as `file:function`, each marked 'clean', 'new' when it has no earlier version, or with its finding ids. Then report the findings. For this axis, 'who would hit it' is the next dev who changes that code, and 'fewer, or none, is a good result' doesn't apply: cover every function in the list. The five-finding cap still applies to the findings. Under 400 words."
+- The brief: "Read each function the diff adds or changes whole, three ways. At `HEAD`. Against its version at the fixed point (`git show <fixed point>:<path>`), asking whether the change left it simpler or more tangled; a regression counts even when each hunk looks fine. And beside its siblings in the diff, and any existing code whose shape it copies. Match each against the smell baseline and, for Python, the python-smells checklist, reading the reference file for each question that applies. First list every function the diff adds or changes, as `file:function`, each marked 'clean', 'new' when it has no earlier version, or with its finding ids. Then report the findings. For this axis, 'who would hit it' is the next dev who changes that code, and 'fewer, or none, is a good result' doesn't apply: cover every function in the list. The five-finding cap still applies to the findings. Under 400 words."
 
 **Names sub-agent prompt** should include:
 
