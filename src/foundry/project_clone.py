@@ -143,7 +143,8 @@ class ProjectClone:
         ``from_remote`` points each new branch on the remote at one of the remote's existing branches:
         {"task/t1": "main"}. ``from_local`` pushes each local branch to the same name on the remote.
         """
-        assert from_remote or from_local, "push_atomic needs at least one branch to push"  # a programming error
+        if not (from_remote or from_local):
+            raise ValueError("push_atomic needs at least one branch to push")  # a programming error
         for source in dict.fromkeys(from_remote.values()):
             self._fetch(source)
         refspecs = [

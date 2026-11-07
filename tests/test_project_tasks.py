@@ -532,7 +532,7 @@ def test_listing_an_unreachable_repository_fails_with_gits_message(tmp_path: Pat
 
 
 def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env, tmp_path: Path) -> None:
-    project_repository.edit_notes(write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(0, 6)})
+    project_repository.edit_notes(write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(6)})
     log = tmp_path / "git-calls.log"
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()

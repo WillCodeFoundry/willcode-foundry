@@ -40,7 +40,7 @@ def test_run_passes_the_given_env_to_the_child_process(host):
 # --- environ ------------------------------------------------------------------
 
 
-def test_environ_is_the_processs_own_environment(host):
+def test_environ_is_this_process_environment(host):
     assert host.environ() is os.environ
 
 

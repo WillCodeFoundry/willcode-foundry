@@ -103,7 +103,7 @@ def test_a_path_that_is_not_a_file_is_none() -> None:
     assert GhCli(gh).file_text(repo_slug="o/r", file_path="README.md") == "hi\n"
 
 
-def test_rulesets_are_the_repositorys_own_by_name() -> None:
+def test_rulesets_by_name_leave_out_the_organisation_rulesets() -> None:
     gh = RecordedGh(
         {
             "repos/o/r/rulesets?per_page=100&includes_parents=false": ok(

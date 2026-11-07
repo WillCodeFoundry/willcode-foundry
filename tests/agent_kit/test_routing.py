@@ -63,7 +63,7 @@ def test_every_role_can_be_stuck_and_stuck_goes_to_the_human() -> None:
 
 def test_every_next_role_is_a_configured_role_or_the_human() -> None:
     roles = set(yaml_io.load(REPO_ROOT / "config" / "foundry.yaml")["roles"])
-    assert {next_role for next_role in routing_table().values()} <= roles | {HUMAN}
+    assert set(routing_table().values()) <= roles | {HUMAN}
 
 
 def test_from_the_planner_every_role_is_reached_and_each_can_reach_the_human_without_being_stuck() -> None:

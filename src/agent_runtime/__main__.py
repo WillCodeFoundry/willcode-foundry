@@ -15,11 +15,11 @@ if sys.version_info < MINIMUM_PYTHON:
     sys.stderr.write(f"agent_runtime: needs Python >= {needed}; {sys.executable} is {found}\n")
     sys.exit(1)
 
-import argparse  # noqa: E402
-from collections.abc import Callable, Sequence  # noqa: E402
-from functools import partial  # noqa: E402
+import argparse
+from collections.abc import Callable, Sequence
+from functools import partial
 
-from agent_runtime import (  # noqa: E402
+from agent_runtime import (
     claude_hooks,
     contract,
     git_hooks,
@@ -27,7 +27,7 @@ from agent_runtime import (  # noqa: E402
     session_init,
     session_setup,
 )
-from agent_runtime.git import GitError  # noqa: E402
+from agent_runtime.git import GitError
 
 COMMANDS: dict[str, tuple[Callable[[], int], str]] = {
     "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),

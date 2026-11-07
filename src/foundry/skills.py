@@ -74,7 +74,8 @@ def update(
             if new_sha == source.commit:
                 report(f"{name}: already at {source.commit[:12]}")
                 continue
-            outcome = _apply(git, _plan(git, foundry_root, url, skill_md, source, new_sha))
+            git.output("fetch", "--quiet", "--no-tags", url, source.commit)
+            outcome = _apply(git, _plan(git, foundry_root, skill_md, source, new_sha))
         except (FoundryError, GitError) as error:
             failed.append(f"{name}: {error}")
             report(f"{name}: failed, still at {source.commit[:12]}")
@@ -111,10 +112,9 @@ class _Plan:
     licence: bytes
 
 
-def _plan(git: Git, foundry_root: Path, url: str, skill_md: Path, source: Source, new_sha: str) -> _Plan:
-    """Every read and check for updating ``skill_md`` to ``new_sha``; writes nothing."""
+def _plan(git: Git, foundry_root: Path, skill_md: Path, source: Source, new_sha: str) -> _Plan:
+    """Every read and check for updating ``skill_md`` to ``new_sha``, both commits already fetched; writes nothing."""
     skill_md_text = skill_md.read_text()
-    git.output("fetch", "--quiet", "--no-tags", url, source.commit)
     _require_one_commit_line(skill_md, skill_md_text, source.commit)
     # Byte for byte: whatever line endings and encoding upstream's licence has.
     licence = git.output_bytes("show", f"{new_sha}:LICENSE")
@@ -157,7 +157,7 @@ def read_source(skill_md: Path) -> Source | None:
         return None
     try:
         # Every value as a string: a SHA of digits must not become a number.
-        front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}
+        front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}  # noqa: S506  BaseLoader builds only strings, lists and dicts
     except yaml.YAMLError as error:
         raise FoundryError(f"{skill_md}: its front matter is not valid YAML: {error}") from None
     metadata = front.get("metadata", {}) if isinstance(front, dict) else None
