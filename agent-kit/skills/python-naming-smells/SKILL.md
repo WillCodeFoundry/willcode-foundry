@@ -19,7 +19,7 @@ Check every name a diff adds or renames, of every kind below. Check too each exi
 | prose word | a concept named in a doc, docstring, message, comment or instruction |
 | test name | a test function, read as a sentence about the behaviour it shows |
 
-Leave case style and builtin shadowing to ruff's `N` and `A` rules, and spelling to a checker such as `typos`. Neither ruff rule flags two names that differ only in case.
+Leave case style and builtin shadowing to ruff's `N` and `A` rules. Neither flags two names that differ only in case.
 
 ## How to check
 
@@ -43,6 +43,7 @@ Leave case style and builtin shadowing to ruff's `N` and `A` rules, and spelling
 | A boolean that doesn't ask | `shipping` for a bool, `check_stock` for a bool | `is_shipped`, `has_stock` | It reads as a value or an action, not a yes or no. |
 | Grammar that doesn't match the kind | `def invoice(order)` that sends it, `is_status = "paid"` | `send_invoice(order)`, `status = "paid"` | A function is a verb, a value a noun, and only booleans start with is, has, can or should. |
 | Names that differ only in case | a function `_draft()` that returns a `_Draft` | `_draft_order()` returning a `_Draft` | Read aloud, the two are one word, so readers mix up the call and the class. An instance `draft = _Draft()` is fine. |
+| A possessive in the name | `test_uses_the_shops_own_prices`, `books_isbn` for one book's ISBN | `test_uses_prices_set_by_the_shop`, `isbn` | A name can't hold an apostrophe, so the possessive reads as a plural or a misspelling, as in `processs`. |
 | The vendor in the name | `stripe_refund(order)` called from checkout, `mailchimp_list` | `refund(order)`, `mailing_list` | Callers then name the vendor too, so changing vendor renames them all. Fine inside the vendor's own adapter. |
 | An exception named for the fix | `RetryLaterError` | `CourierUnavailable` | An exception names what happened, in the glossary's words when it has one. |
 
