@@ -87,7 +87,7 @@ def test_a_missing_file_is_none_and_other_errors_still_raise() -> None:
     assert error.value.http_status == 401
 
 
-def test_rulesets_are_the_repositorys_own_by_name() -> None:
+def test_rulesets_by_name_leave_out_the_organisation_rulesets() -> None:
     gh = RecordedGh(
         {
             "repos/o/r/rulesets?per_page=100&includes_parents=false": ok(

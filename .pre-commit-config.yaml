@@ -41,6 +41,12 @@ repos:
         language: system
         files: ^agent-kit/hooks/
         stages: [pre-push]
+      - id: typos
+        name: typos, misspelt words and names
+        entry: uv run typos
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: pytest
         name: pytest, host tier
         entry: uv run pytest -q

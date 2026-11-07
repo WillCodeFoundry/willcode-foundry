@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["pyyaml>=6"]
 
 [dependency-groups]
-dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML", "vulture>=2.14", "pylint>=3.3", "shellcheck-py>=0.10"]
+dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML", "vulture>=2.14", "pylint>=3.3", "shellcheck-py>=0.10", "typos>=1.30"]
 
 [tool.uv]
 default-groups = []
@@ -112,6 +112,10 @@ check_untyped_defs = true
 # The test doubles themselves stay fully typed.
 module = ["tests.agent_sandbox.conftest"]
 disallow_untyped_defs = true
+
+[tool.typos.default.extend-words]
+# "caf" is test data: the bytes of "café" with the é cut off.
+caf = "caf"
 
 [tool.vulture]
 # Unused code across the package: functions, classes, attributes and parameters nothing reads.

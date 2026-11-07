@@ -274,7 +274,7 @@ def test_skills_from_one_repository_reach_one_commit_while_upstream_moves(foundr
         assert f"    commit: {third}\n" in (foundry_root / "agent-kit" / "skills" / name / "SKILL.md").read_text(), name
 
 
-def test_each_copied_skill_names_its_repositorys_licence() -> None:
+def test_each_copied_skill_names_its_repository_licence() -> None:
     """The licence update writes LICENSE-<owner>-<repo> beside the skills; each copied skill points at it."""
     skills_dir = Path(__file__).parents[1] / "agent-kit" / "skills"
     for skill_md in skills_dir.glob("*/SKILL.md"):

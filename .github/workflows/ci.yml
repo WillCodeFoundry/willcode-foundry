@@ -40,6 +40,7 @@ jobs:
       - run: uv run vulture
       - run: uv run pylint src
       - run: uv run shellcheck agent-kit/hooks/*
+      - run: uv run typos
 
   mypy:
     runs-on: ubuntu-latest

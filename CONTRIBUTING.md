@@ -25,6 +25,7 @@ $ uv run mypy
 $ uv run vulture                        # unused code in src/
 $ uv run pylint src                     # duplicated code in src/
 $ uv run shellcheck agent-kit/hooks/*   # the hook stubs
+$ uv run typos                          # misspelt words and names
 ```
 
 ### What the static checks catch
@@ -38,6 +39,7 @@ The checks hold the smells a tool can see. Code review holds the rest.
 | `vulture` | functions, classes and attributes in `src/` that nothing uses |
 | `pylint src` | the same five or more lines in two places in `src/`; it runs only this check |
 | `shellcheck` | mistakes in the hook stubs, the only shell scripts |
+| `typos` | misspelt words in code and docs, inside identifiers too, which it splits at underscores and capitals |
 | `tests/test_defensive_reads.py` | `getattr` or `hasattr` with a literal attribute name in `src/` |
 
 `pyproject.toml` says why each rule is on, and why each exception is off. Silence a finding on one line with `# noqa: <code>` and the reason.

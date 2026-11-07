@@ -54,7 +54,7 @@ REFUSED = [
     ("git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
     ("git config core.HOOKSPATH /tmp/h", "hook configuration"),
     ("GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/tmp'\" git commit -m x", "hook configuration"),
-    # Unparseable, so scanned: still refused.
+    # Unparsable, so scanned: still refused.
     ("ls # it's here\ngit commit --no-verify -m x", "bypassed"),
     ("echo it's; git -c core.hooksPath=/tmp/h commit -m x", "hook configuration"),
     ("cat <<EOF\nx\nEOF\ngit commit --no-verify -m x", "bypassed"),
@@ -79,7 +79,7 @@ MISSED_ON_PURPOSE = [
     ("git commit --no-ver -m x", 0),
     ('sh -c "git commit --no-verify -m x"', 0),
     ("git config --get core.hooksPath", 2),  # only reads, but refused
-    # Unparseable text that mentions --no-verify, documentation say, is refused.
+    # Unparsable text that mentions --no-verify, documentation say, is refused.
     ('cat > notes.md <<"END"\nNever use --no-verify; it\'s against the rules.\nEND', 2),
     ('git commit -m "(--no-verify)"', 2),  # a message that is exactly that, punctuation stripped
 ]
