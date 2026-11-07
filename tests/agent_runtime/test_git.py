@@ -122,7 +122,7 @@ def test_the_environment_given_is_the_one_git_runs_in(repo: Path) -> None:
 
 
 @pytest.mark.parametrize("env", [{}, {"PATH": "/usr/bin:/bin"}], ids=["empty", "PATH only"])
-def test_the_environment_given_replaces_this_processs(
+def test_the_environment_given_replaces_this_process_environment(
     repo: Path, monkeypatch: pytest.MonkeyPatch, env: dict[str, str]
 ) -> None:
     """Nothing of this process's environment reaches git beside it, even with an empty one."""

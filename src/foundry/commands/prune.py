@@ -17,7 +17,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser.set_defaults(func=main)
 
 
-def main(args: argparse.Namespace) -> int:
+def main(_args: argparse.Namespace) -> int:
     """Composition root: prune what agent_sandbox owns, and report it."""
     print("\n".join(report(agent_sandbox.prune())))
     return 0

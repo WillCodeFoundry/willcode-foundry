@@ -35,6 +35,19 @@ def test_a_created_task_gets_both_checkouts(
     assert git(code, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")
 
 
+def test_both_checkouts_track_their_branch_on_origin_whatever_git_s_config_says(
+    session_for: SessionFor, built_kit: Path, created_task: Path, home: Path
+) -> None:
+    """branch.autoSetupMerge false stands for a git config that wouldn't set the upstream on its own."""
+    git(home, "config", "--global", "branch.autoSetupMerge", "false")
+    session = session_for(built_kit, created_task)
+
+    session_setup.session_setup(session, home)
+
+    for checkout, branch in ((session.agent_project_dir, TASK.branch), (session.agent_notes_dir, NOTES_BRANCH)):
+        assert git(checkout, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip() == f"origin/{branch}"
+
+
 def test_a_task_without_its_branches_is_explained(
     session_for: SessionFor, built_kit: Path, origin: Path, home: Path
 ) -> None:

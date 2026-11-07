@@ -22,7 +22,35 @@ $ uv run pytest -m docker        # the docker tier; needs a Docker daemon
 $ uv run pytest -m sbx           # the sbx tier, by hand: see below
 $ uv run ruff check . && uv run ruff format --check .
 $ uv run mypy
+$ uv run vulture                        # unused code in src/
+$ uv run pylint src                     # duplicated code in src/
+$ uv run shellcheck agent-kit/hooks/*   # the hook stubs
 ```
+
+### What the static checks catch
+
+The checks hold the smells a tool can see. Code review holds the rest.
+
+| Check | Catches |
+|---|---|
+| `ruff check` | unused parameters, blanket and silent `except`, `assert` in `src/`, functions past the size limits, boolean flag parameters, private access across objects, `print` outside the entry points, commented-out code, blanket `noqa` and `type: ignore`, unsafe calls, too-broad `pytest.raises`, and `unittest.mock` in tests |
+| `mypy` | strict typing, plus unreachable code, redundant checks, conditions that are always true, and an `ignore` without its error code |
+| `vulture` | functions, classes and attributes in `src/` that nothing uses |
+| `pylint src` | the same five or more lines in two places in `src/`; it runs only this check |
+| `shellcheck` | mistakes in the hook stubs, the only shell scripts |
+| `tests/test_defensive_reads.py` | `getattr` or `hasattr` with a literal attribute name in `src/` |
+
+`pyproject.toml` says why each rule is on, and why each exception is off. Silence a finding on one line with `# noqa: <code>` and the reason.
+
+### Run them before you push
+
+`.pre-commit-config.yaml` runs ruff before each commit, and the rest of the checks and the host tier before each push. Install it once, in your checkout:
+
+```console
+$ uvx pre-commit install
+```
+
+Sandboxed agents use the kit's hooks instead, so they run the checks themselves, as `AGENTS.md` says.
 
 Run the tests as an ordinary user. A run started as root stops before collecting anything, since root can write anything and the permission checks would mean nothing.
 
