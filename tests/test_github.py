@@ -1,5 +1,6 @@
 """GhCli, through a runner that records the gh commands it would run and answers them."""
 
+import base64
 import json
 import subprocess
 from collections.abc import Sequence
@@ -85,6 +86,21 @@ def test_a_missing_file_is_none_and_other_errors_still_raise() -> None:
     with pytest.raises(GitHubError, match="Bad credentials") as error:
         GhCli(gh).file_text(repo_slug="o/r", file_path="CODEOWNERS")
     assert error.value.http_status == 401
+
+
+def test_a_path_that_is_not_a_file_is_none() -> None:
+    """GitHub answers a folder with a list of its entries, and a link with an object of another type."""
+    gh = RecordedGh(
+        {
+            "repos/o/r/contents/.github": ok([{"type": "dir", "name": "workflows"}]),
+            "repos/o/r/contents/CODEOWNERS": ok({"type": "symlink", "target": "docs/CODEOWNERS"}),
+            "repos/o/r/contents/README.md": ok({"type": "file", "content": base64.b64encode(b"hi\n").decode()}),
+        }
+    )
+
+    assert GhCli(gh).file_text(repo_slug="o/r", file_path=".github") is None
+    assert GhCli(gh).file_text(repo_slug="o/r", file_path="CODEOWNERS") is None
+    assert GhCli(gh).file_text(repo_slug="o/r", file_path="README.md") == "hi\n"
 
 
 def test_rulesets_by_name_leave_out_the_organisation_rulesets() -> None:

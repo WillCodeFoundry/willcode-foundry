@@ -11,7 +11,7 @@ import pytest
 
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
-from foundry.task import NOTES_BRANCH, Task
+from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 from tests.support import TASK, git
 
 ENVIRON = contract.Environ(
@@ -63,6 +63,18 @@ def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
     )
 
 
+def test_a_blank_line_is_skipped_and_the_lines_after_it_still_checked() -> None:
+    refs = ["\n", f"refs/heads/task/tst-0001 {OLD} refs/heads/task/tst-0002 {NEW}\n"]
+
+    with pytest.raises(git_hooks.GitHookRefused, match=r"not task/tst-0002\.\n"):
+        git_hooks.pre_push(refs, ENVIRON)
+
+
+def test_a_line_without_a_remote_ref_is_refused_on_its_own() -> None:
+    with pytest.raises(git_hooks.GitHookRefused, match=r"not \.\n"):
+        git_hooks.pre_push([f"refs/heads/task/tst-0001 {OLD}\n"], ENVIRON)
+
+
 # --- against real checkouts --------------------------------------------------
 
 
@@ -88,7 +100,10 @@ def refusal_of(call: Callable[[], None]) -> str:
     return str(refused.value)
 
 
-@pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md"])
+@pytest.mark.parametrize(
+    "path",
+    [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md", f"{NOTES_ROOT}/PROGRESS.md"],
+)
 def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts, path: str) -> None:
     session, code, _ = checkouts
     stage(code, path)

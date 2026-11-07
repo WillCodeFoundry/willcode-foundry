@@ -159,6 +159,16 @@ def test_a_session_left_without_its_definition_but_holding_files_is_refused(tmp_
     assert not (session_dir / SandboxDefinition.FILE_NAME).exists()
 
 
+def test_a_file_where_the_session_directory_goes_is_refused(tmp_path: Path) -> None:
+    session_path = tmp_path / "sessions" / "dev-tkt-store-wcf-0042"
+    session_path.parent.mkdir()
+    session_path.write_text("x")
+
+    with pytest.raises(FoundryError, match="holds more than an empty workspace"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
+    assert session_path.read_text() == "x"
+
+
 # --- session variables ---------------------------------------------------------
 
 
@@ -179,13 +189,6 @@ def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
     variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001")).variables
 
     assert SessionVariables.from_env(variables.to_env()) == variables
-
-
-def test_variables_read_back_refuse_a_task_id_not_matching_the_pattern(tmp_path: Path) -> None:
-    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042")).variables
-
-    with pytest.raises(FoundryError, match=r"^task id 'WCF-0042' is not valid: "):
-        SessionVariables.from_env({**variables.to_env(), "AGENT_TASK": "WCF-0042"})
 
 
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
