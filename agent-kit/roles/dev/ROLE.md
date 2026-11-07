@@ -58,10 +58,7 @@ code the task extends was replaced.
   in `LEARNINGS.md` as a `[proposal]` entry, as the `domain-modeling` skill
   says. Don't add it to `GLOSSARY.md` unless `TASK.md` or `DESIGN.md` lists
   it.
-- Before each commit, check every name the staged diff (`git diff --cached`)
-  adds or renames, and each existing name whose behaviour it changes, with the
-  `python-naming-smells` skill. Fix any that fails.
-- When the fix would change a name `DESIGN.md` gives, ask the architect, as
+- When a name you need would change one `DESIGN.md` gives, ask the architect, as
   "When to stop and ask" in `AGENTS.md` says. Rename an interface name, such
   as a command, flag or config key, only when `TASK.md` or `DESIGN.md` says
   to; otherwise ask the planner.
@@ -78,7 +75,10 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
   disagree, because <why>.` A Follow-up may instead get `Answers R<n>:
   deferred, because <why>.`, with it listed under `Next`. Never edit
   `REVIEW.md`.
-- Fix each finding with the smallest change. If the only fix you see adds
+- Fix each finding with the smallest change. A finding that asks for a guard,
+  fallback, helper or test meets the bar your own code does: it needs a caller
+  or a requirement today, and a test must fail when its behaviour breaks.
+  Answer one that doesn't `disagree, because <why>`. If the only fix you see adds
   machinery, or instructions that script a recovery, don't make it. Ask the
   architect, as "When to stop and ask" in `AGENTS.md` says.
 - A design question, once the architect answers it, is yours to fix like a
@@ -90,8 +90,8 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - To ask the architect about a finding, use your own id and cite the finding:
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
-- Fix a name finding as "Names" above says: check the new name with the
-  `python-naming-smells` skill at every use in the repository.
+- Fix a name finding as "Names" above says, and read the new name at every
+  use in the repository: `git grep -n -w <name>`.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a

@@ -1,6 +1,6 @@
 ---
 name: python-naming-smells
-description: How to spot a bad name in Python code and prose. Covers names that fail on sight, names that mislead at their uses, and names that break the words the project already agrees on, each with an invented bad and better name and how to spot it. Use when checking the names a diff adds or renames, before committing, when reviewing, or when naming something.
+description: How to spot a bad name in Python code and prose. Covers names that fail on sight, names that mislead at their uses, and names that break the words the project already agrees on, each with an invented bad and better name and how to spot it. Use when reviewing the names a diff or a design adds or renames.
 ---
 
 # Python naming smells
