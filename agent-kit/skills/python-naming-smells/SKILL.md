@@ -89,6 +89,14 @@ The name reads true where the code makes it false, or the reverse.
 ```python
 def is_expired(token: Token) -> bool:
     return token.expires_at > now()  # bad: true while the token is still valid
+
+
+def is_expired(token: Token) -> bool:
+    return token.expires_at <= now()  # better: the body now does what the name says
+
+
+def is_valid(token: Token) -> bool:
+    return token.expires_at > now()  # better: or the name now says what the body does
 ```
 
 - **Spot it:** read the body against what the name claims, especially booleans and `can_`/`should_` functions.
@@ -161,10 +169,18 @@ is_expensive = book.price > 500
 A leading underscore says nothing outside the module or class uses the name.
 
 ```python
-from shop.pricing import _round_price  # bad: used outside, so not private
+# bad
+from shop.pricing import _round_price  # used outside, so not private
 
 
-def parse_sku(raw: str) -> str: ...  # bad when only pricing.py calls it: say so with _parse_sku
+def parse_sku(raw: str) -> str: ...  # in pricing.py, the only module that calls it
+
+
+# better
+from shop.pricing import round_price
+
+
+def _parse_sku(raw: str) -> str: ...
 ```
 
 - **Spot it:** `git grep -n -w _name` finds uses in other modules; a public name's only uses are in its own module. A test that imports the name is a use from outside: test through the public name, or drop the underscore.
