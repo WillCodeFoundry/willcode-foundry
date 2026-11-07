@@ -50,10 +50,24 @@ code the task extends was replaced.
 - Name as "Names" below says.
 
 ## Names
-- Take each name's word from the first of these that has one: the project's
-  `GLOSSARY.md` (never a word it lists under _Avoid_), `DESIGN.md`, the code
-  already there, then a new word. Name an instance for its class, unless the
-  scope holds two of the type or its role is what the reader needs.
+- Take each name's word from the first of these that has one: for a thing
+  from outside, such as a protocol's field or a vendor's parameter, the
+  outside system's own term; then the project's `GLOSSARY.md` (never a word
+  it lists under _Avoid_), `DESIGN.md`, the code already there, then a new
+  word. Name an instance for its class, unless the scope holds two of the
+  type or its role is what the reader needs.
+- Size a name to where it is read. An environment variable, settings field,
+  API model or exported name shares its namespace with code you can't see,
+  so it names the feature that owns it: `RETURNS_COURIER_API_KEY`, not
+  `COURIER_API_KEY`.
+- Name the value itself, not what sits next to it. Look at what the value is
+  built from: titles are `titles`, not `isbns`, and a fact is `is_expensive`,
+  not `needs_review`, the rule that uses it.
+- Name the role, not the implementation. A name callers use leaves out the
+  vendor, backend, library and version: `feature_flags`, not `launchdarkly`.
+  Only the vendor's own adapter names the vendor.
+- Give a word one meaning where it is read. If it already means something
+  there, such as `task` beside `asyncio.Task`, choose another word.
 - A concept the glossary lacks, or a word you find meaning two things, goes
   in `LEARNINGS.md` as a `[proposal]` entry, as the `domain-modeling` skill
   says. Don't add it to `GLOSSARY.md` unless `TASK.md` or `DESIGN.md` lists
