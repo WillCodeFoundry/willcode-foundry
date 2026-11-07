@@ -47,9 +47,28 @@ code the task extends was replaced.
   rules and ADRs" list, with the `domain-modeling` skill: the terms in the
   project's `GLOSSARY.md`, the decisions as ADRs in `docs/adr/`. Nothing else
   goes in either.
-- Name with the `python-naming` skill. Before each commit, run its "Before each
-  commit" check, and record your naming decisions in the task's `NAMES.md`
-  as it says.
+- Name as "Names" below says.
+
+## Names
+- Take each name's word from the first of these that has one: the project's
+  `GLOSSARY.md` (never a word it lists under _Avoid_), `DESIGN.md`, the code
+  already there, then a new word. Name an instance for its class, unless the
+  scope holds two of the type or its role is what the reader needs.
+- A concept the glossary lacks, or a word you find meaning two things, goes
+  in `LEARNINGS.md` as a `[proposal]` entry, as the `domain-modeling` skill
+  says. Don't add it to `GLOSSARY.md` unless `TASK.md` or `DESIGN.md` lists
+  it.
+- Before each commit, check every name the staged diff (`git diff --cached`)
+  adds or renames, and each existing name whose behaviour it changes, with the
+  `python-naming-smells` skill. Fix any that fails.
+- When the fix would change a name `DESIGN.md` gives, ask the architect, as
+  "When to stop and ask" in `AGENTS.md` says. Rename an interface name, such
+  as a command, flag or config key, only when `TASK.md` or `DESIGN.md` says
+  to; otherwise ask the planner.
+- An existing name you find drifting from the agreed word isn't yours to
+  rename in this task. List it under `Next` in `LOG.md`.
+- A word you considered and turned down needs no record. If a review
+  suggests it, answer the finding `disagree, because <why>`.
 
 ## Review
 The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
@@ -71,8 +90,8 @@ The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW
 - To ask the architect about a finding, use your own id and cite the finding:
   `Asks D<n> → architect: <question> (R<m>)`. Answer `R<m>` once `D<n>` is
   answered.
-- Fix a name finding by the `python-naming` skill: read every use of the new name,
-  in the whole repository, and record the rename in `NAMES.md`.
+- Fix a name finding as "Names" above says: check the new name with the
+  `python-naming-smells` skill at every use in the repository.
 
 ## Pull request
 - The first time the work is ready for review, open the pull request as a

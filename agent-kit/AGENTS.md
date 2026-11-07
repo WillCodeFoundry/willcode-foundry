@@ -72,7 +72,6 @@ Each file but `TURN` has one writer, or only grows:
 | `TASK.md` | the planner, once the human approves | The goal and acceptance criteria. Every other role: **never edit it.** |
 | `DESIGN.md` | the architect, once the human approves | How the task fits the code's structure, when it needs that. Every other role: **never edit it**, and follow it as you follow `TASK.md`. |
 | `REVIEW.md` | the reviewer | Review rounds and their findings, `R1`, `R2`, … |
-| `NAMES.md` | the dev | The naming decisions the code can't show: new words, renames, and clashes found, as the `python-naming` skill says. |
 | `LOG.md` | every role, appending only | Everything roles tell each other: progress, questions, answers, outcomes. |
 | `LEARNINGS.md` | every role, appending only | What you found out and decided. |
 | `TURN` | the role ending its turn | One line: the next role, or `human`. |
