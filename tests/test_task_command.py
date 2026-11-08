@@ -191,7 +191,7 @@ def test_an_unknown_project_is_refused_as_create_refuses_it() -> None:
 
 def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, git_env, tmp_path: Path) -> None:
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
-    git_output(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: a FoundryError
+    git_output(git_env, "init", "--quiet", "--bare", str(tmp_path / "bare.git"))  # no agent-notes: no task yet
     projects = [
         Project("bare", str(tmp_path / "bare.git")),
         Project("gone", str(tmp_path / "missing.git")),  # unreachable: git's GitError
@@ -200,10 +200,12 @@ def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, 
 
     listings, errors = read_listings_and_errors(projects, git_env)
 
-    assert listings == [ProjectListing("store", [TaskTurn(Task.as_open("tst-0000"), "dev")])]
-    assert [type(error) for error in errors] == [FoundryError, FoundryError]
-    assert str(errors[0]) == "bare: the repository has no agent-notes branch"
-    assert str(errors[1]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[1])
+    assert listings == [
+        ProjectListing("bare", []),
+        ProjectListing("store", [TaskTurn(Task.as_open("tst-0000"), "dev")]),
+    ]
+    assert [type(error) for error in errors] == [FoundryError]
+    assert str(errors[0]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[0])
 
 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(

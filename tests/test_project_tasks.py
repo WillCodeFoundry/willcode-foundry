@@ -1,6 +1,7 @@
 """ProjectTasks against a real repository on disk: creating, finding, closing, reopening and handing off tasks,
 and reading and listing their turns."""
 
+import contextlib
 import subprocess
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
+from foundry.project_clone import ProjectClone
 from foundry.project_tasks import (
     ClosedTaskError,
     MissingTurnError,
@@ -133,13 +135,13 @@ def test_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Pat
         create(project_tasks_of(tmp_path / "missing.git", git_env))
 
 
-# --- read_task_turn ---------------------------------------------------------------------
+# --- fetch_task_turn ---------------------------------------------------------------------
 
 
 def test_a_new_task_s_turn_is_the_template_s(project_repository) -> None:
     project_repository.project_tasks().create_task("tst-0001", {**TEMPLATE, "TURN": "dev\n"})
 
-    assert project_repository.project_tasks().read_task_turn("tst-0001") == "dev"
+    assert project_repository.project_tasks().fetch_task_turn("tst-0001") == "dev"
 
 
 @pytest.mark.parametrize(
@@ -155,29 +157,29 @@ def test_a_task_without_a_turn_is_refused_naming_its_turn_file(project_repositor
         MissingTurnError,
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.$",
     ):
-        project_repository.project_tasks().read_task_turn("tst-0000")
+        project_repository.project_tasks().fetch_task_turn("tst-0000")
 
 
 def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(project_repository) -> None:
     with pytest.raises(
         FoundryError, match=r"task cls-0000 has no turn: agent-notes has no .agent/tasks/closed/cls-0000/TURN"
     ):
-        project_repository.project_tasks().read_task_turn("cls-0000")
+        project_repository.project_tasks().fetch_task_turn("cls-0000")
 
 
 def test_a_task_that_doesn_t_exist_has_no_turn_to_read(project_repository) -> None:
     with pytest.raises(TaskNotFoundError):
-        project_repository.project_tasks().read_task_turn("tst-0009")
+        project_repository.project_tasks().fetch_task_turn("tst-0009")
 
 
-# --- get_task_by_id ---------------------------------------------------------------------
+# --- fetch_task ---------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "task_id, found", [("tst-0000", Task.as_open("tst-0000")), ("cls-0000", Task.as_closed("cls-0000"))]
 )
 def test_a_task_has_the_status_of_the_dir_holding_its_notes(project_repository, task_id: str, found) -> None:
-    assert project_repository.project_tasks().get_task_by_id(task_id) == found
+    assert project_repository.project_tasks().fetch_task(task_id) == found
 
 
 def test_a_task_in_neither_dir_is_not_found_naming_both(project_repository) -> None:
@@ -188,14 +190,40 @@ def test_a_task_in_neither_dir_is_not_found_naming_both(project_repository) -> N
             r"agent-notes has neither .agent/tasks/open/tst-0009/ nor .agent/tasks/closed/tst-0009/$"
         ),
     ):
-        project_repository.project_tasks().get_task_by_id("tst-0009")
+        project_repository.project_tasks().fetch_task("tst-0009")
 
 
 def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_env) -> None:
     bare_dir = tmp_path / "bare.git"
     git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
-    with pytest.raises(TaskNotFoundError):
-        project_tasks_of(bare_dir, git_env).get_task_by_id("tst-0001")
+    with pytest.raises(
+        TaskNotFoundError, match=r"^task tst-0001 doesn't exist: the repository has no agent-notes branch"
+    ):
+        project_tasks_of(bare_dir, git_env).fetch_task("tst-0001")
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda project_tasks: project_tasks.fetch_task("tst-0000"),
+        lambda project_tasks: project_tasks.fetch_task_turn("tst-0000"),
+        lambda project_tasks: project_tasks.fetch_open_task_turns(),
+        lambda project_tasks: project_tasks.close_task("cls-0000"),  # refused: already closed
+        lambda project_tasks: project_tasks.hand_off("cls-0000", "dev", note=None),  # refused: closed
+    ],
+    ids=["fetch_task", "fetch_task_turn", "fetch_open_task_turns", "refused-close", "refused-hand-off"],
+)
+def test_finding_reading_and_refusing_change_no_file(project_repository, git_env, tmp_path: Path, operation) -> None:
+    """Only an operation that goes ahead checks out NOTES_BRANCH; until then the clone's working tree is empty."""
+    project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
+    work_dir = tmp_path / "clone"
+    work_dir.mkdir()
+    project_tasks = ProjectTasks(ProjectClone.init(str(project_repository.path), work_dir, git_env))
+
+    with contextlib.suppress(FoundryError):
+        operation(project_tasks)
+
+    assert [path.name for path in work_dir.iterdir()] == [".git"]
 
 
 def test_a_task_in_both_dirs_is_refused_naming_both(project_repository) -> None:
@@ -204,7 +232,7 @@ def test_a_task_in_both_dirs_is_refused_naming_both(project_repository) -> None:
     with pytest.raises(
         FoundryError, match=r"^task tst-0000 is both open and closed: .*open/tst-0000/ and .*closed/tst-0000/$"
     ) as error:
-        project_repository.project_tasks().get_task_by_id("tst-0000")
+        project_repository.project_tasks().fetch_task("tst-0000")
     assert not isinstance(error.value, TaskNotFoundError)
 
 
@@ -518,12 +546,12 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(project_repository) -> None
         task_turns_of(project_repository.project_tasks())
 
 
-def test_listing_a_repository_without_a_notes_branch_names_agent_notes(tmp_path: Path, git_env) -> None:
+def test_a_repository_without_a_notes_branch_lists_no_open_task(tmp_path: Path, git_env) -> None:
+    """No task has been created yet, so there is no agent-notes: that is no task, not an error."""
     bare_dir = tmp_path / "bare.git"
     git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
 
-    with pytest.raises(FoundryError, match=r"^the repository has no agent-notes branch$"):
-        task_turns_of(project_tasks_of(bare_dir, git_env))
+    assert task_turns_of(project_tasks_of(bare_dir, git_env)) == []
 
 
 def test_listing_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Path, git_env) -> None:
@@ -560,7 +588,7 @@ def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env,
         (ProjectTasks.create_task, "TST-0000"),
         (ProjectTasks.close_task, "TST-0000"),
         (ProjectTasks.reopen_task, "CLS-0000"),
-        (ProjectTasks.get_task_by_id, "TST-0000"),
+        (ProjectTasks.fetch_task, "TST-0000"),
     ],
     ids=["create", "create-existing", "close", "reopen", "get"],
 )

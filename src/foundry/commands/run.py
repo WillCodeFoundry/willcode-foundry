@@ -57,11 +57,11 @@ def require_open_task_and_role(
     FoundryError, before any sandbox is made, when the task doesn't exist, is closed (saying how to reopen it), or
     has no turn.
     """
-    task = project_tasks.get_task_by_id(task_id)
+    task = project_tasks.fetch_task(task_id)
     if task.status is Status.CLOSED:
         raise FoundryError(f"task {task.id} is closed: reopen it with `foundry task reopen {project_name} {task.id}`")
     if role_name is None:
-        role_name = role_for_turn(project_tasks.read_task_turn(task.id), roles, project_name=project_name, task=task)
+        role_name = role_for_turn(project_tasks.fetch_task_turn(task.id), roles, project_name=project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
     return task, role_name
 

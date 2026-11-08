@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_clone import PathNotOnBranchError, ProjectClone
-from tests.support.project_repository import clone_in
+from foundry.project_clone import BranchNotFoundError, PathNotOnBranchError, ProjectClone
+from tests.support.project_repository import clone_in, git_output
 
 # --- ProjectClone: what ProjectTasks can't reach ----------------------------------------
 
@@ -44,17 +45,43 @@ def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_
 
 def test_fetch_branch_refuses_a_branch_the_remote_lacks(project_repository) -> None:
     clone = project_repository.clone()
-    with pytest.raises(FoundryError, match=r"^the repository has no nope branch$"):
+    with pytest.raises(BranchNotFoundError, match=r"^the repository has no nope branch$"):
         clone.fetch_branch("nope")
 
 
-def test_fetched_list_dir_lists_only_the_directories_in_a_fetched_branch(project_repository) -> None:
+# --- ProjectClone: check_out_fetched ----------------------------------------------------
+
+
+def test_check_out_fetched_checks_out_the_commit_fetched_not_a_later_one(project_repository) -> None:
+    clone = project_repository.fetched_clone()
+    project_repository.edit_notes(write={"later.md": "pushed after the fetch\n"})
+
+    clone.check_out_fetched(task.NOTES_BRANCH)
+    clone.write({"mine.md": "1\n"})
+    clone.commit("mine")
+
+    with pytest.raises(GitError, match="rejected"):  # never forced: the later commit is kept
+        clone.push_atomic(from_remote={}, from_local=[task.NOTES_BRANCH])
+
+
+def test_check_out_fetched_starts_a_branch_the_remote_lacks_with_no_history(tmp_path: Path, git_env) -> None:
+    work_dir = tmp_path / "clone"
+    work_dir.mkdir()
+    clone = ProjectClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
+
+    clone.check_out_fetched("new")
+
+    assert git_output(git_env, "-C", str(work_dir), "branch", "--show-current") == "new"
+    assert git_output(git_env, "-C", str(work_dir), "rev-list", "--all") == ""
+
+
+def test_fetched_subdir_names_lists_only_the_dirs_in_a_fetched_branch(project_repository) -> None:
     clone = project_repository.fetched_clone()
     assert clone.fetched_subdir_names(task.NOTES_BRANCH, task.OPEN_DIR) == ["tst-0000"]
     assert clone.fetched_subdir_names(task.NOTES_BRANCH, f"{task.OPEN_DIR}/tst-0000") == []  # TASK.md is a file
 
 
-def test_fetched_list_dir_of_a_missing_dir_raises_the_narrow_error(project_repository) -> None:
+def test_fetched_subdir_names_of_a_missing_dir_raises_the_narrow_error(project_repository) -> None:
     clone = project_repository.fetched_clone()
     with pytest.raises(PathNotOnBranchError):
         clone.fetched_subdir_names(task.NOTES_BRANCH, ".agent/tasks/nope")

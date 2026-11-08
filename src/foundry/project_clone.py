@@ -13,6 +13,10 @@ _REMOTE_NAME = "origin"
 _ENTRY_WORD_BY_TYPE = {"tree": "dir", "blob": "file"}
 
 
+class BranchNotFoundError(FoundryError):
+    """The remote has no branch of that name."""
+
+
 class PathNotOnBranchError(FoundryError):
     """The dir or file asked for isn't on a fetched branch. Either nothing is at its path, or something of the
     other kind is, such as a dir where a file is wanted."""
@@ -59,22 +63,22 @@ class ProjectClone:
             for line in self._git.output("ls-remote", "--heads", _REMOTE_NAME).splitlines()
         ]
 
-    def check_out(self, branch: str) -> None:
-        """Check out ``branch``: its latest commit if the remote has it, otherwise a start with no history or files."""
-        if branch in self.branches():  # listed here on purpose, so callers needn't say whether it exists
-            self._fetch(branch)
-            self._git.output("switch", "--quiet", branch)
-        else:
-            self._git.output("switch", "--quiet", "--orphan", branch)
-
     def fetch_branch(self, branch: str) -> None:
-        """Fetch the remote's ``branch``, for fetched_subdir_names and fetched_text.
+        """Fetch the remote's ``branch``, for fetched_subdir_names, fetched_text and check_out_fetched.
 
-        FoundryError when it has no such branch.
+        BranchNotFoundError when it has no such branch.
         """
         if branch not in self.branches():
-            raise FoundryError(f"the repository has no {branch} branch")
+            raise BranchNotFoundError(f"the repository has no {branch} branch")
         self._fetch(branch)
+
+    def check_out_fetched(self, branch: str) -> None:
+        """Check out ``branch`` at the commit last fetched, so changes are made on what was read. Makes no network
+        call. A branch that isn't fetched, because the remote has none, starts with no history or files."""
+        if self._is_fetched(branch):
+            self._git.output("switch", "--quiet", "--force-create", branch, self._tracking_ref(branch))
+        else:
+            self._git.output("switch", "--quiet", "--orphan", branch)
 
     def fetched_subdir_names(self, branch: str, path: str) -> list[str]:
         """The names of the dirs directly in ``path`` on ``branch``, as last fetched; files and links are left out.
@@ -95,10 +99,6 @@ class ProjectClone:
         """
         self._require_on_branch(branch, path, "blob")
         return self._git.output("show", f"{self._tracking_ref(branch)}:{path}")
-
-    def exists(self, path: str) -> bool:
-        """Whether ``path``, relative to the repository root, exists in the checked-out files."""
-        return (self._work_dir / path).exists()
 
     def write(self, files: Mapping[str, str]) -> None:
         """Write each file, by path relative to the repository root, creating dirs and replacing files as needed.
@@ -153,8 +153,11 @@ class ProjectClone:
         ]
         self._git.output("push", "--quiet", "--atomic", _REMOTE_NAME, *refspecs)
 
+    def _is_fetched(self, branch: str) -> bool:
+        return self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._tracking_ref(branch)}^{{commit}}")
+
     def _require_fetched(self, branch: str) -> None:
-        if not self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._tracking_ref(branch)}^{{commit}}"):
+        if not self._is_fetched(branch):
             raise FoundryError(f"{branch} isn't fetched: call fetch_branch first")
 
     def _require_on_branch(self, branch: str, path: str, entry_type: Literal["tree", "blob"]) -> None:
@@ -172,8 +175,8 @@ class ProjectClone:
         """The type and name of each entry ``git ls-tree`` lists for ``args``."""
         entries = []
         for entry in filter(None, self._git.output("ls-tree", "-z", *args).split("\0")):
-            info, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
-            entries.append((info.split()[1], name))
+            header, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
+            entries.append((header.split()[1], name))
         return entries
 
     @staticmethod
