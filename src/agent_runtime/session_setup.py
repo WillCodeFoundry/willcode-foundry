@@ -33,7 +33,8 @@ class SetupRefused(Exception):
 
 @dataclass(frozen=True)
 class _Checkout:
-    """One of the sandbox clone's two working trees, as a refusal names it."""
+    """One of the project sandbox clone's two working trees, as a refusal names it. Moving it is done through
+    ``git``; what both checkouts share is _ProjectSandboxClone's."""
 
     name: Literal["code", "notes"]
     dir: Path
@@ -42,6 +43,74 @@ class _Checkout:
     @property
     def git(self) -> Git:
         """git, run in this checkout's working tree."""
+        return Git(self.dir)
+
+
+@dataclass(frozen=True)
+class _ProjectSandboxClone:
+    """The project's sandbox clone: the refs, config and remote both checkouts share. It moves no working tree; a
+    _Checkout does that. The git details of reading refs stay in its methods."""
+
+    dir: Path
+    """Where the clone's .git is: the code checkout's dir."""
+
+    @classmethod
+    def clone_if_missing(cls, url: str, code_checkout_dir: Path) -> "_ProjectSandboxClone":
+        """The clone in ``code_checkout_dir``, cloned from ``url`` first when it isn't there.
+
+        A blobless partial clone: full history of commits, file contents fetched on demand. It keeps large
+        repositories fast without the limits of --depth."""
+        if not (code_checkout_dir / ".git").is_dir():
+            code_checkout_dir.parent.mkdir(parents=True, exist_ok=True)
+            _run_or_refuse(Git(), "clone", "--filter=blob:none", url, str(code_checkout_dir))
+        return cls(code_checkout_dir)
+
+    def use_hooks_in(self, hooks_dir: Path) -> None:
+        """Point core.hooksPath at ``hooks_dir``, for both checkouts."""
+        _run_or_refuse(self._git, "config", "core.hooksPath", str(hooks_dir))
+
+    def fetch(self) -> None:
+        _run_or_refuse(self._git, "fetch", "origin")
+
+    def has_branch(self, branch: str) -> bool:
+        """Whether the clone has a local ``branch``, as opposed to only origin's."""
+        return self._git.succeeds("show-ref", "-q", "--verify", _local_ref(branch))
+
+    def has_origin_branch(self, branch: str) -> bool:
+        """Whether origin had ``branch`` at the last fetch."""
+        return self._git.succeeds("show-ref", "-q", "--verify", _origin_ref(branch))
+
+    def has_file_on_origin(self, branch: str, path: str) -> bool:
+        """Whether origin's ``branch`` holds a file at ``path``, relative to the checkout's root."""
+        return self._git.succeeds("cat-file", "-e", f"{_origin_ref(branch)}:{path}")
+
+    def is_ancestor(self, older_ref: str, newer_ref: str) -> bool:
+        """Whether ``newer_ref`` already holds ``older_ref``: equal to it, or ahead of it."""
+        return self._git.succeeds("merge-base", "--is-ancestor", older_ref, newer_ref)
+
+    def commits_origin_lacks(self, branch: str) -> list[str]:
+        """The subject of each commit on the local ``branch`` that origin's lacks, newest first."""
+        log = self._git.run_captured("log", "--format=%s", f"{_origin_ref(branch)}..{_local_ref(branch)}")
+        return log.stdout.splitlines()
+
+    def add_checkout(self, checkout: _Checkout) -> None:
+        """Add ``checkout`` as a working tree on its branch, tracking origin's when there is no local one yet."""
+        if self.has_branch(checkout.branch):
+            _run_or_refuse(self._git, "worktree", "add", str(checkout.dir), checkout.branch)
+        else:
+            _run_or_refuse(
+                self._git,
+                "worktree",
+                "add",
+                "--track",
+                "-b",
+                checkout.branch,
+                str(checkout.dir),
+                f"origin/{checkout.branch}",
+            )
+
+    @property
+    def _git(self) -> Git:
         return Git(self.dir)
 
 
@@ -79,36 +148,25 @@ def _prepare_checkouts(variables: contract.SessionVariables, agent_kit: AgentKit
     exactly as they were. The one exception is the switch, when the code checkout started on another branch."""
     code = _Checkout("code", variables.agent_code_checkout_dir, variables.agent_task_branch)
     notes = _Checkout("notes", variables.agent_notes_checkout_dir, variables.agent_notes_branch)
-    project_sandbox_clone = _clone_if_missing(variables)
-    _run_or_refuse(project_sandbox_clone, "config", "core.hooksPath", str(agent_kit.git_hooks))  # read-only mount
-    _run_or_refuse(project_sandbox_clone, "fetch", "origin")
+    project_sandbox_clone = _ProjectSandboxClone.clone_if_missing(variables.agent_repo_url, code.dir)
+    project_sandbox_clone.use_hooks_in(agent_kit.git_hooks)  # read-only mount
+    project_sandbox_clone.fetch()
     _require_task_on_origin(project_sandbox_clone, variables)
-    _switch_to_task_branch(code)
+    _switch_to_task_branch(project_sandbox_clone, code)
     _require_checkouts_can_update(project_sandbox_clone, code, notes)
-    _fast_forward(code)
-    _add_notes_checkout(project_sandbox_clone, notes)
-    _fast_forward(notes)
+    _fast_forward(project_sandbox_clone, code)
+    if not notes.dir.is_dir():
+        project_sandbox_clone.add_checkout(notes)
+    _fast_forward(project_sandbox_clone, notes)
 
 
-def _clone_if_missing(variables: contract.SessionVariables) -> Git:
-    """The sandbox clone, cloned into the code checkout's dir when it isn't there.
-
-    A blobless partial clone: full history of commits, file contents fetched on demand. It keeps large repositories
-    fast without the limits of --depth."""
-    code_checkout_dir = variables.agent_code_checkout_dir
-    if not (code_checkout_dir / ".git").is_dir():
-        code_checkout_dir.parent.mkdir(parents=True, exist_ok=True)
-        _run_or_refuse(Git(), "clone", "--filter=blob:none", variables.agent_repo_url, str(code_checkout_dir))
-    return Git(code_checkout_dir)
-
-
-def _require_task_on_origin(project_sandbox_clone: Git, variables: contract.SessionVariables) -> None:
+def _require_task_on_origin(project_sandbox_clone: _ProjectSandboxClone, variables: contract.SessionVariables) -> None:
     """The task must already exist on origin, created with its branch and a TASK.md on the notes branch before
     any agent runs. Say so plainly rather than let git fail, and before any checkout moves."""
     missing = [
         f"branch {branch}"
         for branch in (variables.agent_task_branch, variables.agent_notes_branch)
-        if not project_sandbox_clone.succeeds("show-ref", "-q", "--verify", f"refs/remotes/origin/{branch}")
+        if not project_sandbox_clone.has_origin_branch(branch)
     ]
     if missing:
         raise SetupRefused(
@@ -118,40 +176,23 @@ def _require_task_on_origin(project_sandbox_clone: Git, variables: contract.Sess
             "write its TASK.md, then run again."
         )
     # Every task has a TASK.md: foundry task create refuses a template without one.
-    task_md_on_origin = f"refs/remotes/origin/{variables.agent_notes_branch}:{variables.agent_task_file}"
-    if not project_sandbox_clone.succeeds("cat-file", "-e", task_md_on_origin):
+    if not project_sandbox_clone.has_file_on_origin(variables.agent_notes_branch, variables.agent_task_file):
         raise SetupRefused(
             f"{variables.agent_notes_branch} has no {variables.agent_task_file}; push the task's TASK.md there, "
             "then run again."
         )
 
 
-def _switch_to_task_branch(code: _Checkout) -> None:
-    if _has_branch(code.git, code.branch):
+def _switch_to_task_branch(project_sandbox_clone: _ProjectSandboxClone, code: _Checkout) -> None:
+    if project_sandbox_clone.has_branch(code.branch):
         _run_or_refuse(code.git, "switch", code.branch)
     else:
         _run_or_refuse(code.git, "switch", "-c", code.branch, "--track", f"origin/{code.branch}")
 
 
-def _add_notes_checkout(project_sandbox_clone: Git, notes: _Checkout) -> None:
-    if notes.dir.is_dir():
-        return
-    if _has_branch(project_sandbox_clone, notes.branch):
-        _run_or_refuse(project_sandbox_clone, "worktree", "add", str(notes.dir), notes.branch)
-    else:
-        _run_or_refuse(
-            project_sandbox_clone,
-            "worktree",
-            "add",
-            "--track",
-            "-b",
-            notes.branch,
-            str(notes.dir),
-            f"origin/{notes.branch}",
-        )
-
-
-def _require_checkouts_can_update(project_sandbox_clone: Git, code: _Checkout, notes: _Checkout) -> None:
+def _require_checkouts_can_update(
+    project_sandbox_clone: _ProjectSandboxClone, code: _Checkout, notes: _Checkout
+) -> None:
     """Refuse, changing nothing, unless both checkouts can be brought to origin's tips."""
     _require_notes_on_branch(notes)
     _require_fast_forward(project_sandbox_clone, code)
@@ -172,18 +213,16 @@ def _require_notes_on_branch(notes: _Checkout) -> None:
         )
 
 
-def _require_fast_forward(project_sandbox_clone: Git, checkout: _Checkout) -> None:
+def _require_fast_forward(project_sandbox_clone: _ProjectSandboxClone, checkout: _Checkout) -> None:
     """Refuse when the checkout's branch can't be fast-forwarded to origin's: it has diverged, or the update would
     overwrite uncommitted changes. A branch only ahead of origin is fine, and so is one not made yet."""
-    local_ref, origin_ref = f"refs/heads/{checkout.branch}", f"refs/remotes/origin/{checkout.branch}"
-    if not _has_branch(project_sandbox_clone, checkout.branch) or _is_ancestor(
-        project_sandbox_clone, origin_ref, local_ref
+    local_ref, origin_ref = _local_ref(checkout.branch), _origin_ref(checkout.branch)
+    if not project_sandbox_clone.has_branch(checkout.branch) or project_sandbox_clone.is_ancestor(
+        origin_ref, local_ref
     ):
         return
-    if not _is_ancestor(project_sandbox_clone, local_ref, origin_ref):
-        subjects = project_sandbox_clone.run_captured(
-            "log", "--format=%s", f"{origin_ref}..{local_ref}"
-        ).stdout.splitlines()
+    if not project_sandbox_clone.is_ancestor(local_ref, origin_ref):
+        subjects = project_sandbox_clone.commits_origin_lacks(checkout.branch)
         listed = "".join(f"\n    {subject}" for subject in subjects)
         raise _checkout_refusal(
             checkout,
@@ -211,20 +250,20 @@ def _checkout_refusal(checkout: _Checkout, diagnosis: str, discards: str) -> Set
     )
 
 
-def _fast_forward(checkout: _Checkout) -> None:
-    """Bring the checkout's branch to origin's tip; a branch already there, or ahead, stays."""
-    if not _is_ancestor(checkout.git, f"origin/{checkout.branch}", "HEAD"):
+def _fast_forward(project_sandbox_clone: _ProjectSandboxClone, checkout: _Checkout) -> None:
+    """Bring the checkout's branch to origin's tip; a branch already there, or ahead, stays. The branch is the one
+    checked out: the refusals before it made sure of that."""
+    if not project_sandbox_clone.is_ancestor(_origin_ref(checkout.branch), _local_ref(checkout.branch)):
         _run_or_refuse(checkout.git, "merge", "--ff-only", f"origin/{checkout.branch}")
 
 
-def _has_branch(git: Git, branch: str) -> bool:
-    """Whether the sandbox clone has a local ``branch``, as opposed to only origin's."""
-    return git.succeeds("show-ref", "-q", "--verify", f"refs/heads/{branch}")
+def _local_ref(branch: str) -> str:
+    return f"refs/heads/{branch}"
 
 
-def _is_ancestor(git: Git, older: str, newer: str) -> bool:
-    """Whether ``newer`` already holds ``older``: equal to it, or ahead of it."""
-    return git.succeeds("merge-base", "--is-ancestor", older, newer)
+def _origin_ref(branch: str) -> str:
+    """``branch`` as origin had it at the last fetch."""
+    return f"refs/remotes/origin/{branch}"
 
 
 def _write_instructions(home: Path, agent_kit: AgentKit, role_dir: RoleDir, task_md_path: Path) -> None:
