@@ -114,8 +114,8 @@ def _require_task_on_origin(project_sandbox_clone: Git, variables: contract.Sess
             "write its TASK.md, then run again."
         )
     # Every task has a TASK.md: foundry task create refuses a template without one.
-    task_md = f"refs/remotes/origin/{variables.agent_notes_branch}:{variables.agent_task_file}"
-    if not project_sandbox_clone.succeeds("cat-file", "-e", task_md):
+    task_md_on_origin = f"refs/remotes/origin/{variables.agent_notes_branch}:{variables.agent_task_file}"
+    if not project_sandbox_clone.succeeds("cat-file", "-e", task_md_on_origin):
         raise SetupRefused(
             f"{variables.agent_notes_branch} has no {variables.agent_task_file}; push the task's TASK.md there, "
             "then run again."
