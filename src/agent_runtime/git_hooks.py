@@ -5,11 +5,10 @@
 - ``prepare_commit_msg``: the ``Task:`` trailer on every commit on the task branch.
 - ``pre_push``: pushes only to this task's branch and the notes branch.
 
-Each takes what git passes, the session variables and the repository, defaulting to this process's and the
-current directory's, and raises GitHookRefused, whose message says what was wrong and what to do instead.
+Each takes what git passes, the session variables and the repository, and raises GitHookRefused, whose message
+says what was wrong and what to do instead. agent_runtime.commands.git_hook reads them from this process.
 """
 
-import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -25,16 +24,14 @@ class GitHookRefused(Exception):
     """A hook refuses: the message is the whole refusal, as the agent will read it."""
 
 
-def pre_commit(variables: contract.SessionVariables | None = None, git: Git | None = None) -> None:
+def pre_commit(variables: contract.SessionVariables, git: Git) -> None:
     """Refuse a commit that puts files where they don't belong.
 
     task branch: no task notes: nothing under the notes root, at any depth, so notes written from a
-                 subfolder are caught too;
+                 subdir are caught too;
     notes branch: only this task's notes dir, and LOG_FILE there only added to, as below.
     Commits on any other branch are left alone: they can't be pushed.
     """
-    variables = variables or _read_variables("pre-commit")
-    git = git or Git()
     branch = git.current_branch()
     if branch == variables.agent_task_branch:
         refused_paths = [path for path in _staged_paths(git) if _is_under(variables.agent_notes_root, path)]
@@ -87,15 +84,10 @@ def _text_at(git: Git, revision_and_path: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
-def prepare_commit_msg(
-    args: Sequence[str] | None = None, variables: contract.SessionVariables | None = None, git: Git | None = None
-) -> None:
+def prepare_commit_msg(hook_args: Sequence[str], variables: contract.SessionVariables, git: Git) -> None:
     """Add a "Task: <task>" trailer to every commit on the task branch, so each code commit traces back to
     its task without the agent having to remember. Runs even with --no-verify. git passes the message
     file first."""
-    variables = variables or _read_variables("prepare-commit-msg")
-    git = git or Git()
-    hook_args = sys.argv[1:] if args is None else args
     if git.current_branch() != variables.agent_task_branch:
         return
     if not hook_args:
@@ -108,16 +100,15 @@ def prepare_commit_msg(
     git.output("interpret-trailers", "--in-place", "--if-exists", "doNothing", "--trailer", trailer, message_file)
 
 
-def pre_push(ref_lines: Iterable[str] | None = None, variables: contract.SessionVariables | None = None) -> None:
+def pre_push(ref_lines: Iterable[str], variables: contract.SessionVariables) -> None:
     """Refuse a push to anything but this task's branch and the notes branch.
 
     The project's GitHub rulesets allow any task branch, since GitHub can't tell one task from another;
     this keeps a role to its own. git passes one line per ref on stdin:
     ``<local ref> <local sha> <remote ref> <remote sha>``.
     """
-    variables = variables or _read_variables("pre-push")
     allowed = {f"refs/heads/{variables.agent_task_branch}", f"refs/heads/{variables.agent_notes_branch}"}
-    for line in sys.stdin if ref_lines is None else ref_lines:
+    for line in ref_lines:
         match line.split():
             case []:
                 continue
@@ -138,14 +129,6 @@ def _refusal(hook: str, *lines: str) -> GitHookRefused:
     """Every refusal's shape: the hook, what was wrong, then what to do instead."""
     body = "".join(f"  {line}\n" for line in lines)
     return GitHookRefused(f"{hook}: refusing\n\n{body}")
-
-
-def _read_variables(hook: str) -> contract.SessionVariables:
-    """The session variables, or a refusal naming the missing ones."""
-    try:
-        return contract.read_session_variables()
-    except contract.MissingVariables as error:
-        raise GitHookRefused(f"{hook}: {error}") from None
 
 
 def _is_under(root: str, path: str) -> bool:

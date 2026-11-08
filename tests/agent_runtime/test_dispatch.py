@@ -2,16 +2,16 @@
 
 from functools import partial
 
-from agent_runtime import claude_hooks, session_setup
 from agent_runtime.__main__ import GIT_HOOKS, Invocation, parse
+from agent_runtime.commands import claude_hook, session_setup
 
 
 def test_a_command_is_named_as_typed_and_calls_its_function() -> None:
-    assert parse(["session-setup"]) == Invocation("session-setup", session_setup.set_up)
+    assert parse(["session-setup"]) == Invocation("session-setup", session_setup.main)
 
 
 def test_a_claude_hook_is_named_without_its_kind() -> None:
-    assert parse(["claude-hook", "guard-bash"]) == Invocation("guard-bash", claude_hooks.guard_bash)
+    assert parse(["claude-hook", "guard-bash"]) == Invocation("guard-bash", claude_hook.guard_bash)
 
 
 def test_a_git_hook_is_given_what_git_passed_it() -> None:

@@ -39,11 +39,12 @@ A launch, end to end:
 
 | Module | What it does |
 |---|---|
-| `__main__.py` | The runtime's commands; it prints the errors the runtime's code raises. |
-| `session_init.py` | `session-init`: setup, root mode through sudo on the first launch, then agent mode. |
+| `__main__.py` | The runtime's command line; it prints the errors the runtime's code raises. |
+| `commands/` | One module per command, each a composition root: it reads the session variables, stdin or the hook's arguments, calls the library, and prints. Only these and `__main__.py` print (design rule 6). |
+| `session_init.py` | `session-init`'s order: setup, root mode on the first launch, then agent mode. `commands/session_init.py` makes the sudo call. |
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
-| `claude_hooks.py`, `git_hooks.py` | The Claude hooks and the git hooks. |
+| `claude_hooks.py`, `git_hooks.py` | The rules of the Claude hooks and the git hooks. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 
 The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <command>`:

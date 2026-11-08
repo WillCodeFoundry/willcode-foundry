@@ -5,8 +5,11 @@ Idempotent: safe to run again on a re-attached sandbox. Never needs root, so the
 sandbox. The sandbox has no host checkout: the project is cloned here from AGENT_REPO_URL into
 AGENT_CODE_CHECKOUT_DIR. Assumes `foundry task create` has already created the task: its branch, and its task
 notes dir, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
+
+Progress is logged, and git writes its own output straight to the terminal. The command that runs setup shows both.
 """
 
+import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +19,8 @@ from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit, RoleDir
 from agent_runtime.atomic_files import atomic_write
 from agent_runtime.git import Git
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SetupRefused(Exception):
@@ -40,10 +45,9 @@ class _Checkout:
         return Git(self.dir)
 
 
-def set_up(variables: contract.SessionVariables | None = None) -> None:
+def set_up(variables: contract.SessionVariables) -> None:
     """Set the sandbox up: the git identity, both checkouts, and the agent's instructions and skills under ~/.claude.
     Raises SetupRefused when it can't."""
-    variables = variables or contract.read_session_variables()
     home = Path.home()
     agent_kit = AgentKit(variables.agent_kit_dir)
     role_dir = agent_kit.role_dir(variables.agent_role)
@@ -55,9 +59,9 @@ def set_up(variables: contract.SessionVariables | None = None) -> None:
     task_md_path = variables.agent_notes_checkout_dir / variables.agent_task_file
     _write_instructions(home, agent_kit, role_dir, task_md_path)
     _link_skills(home, role_dir)
-    print("session-setup: checkouts ready", flush=True)
+    _LOGGER.info("session-setup: checkouts ready")
     for checkout_dir in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
-        print(Git(checkout_dir).run_captured("status", "-sb").stdout.partition("\n")[0], flush=True)
+        _LOGGER.info(Git(checkout_dir).run_captured("status", "-sb").stdout.partition("\n")[0])
 
 
 def _set_identity(variables: contract.SessionVariables, agent_kit: AgentKit, role_dir: RoleDir) -> None:

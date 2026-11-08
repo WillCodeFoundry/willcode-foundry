@@ -6,42 +6,39 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
 
-from agent_runtime import (
-    claude_hooks,
-    contract,
-    git_hooks,
-    hardening,
-    session_init,
-    session_setup,
-)
+from agent_runtime.commands import check_hardening, claude_hook, git_hook, harden, session_init, session_setup
+from agent_runtime.contract import MissingVariables
 from agent_runtime.git import GitError
+from agent_runtime.git_hooks import GitHookRefused
+from agent_runtime.hardening import HardeningRefused
+from agent_runtime.session_setup import SetupRefused
 
 Command = Callable[[], int | None]
 """Runs one command, and returns its exit code, or None for 0. Most return nothing and raise to fail, as
 agent_runtime's docstring says."""
 
 COMMANDS: dict[str, tuple[Command, str]] = {
-    "session-init": (session_init.init, "prepare the sandbox: what the launcher runs before the agent"),
-    "session-setup": (session_setup.set_up, "the agent user's part of session-init"),
-    "harden": (session_init.harden, "as root: harden the sandbox"),
-    "check-hardening": (session_init.check_hardening, "as the agent: check the sandbox is hardened"),
+    "session-init": (session_init.main, "prepare the sandbox: what the launcher runs before the agent"),
+    "session-setup": (session_setup.main, "the agent user's part of session-init"),
+    "harden": (harden.main, "as root: harden the sandbox"),
+    "check-hardening": (check_hardening.main, "as the agent: check the sandbox is hardened"),
 }
 CLAUDE_HOOKS: dict[str, Command] = {
-    "guard-bash": claude_hooks.guard_bash,
-    "session-check": claude_hooks.session_check,
+    "guard-bash": claude_hook.guard_bash,
+    "session-check": claude_hook.session_check,
 }
 GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
-    "pre-commit": lambda _hook_args: git_hooks.pre_commit(),
-    "prepare-commit-msg": git_hooks.prepare_commit_msg,
-    "pre-push": lambda _hook_args: git_hooks.pre_push(),
+    "pre-commit": git_hook.pre_commit,
+    "prepare-commit-msg": git_hook.prepare_commit_msg,
+    "pre-push": git_hook.pre_push,
 }
 """What agent-kit/hooks/pre-commit runs, by the name git ran it as, given what git passed the hook. The other two
 hooks link to it."""
 _EXPECTED_ERRORS = (
-    contract.MissingVariables,
-    hardening.HardeningRefused,
-    session_setup.SetupRefused,
-    git_hooks.GitHookRefused,
+    MissingVariables,
+    HardeningRefused,
+    SetupRefused,
+    GitHookRefused,
     GitError,
 )
 """What a command raises to stop with a message, rather than a traceback."""
@@ -95,7 +92,7 @@ def run(argv: Sequence[str] | None = None) -> int:
 def _error_message(command_name: str, error: Exception) -> str:
     """The error as the user sees it. Most messages already start with their command's name. The two from shared
     code don't, so they get it here."""
-    if isinstance(error, (contract.MissingVariables, GitError)):
+    if isinstance(error, (MissingVariables, GitError)):
         return f"agent_runtime {command_name}: {error}"
     return str(error)
 
