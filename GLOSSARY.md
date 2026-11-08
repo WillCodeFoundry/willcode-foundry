@@ -19,7 +19,7 @@ The GitHub repository behind a project, at the URL `config/foundry.yaml` gives i
 _Avoid_: the repository (alone, when a clone is also meant)
 
 **Clone**:
-A local repository made from a project repository: a **scratch clone** on the host, made for one foundry command and deleted after it, or the **sandbox clone** inside a sandbox, whose two worktrees are the code checkout and the notes checkout. A clone's files are its **working tree**.
+A local repository made from a project repository: a **scratch clone** on the host, made for one foundry command and deleted after it, or the **sandbox clone** inside a sandbox, whose two worktrees are the code checkout and the notes checkout. A clone's files are its **working tree**. The code names each kind with its project, so a reader sees what was cloned: `ProjectScratchClone`, `project_sandbox_clone`.
 _Avoid_: repository, repo (for a clone); repository root (say working tree)
 
 **Fetched branch**:
