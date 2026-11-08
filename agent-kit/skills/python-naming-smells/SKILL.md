@@ -28,6 +28,14 @@ Leave case style and builtin shadowing to ruff's `N` and `A` rules. Neither flag
 3. **Against the project's words.** Search with `git grep -n -w` for the name, and for the other words a reader might use for the concept. Check "Smells against the project's words".
 4. **In prose.** In the lines the diff adds to docs, docstrings and messages, check only what "Smells in prose" lists.
 
+## Opportunities nearby
+
+Searching for uses and synonyms takes you into names the diff doesn't change. A smell there is an opportunity, not a finding against the diff.
+
+- Don't rename it in this change.
+- Record it as a follow-up, where your `AGENTS.md` says: one line with `file:line`, the smell, and what it costs.
+- Record at most three per task, the strongest. A name you can't make honest comes first: it usually does two jobs, or sits in the wrong place, and needs a restructure, not a rename.
+
 ## Smells you can see in the name
 
 | Smell | Bad | Better | Why it fails |

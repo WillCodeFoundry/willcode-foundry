@@ -35,6 +35,14 @@ Read a reference file only when a question points to it. Its examples are invent
 | 10 | Would each new test fail if the behaviour it names broke? | [Tests that prove nothing](references/tests-that-prove-nothing.md) |
 | 11 | Did I reshape clear code only to satisfy a checker, a budget or a reviewer's request? | [Obeying the letter of a rule](references/obeying-the-letter.md) |
 
+## Opportunities nearby
+
+Reading at the uses takes you into code the diff doesn't change. A smell there is an opportunity, not a finding against the diff.
+
+- Don't fix it in this change.
+- Record it as a follow-up, where your `AGENTS.md` says: one line with `file:line`, the smell's number and name, and what it costs.
+- Record at most three per task, the strongest. A smell that makes the next change harder beats one that only reads poorly.
+
 ## Asking for more code
 
 A finding that asks for more guards, fallbacks, helpers or tests must pass questions 1, 2 and 10 itself. Report it only when it does.
