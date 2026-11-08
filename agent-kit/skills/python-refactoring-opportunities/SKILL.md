@@ -1,11 +1,11 @@
 ---
 name: python-refactoring-opportunities
-description: Hunt a Python codebase for refactors that make it simpler, and open a PR for each one worth it, on its own or from given hints such as follow-ups. Use when asked to find refactors or simplify.
+description: Hunt a Python codebase for refactors that make it simpler, and write a TASK.md for each one worth doing, on its own or from given hints such as follow-ups. Use when asked to find refactors or simplify.
 ---
 
 # Finding refactoring opportunities in Python
 
-Find changes across a Python codebase that make it simpler to read, test and change, and make the worthwhile ones as pull requests. Nobody checks in with you along the way: you decide what is worth a PR, and the human accepts or closes each one. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Opening no PR is a good result when nothing clears the bar.
+Find changes across a Python codebase that make it simpler to read, test and change, and write a `TASK.md` for each one worth doing. You change no code. Nobody checks in with you along the way: you decide what is worth a task, and the human decides which tasks to create. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Writing no task is a good result when nothing clears the bar.
 
 This skill decides where to look and how to propose. What to look for comes from two skills:
 
@@ -42,15 +42,15 @@ A hint was written against older code, by someone looking at something else. For
 
 ## 1. Signals: rank where tools point
 
-Run tools the project doesn't depend on with `uvx`, so nothing is added to it. They see one function at a time.
+They see one function at a time. Run a tool the project doesn't depend on with `uvx`, and add a pytest plugin for one run with `uv run --with`, so nothing is added to the project. Both download from PyPI. If a tool can't run, skip its signal and say so in the report.
 
 | Signal | Command |
 |---|---|
-| Complex functions | `uvx radon cc -s -n C src` (grade C or worse), and `ruff check --select C901 --config 'lint.mccabe.max-complexity = 6' src` to rank below the project's own limit |
+| Complex functions | `ruff check --select C901 --config 'lint.mccabe.max-complexity = 6' src`, which ranks below the project's own limit |
 | Functions near the size limits | `ruff check --select PLR0911,PLR0912,PLR0913,PLR0915,PLR0917 src`, lowering the `lint.pylint.max-*` settings with `--config` if the project already passes |
 | Often changed | `git log --format= --name-only --since=1.year -- '*.py' \| sort \| uniq -c \| sort -rn \| head -20`. Complex and often changed comes first. |
 | Dead code | `uvx vulture src --min-confidence 60`, then `git grep -n -w <name>` for each public name, to find those used in one module or only by tests |
-| Untested or unreachable branches | `pytest --cov=src --cov-branch --cov-report=term-missing`; `mypy --warn-unreachable` |
+| Untested or unreachable branches | `uv run --with pytest-cov pytest --cov=src --cov-branch --cov-report=term-missing`; `mypy --warn-unreachable` |
 | Duplicated code | `uvx pylint --disable=all --enable=duplicate-code src` |
 | Import cycles | `uvx pylint --disable=all --enable=cyclic-import src` |
 | Suppressed warnings | `git grep -nE '# (noqa\|type: ignore\|pragma: no cover\|pylint: disable)' src`, and every entry in `per-file-ignores` |
@@ -98,54 +98,52 @@ For any finding beyond a rename, write the code as it would look after. A sketch
 
 Check each finding that adds code, such as a guard, a helper or a test, against `python-smells` questions 1, 2 and 10, as that skill asks.
 
-Open a PR for a finding only when all of these hold:
+Write a task for a finding only when all of these hold:
 
 | Test | Holds when |
 |---|---|
 | It removes something | Something in the comparison went down, and nothing important went up. |
-| It is worth a review | The gain is more than the reviewer's time. A rename of a private name used twice rarely is; a concept removed, a test workaround gone, or a function a newcomer can now follow usually is. |
+| It is worth a task | The gain is more than the cost of planning, doing and reviewing it. A rename of a private name used twice rarely is; a concept removed, a test workaround gone, or a function a newcomer can now follow usually is. |
 | You are confident | You would defend the shape, not just try it. |
-| Behaviour is kept | Callers and users see no difference. A behaviour change is allowed only when it is the point of the PR, and the description says exactly what changes. |
-| It stands alone | It doesn't need another finding merged first. If it does, stack it on that PR's branch and say so. |
-| It doesn't reverse a decision | It goes against no ADR or design rule. Report one that does, with the reason, instead. |
+| Behaviour is kept | Callers and users see no difference. A behaviour change is allowed only when it is the point of the task, and the task says exactly what changes. |
+| It reverses no decision | It goes against no ADR or design rule. Report one that does, with the reason, instead. |
 
-Skip the rest. When a finding needs a choice only the human can make, such as a change to a command line, a public API or a dependency, report it instead of guessing.
+Skip the rest. A finding that needs a choice only the human can make, such as a change to a command line, a public API or a dependency, still gets a task: put the choice under "Open questions", with your recommendation.
 
-## 5. Make the PRs
+## 5. Write the tasks
 
-Most valuable first, at most five per run, so the human can review them; report the rest.
+Most valuable first, at most five per run; report the rest.
 
-- **One concern per PR.** Batch small renames of one kind into one PR. Give each restructure its own.
-- Branch from the default branch, fresh for each PR, unless it is stacked.
-- Follow the project's own rules for commits, tests and docs. Change no test only to make it pass. Update the docs, glossary terms or ADRs the change makes wrong.
-- Run all the project's checks. Never open a PR whose checks fail.
-- Write the description so the human can accept or close it without asking you anything:
+- **One concern per task.** Group small renames of one kind into one task. Give each restructure its own.
+- Write each task to `<slug>/TASK.md` in the directory you were told, or in `refactoring-tasks/` beside the code checkout. The slug is a few words in kebab case. Leave the id as `<id>`: the human chooses it with `foundry task create`.
+- Follow the task template's sections, in order. Write each for a planner and a dev who haven't seen your notes:
 
-| Field | Content |
+| Section | What to put there |
 |---|---|
-| Where | `path.py:line`, and the function, class or flow |
-| Found by | the hint it came from, the signal from step 1, or the exploring step from step 2 |
-| Smell | the `python-smells` number and name, the `python-naming-smells` smell, or the question from this skill |
-| Cost before | what was hard for a reader, a test or a change, in one or two sentences |
-| Removes | what went away, with the before and after counts that matter |
-| Behaviour change | none, or exactly what a user or caller now sees, such as output moving from stdout to stderr |
-| Alternatives | the other shapes or names you weighed, and why this one |
+| `# Task <id>: <title>` | The change, in a few words: what goes away or what becomes simpler. |
+| Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. |
+| Acceptance criteria | Checkable statements. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
+| Out of scope | The neighbouring smells you saw and are leaving, so the dev doesn't widen the task. |
+| Context | Where, as `path.py:line` and the function, class or flow. How it was found: the hint, the signal from step 1, or the exploring step from step 2. The smell, by `python-smells` number and name or `python-naming-smells` smell. Your sketch, as a direction the dev may improve on. Another task this one depends on, by slug. |
+| Seams to test | The public functions or commands whose tests prove behaviour is kept. |
+| Terms and decisions | Glossary terms the change adds, renames or retires. A decision worth an ADR. Empty if none. |
+| Open questions | Choices only the human can make, each with the options and your recommendation. Empty otherwise. |
 
-After a restructure, explore the changed flow again before the next PR. The new code often shows the next simplification, or a new thing that is hard to name.
+After a restructure you've written up, explore the flow again as it would look after. The change often shows the next simplification, or a new thing that is hard to name. Write that as a second task that depends on the first.
 
 ## 6. Report
 
 End the run with a short report:
 
-- the PRs you opened, one line each, in the order to review them, saying which are stacked;
+- the tasks you wrote, one line each, in the order to do them, saying which depend on others;
 - the findings you skipped, one line each, with the test from step 4 that failed;
-- the choices only the human can make, each with your recommendation;
+- the signals you couldn't run, and why;
 - when you were given hints, the ones you dropped and why.
 
 ## Don't
 
-- Don't add a class, base class or `Protocol` to remove two similar lines.
-- Don't write a workaround in a test, such as subclassing `list` or patching a private function. A test that needs one is a finding about the code. Use pytest's fixtures: `caplog`, `capsys`, `tmp_path`, `monkeypatch.setenv`.
-- Don't add a `noqa` or `type: ignore` to land a refactor. If one seems needed, the shape is wrong.
-- Don't propose a change because code is old or unfamiliar. Each finding needs a concrete cost.
-- Don't reformat or rename beyond the finding; it hides the change that matters.
+- Don't change the code. Your output is tasks and a report.
+- Don't sketch a class, base class or `Protocol` to remove two similar lines.
+- Don't sketch a `noqa`, a `type: ignore` or a test workaround into a change. If one seems needed, the shape is wrong.
+- Don't write a task because code is old or unfamiliar. Each task needs a concrete cost.
+- Don't widen a task beyond its finding. Name the neighbours under "Out of scope" instead.
