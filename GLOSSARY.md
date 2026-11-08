@@ -19,7 +19,7 @@ The GitHub repository behind a project, at the URL `config/foundry.yaml` gives i
 _Avoid_: the repository (alone, when a clone is also meant)
 
 **Clone**:
-A local repository made from a project repository: a **scratch clone** on the host, made for one foundry command and deleted after it, or the **sandbox clone** inside a sandbox, whose two worktrees are the code checkout and the notes checkout. A clone's files are its **working tree**.
+A local repository made from a project repository: a **scratch clone** on the host, made for one foundry command and deleted after it, or the **sandbox clone** inside a sandbox, whose two worktrees are the code checkout and the notes checkout. A clone's files are its **working tree**. The code names each kind with its project, so a reader sees what was cloned: `ProjectScratchClone`, `project_sandbox_clone`.
 _Avoid_: repository, repo (for a clone); repository root (say working tree)
 
 **Fetched branch**:
@@ -180,7 +180,7 @@ _Avoid_: boundary, security (for a guardrail)
 `guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.
 
 **Refusal**:
-What a hook or a hardening mode says when it stops something: what was wrong, and what to do instead.
+What a hook, a hardening mode or session-setup says when it stops something: what was wrong, and what to do instead. The code names each for who refuses: `GitHookRefused`, `HardeningRefused`, `SetupRefused`.
 
 ### Testing
 

@@ -189,7 +189,7 @@ def chosen_projects(foundry_config: Config, project_names: Sequence[str]) -> lis
 def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectListing:
     """``project``'s open tasks, through a scratch clone.
 
-    ``env`` is the environment git runs in, as for ProjectClone.
+    ``env`` is the environment git runs in, as for ProjectScratchClone.
     """
     with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
         return ProjectListing(project.name, project_tasks.fetch_open_task_turns())

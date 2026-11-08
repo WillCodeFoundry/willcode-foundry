@@ -30,8 +30,8 @@ def test_a_created_task_gets_both_checkouts_with_the_git_hooks_from_the_kit(buil
     result = session_setup(env, created_task)
 
     assert result.returncode == 0, result.stderr
-    code, notes = Path(env["AGENT_CODE_CHECKOUT_DIR"]), Path(env["AGENT_NOTES_CHECKOUT_DIR"])
-    assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
-    assert git(notes, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
-    assert (notes / TASK.task_file).read_text() == "# Task\n"
-    assert git(code, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")
+    code_checkout_dir, notes_checkout_dir = Path(env["AGENT_CODE_CHECKOUT_DIR"]), Path(env["AGENT_NOTES_CHECKOUT_DIR"])
+    assert git(code_checkout_dir, "branch", "--show-current").stdout.strip() == TASK.branch
+    assert git(notes_checkout_dir, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
+    assert (notes_checkout_dir / TASK.task_file).read_text() == "# Task\n"
+    assert git(code_checkout_dir, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")

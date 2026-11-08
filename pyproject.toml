@@ -66,15 +66,17 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Test functions take fixtures for their effect, and fakes take the arguments the protocol they stand in for does.
 "tests/**" = ["ARG", "FBT", "S101", "PLR0913", "PLR0917"]
-# The entry points: the only modules that print (design rule 6).
-"src/foundry/cli.py" = ["T20"]
-"src/foundry/commands/*" = ["T20"]
-"src/agent_runtime/__main__.py" = ["T20"]
-"src/agent_runtime/session_init.py" = ["T20"]
-"src/agent_runtime/session_setup.py" = ["T20"]
+# The entry points: the only modules that print, or write to sys.stdout or sys.stderr (design rule 6).
+"src/foundry/cli.py" = ["T20", "TID251"]
+"src/foundry/commands/*" = ["T20", "TID251"]
+"src/agent_runtime/__main__.py" = ["T20", "TID251"]
+"src/agent_runtime/commands/*" = ["T20", "TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "unittest.mock".msg = "Tests never patch: fake the outside system instead, as design rule 3 in ARCHITECTURE.md says."
+# T20 misses print(file=<an expression>) and sys.stderr.write; banning the streams catches both.
+"sys.stdout".msg = "Only entry points write here: log progress to the module's logger, as design rule 6 says."
+"sys.stderr".msg = "Only entry points write here: log progress to the module's logger, as design rule 6 says."
 
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["input"]   # git.py and tests/support take input= as subprocess.run does
