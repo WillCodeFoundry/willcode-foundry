@@ -1,12 +1,12 @@
-"""ProjectTasks: the tasks of one project's repository: finding, creating, closing and reopening them, reading their
+"""ProjectTasks: the tasks of one project repository: finding, creating, closing and reopening them, reading their
 turn and handing them off, and listing the open ones with their turns.
 
-The repository decides a task's status, by which dir under NOTES_ROOT holds its notes: fetch_task finds it, every
-operation on one task goes through it, and callers pass task ids. Listing is the exception: it reads every dir under
-OPEN_DIR from one fetch, since fetch_task would fetch once per task.
+The project repository decides a task's status, by which dir under NOTES_ROOT holds its notes: fetch_task finds it,
+every operation on one task goes through it, and callers pass task ids. Listing is the exception: it reads every dir
+under OPEN_DIR from one fetch, since fetch_task would fetch once per task.
 
-Finding and reading only fetch NOTES_BRANCH and read git objects: they change no file. An operation that writes checks
-out NOTES_BRANCH itself, after every check that can refuse it, at the commit those checks read.
+Finding and reading only fetch NOTES_BRANCH and read what was fetched: they change no file. An operation that writes
+checks out the fetched NOTES_BRANCH itself, after every check that can refuse it, so it writes on what it read.
 """
 
 import re
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import BranchNotFoundError, PathNotOnBranchError, ProjectClone
+from foundry.project_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectClone
 from foundry.task import CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
@@ -61,7 +61,7 @@ class ProjectTasks:
     @classmethod
     @contextmanager
     def in_scratch_clone(cls, url: str, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
-        """The tasks of the repository at ``url``, through a clone in a temporary dir removed afterwards.
+        """The tasks of the project repository at ``url``, through a scratch clone removed afterwards.
 
         ``env`` is the environment git runs in, as for ProjectClone.
         """
@@ -72,27 +72,9 @@ class ProjectTasks:
         """The task named ``task_id``, with the status of the dir on NOTES_BRANCH that holds its notes.
 
         Fetches NOTES_BRANCH and reads it; changes no file. TaskNotFoundError when neither dir exists, or the
-        repository has no NOTES_BRANCH yet; FoundryError when both dirs do.
+        project repository has no NOTES_BRANCH yet; FoundryError when both dirs do.
         """
-        open_candidate, closed_candidate = Task.as_open(task_id), Task.as_closed(task_id)
-        try:
-            self._clone.fetch_branch(NOTES_BRANCH)
-        except BranchNotFoundError:
-            raise TaskNotFoundError(
-                f"task {open_candidate.id} doesn't exist: the repository has no {NOTES_BRANCH} branch yet"
-            ) from None
-        open_dir, closed_dir = open_candidate.task_notes_dir, closed_candidate.task_notes_dir
-        is_open = open_candidate.id in self._fetched_task_ids(OPEN_DIR)
-        is_closed = closed_candidate.id in self._fetched_task_ids(CLOSED_DIR)
-        if is_open and is_closed:
-            raise FoundryError(
-                f"task {open_candidate.id} is both open and closed: {NOTES_BRANCH} has {open_dir}/ and {closed_dir}/"
-            )
-        if not is_open and not is_closed:
-            raise TaskNotFoundError(
-                f"task {open_candidate.id} doesn't exist: {NOTES_BRANCH} has neither {open_dir}/ nor {closed_dir}/"
-            )
-        return open_candidate if is_open else closed_candidate
+        return self._task_on(self._fetch_notes_branch(task_id), task_id)
 
     def create_task(self, task_id: str, task_template: Mapping[str, str]) -> Task:
         """Create the task's branch from the default branch, and copy ``task_template`` into its open notes dir.
@@ -101,22 +83,27 @@ class ProjectTasks:
         or closed, or its branch does. NOTES_BRANCH is created for the first task, as an orphan branch: it shares
         no history with the code.
         """
-        try:
-            existing = self.fetch_task(task_id)
-        except TaskNotFoundError:
-            pass  # the id is free
-        else:
-            raise FoundryError(f"task {existing.id} already exists: {NOTES_BRANCH} has {existing.task_notes_dir}/")
         clone = self._clone
         new_task = Task.as_open(task_id)
+        try:
+            notes_branch: FetchedBranch | None = clone.fetch_branch(NOTES_BRANCH)
+        except BranchNotFoundError:
+            notes_branch = None  # the first task: NOTES_BRANCH starts with it
+        if notes_branch is not None:
+            with suppress(TaskNotFoundError):
+                existing = self._task_on(notes_branch, task_id)
+                raise FoundryError(f"task {existing.id} already exists: {NOTES_BRANCH} has {existing.task_notes_dir}/")
         default_branch = clone.default_branch()
         branches = clone.branches()
         if new_task.branch in branches:
             raise FoundryError(f"task {new_task.id} already exists: there is a {new_task.branch} branch")
-        if default_branch is None or default_branch not in branches:  # a repository with no commits yet
-            raise FoundryError(f"the repository has no commits to branch {new_task.branch} from")
+        if default_branch is None or default_branch not in branches:  # a project repository with no commits yet
+            raise FoundryError(f"the project repository has no commits to branch {new_task.branch} from")
 
-        clone.check_out_fetched(NOTES_BRANCH)  # with no NOTES_BRANCH yet, a start with no history
+        if notes_branch is None:
+            clone.start_orphan(NOTES_BRANCH)
+        else:
+            clone.check_out(notes_branch)
         clone.write({f"{new_task.task_notes_dir}/{name}": text for name, text in task_template.items()})
         clone.commit(f"Add task {new_task.id}")
         clone.push_atomic(from_remote={new_task.branch: default_branch}, from_local=[NOTES_BRANCH])
@@ -127,10 +114,11 @@ class ProjectTasks:
 
         Refuses a task that is already closed, or doesn't exist.
         """
-        task = self.fetch_task(task_id)
+        notes_branch = self._fetch_notes_branch(task_id)
+        task = self._task_on(notes_branch, task_id)
         if task.status is Status.CLOSED:
             raise FoundryError(f"task {task.id} is already closed")
-        self._clone.check_out_fetched(NOTES_BRANCH)
+        self._clone.check_out(notes_branch)
         return self._move(task, Task.as_closed(task.id), message=f"Close task {task.id}")
 
     def reopen_task(self, task_id: str) -> Task:
@@ -138,10 +126,11 @@ class ProjectTasks:
 
         Refuses a task that is already open, or doesn't exist.
         """
-        task = self.fetch_task(task_id)
+        notes_branch = self._fetch_notes_branch(task_id)
+        task = self._task_on(notes_branch, task_id)
         if task.status is Status.OPEN:
             raise FoundryError(f"task {task.id} is already open")
-        self._clone.check_out_fetched(NOTES_BRANCH)
+        self._clone.check_out(notes_branch)
         return self._move(task, Task.as_open(task.id), message=f"Reopen task {task.id}")
 
     def fetch_task_turn(self, task_id: str) -> str:
@@ -150,7 +139,8 @@ class ProjectTasks:
         Fetches NOTES_BRANCH and reads it; changes no file. MissingTurnError when the file is missing, not a file
         or empty.
         """
-        return self._read_fetched_turn(self.fetch_task(task_id))
+        notes_branch = self._fetch_notes_branch(task_id)
+        return self._turn_on(notes_branch, self._task_on(notes_branch, task_id))
 
     def hand_off(self, task_id: str, turn: str, *, note: str | None) -> None:
         """Hand the open task off to ``turn``, in one commit pushed to NOTES_BRANCH.
@@ -158,21 +148,22 @@ class ProjectTasks:
         Writes ``turn`` to the task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it isn't
         None. A task with no turn is handed off like any other. The caller checks ``turn``.
 
-        Every check reads the fetched NOTES_BRANCH; only then is it checked out, at the commit those checks read.
-        FoundryError, with nothing written or pushed, when:
+        Every check reads the fetched NOTES_BRANCH; only then is it checked out, so the handoff is written on what
+        was read. FoundryError, with nothing written or pushed, when:
         - fetch_task refuses the task id, or the task is closed (ClosedTaskError);
         - its turn is already ``turn``;
         - it has no LOG_FILE;
         - its TURN_FILE or LOG_FILE is a link, as ProjectClone.write refuses.
         """
-        task = self.fetch_task(task_id)
+        notes_branch = self._fetch_notes_branch(task_id)
+        task = self._task_on(notes_branch, task_id)
         if task.status is Status.CLOSED:
             raise ClosedTaskError(task)
         with suppress(MissingTurnError):
-            if self._read_fetched_turn(task) == turn:
+            if self._turn_on(notes_branch, task) == turn:
                 raise FoundryError(f"task {task.id}'s turn is already {turn}")
-        log = self._read_fetched_log(task)
-        self._clone.check_out_fetched(NOTES_BRANCH)
+        log = self._log_on(notes_branch, task)
+        self._clone.check_out(notes_branch)
         self._clone.write(
             {
                 task.turn_file: f"{turn}\n",
@@ -184,42 +175,69 @@ class ProjectTasks:
     def fetch_open_task_turns(self) -> list[TaskTurn]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
 
-        Fetches NOTES_BRANCH once, then reads git objects; changes no file. Empty when the repository has no
-        NOTES_BRANCH yet, as before its first task. FoundryError when a dir under OPEN_DIR isn't a valid task id, or
-        when a task's TURN_FILE is missing, empty or not a file.
+        Fetches NOTES_BRANCH once, then reads what was fetched; changes no file. Empty when the project repository
+        has no NOTES_BRANCH yet, as before its first task. FoundryError when a dir under OPEN_DIR isn't a valid task
+        id, or when a task's TURN_FILE is missing, empty or not a file.
         """
         try:
-            self._clone.fetch_branch(NOTES_BRANCH)
+            notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
         except BranchNotFoundError:
             return []  # no task has been created yet
-        tasks = [_open_task_for_dir(name) for name in sorted(self._fetched_task_ids(OPEN_DIR))]
-        return [TaskTurn(task, self._read_fetched_turn(task)) for task in tasks]
+        tasks = [_open_task_for_dir(name) for name in sorted(self._task_ids_on(notes_branch, OPEN_DIR))]
+        return [TaskTurn(task, self._turn_on(notes_branch, task)) for task in tasks]
 
-    def _fetched_task_ids(self, status_dir: str) -> list[str]:
-        """The names of the dirs under ``status_dir`` on NOTES_BRANCH as last fetched: the ids of its tasks."""
+    def _fetch_notes_branch(self, task_id: str) -> FetchedBranch:
+        """NOTES_BRANCH, fetched to find ``task_id`` on. TaskNotFoundError when the project repository has none yet."""
         try:
-            return self._clone.fetched_subdir_names(NOTES_BRANCH, status_dir)
+            return self._clone.fetch_branch(NOTES_BRANCH)
+        except BranchNotFoundError:
+            raise TaskNotFoundError(
+                f"task {task_id} doesn't exist: the project repository has no {NOTES_BRANCH} branch yet"
+            ) from None
+
+    def _task_on(self, notes_branch: FetchedBranch, task_id: str) -> Task:
+        """The task named ``task_id``, with the status of the dir on ``notes_branch`` that holds its notes.
+
+        TaskNotFoundError when neither dir exists; FoundryError when both do.
+        """
+        open_candidate, closed_candidate = Task.as_open(task_id), Task.as_closed(task_id)
+        open_dir, closed_dir = open_candidate.task_notes_dir, closed_candidate.task_notes_dir
+        is_open = open_candidate.id in self._task_ids_on(notes_branch, OPEN_DIR)
+        is_closed = closed_candidate.id in self._task_ids_on(notes_branch, CLOSED_DIR)
+        if is_open and is_closed:
+            raise FoundryError(
+                f"task {open_candidate.id} is both open and closed: {NOTES_BRANCH} has {open_dir}/ and {closed_dir}/"
+            )
+        if not is_open and not is_closed:
+            raise TaskNotFoundError(
+                f"task {open_candidate.id} doesn't exist: {NOTES_BRANCH} has neither {open_dir}/ nor {closed_dir}/"
+            )
+        return open_candidate if is_open else closed_candidate
+
+    def _task_ids_on(self, notes_branch: FetchedBranch, status_dir: str) -> list[str]:
+        """The names of the dirs under ``status_dir`` on ``notes_branch``: the ids of its tasks."""
+        try:
+            return self._clone.subdir_names(notes_branch, status_dir)
         except PathNotOnBranchError:
             return []  # git keeps no empty dir, so a status dir is gone once its last task leaves
 
-    def _read_fetched_turn(self, task: Task) -> str:
-        """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
+    def _turn_on(self, notes_branch: FetchedBranch, task: Task) -> str:
+        """``task``'s turn: its TURN_FILE on ``notes_branch``, stripped.
 
         MissingTurnError when the file is missing, not a file, or holds only blanks.
         """
         try:
-            turn = self._clone.fetched_text(NOTES_BRANCH, task.turn_file).strip()
+            turn = self._clone.text(notes_branch, task.turn_file).strip()
         except PathNotOnBranchError:
             turn = ""
         if not turn:
             raise MissingTurnError(task)
         return turn
 
-    def _read_fetched_log(self, task: Task) -> str:
-        """``task``'s LOG_FILE on NOTES_BRANCH as last fetched; FoundryError, naming the file, when it is missing or
-        not a file."""
+    def _log_on(self, notes_branch: FetchedBranch, task: Task) -> str:
+        """``task``'s LOG_FILE on ``notes_branch``; FoundryError, naming the file, when it is missing or not a file."""
         try:
-            return self._clone.fetched_text(NOTES_BRANCH, task.log_file)
+            return self._clone.text(notes_branch, task.log_file)
         except PathNotOnBranchError:
             raise FoundryError(
                 f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"

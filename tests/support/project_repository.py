@@ -75,12 +75,6 @@ class ProjectRepository:
         """A ProjectClone of it in a new dir, with git run in ``env``, or ``git_env``."""
         return clone_in(self.path.parent, env or self.git_env, str(self.path))
 
-    def fetched_clone(self) -> ProjectClone:
-        """A ProjectClone of it, with agent-notes fetched."""
-        clone = self.clone()
-        clone.fetch_branch(NOTES_BRANCH)
-        return clone
-
     def project_tasks(self, env: dict[str, str] | None = None) -> ProjectTasks:
         """Its tasks, through a clone of their own, with git run in ``env``, or ``git_env``."""
         return project_tasks_of(self.path, env or self.git_env)

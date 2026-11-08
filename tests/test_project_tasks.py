@@ -113,7 +113,7 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, git_env) -> Non
     empty_dir = tmp_path / "empty.git"
     git_output(git_env, "init", "--quiet", "--bare", str(empty_dir))
 
-    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
+    with pytest.raises(FoundryError, match=r"^the project repository has no commits to branch task/tst-0001 from$"):
         create(project_tasks_of(empty_dir, git_env))
 
 
@@ -123,7 +123,7 @@ def test_a_default_branch_that_is_not_a_branch_is_refused_and_nothing_is_pushed(
     project_repository.git("symbolic-ref", "HEAD", "refs/tags/v1")
     refs_before = project_repository.git("for-each-ref")
 
-    with pytest.raises(FoundryError, match=r"^the repository has no commits to branch task/tst-0001 from$"):
+    with pytest.raises(FoundryError, match=r"^the project repository has no commits to branch task/tst-0001 from$"):
         create(project_repository.project_tasks())
     assert project_repository.git("for-each-ref") == refs_before
 
@@ -197,7 +197,7 @@ def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_en
     bare_dir = tmp_path / "bare.git"
     git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
     with pytest.raises(
-        TaskNotFoundError, match=r"^task tst-0001 doesn't exist: the repository has no agent-notes branch"
+        TaskNotFoundError, match=r"^task tst-0001 doesn't exist: the project repository has no agent-notes branch"
     ):
         project_tasks_of(bare_dir, git_env).fetch_task("tst-0001")
 
