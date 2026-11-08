@@ -99,9 +99,9 @@ async def place_order_async(cart: Cart) -> Order:
 - **Fine when:** the two really behave differently, and the shared part is too small to extract.
 - **Spot it:** a commit that makes the same edit in two files; function pairs named `x` and `x_async` or `ax`.
 
-## 6.4 Going around the framework
+## 6.4 Going around the framework or the standard library
 
-Re-implementing something the framework or a base class already provides.
+Re-implementing something the framework, a base class or the standard library already provides.
 
 Bad:
 
@@ -120,9 +120,37 @@ class ShopApp(App):
         return self.authenticated_user()  # the framework's helper: one way to read the session
 ```
 
-- **Why:** the local copy skips the framework's error handling and checks, and shared code grows special cases for it.
+The standard library's versions are missed most often. Progress reported through a callback is a common case.
+
+Bad:
+
+```python
+def import_catalogue(path: Path, report: Callable[[str], None] = lambda line: None) -> None:
+    for row in read_rows(path):
+        save_product(row)
+        report(f"imported {row.sku}")
+
+
+import_catalogue(path, report=print)  # in main
+```
+
+Better:
+
+```python
+_LOGGER = logging.getLogger(__name__)
+
+
+def import_catalogue(path: Path) -> None:
+    for row in read_rows(path):
+        save_product(row)
+        _LOGGER.info("imported %s", row.sku)
+```
+
+The entry point configures a handler once. Results stay return values; `logging` is for progress.
+
+- **Why:** the local copy skips the framework's error handling and checks, and shared code grows special cases for it. A progress callback is threaded through every layer between the entry point and the work, and every test passes one. `logging` brings levels, one place to configure output, and pytest's `caplog`.
 - **Fine when:** the framework's helper can't do what you need, and you say why next to the code.
-- **Spot it:** before writing a helper, grep the base class and the framework docs for one that exists.
+- **Spot it:** before writing a helper, grep the base class and the framework docs for one that exists. A `report`, `echo` or `on_progress` parameter passed down several calls; `print` outside the entry point. Paired calls such as `start()` and `stop()` where a `contextlib.contextmanager` would keep them together; hand-made temporary dirs where `tempfile` fits.
 
 ## 6.5 Reading a format one way, writing it another
 
