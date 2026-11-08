@@ -6,6 +6,7 @@ commit, without agents/, with git's three-way merge, and records the new commit.
 left as a merge conflict, to review (git diff HEAD), resolve and commit.
 """
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from agent_runtime.agent_kit import AgentKit
 from agent_runtime.git import Git, GitError
 from foundry import paths
 from foundry.errors import FoundryError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def github_url(repo: str) -> str:
@@ -42,15 +45,14 @@ def update(
     foundry_root: Path,
     ref: str = "HEAD",
     url_for: Callable[[str], str] = github_url,
-    report: Callable[[str], None] = lambda line: None,
 ) -> list[str]:
     """Update every copied skill in the foundry's agent kit to ``ref`` of its upstream repository, and return
     the skills git couldn't merge cleanly, whose files hold conflict markers.
 
     Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
     repository's ``ref`` is resolved once, so its skills all reach the same commit. A copied skill with
-    uncommitted changes stops the run before anything changes. What happened to each skill goes to ``report`` as soon
-    as it is known. A skill that fails, its patch rejected outright, say, keeps its commit; every skill is still
+    uncommitted changes stops the run before anything changes. What happened to each skill is shown as progress as
+    soon as it is known. A skill that fails, its patch rejected outright, say, keeps its commit; every skill is still
     tried, and the run then raises FoundryError naming the failed ones and any left conflicted.
     """
     git = Git(foundry_root)
@@ -72,24 +74,24 @@ def update(
                 new_sha_by_repo[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
             new_sha = new_sha_by_repo[source.repo]
             if new_sha == source.commit:
-                report(f"{name}: already at {source.commit[:12]}")
+                _LOGGER.info("%s: already at %s", name, source.commit[:12])
                 continue
             git.output("fetch", "--quiet", "--no-tags", url, source.commit)
             merge = _write_plan(git, _plan_update(git, foundry_root, skill_md, source, new_sha))
         except (FoundryError, GitError) as error:
             failed.append(f"{name}: {error}")
-            report(f"{name}: failed, still at {source.commit[:12]}")
+            _LOGGER.info("%s: failed, still at %s", name, source.commit[:12])
             continue
         if merge == "rejected":
             failed.append(
                 f"{name}: git apply rejected upstream's changes, so it stays at its commit; see git's message above"
             )
-            report(f"{name}: rejected, still at {source.commit[:12]}")
+            _LOGGER.info("%s: rejected, still at %s", name, source.commit[:12])
         elif merge == "conflicted":
             conflicted.append(name)
-            report(f"{name}: conflicted at {new_sha[:12]}")
+            _LOGGER.info("%s: conflicted at %s", name, new_sha[:12])
         else:
-            report(f"{name}: updated to {new_sha[:12]}")
+            _LOGGER.info("%s: updated to %s", name, new_sha[:12])
     if failed:
         unmerged = f"\nNot merged cleanly: {' '.join(conflicted)}; resolve what git reported above, then commit"
         raise FoundryError(

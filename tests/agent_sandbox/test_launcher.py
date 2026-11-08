@@ -157,7 +157,7 @@ def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
 def test_the_summary_names_the_model(layout: Layout, model: str | None, line: str) -> None:
     request = LaunchRequest(definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, model=model)
     summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
-    assert summary.splitlines()[-1] == f"==> model:      {line}"
+    assert summary[-1] == f"model:      {line}"
 
 
 def test_the_summary_says_where_the_github_token_comes_from(layout: Layout, tmp_path: Path) -> None:
@@ -166,10 +166,10 @@ def test_the_summary_says_where_the_github_token_comes_from(layout: Layout, tmp_
             definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, github_token_path=github_token_path
         )
         summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
-        return [line for line in summary.splitlines() if line.startswith("==> github:")]
+        return [line for line in summary if line.startswith("github:")]
 
-    assert github_line(tmp_path / "token") == [f"==> github:     token from {tmp_path / 'token'}"]
-    assert github_line(None) == ["==> github:     no token"]
+    assert github_line(tmp_path / "token") == [f"github:     token from {tmp_path / 'token'}"]
+    assert github_line(None) == ["github:     no token"]
 
 
 # --- layouts provision_sandbox refuses, before touching anything --------------------

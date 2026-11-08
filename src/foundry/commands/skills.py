@@ -25,7 +25,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 def update_main(args: argparse.Namespace) -> int:
     """Composition root: this foundry's skills, against their upstream repositories on GitHub."""
-    conflicted = skills.update(paths.find_foundry_root(), args.ref, report=lambda line: print(line, flush=True))
+    conflicted = skills.update(paths.find_foundry_root(), args.ref)
     if conflicted:
         print(
             f"skills update: not merged cleanly: {' '.join(conflicted)}; resolve what git reported above, then commit",

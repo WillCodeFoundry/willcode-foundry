@@ -1,6 +1,7 @@
 """foundry run, up to the call into agent_sandbox: the launch request a session gives, the new session reported,
 and which task and role it launches, against a foundry under tmp_path."""
 
+import logging
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -93,18 +94,20 @@ def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
     assert request_for(foundry_root) == request_for(foundry_root)
 
 
-def test_a_new_session_is_printed_and_an_existing_one_is_not(
-    foundry_root: Path, capsys: pytest.CaptureFixture[str]
+def test_a_new_session_is_shown_as_progress_and_an_existing_one_is_not(
+    foundry_root: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    caplog.set_level(logging.INFO, logger="foundry")
     created = session_for(foundry_root)
-    assert capsys.readouterr().err == f"==> session:   {created.dir} (new)\n"
+    assert caplog.messages == [f"session:   {created.dir} (new)"]
 
+    caplog.clear()
     reopened = session_for(foundry_root)
-    assert capsys.readouterr().err == ""
+    assert caplog.messages == []
     assert (created.created, reopened.created) == (True, False)
 
 
-def test_run_prints_the_turn_and_the_new_session_then_calls_the_launcher(
+def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
     project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.

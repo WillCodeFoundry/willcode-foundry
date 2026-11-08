@@ -113,6 +113,10 @@ _Avoid_: prepare, start (for this step; start is for a process or a sandbox)
 **Opening prompt**:
 The fixed first message foundry sends when it attaches the agent.
 
+**Progress**:
+What a `foundry` command shows on stderr as it works, as `==>` lines: the turn it read, a new session, each remnant pruned. `foundry -v` adds detail, such as session-init's output. A command's result goes to stdout instead.
+_Avoid_: log, which is a task's `LOG.md`
+
 **Remnant**:
 Something of a sandbox that outlives it on this machine, such as its ssh-agent. Every remnant belongs to one sandbox, and is pruned once that sandbox is stopped or removed: by every launch, and by `foundry prune`.
 

@@ -5,8 +5,8 @@ Imports nothing from the rest of foundry. It is given a dir holding the sandbox 
 what to run before attaching the agent. The sandbox's name and agent kit come from the definition.
 """
 
+import logging
 import os
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +18,8 @@ from foundry.agent_sandbox.host import SystemHost
 from foundry.agent_sandbox.pruning import prune
 from foundry.agent_sandbox.sandbox import Sandbox, SbxCli
 from foundry.agent_sandbox.ssh_agent import SshAgent, SshAgentRegistry
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -39,10 +41,11 @@ def launch(request: LaunchRequest) -> NoReturn:
     """Prune remnants, provision this sandbox, and replace this process with an agent run in it.
 
     Composition root: it builds the real host, ssh-agent and sbx client, and passes them to provision_sandbox.
+    Shows each remnant pruned and the launch summary as progress, and the init command's output as detail.
     Raises SandboxError if anything before attaching fails.
     """
     for remnant in prune():
-        print(f"==> pruned the {remnant.kind} of {remnant.sandbox_name}", file=sys.stderr)
+        _LOGGER.info("pruned the %s of %s", remnant.kind, remnant.sandbox_name)
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
     ssh_agent = SshAgentRegistry(host, uid=os.getuid()).ssh_agent(definition.name)
@@ -52,8 +55,10 @@ def launch(request: LaunchRequest) -> NoReturn:
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    provision_sandbox(request, definition, ssh_agent, sandbox)
-    print(launch_summary(request, definition, ssh_agent.socket_path), file=sys.stderr)
+    for line in provision_sandbox(request, definition, ssh_agent, sandbox).splitlines():
+        _LOGGER.debug("init: %s", line)
+    for line in launch_summary(request, definition, ssh_agent.socket_path):
+        _LOGGER.info("%s", line)
     sandbox.attach(request.model)
 
 
@@ -73,9 +78,11 @@ def provision_sandbox(
     return _run_init(sandbox, request.init_command) if request.init_command else ""
 
 
-def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
-    """The lines launch prints before attaching: what the sandbox was given."""
-    lines = (
+def launch_summary(
+    request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path
+) -> tuple[str, ...]:
+    """The progress lines launch shows before attaching: what the sandbox was given."""
+    return (
         f"ssh-agent:  {ssh_agent_socket_path}",
         f"key:        {request.ssh_key_path}",
         f"sandbox:    {definition.name}",
@@ -86,7 +93,6 @@ def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_ag
         else "github:     no token",
         f"model:      {request.model or 'the agent default'}",
     )
-    return "\n".join(f"==> {line}" for line in lines)
 
 
 def _require_safe_layout(request: LaunchRequest, definition: SandboxDefinition) -> None:
