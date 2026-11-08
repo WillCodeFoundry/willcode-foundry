@@ -1,5 +1,5 @@
 ---
-name: python-refactoring-opportunities
+name: python-refactoring-tasks
 description: Hunt a Python codebase for refactors that make it simpler, and write a TASK.md for each one worth doing, on its own or from given hints such as follow-ups. Use when asked to find refactors or simplify.
 ---
 
