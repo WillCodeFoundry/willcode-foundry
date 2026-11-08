@@ -13,7 +13,7 @@ Three programs share this repository:
 A launch, end to end:
 
 1. `foundry run PROJECT [ROLE] TASK` reads the config, finds the task on `agent-notes`, opens or creates the session, and builds the runtime into the kit. It refuses a closed task, or one that doesn't exist. Without ROLE, it reads the task's `TURN` file too.
-2. `foundry.agent_sandbox` prunes stale ssh-agents, starts this sandbox's own, and creates the sandbox if it doesn't exist. It allows SSH to GitHub, has sbx read the role's token from its file, and checks the sandbox sees exactly the role's key.
+2. `foundry.agent_sandbox` prunes the remnants of stopped or removed sandboxes, starts this sandbox's own, and creates the sandbox if it doesn't exist. It allows SSH to GitHub, has sbx read the role's token from its file, and checks the sandbox sees exactly the role's key.
 3. The runtime's `session-init` runs in the sandbox: setup as the agent, hardening as root on the first launch, then the check as the agent.
 4. foundry replaces itself with `sbx run --name`, which attaches the agent and sends it the opening prompt, with the role's model as `--model` when config names one. Only `sbx run` passes arguments to the agent; `sbx env run` reads them as more paths. foundry never learns how the agent run ended.
 
