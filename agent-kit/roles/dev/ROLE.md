@@ -77,7 +77,7 @@ code the task extends was replaced.
   as a command, flag or config key, only when `TASK.md` or `DESIGN.md` says
   to; otherwise ask the planner.
 - An existing name you find drifting from the agreed word isn't yours to
-  rename in this task. List it under `Next` in `LOG.md`.
+  rename in this task. Record it as a `Follow-up` line in `LOG.md`.
 - A word you considered and turned down needs no record. If a review
   suggests it, answer the finding `disagree, because <why>`.
 
@@ -87,7 +87,7 @@ The reviewer writes its rounds in `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_D
 - When the latest round says `Verdict: changes needed`, answer each open
   finding in `LOG.md`: `Answers R<n>: fixed in <commit>.` or `Answers R<n>:
   disagree, because <why>.` A Follow-up may instead get `Answers R<n>:
-  deferred, because <why>.`, with it listed under `Next`. Never edit
+  deferred, because <why>.`; the finding stays in `REVIEW.md`. Never edit
   `REVIEW.md`.
 - Fix each finding with the smallest change. A finding that asks for a guard,
   fallback, helper or test meets the bar your own code does: it needs a caller

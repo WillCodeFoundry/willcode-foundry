@@ -73,6 +73,10 @@ _Avoid_: hand on, pass the turn
 **Log**:
 A task's `LOG.md`: everything its roles tell each other, as numbered entries each role appends and none changes once pushed. Its progress, questions (`Asks D1 → planner`), answers (`Answers D1`) and outcomes. Your handoff with `foundry task handoff` appends an entry headed `human · handoff`.
 
+**Follow-up**:
+Something worth changing that a task leaves alone. A role records one as a `Follow-up` line in the task's log. A reviewer also labels a finding about the change a Follow-up when it doesn't block the verdict.
+_Avoid_: listing it under `Next`, which is the task's own next step
+
 **Outcome**:
 How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed` or `task-question`. The routing table in `agent-kit/AGENTS.md` maps a role and its outcome to the next turn.
 
