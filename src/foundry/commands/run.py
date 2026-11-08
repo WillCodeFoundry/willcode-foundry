@@ -4,14 +4,15 @@ import argparse
 import os
 import sys
 from collections.abc import Collection
-from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from foundry import agent_sandbox, config, paths, session
+from foundry import agent_sandbox, config, paths
+from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
+from foundry.session import open_or_create
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, Status, Task
 
 
@@ -31,39 +32,37 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def main(args: argparse.Namespace) -> NoReturn:
-    """Composition root: find the role, prepare the launch from this foundry, say what it created, then attach."""
+    """Composition root: find the open task and the role, make the launch request, then launch."""
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
-    url = foundry_config.project(args.project_name).url
-    with ProjectTasks.in_scratch_clone(url, os.environ) as project_tasks:
-        task, role_name = require_open_task_and_role(
-            project_tasks,
-            project_name=args.project_name,
-            task_id=args.task_id,
-            role_name=args.role_name,
-            roles=foundry_config.roles,
+    project = foundry_config.project(args.project_name)
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        task = fetch_open_task(project_tasks, project_name=project.name, task_id=args.task_id)
+        role = choose_role(
+            project_tasks, foundry_config, project_name=project.name, task=task, role_name=args.role_name
         )
-    launch = prepare_launch(foundry_root, project_name=args.project_name, role_name=role_name, task=task)
-    if launch.created:
-        print(f"==> session:   {launch.request.definition_dir} (new)", file=sys.stderr)
-    agent_sandbox.launch(launch.request)
+    agent_sandbox.launch(make_launch_request(foundry_root, project=project, role=role, task=task))
 
 
-def require_open_task_and_role(
-    project_tasks: ProjectTasks, *, project_name: str, task_id: str, role_name: str | None, roles: Collection[str]
-) -> tuple[Task, str]:
-    """The open task, and the role to launch on it: ``role_name``, or the turn's when it is None.
-
-    FoundryError, before any sandbox is made, when the task doesn't exist, is closed (saying how to reopen it), or
-    has no turn.
-    """
+def fetch_open_task(project_tasks: ProjectTasks, *, project_name: str, task_id: str) -> Task:
+    """The open task named ``task_id``. FoundryError, before any sandbox is made, when it doesn't exist or is closed,
+    saying how to reopen it."""
     task = project_tasks.fetch_task(task_id)
     if task.status is Status.CLOSED:
         raise FoundryError(f"task {task.id} is closed: reopen it with `foundry task reopen {project_name} {task.id}`")
+    return task
+
+
+def choose_role(
+    project_tasks: ProjectTasks, foundry_config: Config, *, project_name: str, task: Task, role_name: str | None
+) -> Role:
+    """The role to launch on ``task``: ``role_name``, or the turn's when it is None, read from NOTES_BRANCH and
+    printed. FoundryError, before any sandbox is made, when the role isn't in the config or the turn names none."""
     if role_name is None:
-        role_name = role_for_turn(project_tasks.fetch_task_turn(task.id), roles, project_name=project_name, task=task)
+        turn = project_tasks.fetch_task_turn(task.id)
+        role_name = role_for_turn(turn, foundry_config.roles, project_name=project_name, task=task)
         print(f"==> turn:      {role_name}", file=sys.stderr)
-    return task, role_name
+    return foundry_config.role(role_name)
 
 
 def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
@@ -81,27 +80,17 @@ def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task:
     return turn
 
 
-@dataclass(frozen=True)
-class Launch:
-    """A launch ready to attach: the request, and whether this launch created the session."""
-
-    request: agent_sandbox.LaunchRequest
-    created: bool
-
-
-def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> Launch:
-    """Everything up to attaching: the session, created the first time, the agent runtime built into its
-    kit, and the request to launch it. A failed build aborts."""
-    foundry_config = config.load(foundry_root)
-    project = foundry_config.project(project_name)
-    role = foundry_config.role(role_name)
-    opened = session.open_or_create(foundry_root, project=project, role=role, task=task)
+def make_launch_request(foundry_root: Path, *, project: Project, role: Role, task: Task) -> agent_sandbox.LaunchRequest:
+    """What agent_sandbox needs to launch ``role`` on ``task``: the session, created and printed the first time, and
+    the agent runtime built into the kit. A failed build aborts."""
+    session = open_or_create(foundry_root, project=project, role=role, task=task)
+    if session.created:
+        print(f"==> session:   {session.dir} (new)", file=sys.stderr)
     build_runtime(paths.agent_kit_dir(foundry_root))
-    request = agent_sandbox.LaunchRequest(
-        definition_dir=opened.dir,
+    return agent_sandbox.LaunchRequest(
+        definition_dir=session.dir,
         ssh_key_path=role.ssh_key_path,
-        init_command=opened.init_command,
+        init_command=session.init_command,
         github_token_path=role.github_token_path,
         model=role.model,
     )
-    return Launch(request, opened.created)
