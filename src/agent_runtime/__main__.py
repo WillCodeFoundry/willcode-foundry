@@ -17,6 +17,7 @@ if sys.version_info < _MINIMUM_PYTHON:
 
 import argparse
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from functools import partial
 
 from agent_runtime import (
@@ -29,22 +30,27 @@ from agent_runtime import (
 )
 from agent_runtime.git import GitError
 
-COMMANDS: dict[str, tuple[Callable[[], int], str]] = {
+Command = Callable[[], int | None]
+"""Runs one command, and returns its exit code, or None for 0. Most return nothing and raise to fail, as
+agent_runtime's docstring says."""
+
+COMMANDS: dict[str, tuple[Command, str]] = {
     "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),
-    "session-setup": (lambda: _ran(session_setup.session_setup), "the agent user's part of session-init"),
+    "session-setup": (session_setup.session_setup, "the agent user's part of session-init"),
     "harden": (session_init.harden, "as root: harden the sandbox"),
     "check-hardening": (session_init.check_hardening, "as the agent: check the sandbox is hardened"),
 }
-CLAUDE_HOOKS: dict[str, Callable[[], int]] = {
+CLAUDE_HOOKS: dict[str, Command] = {
     "guard-bash": claude_hooks.guard_bash,
     "session-check": claude_hooks.session_check,
 }
 GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
-    "pre-commit": lambda _args: git_hooks.pre_commit(),
+    "pre-commit": lambda _hook_args: git_hooks.pre_commit(),
     "prepare-commit-msg": git_hooks.prepare_commit_msg,
-    "pre-push": lambda _args: git_hooks.pre_push(),
+    "pre-push": lambda _hook_args: git_hooks.pre_push(),
 }
-"""What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
+"""What agent-kit/hooks/pre-commit runs, by the name git ran it as, given what git passed the hook. The other two
+hooks link to it."""
 _EXPECTED_ERRORS = (
     contract.MissingVariables,
     hardening.HardeningRefused,
@@ -55,45 +61,55 @@ _EXPECTED_ERRORS = (
 """What a command raises to stop with a message, rather than a traceback."""
 
 
-def _ran(command: Callable[[], None]) -> int:
-    """Exit code 0 for a command that raises to fail."""
-    command()
-    return 0
+@dataclass(frozen=True)
+class Invocation:
+    """One command as the command line asked for it."""
+
+    name: str
+    """As messages show it: "session-init", "guard-bash", "pre-commit"."""
+    call: Command
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent_runtime", description="Runs inside a foundry sandbox.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    for name, (func, help_text) in COMMANDS.items():
-        subparsers.add_parser(name, help=help_text).set_defaults(func=func)
+    subparsers = parser.add_subparsers(dest="kind", required=True)
+    for name, (_, help_text) in COMMANDS.items():
+        subparsers.add_parser(name, help=help_text).set_defaults(name=name)
     claude_hook = subparsers.add_parser("claude-hook", help="a Claude Code hook, as managed settings run it")
     claude_hook.add_argument("name", choices=CLAUDE_HOOKS)
     git_hook = subparsers.add_parser("git-hook", help="a git hook, as agent-kit/hooks/ runs it")
     git_hook.add_argument("name", choices=GIT_HOOKS)
-    git_hook.add_argument("args", nargs=argparse.REMAINDER, help="what git passed the hook")
+    git_hook.add_argument("hook_args", nargs=argparse.REMAINDER, help="what git passed the hook")
     return parser
 
 
-def run(argv: Sequence[str] | None = None) -> int:
-    """Run one command; returns its exit code. What it raises to stop is printed, not a traceback."""
+def parse(argv: Sequence[str] | None = None) -> Invocation:
+    """The command ``argv`` names, ready to call. Exits with argparse's usage message for anything else."""
     args = build_parser().parse_args(argv)
-    func: Callable[[], int]
-    if args.command == "claude-hook":
-        func = CLAUDE_HOOKS[args.name]
-    elif args.command == "git-hook":
-        func = partial(_ran, partial(GIT_HOOKS[args.name], args.args))
-    else:
-        func = args.func
+    if args.kind == "claude-hook":
+        return Invocation(args.name, CLAUDE_HOOKS[args.name])
+    if args.kind == "git-hook":
+        return Invocation(args.name, partial(GIT_HOOKS[args.name], args.hook_args))
+    return Invocation(args.name, COMMANDS[args.name][0])
+
+
+def run(argv: Sequence[str] | None = None) -> int:
+    """Run one command, and return its exit code. What it raises to stop is printed, not a traceback."""
+    invocation = parse(argv)
     try:
-        return func()
+        exit_code = invocation.call()
     except _EXPECTED_ERRORS as error:
-        if isinstance(error, (contract.MissingVariables, GitError)):
-            # Messages that don't say which command they come from; a hook says its own name.
-            command = args.name if args.command in ("claude-hook", "git-hook") else args.command
-            print(f"agent_runtime {command}: {error}", file=sys.stderr)
-        else:
-            print(error, file=sys.stderr)
+        print(_error_message(invocation.name, error), file=sys.stderr)
         return 1
+    return 0 if exit_code is None else exit_code
+
+
+def _error_message(command_name: str, error: Exception) -> str:
+    """The error as the user sees it. Most messages already start with their command's name. The two from shared
+    code don't, so they get it here."""
+    if isinstance(error, (contract.MissingVariables, GitError)):
+        return f"agent_runtime {command_name}: {error}"
+    return str(error)
 
 
 def main() -> None:
