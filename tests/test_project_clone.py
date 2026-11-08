@@ -40,7 +40,7 @@ def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_
     assert outside.read_text() == "outside\n"
 
 
-# --- ProjectClone: fetch_branch, subdir_names, text --------------------------------------
+# --- ProjectClone.fetch_branch, FetchedBranch: subdir_names, read_text -------------------
 
 
 def test_fetch_branch_refuses_a_branch_the_remote_lacks(project_repository) -> None:
@@ -52,37 +52,37 @@ def test_fetch_branch_refuses_a_branch_the_remote_lacks(project_repository) -> N
 def test_subdir_names_lists_only_the_dirs_on_a_fetched_branch(project_repository) -> None:
     clone = project_repository.clone()
     notes_branch = clone.fetch_branch(task.NOTES_BRANCH)
-    assert clone.subdir_names(notes_branch, task.OPEN_DIR) == ["tst-0000"]
-    assert clone.subdir_names(notes_branch, f"{task.OPEN_DIR}/tst-0000") == []  # TASK.md is a file
+    assert notes_branch.subdir_names(task.OPEN_DIR) == ["tst-0000"]
+    assert notes_branch.subdir_names(f"{task.OPEN_DIR}/tst-0000") == []  # TASK.md is a file
 
 
 def test_subdir_names_of_a_missing_dir_raises_the_narrow_error(project_repository) -> None:
     clone = project_repository.clone()
     notes_branch = clone.fetch_branch(task.NOTES_BRANCH)
     with pytest.raises(PathNotOnBranchError):
-        clone.subdir_names(notes_branch, ".agent/tasks/nope")
+        notes_branch.subdir_names(".agent/tasks/nope")
     with pytest.raises(PathNotOnBranchError):  # a file is not a dir
-        clone.subdir_names(notes_branch, f"{task.OPEN_DIR}/tst-0000/TASK.md")
+        notes_branch.subdir_names(f"{task.OPEN_DIR}/tst-0000/TASK.md")
     with pytest.raises(PathNotOnBranchError):  # a prefix of a dir's name is not that dir
-        clone.subdir_names(notes_branch, task.OPEN_DIR[:-1])
+        notes_branch.subdir_names(task.OPEN_DIR[:-1])
 
 
-def test_text_reads_a_file_and_a_link_as_its_target_name(project_repository) -> None:
+def test_read_text_reads_a_file_and_a_link_as_its_target_name(project_repository) -> None:
     project_repository.edit_notes(symlink={".agent/tasks/open/tst-0000/LINK": "/etc/hostname"})
     clone = project_repository.clone()
     notes_branch = clone.fetch_branch(task.NOTES_BRANCH)
 
-    assert clone.text(notes_branch, f"{task.OPEN_DIR}/tst-0000/TASK.md") == "tst-0000\n"
-    assert clone.text(notes_branch, f"{task.OPEN_DIR}/tst-0000/LINK") == "/etc/hostname"
+    assert notes_branch.read_text(f"{task.OPEN_DIR}/tst-0000/TASK.md") == "tst-0000\n"
+    assert notes_branch.read_text(f"{task.OPEN_DIR}/tst-0000/LINK") == "/etc/hostname"
 
 
-def test_text_of_a_missing_file_or_a_dir_raises_the_narrow_error(project_repository) -> None:
+def test_read_text_of_a_missing_file_or_a_dir_raises_the_narrow_error(project_repository) -> None:
     clone = project_repository.clone()
     notes_branch = clone.fetch_branch(task.NOTES_BRANCH)
     # "dir/" makes ls-tree list the dir's contents: still not a file
     for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000", f"{task.OPEN_DIR}/tst-0000/"):
         with pytest.raises(PathNotOnBranchError):
-            clone.text(notes_branch, path)
+            notes_branch.read_text(path)
 
 
 def test_reads_use_the_commit_fetched_even_after_a_later_fetch(project_repository) -> None:
@@ -92,8 +92,8 @@ def test_reads_use_the_commit_fetched_even_after_a_later_fetch(project_repositor
     second = clone.fetch_branch(task.NOTES_BRANCH)
 
     assert first.commit != second.commit
-    assert clone.subdir_names(first, task.OPEN_DIR) == ["tst-0000"]
-    assert clone.subdir_names(second, task.OPEN_DIR) == ["tst-0000", "tst-0002"]
+    assert first.subdir_names(task.OPEN_DIR) == ["tst-0000"]
+    assert second.subdir_names(task.OPEN_DIR) == ["tst-0000", "tst-0002"]
 
 
 # --- ProjectClone: check_out, start_orphan ----------------------------------------------

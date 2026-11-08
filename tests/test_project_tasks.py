@@ -10,7 +10,7 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_clone import ProjectClone
+from foundry.project_clone import BranchNotFoundError, ProjectClone
 from foundry.project_tasks import (
     ClosedTaskError,
     MissingTurnError,
@@ -193,12 +193,10 @@ def test_a_task_in_neither_dir_is_not_found_naming_both(project_repository) -> N
         project_repository.project_tasks().fetch_task("tst-0009")
 
 
-def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_env) -> None:
+def test_finding_a_task_without_a_notes_branch_names_the_missing_branch(tmp_path: Path, git_env) -> None:
     bare_dir = tmp_path / "bare.git"
     git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
-    with pytest.raises(
-        TaskNotFoundError, match=r"^task tst-0001 doesn't exist: the project repository has no agent-notes branch"
-    ):
+    with pytest.raises(BranchNotFoundError, match=r"^the project repository has no agent-notes branch$"):
         project_tasks_of(bare_dir, git_env).fetch_task("tst-0001")
 
 
@@ -210,8 +208,16 @@ def test_a_repository_without_a_notes_branch_has_no_tasks(tmp_path: Path, git_en
         lambda project_tasks: project_tasks.fetch_open_task_turns(),
         lambda project_tasks: project_tasks.close_task("cls-0000"),  # refused: already closed
         lambda project_tasks: project_tasks.hand_off("cls-0000", "dev", note=None),  # refused: closed
+        lambda project_tasks: project_tasks.create_task("cls-0000", TEMPLATE),  # refused: exists, closed
     ],
-    ids=["fetch_task", "fetch_task_turn", "fetch_open_task_turns", "refused-close", "refused-hand-off"],
+    ids=[
+        "fetch_task",
+        "fetch_task_turn",
+        "fetch_open_task_turns",
+        "refused-close",
+        "refused-hand-off",
+        "refused-create",
+    ],
 )
 def test_finding_reading_and_refusing_change_no_file(project_repository, git_env, tmp_path: Path, operation) -> None:
     """Only an operation that goes ahead checks out NOTES_BRANCH; until then the clone's working tree is empty."""
