@@ -1,21 +1,7 @@
-"""The runtime's command line: ``/usr/bin/python3 -IS agent_runtime.pyz <command>``.
-
-The version is checked before anything else is imported, and this file uses only syntax that old
-interpreters parse, so a template that ships an older python3 prints what it needs instead of a
-SyntaxError from a module further in.
-"""
-
-import sys
-
-_MINIMUM_PYTHON = (3, 11)
-
-if sys.version_info < _MINIMUM_PYTHON:
-    needed = ".".join(map(str, _MINIMUM_PYTHON))
-    found = ".".join(map(str, sys.version_info[:2]))
-    sys.stderr.write(f"agent_runtime: needs Python >= {needed}; {sys.executable} is {found}\n")
-    sys.exit(1)
+"""The runtime's command line: ``/usr/bin/python3 -IS agent_runtime.pyz <command>``."""
 
 import argparse
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
@@ -86,11 +72,13 @@ def build_parser() -> argparse.ArgumentParser:
 def parse(argv: Sequence[str] | None = None) -> Invocation:
     """The command ``argv`` names, ready to call. Exits with argparse's usage message for anything else."""
     args = build_parser().parse_args(argv)
-    if args.kind == "claude-hook":
-        return Invocation(args.name, CLAUDE_HOOKS[args.name])
-    if args.kind == "git-hook":
-        return Invocation(args.name, partial(GIT_HOOKS[args.name], args.hook_args))
-    return Invocation(args.name, COMMANDS[args.name][0])
+    match args.kind:
+        case "claude-hook":
+            return Invocation(args.name, CLAUDE_HOOKS[args.name])
+        case "git-hook":
+            return Invocation(args.name, partial(GIT_HOOKS[args.name], args.hook_args))
+        case _:
+            return Invocation(args.name, COMMANDS[args.name][0])
 
 
 def run(argv: Sequence[str] | None = None) -> int:
