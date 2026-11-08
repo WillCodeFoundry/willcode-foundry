@@ -1,5 +1,5 @@
-"""agent_runtime.claude_hooks, in-process: guard-bash against the commands it must allow and refuse, and
-session-check against real checkouts that session_setup made.
+"""The Claude hooks, in-process, through agent_runtime.commands.claude_hook: guard-bash against the commands it
+must allow and refuse, and session-check against real checkouts that session_setup made.
 
 tests/agent_kit/test_managed_settings.py and test_stop_hook.py run each hook once as the managed settings say.
 """
@@ -11,14 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime import claude_hooks, contract
+from agent_runtime import contract
+from agent_runtime.commands import claude_hook
 from tests.support import TASK, git
 
 
 def guard(command: str) -> tuple[int, str]:
     stderr = io.StringIO()
     call = {"tool_name": "Bash", "tool_input": {"command": command}}
-    returncode = claude_hooks.guard_bash(io.StringIO(json.dumps(call)), stderr)
+    returncode = claude_hook.guard_bash(io.StringIO(json.dumps(call)), stderr)
     return returncode, stderr.getvalue()
 
 
@@ -107,7 +108,7 @@ def test_refused_with_a_reason(command: str, reason: str) -> None:
 
 @pytest.mark.parametrize("raw_input", ["not json", "[]", '{"tool_input": "x"}', '{"tool_input": {"command": 3}}'])
 def test_input_it_does_not_understand_is_let_through(raw_input: str) -> None:
-    assert claude_hooks.guard_bash(io.StringIO(raw_input), io.StringIO()) == 0
+    assert claude_hook.guard_bash(io.StringIO(raw_input), io.StringIO()) == 0
 
 
 # --- session-check -----------------------------------------------------------
@@ -118,7 +119,7 @@ Checkouts = tuple[contract.SessionVariables, Path, Path]
 def stop(variables: contract.SessionVariables, raw_input: str = '{"stop_hook_active": false}') -> str:
     """session-check's decision on this stop, as the JSON it prints; empty when the stop goes through."""
     stdout = io.StringIO()
-    assert claude_hooks.session_check(io.StringIO(raw_input), stdout, variables) == 0
+    assert claude_hook.session_check(io.StringIO(raw_input), stdout, variables) == 0
     return stdout.getvalue()
 
 

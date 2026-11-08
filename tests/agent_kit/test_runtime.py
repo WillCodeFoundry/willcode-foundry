@@ -23,7 +23,12 @@ def test_the_runtime_imports_only_the_standard_library(built_kit: Path) -> None:
     foundry nor yaml, nor anything else installed, has to be in the sandbox. (What the interpreter's own site
     loads before, a virtualenv's for one, isn't the runtime's.)"""
     pyz = AgentKit(built_kit).runtime
-    modules = sorted(path.stem for path in RUNTIME_SOURCE.glob("*.py") if path.stem != "__main__")
+    sources = [path.relative_to(RUNTIME_SOURCE).with_suffix("") for path in RUNTIME_SOURCE.rglob("*.py")]
+    modules = sorted(  # commands/__init__.py is the package agent_runtime.commands
+        ".".join(source.parts).removesuffix(".__init__")
+        for source in sources
+        if source.parts not in {("__main__",), ("__init__",)}
+    )
     code = "\n".join(
         [
             "import sys",
