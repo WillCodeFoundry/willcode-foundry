@@ -70,9 +70,7 @@ ignore = [
 "src/foundry/cli.py" = ["T20", "TID251"]
 "src/foundry/commands/*" = ["T20", "TID251"]
 "src/agent_runtime/__main__.py" = ["T20", "TID251"]
-"src/agent_runtime/claude_hooks.py" = ["T20", "TID251"]
-"src/agent_runtime/session_init.py" = ["T20", "TID251"]
-"src/agent_runtime/session_setup.py" = ["T20", "TID251"]
+"src/agent_runtime/commands/*" = ["T20", "TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "unittest.mock".msg = "Tests never patch: fake the outside system instead, as design rule 3 in ARCHITECTURE.md says."

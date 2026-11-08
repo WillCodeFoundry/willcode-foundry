@@ -124,7 +124,7 @@ def checkouts(
     origin, both clean and pushed. Commits aren't signed: the role signs with a key there is no private half of here, so
     signing is turned off by git's environment override, which beats any file."""
     variables = variables_for(built_kit, created_task)
-    session_setup.session_setup(variables, git_identity)
+    session_setup.set_up(variables)
     for name, value in {
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "commit.gpgsign",

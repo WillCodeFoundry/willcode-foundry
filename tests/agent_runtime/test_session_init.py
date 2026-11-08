@@ -1,15 +1,17 @@
 """session_init's order, in-process: set up, harden as root while sudo works, then check, on one temporary machine.
 
 Root mode is reached through ``run_as_root``: here it calls harden in-process with the machine's root view,
-where the real launch goes through sudo. tests/agent_kit/test_session_init.py checks that sudo call itself.
+where the real launch goes through sudo. tests/agent_kit/test_session_init.py checks that sudo call itself, and
+tests/agent_runtime/test_commands.py what session-init prints for each outcome.
 """
 
+import logging
 from pathlib import Path
 
 import pytest
 
 from agent_runtime import hardening, session_init
-from agent_runtime.session_setup import SetupError
+from agent_runtime.session_setup import SetupRefused
 from tests.support import VariablesFor
 from tests.support.machine import SUDO_USER, TemporaryMachine
 
@@ -31,52 +33,44 @@ def test_a_first_launch_sets_up_hardens_as_root_then_checks(
     created_task: Path,
     machine: TemporaryMachine,
     read_only_kit: Path,
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     calls: list[Path] = []
 
-    returncode = session_init.session_init(
-        variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls)
-    )
+    with caplog.at_level(logging.INFO, logger="agent_runtime"):
+        outcome = session_init.init(
+            variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls)
+        )
 
-    assert returncode == 0, capsys.readouterr().err
+    assert outcome == session_init.Checked(can_still=[])
     assert calls == [read_only_kit]
-    out = capsys.readouterr().out
-    assert out.index("session-setup: checkouts ready") < out.index("check-hardening: hardened")
+    assert "session-setup: checkouts ready" in caplog.messages
 
 
 def test_a_relaunch_only_checks(
-    variables_for: VariablesFor,
-    created_task: Path,
-    machine: TemporaryMachine,
-    read_only_kit: Path,
-    capsys: pytest.CaptureFixture[str],
+    variables_for: VariablesFor, created_task: Path, machine: TemporaryMachine, read_only_kit: Path
 ) -> None:
     """Root mode left sudo mode 0: it can't execute, which counts as no sudo, so root mode doesn't run again."""
     calls: list[Path] = []
     variables = variables_for(read_only_kit, created_task)
-    session_init.session_init(variables, machine.agent_mode, in_process_root(machine, calls))
+    session_init.init(variables, machine.agent_mode, in_process_root(machine, calls))
 
-    assert session_init.session_init(variables, machine.agent_mode, in_process_root(machine, calls)) == 0
+    outcome = session_init.init(variables, machine.agent_mode, in_process_root(machine, calls))
+
+    assert outcome == session_init.Checked(can_still=[])
     assert calls == [read_only_kit]
-    assert capsys.readouterr().out.endswith("check-hardening: hardened\n")
 
 
 def test_a_failing_root_mode_stops_the_launch_before_the_check(
-    variables_for: VariablesFor,
-    created_task: Path,
-    machine: TemporaryMachine,
-    read_only_kit: Path,
-    capsys: pytest.CaptureFixture[str],
+    variables_for: VariablesFor, created_task: Path, machine: TemporaryMachine, read_only_kit: Path
 ) -> None:
     calls: list[Path] = []
 
-    returncode = session_init.session_init(
+    outcome = session_init.init(
         variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls, exit_code=3)
     )
 
-    assert returncode == 3
-    assert "check-hardening:" not in capsys.readouterr().out
+    assert outcome == session_init.RootModeFailed(exit_code=3)
 
 
 def test_a_failing_setup_stops_the_launch_before_root(
@@ -86,35 +80,22 @@ def test_a_failing_setup_stops_the_launch_before_root(
     no_roles = tmp_path / "kit-without-roles"
     no_roles.mkdir()
 
-    with pytest.raises(SetupError, match=r"^session-setup: role 'dev': .* has no ROLE.md or gitconfig$"):
-        session_init.session_init(
-            variables_for(no_roles, created_task), machine.agent_mode, in_process_root(machine, calls)
-        )
+    with pytest.raises(SetupRefused, match=r"^session-setup: role 'dev': .* has no ROLE.md or gitconfig$"):
+        session_init.init(variables_for(no_roles, created_task), machine.agent_mode, in_process_root(machine, calls))
     assert calls == []
 
 
 def test_an_unhardened_machine_is_refused_naming_what_the_agent_can_still_do(
-    variables_for: VariablesFor,
-    created_task: Path,
-    machine: TemporaryMachine,
-    read_only_kit: Path,
-    capsys: pytest.CaptureFixture[str],
+    variables_for: VariablesFor, created_task: Path, machine: TemporaryMachine, read_only_kit: Path
 ) -> None:
     """Root mode ran, but the agent can still write the settings: the check stops the launch."""
-    session_init.session_init(
+    session_init.init(variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, []))
+    machine.root_mode.managed_settings.chmod(0o646)
+
+    outcome = session_init.init(
         variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
     )
-    machine.root_mode.managed_settings.chmod(0o646)
-    capsys.readouterr()  # what the first launch printed
 
-    assert (
-        session_init.session_init(
-            variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
-        )
-        == 1
-    )
-    assert capsys.readouterr().err == (
-        "check-hardening: not starting the agent; it can still:\n"
-        f"  change Claude's managed settings: {machine.root_mode.managed_settings} is writable\n"
-        "This sandbox needs recreating: see Recreating a sandbox in the foundry's README.\n"
+    assert outcome == session_init.Checked(
+        can_still=[f"change Claude's managed settings: {machine.root_mode.managed_settings} is writable"]
     )

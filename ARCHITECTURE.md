@@ -28,7 +28,7 @@ A launch, end to end:
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches (`SessionVariables`). |
 | `task.py` | `Task` and its `Status`: the one place a task's names are spelled, open and closed paths included. |
 | `project_tasks.py` | `ProjectTasks`: finding a project's tasks by id, with the status their notes dir gives them; creating, closing and reopening them; reading a task's turn and handing it off; listing the open tasks with their turns. |
-| `project_clone.py` | `ProjectClone`: the throwaway clone `foundry task` commits and pushes from, and lists and reads a fetched branch's files from. |
+| `project_scratch_clone.py` | `ProjectScratchClone`: the scratch clone `foundry task` commits and pushes from, and lists and reads a fetched branch's files from. |
 | `runtime_build.py` | Builds the runtime into the kit, replacing it only when it changed. |
 | `repo_policy.py`, `github.py` | `foundry repo check`: compares each project's repository with the repo policy, through `gh`. |
 | `skills.py` | `foundry skills update`: merges upstream's changes into the copied skills. |
@@ -39,11 +39,12 @@ A launch, end to end:
 
 | Module | What it does |
 |---|---|
-| `__main__.py` | The runtime's commands; it prints the errors the runtime's code raises. |
-| `session_init.py` | `session-init`: setup, root mode through sudo on the first launch, then agent mode. |
+| `__main__.py` | The runtime's command line; it prints the errors the runtime's code raises. |
+| `commands/` | One module per command, each a composition root: it reads the session variables, stdin or the hook's arguments, calls the library, and prints. Only these and `__main__.py` print (design rule 6). |
+| `session_init.py` | `session-init`'s order: setup, root mode on the first launch, then agent mode. `commands/session_init.py` makes the sudo call. |
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
-| `claude_hooks.py`, `git_hooks.py` | The Claude hooks and the git hooks. |
+| `claude_hooks.py`, `git_hooks.py` | The rules of the Claude hooks and the git hooks. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 
 The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <command>`:
