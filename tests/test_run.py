@@ -1,5 +1,5 @@
-"""foundry run, up to the call into agent_sandbox: make_launch_request against a foundry under tmp_path, and which
-task and role it launches."""
+"""foundry run, up to the call into agent_sandbox: the launch request a session gives, the new session reported,
+and which task and role it launches, against a foundry under tmp_path."""
 
 import os
 from collections.abc import Iterator
@@ -10,11 +10,11 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from foundry import cli, config
 from foundry.agent_sandbox import LaunchRequest, SandboxDefinition
-from foundry.commands.run import choose_role, fetch_open_task, make_launch_request, role_for_turn
+from foundry.commands.run import choose_role, fetch_open_task, role_for_turn
 from foundry.config import Config
 from foundry.errors import FoundryError
 from foundry.project_tasks import MissingTurnError, ProjectTasks
-from foundry.session import SessionVariables
+from foundry.session import Session, SessionVariables, open_or_create
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
 
@@ -44,10 +44,10 @@ def foundry_config(foundry_root: Path) -> Config:
     return config.load(foundry_root)
 
 
-def request_for(foundry_root: Path, task_id: str = "wcf-0042") -> LaunchRequest:
-    """make_launch_request for role dev on ``task_id`` in tkt-store, as this foundry's config has them."""
+def session_for(foundry_root: Path, task_id: str = "wcf-0042") -> Session:
+    """The session for role dev on ``task_id`` in tkt-store, as this foundry's config has them."""
     foundry_config = config.load(foundry_root)
-    return make_launch_request(
+    return open_or_create(
         foundry_root,
         project=foundry_config.project("tkt-store"),
         role=foundry_config.role("dev"),
@@ -55,13 +55,14 @@ def request_for(foundry_root: Path, task_id: str = "wcf-0042") -> LaunchRequest:
     )
 
 
-def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(
-    foundry_root: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def request_for(foundry_root: Path) -> LaunchRequest:
+    return session_for(foundry_root).launch_request(config.load(foundry_root).role("dev"))
+
+
+def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
     request = request_for(foundry_root)
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
-    assert capsys.readouterr().err == f"==> session:   {session_dir} (new)\n"
     assert request.definition_dir == session_dir
     assert SessionVariables.from_env(SandboxDefinition.read(session_dir).variables).task == Task.as_open("wcf-0042")
     assert request.init_command == (
@@ -81,28 +82,26 @@ def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
     assert request_for(foundry_root).model == "sonnet"
 
 
-def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
-    AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the dir goes\n")
-
-    with pytest.raises(FoundryError, match="can't build the agent runtime"):
-        request_for(foundry_root)
-
-
-def test_a_rerun_asks_for_the_same_launch_and_prints_no_new_session(
-    foundry_root: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    first = request_for(foundry_root)
-    capsys.readouterr()
-
-    assert request_for(foundry_root) == first
-    assert capsys.readouterr().err == ""
-
-
 def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token = foundry_root / "secrets" / "github" / "dev.token"
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
     assert request_for(foundry_root).github_token_path == token
+
+
+def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
+    assert request_for(foundry_root) == request_for(foundry_root)
+
+
+def test_a_new_session_is_printed_and_an_existing_one_is_not(
+    foundry_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    created = session_for(foundry_root)
+    assert capsys.readouterr().err == f"==> session:   {created.dir} (new)\n"
+
+    reopened = session_for(foundry_root)
+    assert capsys.readouterr().err == ""
+    assert (created.created, reopened.created) == (True, False)
 
 
 def test_run_prints_the_turn_and_the_new_session_then_calls_the_launcher(

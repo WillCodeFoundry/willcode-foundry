@@ -28,8 +28,9 @@ from foundry.agent_sandbox.host import SystemHost
 from foundry.agent_sandbox.launcher import LaunchRequest, provision_sandbox
 from foundry.agent_sandbox.sandbox import SbxCli
 from foundry.agent_sandbox.ssh_agent import SshAgentRegistry, ssh_agent_socket_path
-from foundry.commands.run import make_launch_request
 from foundry.errors import FoundryError
+from foundry.runtime_build import build_runtime
+from foundry.session import open_or_create
 from foundry.task import Task
 
 pytestmark = pytest.mark.sbx
@@ -80,11 +81,12 @@ class Smoke:
     """What session-init printed at the last launch."""
 
     def make_launch_request(self) -> LaunchRequest:
-        """The session, created if missing, and the runtime built into the kit: no sbx call yet."""
+        """The session, created if missing, and the runtime built into the kit, as foundry run does: no sbx call yet."""
         foundry_config = config.load(self.foundry_root)
-        self.request = make_launch_request(
-            self.foundry_root, project=foundry_config.project(PROJECT), role=foundry_config.role(ROLE), task=TASK
-        )
+        role = foundry_config.role(ROLE)
+        session = open_or_create(self.foundry_root, project=foundry_config.project(PROJECT), role=role, task=TASK)
+        build_runtime(paths.agent_kit_dir(self.foundry_root))
+        self.request = session.launch_request(role)
         return self.request
 
     def provision_sandbox(self) -> None:

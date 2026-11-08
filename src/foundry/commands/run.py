@@ -4,11 +4,10 @@ import argparse
 import os
 import sys
 from collections.abc import Collection
-from pathlib import Path
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths
-from foundry.config import Config, Project, Role
+from foundry.config import Config, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
@@ -32,7 +31,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def main(args: argparse.Namespace) -> NoReturn:
-    """Composition root: find the open task and the role, make the launch request, then launch."""
+    """Composition root: find the open task and the role, open the session, build the runtime, then launch."""
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(args.project_name)
@@ -41,7 +40,9 @@ def main(args: argparse.Namespace) -> NoReturn:
         role = choose_role(
             project_tasks, foundry_config, project_name=project.name, task=task, role_name=args.role_name
         )
-    agent_sandbox.launch(make_launch_request(foundry_root, project=project, role=role, task=task))
+    session = open_or_create(foundry_root, project=project, role=role, task=task)  # creates it the first time
+    build_runtime(paths.agent_kit_dir(foundry_root))  # writes it when it changed
+    agent_sandbox.launch(session.launch_request(role))
 
 
 def fetch_open_task(project_tasks: ProjectTasks, *, project_name: str, task_id: str) -> Task:
@@ -78,19 +79,3 @@ def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task:
             f"known: {known}, or {HUMAN}. {override_hint}"
         )
     return turn
-
-
-def make_launch_request(foundry_root: Path, *, project: Project, role: Role, task: Task) -> agent_sandbox.LaunchRequest:
-    """What agent_sandbox needs to launch ``role`` on ``task``: the session, created and printed the first time, and
-    the agent runtime built into the kit. A failed build aborts."""
-    session = open_or_create(foundry_root, project=project, role=role, task=task)
-    if session.created:
-        print(f"==> session:   {session.dir} (new)", file=sys.stderr)
-    build_runtime(paths.agent_kit_dir(foundry_root))
-    return agent_sandbox.LaunchRequest(
-        definition_dir=session.dir,
-        ssh_key_path=role.ssh_key_path,
-        init_command=session.init_command,
-        github_token_path=role.github_token_path,
-        model=role.model,
-    )

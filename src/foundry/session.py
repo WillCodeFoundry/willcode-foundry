@@ -5,13 +5,14 @@ sandbox is first launched (SandboxDefinition knows its format), and the
 empty ``workspace/`` directory sbx requires as the sandbox's primary
 workspace. The definition carries the session variables, the AGENT_*
 variables the sandbox is created with (SessionVariables knows their names).
-``open_or_create`` is the whole interface: it names the sandbox, creates its
-session the first time, and on every later launch reads the definition back
-and refuses one written for another role, task, repository or agent kit.
-``recreate_hint`` says how to start a sandbox over.
+``open_or_create`` names the sandbox, creates its session the first time, and on
+every later launch reads the definition back and refuses one written for another
+role, task, repository or agent kit. ``Session.launch_request`` is what a launch
+asks agent_sandbox for. ``recreate_hint`` says how to start a sandbox over.
 """
 
 import re
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +21,7 @@ from typing import Final
 from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit
 from foundry import paths
-from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, is_valid_sandbox_name
+from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, LaunchRequest, SandboxDefinition, is_valid_sandbox_name
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
@@ -116,9 +117,19 @@ class Session:
         """The runtime's session-init, from the agent kit, which open_or_create checked is this foundry's."""
         return AgentKit(self.definition.agent_kit_dir).runtime_command("session-init")
 
+    def launch_request(self, role: Role) -> LaunchRequest:
+        """What agent_sandbox needs to launch this session's sandbox for ``role``. Reads and writes nothing."""
+        return LaunchRequest(
+            definition_dir=self.dir,
+            ssh_key_path=role.ssh_key_path,
+            init_command=self.init_command,
+            github_token_path=role.github_token_path,
+            model=role.model,
+        )
+
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:
-    """The session for this role on this task in this project, created the first time.
+    """The session for this role on this task in this project, created, and printed, the first time.
 
     Raises FoundryError if the sandbox name would be too long, if the session
     directory exists without its definition but holds more than an empty
@@ -135,6 +146,8 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     recorded = _recorded_variables(definition)
     _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
     _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
+    if created:  # printed here until the logging PR makes it a log line; design rule 6 keeps print to entry points
+        print(f"==> session:   {session_dir} (new)", file=sys.stderr)  # noqa: T201
     return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
 
 
