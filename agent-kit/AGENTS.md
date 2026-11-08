@@ -96,12 +96,14 @@ Next: the message when the task is already closed.
 - Asks D1 → planner: TASK.md says to extend `ProjectTasks.move`, but a1b2c3d
   replaced it with `close` and `reopen`. Which should change?
 - Answers R4: fixed in 9f8e7d6.
+- Follow-up: src/tasks.py:42 `move_notes` · checks and moves in one function · no test reaches the check alone.
 ```
 
 - **The heading** is the entry's number, one more than the entry before it;
   your role; and `progress`, or, in your turn's last entry, the outcome your
   turn ends with (see "Taking turns"). The first entry is `1`.
 - **`Done` and `Next`** say exactly where you stopped, for whoever continues.
+  `Next` is this task's next step only.
 - **A question** is `Asks <id> → <role or human>: <question>`. Its id is your
   role's initial and the next number for that initial in the task: `P1`
   (planner), `A1` (architect), `D1` (dev), `Q1` (qa). The reviewer asks
@@ -110,6 +112,9 @@ Next: the message when the task is already closed.
   asked, or, for a question to the human, by whichever role the human
   answers: `Answers <id>: <answer> (the human)`. A question is open until
   some entry answers it.
+- **A follow-up** is `Follow-up: <where> · <what is wrong> · <what it costs>`:
+  something worth changing that this task leaves alone. One line each, for a
+  later task to find with `git grep -n '^- Follow-up:'`. Nothing answers it.
 - **An entry headed `human · handoff`** is the human handing the task off,
   with `foundry task handoff`.
 
@@ -200,8 +205,8 @@ after every meaningful step, and always before anything risky or long.
 
 ### Stay in scope
 
-- Do only what `TASK.md` asks. If you notice other problems, list them under
-  `Next` as suggested follow-ups instead of fixing them. No unrelated
+- Do only what `TASK.md` asks. If you notice other problems, record each as a
+  `Follow-up` line in your `LOG.md` entry instead of fixing it. No unrelated
   refactoring or reformatting.
 - Prefer the project's existing tools, patterns and dependencies. Adding a
   dependency is out of scope unless `TASK.md` allows it; otherwise ask, as
