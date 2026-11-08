@@ -7,7 +7,7 @@ from agent_runtime.__main__ import GIT_HOOKS, Invocation, parse
 
 
 def test_a_command_is_named_as_typed_and_calls_its_function() -> None:
-    assert parse(["session-setup"]) == Invocation("session-setup", session_setup.session_setup)
+    assert parse(["session-setup"]) == Invocation("session-setup", session_setup.set_up)
 
 
 def test_a_claude_hook_is_named_without_its_kind() -> None:

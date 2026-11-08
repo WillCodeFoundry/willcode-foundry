@@ -16,7 +16,7 @@ RunAsRoot = Callable[[hardening.Machine, Path], int]
 """Runs root mode for the kit at the Path, as root, and returns its exit code."""
 
 
-def session_init(
+def init(
     variables: contract.SessionVariables | None = None,
     machine: hardening.Machine = hardening.SANDBOX,
     run_as_root: RunAsRoot | None = None,
@@ -24,7 +24,7 @@ def session_init(
     """Set up as the agent; harden as root on the first launch, while sudo still works; check the hardening as the
     agent on every launch, with the groups sbx gives it. The launch stops unless the agent can't become root."""
     variables = variables or contract.read_session_variables()
-    session_setup.session_setup(variables)
+    session_setup.set_up(variables)
     if (
         hardening.can_sudo(machine.sudo)
         and (returncode := (run_as_root or _through_sudo)(machine, variables.agent_kit_dir)) != 0

@@ -180,7 +180,7 @@ _Avoid_: boundary, security (for a guardrail)
 `guard-bash`, which Claude Code runs before each shell command, and `session-check`, which it runs at the end of each of the agent's turns.
 
 **Refusal**:
-What a hook or a hardening mode says when it stops something: what was wrong, and what to do instead.
+What a hook, a hardening mode or session-setup says when it stops something: what was wrong, and what to do instead. The code names each for who refuses: `GitHookRefused`, `HardeningRefused`, `SetupRefused`.
 
 ### Testing
 

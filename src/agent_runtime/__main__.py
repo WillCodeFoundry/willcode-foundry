@@ -21,8 +21,8 @@ Command = Callable[[], int | None]
 agent_runtime's docstring says."""
 
 COMMANDS: dict[str, tuple[Command, str]] = {
-    "session-init": (session_init.session_init, "prepare the sandbox: what the launcher runs before the agent"),
-    "session-setup": (session_setup.session_setup, "the agent user's part of session-init"),
+    "session-init": (session_init.init, "prepare the sandbox: what the launcher runs before the agent"),
+    "session-setup": (session_setup.set_up, "the agent user's part of session-init"),
     "harden": (session_init.harden, "as root: harden the sandbox"),
     "check-hardening": (session_init.check_hardening, "as the agent: check the sandbox is hardened"),
 }
@@ -40,7 +40,7 @@ hooks link to it."""
 _EXPECTED_ERRORS = (
     contract.MissingVariables,
     hardening.HardeningRefused,
-    session_setup.SetupError,
+    session_setup.SetupRefused,
     git_hooks.GitHookRefused,
     GitError,
 )
