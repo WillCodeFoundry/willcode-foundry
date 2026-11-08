@@ -105,6 +105,7 @@ def test_an_unhardened_machine_is_refused_naming_what_the_agent_can_still_do(
         variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
     )
     machine.root_mode.managed_settings.chmod(0o646)
+    capsys.readouterr()  # what the first launch printed
 
     assert (
         session_init.session_init(

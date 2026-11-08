@@ -1,14 +1,13 @@
-"""Launch one sandbox from its definition, with its own ssh-agent.
+"""Launch one sandbox from its definition, with its own ssh-agent: prune remnants, provision the sandbox, then
+attach the agent.
 
-Imports nothing from the rest of foundry: it is given a directory holding the
-sandbox definition, a private key, and what to run before attaching the
-agent. The sandbox's name and agent kit come from the
-definition.
+Imports nothing from the rest of foundry. It is given a dir holding the sandbox definition, a private key, and
+what to run before attaching the agent. The sandbox's name and agent kit come from the definition.
 """
 
 import os
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -16,7 +15,8 @@ from typing import NoReturn
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.sandbox import Sandbox, SbxCli, list_live_sandboxes
+from foundry.agent_sandbox.pruning import prune
+from foundry.agent_sandbox.sandbox import Sandbox, SbxCli
 from foundry.agent_sandbox.ssh_agent import SshAgent, SshAgentRegistry
 
 
@@ -35,49 +35,34 @@ class LaunchRequest:
     """The model the agent runs on, given to it at each attach; None for its default. Not part of the sandbox."""
 
 
-@dataclass(frozen=True)
-class PreparedSandbox:
-    """A sandbox start() prepared, ready for the agent: what launch prints, and the sandbox to attach to."""
-
-    definition: SandboxDefinition
-    ssh_agent_socket_path: Path
-    sandbox: SbxCli
-    init_output: str = ""
-    """What the init command printed."""
-
-
 def launch(request: LaunchRequest) -> NoReturn:
-    """Prepare the sandbox and replace this process with an agent run in it.
+    """Prune remnants, provision this sandbox, and replace this process with an agent run in it.
 
-    Composition root. Raises SandboxError if anything before attaching fails.
+    Composition root: it builds the real host, ssh-agent and sbx client, and passes them to provision_sandbox.
+    Raises SandboxError if anything before attaching fails.
     """
-    prepared = start(request, report=lambda line: print(line, file=sys.stderr))
-    print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
-    prepared.sandbox.attach(request.model)
-
-
-def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: None) -> PreparedSandbox:
-    """Everything launch does before attaching: prune, then prepare the sandbox, up to but not including
-    attaching the agent. Raises SandboxError if any of it fails."""
+    for remnant in prune():
+        print(f"==> pruned the {remnant.kind} of {remnant.sandbox_name}", file=sys.stderr)
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
-    ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())
-    ssh_agent = ssh_agent_registry.ssh_agent(definition.name)
+    ssh_agent = SshAgentRegistry(host, uid=os.getuid()).ssh_agent(definition.name)
     sandbox = SbxCli(
         host,
         sandbox_name=definition.name,
         definition_dir=request.definition_dir,
         ssh_agent_socket_path=ssh_agent.socket_path,
     )
-    if pruned := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
-        # Reported now, not returned: the preparation below can fail, and what was pruned stays pruned.
-        report(f"==> pruned the ssh-agents of stopped or removed sandboxes: {', '.join(pruned)}")
-    init_output = prepare(request, definition, ssh_agent, sandbox)
-    return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output)
+    provision_sandbox(request, definition, ssh_agent, sandbox)
+    print(launch_summary(request, definition, ssh_agent.socket_path), file=sys.stderr)
+    sandbox.attach(request.model)
 
 
-def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox) -> str:
-    """Everything up to, but not including, attaching the agent. Returns what the init command printed."""
+def provision_sandbox(
+    request: LaunchRequest, definition: SandboxDefinition, ssh_agent: SshAgent, sandbox: Sandbox
+) -> str:
+    """Bring the sandbox to the state the agent starts in, creating it if missing: its ssh-agent holding only the
+    role's key, GitHub reachable over SSH, the token set, the forwarded keys checked, then the init command run.
+    Returns what the init command printed. Raises SandboxError if any of it fails."""
     _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])

@@ -11,6 +11,7 @@ each building on the one before.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -23,10 +24,13 @@ import pytest
 from agent_runtime.agent_kit import AgentKit
 from foundry import agent_sandbox, config, paths
 from foundry.agent_sandbox import SandboxDefinition
-from foundry.agent_sandbox.launcher import LaunchRequest, PreparedSandbox, start
-from foundry.agent_sandbox.ssh_agent import ssh_agent_socket_path
-from foundry.commands.run import prepare_launch
+from foundry.agent_sandbox.host import SystemHost
+from foundry.agent_sandbox.launcher import LaunchRequest, provision_sandbox
+from foundry.agent_sandbox.sandbox import SbxCli
+from foundry.agent_sandbox.ssh_agent import SshAgentRegistry, ssh_agent_socket_path
 from foundry.errors import FoundryError
+from foundry.runtime_build import build_runtime
+from foundry.session import open_or_create
 from foundry.task import Task
 
 pytestmark = pytest.mark.sbx
@@ -67,21 +71,37 @@ def missing_prerequisites(foundry_root: Path) -> list[str]:
 
 @dataclass
 class Smoke:
-    """The smoke sandbox across the tests: what the last launch asked for and started."""
+    """The smoke sandbox across the tests: what the last launch asked for, and the sandbox it provisioned."""
 
     foundry_root: Path
     request: LaunchRequest | None = None
-    started: PreparedSandbox | None = None
+    definition: SandboxDefinition | None = None
+    sandbox: SbxCli | None = None
+    init_output: str = ""
+    """What session-init printed at the last launch."""
 
-    def prepare(self) -> LaunchRequest:
-        """The session, created if missing, and the runtime built into the kit: no sbx call yet."""
-        self.request = prepare_launch(self.foundry_root, project_name=PROJECT, role_name=ROLE, task=TASK).request
+    def make_launch_request(self) -> LaunchRequest:
+        """The session, created if missing, and the runtime built into the kit, as foundry run does: no sbx call yet."""
+        foundry_config = config.load(self.foundry_root)
+        role = foundry_config.role(ROLE)
+        session = open_or_create(self.foundry_root, project=foundry_config.project(PROJECT), role=role, task=TASK)
+        build_runtime(paths.agent_kit_dir(self.foundry_root))
+        self.request = session.launch_request(role)
         return self.request
 
-    def launch(self) -> PreparedSandbox:
-        """The launch up to the agent: prepare, then start."""
-        self.started = start(self.prepare())
-        return self.started
+    def provision_sandbox(self) -> None:
+        """The launch up to the agent, with the real host, ssh-agent and sbx client, built as launch builds them."""
+        request = self.make_launch_request()
+        self.definition = SandboxDefinition.read(request.definition_dir)
+        host = SystemHost()
+        ssh_agent = SshAgentRegistry(host, uid=os.getuid()).ssh_agent(self.definition.name)
+        self.sandbox = SbxCli(
+            host,
+            sandbox_name=self.definition.name,
+            definition_dir=request.definition_dir,
+            ssh_agent_socket_path=ssh_agent.socket_path,
+        )
+        self.init_output = provision_sandbox(request, self.definition, ssh_agent, self.sandbox)
 
     @property
     def ssh_agent_socket(self) -> Path:
@@ -91,13 +111,13 @@ class Smoke:
 
     def run(self, *command: str) -> subprocess.CompletedProcess[str]:
         """``command`` in the sandbox, as the agent, through sbx env exec."""
-        assert self.started is not None, "the first launch didn't run"
-        return self.started.sandbox.run(command)
+        assert self.sandbox is not None, "the first launch didn't run"
+        return self.sandbox.run(command)
 
     @property
     def agent_kit(self) -> Path:
-        assert self.started is not None, "the first launch didn't run"
-        return self.started.definition.agent_kit_dir
+        assert self.definition is not None, "the first launch didn't run"
+        return self.definition.agent_kit_dir
 
 
 def sbx_sandboxes() -> dict[str, str]:
@@ -109,7 +129,7 @@ def sbx_sandboxes() -> dict[str, str]:
 def remove_the_smoke_sandbox(session_dir: Path) -> None:
     """As the README says to recreate a sandbox: sbx env rm --force, then delete its session directory.
 
-    sbx is asked to remove the sandbox only when it has one by the definition's name: a session prepared but
+    sbx is asked to remove the sandbox only when it has one by the definition's name: a session made but
     never launched has none, and sbx would fail on it. When sbx fails to remove one it has, the run fails naming
     the command, and the dir stays: the sandbox can still be removed by its path.
     """
@@ -135,7 +155,7 @@ def smoke() -> Iterator[Smoke]:
     smoke = Smoke(foundry_root)
     # The session names the sandbox; a leftover from an earlier run is removed from its dir.
     try:
-        definition_dir = smoke.prepare().definition_dir
+        definition_dir = smoke.make_launch_request().definition_dir
     except FoundryError as error:
         pytest.fail(f"a leftover session stops the smoke test before it can remove it: {error}", pytrace=False)
     # Read while sbxenv.yaml exists: removing the sandbox deletes it, and the name is the same at every launch.
@@ -154,15 +174,14 @@ def smoke() -> Iterator[Smoke]:
 
 
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
-    smoke.launch()  # raises unless session-init exited 0
+    smoke.provision_sandbox()  # raises unless session-init exited 0
 
     checked = smoke.run(*AgentKit(smoke.agent_kit).runtime_command("check-hardening"))
 
     assert checked.returncode == 0, checked.stdout + checked.stderr
     assert "check-hardening: hardened" in checked.stdout
     # What only root mode prints: a relaunch of a sandbox left from an earlier run wouldn't.
-    assert smoke.started is not None
-    assert "harden: managed settings installed" in smoke.started.init_output
+    assert "harden: managed settings installed" in smoke.init_output
 
 
 @pytest.mark.parametrize(
@@ -181,7 +200,7 @@ def test_the_agent_cant(smoke: Smoke, what: str, script: str) -> None:
 
 
 def test_a_relaunch_only_checks(smoke: Smoke) -> None:
-    smoke.launch()  # raises unless session-init exited 0
+    smoke.provision_sandbox()  # raises unless session-init exited 0
 
     assert smoke.request is not None
     relaunched = smoke.run(*smoke.request.init_command)
@@ -193,15 +212,13 @@ def test_a_relaunch_only_checks(smoke: Smoke) -> None:
 
 def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
     """dockerd recreates its socket when the sandbox starts again, in the group daemon.json names."""
-    assert smoke.started is not None
+    assert smoke.definition is not None
     # sbx env has no stop; the top-level sbx stop takes the sandbox's name, not its definition dir.
-    stopped = subprocess.run(
-        ["sbx", "stop", smoke.started.definition.name], capture_output=True, text=True, check=False
-    )
+    stopped = subprocess.run(["sbx", "stop", smoke.definition.name], capture_output=True, text=True, check=False)
     assert stopped.returncode == 0, stopped.stderr
     assert sandbox_status(smoke) == "stopped"
 
-    smoke.launch()  # starts it again
+    smoke.provision_sandbox()  # starts it again
 
     deadline = time.monotonic() + 60
     while smoke.run("test", "-S", DOCKER_SOCKET).returncode != 0:
@@ -212,5 +229,5 @@ def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
 
 
 def sandbox_status(smoke: Smoke) -> str:
-    assert smoke.started is not None
-    return str(sbx_sandboxes().get(smoke.started.definition.name, "absent"))
+    assert smoke.definition is not None
+    return str(sbx_sandboxes().get(smoke.definition.name, "absent"))

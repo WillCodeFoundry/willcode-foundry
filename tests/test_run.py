@@ -1,5 +1,5 @@
-"""foundry run, up to the call into agent_sandbox: prepare_launch against a foundry under tmp_path, and whose
-turn it launches."""
+"""foundry run, up to the call into agent_sandbox: the launch request a session gives, the new session reported,
+and which task and role it launches, against a foundry under tmp_path."""
 
 import os
 from collections.abc import Iterator
@@ -8,12 +8,13 @@ from pathlib import Path
 import pytest
 
 from agent_runtime.agent_kit import AgentKit
-from foundry import cli
-from foundry.agent_sandbox import SandboxDefinition
-from foundry.commands.run import prepare_launch, require_open_task_and_role, role_for_turn
+from foundry import cli, config
+from foundry.agent_sandbox import LaunchRequest, SandboxDefinition
+from foundry.commands.run import choose_role, fetch_open_task, role_for_turn
+from foundry.config import Config
 from foundry.errors import FoundryError
 from foundry.project_tasks import MissingTurnError, ProjectTasks
-from foundry.session import SessionVariables
+from foundry.session import Session, SessionVariables, open_or_create
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
 
@@ -23,6 +24,7 @@ projects:
   tkt-store: {url: "git@github.com:o/tkt-store.git"}
 roles:
   dev: {}
+  reviewer: {}
 """
 
 
@@ -30,17 +32,35 @@ roles:
 def foundry_root(tmp_path: Path) -> Path:
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "foundry.yaml").write_text(CONFIG)
-    (tmp_path / "agent-kit" / "roles" / "dev").mkdir(parents=True)
-    for name in ("ROLE.md", "gitconfig"):
-        (tmp_path / "agent-kit" / "roles" / "dev" / name).write_text("")
+    for role_name in ("dev", "reviewer"):
+        (tmp_path / "agent-kit" / "roles" / role_name).mkdir(parents=True)
+        for name in ("ROLE.md", "gitconfig"):
+            (tmp_path / "agent-kit" / "roles" / role_name / name).write_text("")
     return tmp_path
 
 
-def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
-    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-    request = launch.request
+@pytest.fixture
+def foundry_config(foundry_root: Path) -> Config:
+    return config.load(foundry_root)
 
-    assert launch.created
+
+def session_for(foundry_root: Path, task_id: str = "wcf-0042") -> Session:
+    """The session for role dev on ``task_id`` in tkt-store, as this foundry's config has them."""
+    foundry_config = config.load(foundry_root)
+    return open_or_create(
+        foundry_root,
+        project=foundry_config.project("tkt-store"),
+        role=foundry_config.role("dev"),
+        task=Task.as_open(task_id),
+    )
+
+
+def request_for(foundry_root: Path) -> LaunchRequest:
+    return session_for(foundry_root).launch_request(config.load(foundry_root).role("dev"))
+
+
+def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
+    request = request_for(foundry_root)
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
     assert request.definition_dir == session_dir
@@ -59,46 +79,32 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
     (foundry_root / "config" / "foundry.yaml").write_text(CONFIG.replace("dev: {}", "dev: {model: sonnet}"))
 
-    launch = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-
-    assert launch.request.model == "sonnet"
-
-
-def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
-    AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the dir goes\n")
-
-    with pytest.raises(FoundryError, match="can't build the agent runtime"):
-        prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-
-
-def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
-    first = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-    again = prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))
-    assert (again.request, again.created) == (first.request, False)
+    assert request_for(foundry_root).model == "sonnet"
 
 
 def test_a_token_file_is_passed_when_present(foundry_root: Path) -> None:
     token = foundry_root / "secrets" / "github" / "dev.token"
     token.parent.mkdir(parents=True)
     token.write_text("ghp_x")
-    assert (
-        prepare_launch(
-            foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042")
-        ).request.github_token_path
-        == token
-    )
+    assert request_for(foundry_root).github_token_path == token
 
 
-@pytest.mark.parametrize(
-    ("project_name", "role_name", "message"),
-    [("nope", "dev", "unknown project 'nope'"), ("tkt-store", "qa", "unknown role 'qa'; known: dev")],
-)
-def test_unknown_names_are_reported(foundry_root: Path, project_name: str, role_name: str, message: str) -> None:
-    with pytest.raises(FoundryError, match=message):
-        prepare_launch(foundry_root, project_name=project_name, role_name=role_name, task=Task.as_open("tst-0001"))
+def test_a_rerun_asks_for_the_same_launch(foundry_root: Path) -> None:
+    assert request_for(foundry_root) == request_for(foundry_root)
 
 
-def test_run_prints_the_turn_and_the_new_session_then_hands_over_to_the_launcher(
+def test_a_new_session_is_printed_and_an_existing_one_is_not(
+    foundry_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    created = session_for(foundry_root)
+    assert capsys.readouterr().err == f"==> session:   {created.dir} (new)\n"
+
+    reopened = session_for(foundry_root)
+    assert capsys.readouterr().err == ""
+    assert (created.created, reopened.created) == (True, False)
+
+
+def test_run_prints_the_turn_and_the_new_session_then_calls_the_launcher(
     project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.
@@ -188,28 +194,33 @@ def project_tasks(tmp_path: Path, origin: Path) -> Iterator[ProjectTasks]:
 
 @pytest.mark.parametrize("role_name, launched", [(None, "reviewer"), ("dev", "dev")], ids=["without ROLE", "with ROLE"])
 def test_an_open_task_launches_the_role_named_or_else_the_turn_s(
-    project_tasks: ProjectTasks, role_name, launched
+    project_tasks: ProjectTasks, foundry_config: Config, role_name, launched
 ) -> None:
-    assert require_open_task_and_role(
-        project_tasks, project_name="tkt-store", task_id="tst-0001", role_name=role_name, roles=ROLES
-    ) == (Task.as_open("tst-0001"), launched)
+    task = fetch_open_task(project_tasks, project_name="tkt-store", task_id="tst-0001")
+    role = choose_role(project_tasks, foundry_config, project_name="tkt-store", task=task, role_name=role_name)
+
+    assert (task, role) == (Task.as_open("tst-0001"), foundry_config.role(launched))
 
 
-@pytest.mark.parametrize("role_name", [None, "dev"], ids=["without ROLE", "with ROLE"])
-def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: ProjectTasks, role_name) -> None:
+def test_a_closed_task_is_refused_saying_how_to_reopen_it(project_tasks: ProjectTasks) -> None:
     with pytest.raises(
         FoundryError, match=r"^task tst-0002 is closed: reopen it with `foundry task reopen tkt-store tst-0002`$"
     ):
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="tst-0002", role_name=role_name, roles=ROLES
-        )
+        fetch_open_task(project_tasks, project_name="tkt-store", task_id="tst-0002")
 
 
-def test_a_task_without_a_turn_is_refused(project_tasks: ProjectTasks) -> None:
+def test_a_task_without_a_turn_is_refused(project_tasks: ProjectTasks, foundry_config: Config) -> None:
     with pytest.raises(
         MissingTurnError,
         match=r"^task tst-0003 has no turn: agent-notes has no \.agent/tasks/open/tst-0003/TURN, or it is empty\.$",
     ):
-        require_open_task_and_role(
-            project_tasks, project_name="tkt-store", task_id="tst-0003", role_name=None, roles=ROLES
+        choose_role(
+            project_tasks, foundry_config, project_name="tkt-store", task=Task.as_open("tst-0003"), role_name=None
+        )
+
+
+def test_a_role_not_in_the_config_is_refused(project_tasks: ProjectTasks, foundry_config: Config) -> None:
+    with pytest.raises(FoundryError, match=r"unknown role 'qa'; known: dev, reviewer"):
+        choose_role(
+            project_tasks, foundry_config, project_name="tkt-store", task=Task.as_open("tst-0001"), role_name="qa"
         )

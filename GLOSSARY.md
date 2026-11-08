@@ -106,6 +106,10 @@ The `AGENT_*` environment variables a sandbox is created with, which tell the ag
 **Launch**:
 One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch** creates and hardens it; a **relaunch** sets it up again and checks it, without hardening.
 
+**Provision**:
+Bring a sandbox to the state the agent starts in, at every launch: its ssh-agent holding only the role's key, the sandbox created if missing, GitHub reachable, the token set and the keys checked, then `session-init`. Steps 2 and 3 of a launch in ARCHITECTURE.md.
+_Avoid_: prepare, start (for this step; start is for a process or a sandbox)
+
 **Opening prompt**:
 The fixed first message foundry sends when it attaches the agent.
 
