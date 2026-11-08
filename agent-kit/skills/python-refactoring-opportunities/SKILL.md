@@ -1,11 +1,11 @@
 ---
 name: python-refactoring-opportunities
-description: Hunt a Python codebase for refactors that make it simpler, on its own or from given hints such as follow-ups, using python-smells and python-naming-smells. Use when asked to find refactors or simplify.
+description: Hunt a Python codebase for refactors that make it simpler, and open a PR for each one worth it, on its own or from given hints such as follow-ups. Use when asked to find refactors or simplify.
 ---
 
 # Finding refactoring opportunities in Python
 
-Find changes across a Python codebase that make it simpler to read, test and change, and propose them. Don't edit until the user has agreed. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test.
+Find changes across a Python codebase that make it simpler to read, test and change, and make the worthwhile ones as pull requests. Nobody checks in with you along the way: you decide what is worth a PR, and the human accepts or closes each one. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Opening no PR is a good result when nothing clears the bar.
 
 This skill decides where to look and how to propose. What to look for comes from two skills:
 
@@ -35,7 +35,7 @@ Use only the hints you are given. Don't go looking for follow-ups or notes yours
 
 A hint was written against older code, by someone looking at something else. For each:
 
-1. Find the place at `HEAD`. Line numbers drift: search for the function or name it gives, with `git grep -n -w`.
+1. Find the place on the default branch. Line numbers drift: search for the function or name it gives, with `git grep -n -w`.
 2. Check it still holds. Drop a hint the code no longer shows, and say so in the proposal.
 3. Group hints that point at one place or one cause. Several hints about one module are a stronger signal than any one of them.
 4. Make each surviving hint a candidate for step 3. Read around it too: the smell a hint names is often a symptom of a bigger one nearby.
@@ -92,37 +92,55 @@ For each candidate from steps 0, 1 and 2:
 - **How do well-known Python projects do this?** The standard library, pip, pytest, requests. Look it up rather than invent a pattern.
 - **Could it come back?** If a ruff rule, a `[tool.ruff.lint.flake8-tidy-imports.banned-api]` entry or a test would stop it, propose that too. Check the rule on a small file first: ruff's rules have blind spots.
 
-## 4. Sketch before proposing
+## 4. Sketch, then decide
 
-For any finding beyond a rename, write the code as it would look after. A sketch often shows that a change only moves complexity around; drop those. Compare before and after: lines, branches, parameters, public names, and concepts a reader must hold. Keep the finding only if something went down and nothing important went up.
+For any finding beyond a rename, write the code as it would look after. A sketch often shows that a change only moves complexity around; drop those. Compare before and after: lines, branches, parameters, public names, and concepts a reader must hold.
 
 Check each finding that adds code, such as a guard, a helper or a test, against `python-smells` questions 1, 2 and 10, as that skill asks.
 
-## 5. Write the proposal
+Open a PR for a finding only when all of these hold:
 
-One markdown document, ranked by value. For each finding:
+| Test | Holds when |
+|---|---|
+| It removes something | Something in the comparison went down, and nothing important went up. |
+| It is worth a review | The gain is more than the reviewer's time. A rename of a private name used twice rarely is; a concept removed, a test workaround gone, or a function a newcomer can now follow usually is. |
+| You are confident | You would defend the shape, not just try it. |
+| Behaviour is kept | Callers and users see no difference. A behaviour change is allowed only when it is the point of the PR, and the description says exactly what changes. |
+| It stands alone | It doesn't need another finding merged first. If it does, stack it on that PR's branch and say so. |
+| It doesn't reverse a decision | It goes against no ADR or design rule. Report one that does, with the reason, instead. |
+
+Skip the rest. When a finding needs a choice only the human can make, such as a change to a command line, a public API or a dependency, report it instead of guessing.
+
+## 5. Make the PRs
+
+Most valuable first, at most five per run, so the human can review them; report the rest.
+
+- **One concern per PR.** Batch small renames of one kind into one PR. Give each restructure its own.
+- Branch from the default branch, fresh for each PR, unless it is stacked.
+- Follow the project's own rules for commits, tests and docs. Change no test only to make it pass. Update the docs, glossary terms or ADRs the change makes wrong.
+- Run all the project's checks. Never open a PR whose checks fail.
+- Write the description so the human can accept or close it without asking you anything:
 
 | Field | Content |
 |---|---|
 | Where | `path.py:line`, and the function, class or flow |
 | Found by | the hint it came from, the signal from step 1, or the exploring step from step 2 |
 | Smell | the `python-smells` number and name, the `python-naming-smells` smell, or the question from this skill |
-| Cost now | what is hard for a reader, a test or a change, in one or two sentences |
-| Proposal | the new shape, with a short sketch when it isn't a rename |
-| Removes | what goes away |
-| Behaviour change | none, or exactly what a user or caller would notice, such as output moving from stdout to stderr |
-| Confidence | sure, likely, or a question for the user |
+| Cost before | what was hard for a reader, a test or a change, in one or two sentences |
+| Removes | what went away, with the before and after counts that matter |
+| Behaviour change | none, or exactly what a user or caller now sees, such as output moving from stdout to stderr |
+| Alternatives | the other shapes or names you weighed, and why this one |
 
-"No good option found" is an allowed answer: say what you tried. Group the findings into simple changes and restructures. When you were given hints, list the ones you dropped and why. End with the questions you need answered.
+After a restructure, explore the changed flow again before the next PR. The new code often shows the next simplification, or a new thing that is hard to name.
 
-## 6. Work through it with the user
+## 6. Report
 
-- Decide the uncertain findings together. Give context and two or three options, with your pick.
-- Simple changes first, in one PR; then one restructure per PR.
-- Keep separate concerns in separate PRs, even when one finding leads to another.
-- Behaviour stays the same unless the user agreed. Flag every behaviour change in the PR description.
-- Run the project's checks after each change. Update the docs, glossary terms or ADRs the change makes wrong.
-- After a restructure, explore the changed flow again. The new code often shows the next simplification, or a new thing that is hard to name.
+End the run with a short report:
+
+- the PRs you opened, one line each, in the order to review them, saying which are stacked;
+- the findings you skipped, one line each, with the test from step 4 that failed;
+- the choices only the human can make, each with your recommendation;
+- when you were given hints, the ones you dropped and why.
 
 ## Don't
 
