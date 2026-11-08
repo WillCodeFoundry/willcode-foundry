@@ -28,11 +28,11 @@ def test_a_created_task_gets_both_checkouts(
 
     session_setup.session_setup(variables, home)
 
-    code, notes = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
-    assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
-    assert git(notes, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
-    assert (notes / TASK.task_file).read_text() == "# Task\n"
-    assert git(code, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")
+    code_checkout_dir, notes_checkout_dir = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
+    assert git(code_checkout_dir, "branch", "--show-current").stdout.strip() == TASK.branch
+    assert git(notes_checkout_dir, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
+    assert (notes_checkout_dir / TASK.task_file).read_text() == "# Task\n"
+    assert git(code_checkout_dir, "config", "core.hooksPath").stdout.strip() == str(built_kit / "hooks")
 
 
 def test_both_checkouts_track_their_branch_on_origin_whatever_git_s_config_says(
@@ -44,11 +44,11 @@ def test_both_checkouts_track_their_branch_on_origin_whatever_git_s_config_says(
 
     session_setup.session_setup(variables, home)
 
-    for checkout, branch in (
+    for checkout_dir, branch in (
         (variables.agent_code_checkout_dir, TASK.branch),
         (variables.agent_notes_checkout_dir, NOTES_BRANCH),
     ):
-        assert git(checkout, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip() == f"origin/{branch}"
+        assert git(checkout_dir, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip() == f"origin/{branch}"
 
 
 def test_a_task_without_its_branches_is_explained(
@@ -147,13 +147,16 @@ def test_a_second_run_succeeds_and_changes_nothing(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    code = variables.agent_code_checkout_dir
-    before = (git(code, "rev-parse", "HEAD").stdout.strip(), (home / ".claude" / "CLAUDE.md").read_text())
+    code_checkout_dir = variables.agent_code_checkout_dir
+    before = (git(code_checkout_dir, "rev-parse", "HEAD").stdout.strip(), (home / ".claude" / "CLAUDE.md").read_text())
 
     session_setup.session_setup(variables, home)
 
-    assert (git(code, "rev-parse", "HEAD").stdout.strip(), (home / ".claude" / "CLAUDE.md").read_text()) == before
-    assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
+    assert (
+        git(code_checkout_dir, "rev-parse", "HEAD").stdout.strip(),
+        (home / ".claude" / "CLAUDE.md").read_text(),
+    ) == before
+    assert git(code_checkout_dir, "branch", "--show-current").stdout.strip() == TASK.branch
 
 
 def kit_copy(built_kit: Path, tmp_path: Path) -> Path:
@@ -225,8 +228,11 @@ def test_a_failed_step_names_the_checkout_it_ran_in(
     with pytest.raises(SetupError) as refused:
         session_setup.session_setup(variables, home)
 
-    project = variables.agent_code_checkout_dir
-    assert str(refused.value) == f"session-setup: `git -C {project} fetch origin` failed; see git's message above"
+    code_checkout_dir = variables.agent_code_checkout_dir
+    assert (
+        str(refused.value)
+        == f"session-setup: `git -C {code_checkout_dir} fetch origin` failed; see git's message above"
+    )
 
 
 def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, str], message: str = "more") -> None:
@@ -244,11 +250,11 @@ def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, s
     git(other, "push", "-q", "origin", branch)
 
 
-def commit_locally(checkout: Path, message: str) -> None:
+def commit_locally(checkout_dir: Path, message: str) -> None:
     """An unpushed commit in a checkout session_setup made. Unsigned, and unseen by the kit's hooks, which need
     the session variables this process doesn't have."""
     git(
-        checkout,
+        checkout_dir,
         "-c",
         "commit.gpgsign=false",
         "-c",
@@ -271,14 +277,14 @@ def tips(variables: contract.SessionVariables) -> tuple[str, str]:
 def snapshot(variables: contract.SessionVariables) -> tuple[str, ...]:
     """Everything a refusal must leave alone: each checkout's HEAD, status, stashes and branch tips."""
     state = []
-    for checkout in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
+    for checkout_dir in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
         for args in (
             ("rev-parse", "HEAD"),
             ("status", "--porcelain"),
             ("stash", "list"),
             ("for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"),
         ):
-            state.append(git(checkout, *args).stdout)
+            state.append(git(checkout_dir, *args).stdout)
     return tuple(state)
 
 
@@ -302,14 +308,20 @@ def test_a_relaunch_brings_both_checkouts_to_the_tip_on_origin(
 
     session_setup.session_setup(variables, home)
 
-    code, notes = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
-    assert (code / "new.py").read_text() == "x\n"
-    assert git(code, "rev-parse", "HEAD").stdout == git(code, "rev-parse", f"origin/{TASK.branch}").stdout
-    assert git(notes, "rev-parse", "HEAD").stdout == git(notes, "rev-parse", f"origin/{NOTES_BRANCH}").stdout
-    assert (notes / TASK.task_notes_dir / "REVIEW.md").read_text() == "review\n"
-    assert (notes / TASK.task_file).read_text() == "# Task, edited\n"
+    code_checkout_dir, notes_checkout_dir = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
+    assert (code_checkout_dir / "new.py").read_text() == "x\n"
+    assert (
+        git(code_checkout_dir, "rev-parse", "HEAD").stdout
+        == git(code_checkout_dir, "rev-parse", f"origin/{TASK.branch}").stdout
+    )
+    assert (
+        git(notes_checkout_dir, "rev-parse", "HEAD").stdout
+        == git(notes_checkout_dir, "rev-parse", f"origin/{NOTES_BRANCH}").stdout
+    )
+    assert (notes_checkout_dir / TASK.task_notes_dir / "REVIEW.md").read_text() == "review\n"
+    assert (notes_checkout_dir / TASK.task_file).read_text() == "# Task, edited\n"
     imports = [line for line in (home / ".claude" / "CLAUDE.md").read_text().splitlines() if line.startswith("@")]
-    assert imports[-1] == f"@{notes / TASK.task_file}"
+    assert imports[-1] == f"@{notes_checkout_dir / TASK.task_file}"
 
 
 def test_the_notes_branch_is_brought_forward_when_only_its_directory_is_missing(
@@ -330,8 +342,8 @@ def test_unpushed_commits_are_left_as_they_are(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    for checkout in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
-        commit_locally(checkout, "local")
+    for checkout_dir in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
+        commit_locally(checkout_dir, "local")
     before = tips(variables)
 
     session_setup.session_setup(variables, home)
@@ -344,17 +356,17 @@ def test_uncommitted_changes_that_dont_conflict_survive_the_update(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    code, notes = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
-    (code / "README.md").write_text("edited\n")
-    (notes / TASK.task_notes_dir / "PROGRESS.md").write_text("wip\n")
+    code_checkout_dir, notes_checkout_dir = variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir
+    (code_checkout_dir / "README.md").write_text("edited\n")
+    (notes_checkout_dir / TASK.task_notes_dir / "PROGRESS.md").write_text("wip\n")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     push_to_origin(created_task, tmp_path, NOTES_BRANCH, {f"{TASK.task_notes_dir}/TURN": "dev\n"})
 
     session_setup.session_setup(variables, home)
 
-    assert (code / "new.py").is_file() and (code / "README.md").read_text() == "edited\n"
-    assert (notes / TASK.task_notes_dir / "TURN").is_file()
-    assert (notes / TASK.task_notes_dir / "PROGRESS.md").read_text() == "wip\n"
+    assert (code_checkout_dir / "new.py").is_file() and (code_checkout_dir / "README.md").read_text() == "edited\n"
+    assert (notes_checkout_dir / TASK.task_notes_dir / "TURN").is_file()
+    assert (notes_checkout_dir / TASK.task_notes_dir / "PROGRESS.md").read_text() == "wip\n"
 
 
 RECREATING = 'README\'s "Recreating a sandbox"'
@@ -365,8 +377,8 @@ def test_a_diverged_branch_is_refused_naming_the_local_commits(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    code = variables.agent_code_checkout_dir
-    commit_locally(code, "my unpushed work")
+    code_checkout_dir = variables.agent_code_checkout_dir
+    commit_locally(code_checkout_dir, "my unpushed work")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     before = snapshot(variables)
 
@@ -385,8 +397,8 @@ def test_uncommitted_changes_the_update_would_overwrite_are_refused(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    notes = variables.agent_notes_checkout_dir
-    (notes / TASK.task_file).write_text("# mine\n")
+    notes_checkout_dir = variables.agent_notes_checkout_dir
+    (notes_checkout_dir / TASK.task_file).write_text("# mine\n")
     push_to_origin(created_task, tmp_path, NOTES_BRANCH, {TASK.task_file: "# theirs\n"})
     before = snapshot(variables)
 
@@ -397,7 +409,7 @@ def test_uncommitted_changes_the_update_would_overwrite_are_refused(
     assert "notes checkout" in message and NOTES_BRANCH in message and TASK.task_file in message
     assert "uncommitted changes" in message and RECREATING in message
     assert snapshot(variables) == before
-    assert (notes / TASK.task_file).read_text() == "# mine\n"
+    assert (notes_checkout_dir / TASK.task_file).read_text() == "# mine\n"
 
 
 def test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was(
@@ -418,13 +430,15 @@ def test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was(
 
 
 @pytest.mark.parametrize("make", ["detached", "other branch"])
-def test_a_notes_worktree_not_on_the_notes_branch_is_refused(
+def test_a_notes_checkout_not_on_the_notes_branch_is_refused(
     variables_for: VariablesFor, built_kit: Path, created_task: Path, home: Path, make: str
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.session_setup(variables, home)
-    notes = variables.agent_notes_checkout_dir
-    git(notes, "switch", "-q", "--detach") if make == "detached" else git(notes, "switch", "-q", "-c", "elsewhere")
+    notes_checkout_dir = variables.agent_notes_checkout_dir
+    git(notes_checkout_dir, "switch", "-q", "--detach") if make == "detached" else git(
+        notes_checkout_dir, "switch", "-q", "-c", "elsewhere"
+    )
     before = snapshot(variables)
 
     with pytest.raises(SetupError) as refused:
