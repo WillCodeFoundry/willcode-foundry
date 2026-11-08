@@ -52,6 +52,8 @@ When you write `TASK.md` yourself, you take the planner's place. Hand it off to 
 | `foundry prune` | Prunes the remnants of sandboxes that are stopped or removed (their ssh-agents), sparing any started in the last 10 minutes. `foundry run` does this too. |
 | `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
 
+Each command shows its progress on stderr as `==>` lines. Put `-v` before the command, as in `foundry -v run …`, to see the detail too, such as session-init's output.
+
 foundry approves each sandbox's plan for you (`--auto-approve`). Each plan mounts only `agent-kit/`, read-only, and an empty dir.
 
 ## Where agent output lives

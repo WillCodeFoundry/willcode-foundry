@@ -11,8 +11,8 @@ role, task, repository or agent kit. ``Session.launch_request`` is what a launch
 asks agent_sandbox for. ``recreate_hint`` says how to start a sandbox over.
 """
 
+import logging
 import re
-import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +25,8 @@ from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, LaunchRequest, Sandbo
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
+
+_LOGGER = logging.getLogger(__name__)
 
 _UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
 """What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
@@ -129,7 +131,7 @@ class Session:
 
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:
-    """The session for this role on this task in this project, created, and printed, the first time.
+    """The session for this role on this task in this project, created, and shown as progress, the first time.
 
     Raises FoundryError if the sandbox name would be too long, if the session
     directory exists without its definition but holds more than an empty
@@ -146,8 +148,8 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     recorded = _recorded_variables(definition)
     _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
     _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
-    if created:  # printed here until the logging PR makes it a log line; design rule 6 keeps print to entry points
-        print(f"==> session:   {session_dir} (new)", file=sys.stderr)  # noqa: T201
+    if created:
+        _LOGGER.info("session:   %s (new)", session_dir)
     return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
 
 

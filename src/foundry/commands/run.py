@@ -1,8 +1,8 @@
 """foundry run: start or re-attach to the sandbox for a role on a task, by default the role whose turn it is."""
 
 import argparse
+import logging
 import os
-import sys
 from collections.abc import Collection
 from typing import NoReturn
 
@@ -13,6 +13,8 @@ from foundry.project_tasks import ProjectTasks
 from foundry.runtime_build import build_runtime
 from foundry.session import open_or_create
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, Status, Task
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -57,12 +59,15 @@ def fetch_open_task(project_tasks: ProjectTasks, *, project_name: str, task_id: 
 def choose_role(
     project_tasks: ProjectTasks, foundry_config: Config, *, project_name: str, task: Task, role_name: str | None
 ) -> Role:
-    """The role to launch on ``task``: ``role_name``, or the turn's when it is None, read from NOTES_BRANCH and
-    printed. FoundryError, before any sandbox is made, when the role isn't in the config or the turn names none."""
+    """The role to launch on ``task``: ``role_name``, or the turn's when it is None, read from NOTES_BRANCH.
+
+    The turn's role is shown as progress. FoundryError, before any sandbox is made, when the role isn't in the
+    config or the turn names none.
+    """
     if role_name is None:
         turn = project_tasks.fetch_task_turn(task.id)
         role_name = role_for_turn(turn, foundry_config.roles, project_name=project_name, task=task)
-        print(f"==> turn:      {role_name}", file=sys.stderr)
+        _LOGGER.info("turn:      %s", role_name)
     return foundry_config.role(role_name)
 
 

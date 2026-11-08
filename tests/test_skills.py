@@ -1,7 +1,7 @@
 """foundry skills update, against a local "upstream" repository standing in for GitHub."""
 
+import logging
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 
@@ -66,21 +66,20 @@ def foundry_root(tmp_path: Path, upstream: Path) -> Path:
     return root
 
 
-class Updated(NamedTuple):
-    reported: list[str]
-    """The lines skills.update reported, in order."""
-    conflicted: list[str]
-    """The skills it left with conflicts."""
+@pytest.fixture(autouse=True)
+def show_progress(caplog: pytest.LogCaptureFixture) -> None:
+    """skills.update's progress lines, in caplog.messages."""
+    caplog.set_level(logging.INFO, logger="foundry")
 
 
-def update_from(foundry_root: Path, upstream: Path, ref: str = "HEAD") -> Updated:
-    """skills.update against the local upstream, for every repository."""
-    reported: list[str] = []
-    conflicted = skills.update(foundry_root, ref, url_for=lambda repo: str(upstream), report=reported.append)
-    return Updated(reported, conflicted)
+def update_from(foundry_root: Path, upstream: Path, ref: str = "HEAD") -> list[str]:
+    """skills.update against the local upstream, for every repository: the skills it left conflicted."""
+    return skills.update(foundry_root, ref, url_for=lambda repo: str(upstream))
 
 
-def test_changes_upstream_merge_with_those_in_the_foundry_and_the_commit_is_recorded(foundry_root, upstream) -> None:
+def test_changes_upstream_merge_with_those_in_the_foundry_and_the_commit_is_recorded(
+    foundry_root, upstream, caplog
+) -> None:
     skill_md = upstream_skill(upstream) / "SKILL.md"
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     (upstream_skill(upstream) / "agents" / "codex.yaml").write_text("x: 2\n")
@@ -88,10 +87,10 @@ def test_changes_upstream_merge_with_those_in_the_foundry_and_the_commit_is_reco
     (upstream / "LICENSE").write_bytes("MIT, second, ©\r\n".encode())
     second = commit_all(upstream, "second")
 
-    reported, conflicted = update_from(foundry_root, upstream)
+    conflicted = update_from(foundry_root, upstream)
 
     skill_dir = foundry_root / "agent-kit" / "skills" / "tdd"
-    assert (reported, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
+    assert (caplog.messages, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
     assert (skill_dir / "SKILL.md").read_text() == copied_skill_md(
         second, "\nFirst, for the foundry.\nSecond.\nThird, improved.\n"
     )
@@ -101,7 +100,7 @@ def test_changes_upstream_merge_with_those_in_the_foundry_and_the_commit_is_reco
     assert licence.read_bytes() == "MIT, second, ©\r\n".encode()
 
 
-def test_files_that_arent_utf_8_arrive_byte_for_byte(foundry_root, upstream) -> None:
+def test_files_that_arent_utf_8_arrive_byte_for_byte(foundry_root, upstream, caplog) -> None:
     """Upstream's diff goes to git apply as bytes. A binary file's patch is ASCII anyway; a text file in another
     encoding puts its own bytes in the diff, which a diff read as text would mangle."""
     files = {"picture.bin": bytes(range(256)) + b"\x00\r\n\xff", "latin-1.md": "Café, à côté.\n".encode("latin-1")}
@@ -109,19 +108,19 @@ def test_files_that_arent_utf_8_arrive_byte_for_byte(foundry_root, upstream) -> 
         (upstream_skill(upstream) / name).write_bytes(content)
     second = commit_all(upstream, "second")
 
-    reported, conflicted = update_from(foundry_root, upstream)
+    conflicted = update_from(foundry_root, upstream)
 
-    assert (reported, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
+    assert (caplog.messages, conflicted) == ([f"tdd: updated to {second[:12]}"], [])
     for name, content in files.items():
         assert (foundry_root / "agent-kit" / "skills" / "tdd" / name).read_bytes() == content, name
 
 
-def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream) -> None:
+def test_a_skill_already_up_to_date_is_left_alone(foundry_root, upstream, caplog) -> None:
     before = git(foundry_root, "status", "--porcelain").stdout.strip()
 
-    reported, _ = update_from(foundry_root, upstream)
+    update_from(foundry_root, upstream)
 
-    assert reported == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD').stdout.strip()[:12]}"]
+    assert caplog.messages == [f"tdd: already at {git(upstream, 'rev-parse', 'HEAD').stdout.strip()[:12]}"]
     assert git(foundry_root, "status", "--porcelain").stdout.strip() == before == ""
 
 
@@ -130,21 +129,22 @@ def test_a_line_both_sides_changed_is_left_as_a_conflict(foundry_root, upstream)
     skill_md.write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))
     second = commit_all(upstream, "second")
 
-    _, conflicted = update_from(foundry_root, upstream)
+    conflicted = update_from(foundry_root, upstream)
 
     assert conflicted == ["tdd"]
     text = (foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md").read_text()
     assert "<<<<<<<" in text and f"    commit: {second}\n" in text
 
 
-def test_a_given_commit_is_the_one_updated_to(foundry_root, upstream) -> None:
+def test_a_given_commit_is_the_one_updated_to(foundry_root, upstream, caplog) -> None:
     skill_md = upstream_skill(upstream) / "SKILL.md"
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     second = commit_all(upstream, "second")
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved twice."))
     commit_all(upstream, "third")
 
-    assert update_from(foundry_root, upstream, second).reported == [f"tdd: updated to {second[:12]}"]
+    update_from(foundry_root, upstream, second)
+    assert caplog.messages == [f"tdd: updated to {second[:12]}"]
     assert "Third, improved.\n" in (foundry_root / "agent-kit" / "skills" / "tdd" / "SKILL.md").read_text()
 
 
@@ -186,7 +186,7 @@ def test_a_patch_git_rejects_is_an_error_and_the_commit_stays(foundry_root, upst
     assert kit_status(foundry_root) == ""
 
 
-def test_a_rejected_skill_doesnt_hide_the_others_conflicts(foundry_root, upstream) -> None:
+def test_a_rejected_skill_doesnt_hide_the_others_conflicts(foundry_root, upstream, caplog) -> None:
     """Every skill is tried; the error at the end names the rejected one and the conflicted one."""
     extra = upstream_skill(upstream, "zz") / "EXTRA.md"
     extra.parent.mkdir()
@@ -201,17 +201,16 @@ def test_a_rejected_skill_doesnt_hide_the_others_conflicts(foundry_root, upstrea
     skill_md = upstream_skill(upstream) / "SKILL.md"
     skill_md.write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))  # conflicts with the copy
     third = commit_all(upstream, "third")
-    reported: list[str] = []
 
     with pytest.raises(FoundryError) as raised:
-        skills.update(foundry_root, url_for=lambda repo: str(upstream), report=reported.append)
+        update_from(foundry_root, upstream)
 
     assert str(raised.value) == (
         "skills update couldn't update every skill:\n"
         "  zz: git apply rejected upstream's changes, so it stays at its commit; see git's message above\n"
         "Not merged cleanly: tdd; resolve what git reported above, then commit"
     )
-    assert reported == [f"tdd: conflicted at {third[:12]}", f"zz: rejected, still at {second[:12]}"]
+    assert caplog.messages == [f"tdd: conflicted at {third[:12]}", f"zz: rejected, still at {second[:12]}"]
 
 
 def test_spaces_after_the_recorded_commit_dont_stop_it_moving(foundry_root, upstream) -> None:
@@ -341,7 +340,9 @@ def test_every_copied_skill_in_the_kit_has_a_source() -> None:
     assert {source.repo for source in sources.values() if source is not None} == {"mattpocock/skills"}
 
 
-def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, upstream: Path, tmp_path: Path) -> None:
+def test_skills_updated_before_a_failure_are_still_reported(
+    foundry_root: Path, upstream: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """A later skill's upstream can't be fetched: the earlier one is already changed on disk, and says so."""
     skill_md = upstream_skill(upstream) / "SKILL.md"
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
@@ -351,13 +352,12 @@ def test_skills_updated_before_a_failure_are_still_reported(foundry_root: Path, 
         copied_skill_md(NO_SUCH_COMMIT, "\nOther.\n", repo="other/skills")
     )
     commit_all(foundry_root, "copy zz")
-    reported: list[str] = []
     urls = {"mattpocock/skills": str(upstream), "other/skills": str(tmp_path / "missing")}
 
     with pytest.raises(FoundryError, match=r"\n  zz: git -C \S+ fetch --quiet --no-tags .*missing"):
-        skills.update(foundry_root, url_for=urls.__getitem__, report=reported.append)
+        skills.update(foundry_root, url_for=urls.__getitem__)
 
-    assert reported == [f"tdd: updated to {second[:12]}", f"zz: failed, still at {NO_SUCH_COMMIT[:12]}"]
+    assert caplog.messages == [f"tdd: updated to {second[:12]}", f"zz: failed, still at {NO_SUCH_COMMIT[:12]}"]
 
 
 def test_a_later_skills_failure_doesnt_hide_an_earlier_conflict(
@@ -405,7 +405,7 @@ def test_skills_update_exits_0_when_clean_and_1_with_the_conflicts_on_stderr(
     second = commit_all(upstream, "second")
 
     assert cli.main(["skills", "update"]) == 0
-    assert capsys.readouterr() == (f"tdd: updated to {second[:12]}\n", "")
+    assert capsys.readouterr() == ("", f"==> tdd: updated to {second[:12]}\n")
 
     commit_all(foundry_root, "update tdd")
     (upstream_skill(upstream) / "SKILL.md").write_text(UPSTREAM_SKILL.replace("First.", "First, upstream's way."))
@@ -413,6 +413,7 @@ def test_skills_update_exits_0_when_clean_and_1_with_the_conflicts_on_stderr(
 
     assert cli.main(["skills", "update"]) == 1
     assert capsys.readouterr() == (
-        f"tdd: conflicted at {third[:12]}\n",
+        "",
+        f"==> tdd: conflicted at {third[:12]}\n"
         "skills update: not merged cleanly: tdd; resolve what git reported above, then commit\n",
     )

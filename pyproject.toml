@@ -69,7 +69,6 @@ ignore = [
 # The entry points: the only modules that print (design rule 6).
 "src/foundry/cli.py" = ["T20"]
 "src/foundry/commands/*" = ["T20"]
-"src/foundry/agent_sandbox/launcher.py" = ["T20"]
 "src/agent_runtime/__main__.py" = ["T20"]
 "src/agent_runtime/session_init.py" = ["T20"]
 "src/agent_runtime/session_setup.py" = ["T20"]
