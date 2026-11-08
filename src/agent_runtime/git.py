@@ -58,8 +58,8 @@ class Git:
     def run_visibly(self, *args: str, input: bytes | None = None) -> bool:
         """Whether the command exits 0, git writing straight to this process's stdout and stderr, after what this
         process has already written there."""
-        sys.stdout.flush()
-        sys.stderr.flush()
+        sys.stdout.flush()  # noqa: TID251  writes nothing; keeps git's output after ours
+        sys.stderr.flush()  # noqa: TID251
         return self._run(args, input=input, text=False, output=None).returncode == 0
 
     def describe(self, *args: str) -> str:
