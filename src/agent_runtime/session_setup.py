@@ -33,23 +33,53 @@ class SetupRefused(Exception):
 
 @dataclass(frozen=True)
 class _Checkout:
-    """One of the project sandbox clone's two working trees, as a refusal names it. Moving it is done through
-    ``git``; what both checkouts share is _ProjectSandboxClone's."""
+    """One of the project sandbox clone's two working trees, made by _ProjectSandboxClone.checkout. Its methods
+    move or read this working tree; what both checkouts share is the clone's."""
 
+    clone: "_ProjectSandboxClone"
     name: Literal["code", "notes"]
+    """As a refusal names the checkout."""
     dir: Path
     branch: str
 
+    def current_branch(self) -> str | None:
+        """The branch checked out; None when HEAD is detached."""
+        return self._git.current_branch()
+
+    def switch_to_branch(self) -> None:
+        """Check out the branch, making it to track origin's when the clone has no local one yet."""
+        if self.clone.has_branch(self.branch):
+            _run_or_refuse(self._git, "switch", self.branch)
+        else:
+            _run_or_refuse(self._git, "switch", "-c", self.branch, "--track", f"origin/{self.branch}")
+
+    def update_would_overwrite(self) -> str | None:
+        """Why bringing the branch to origin's would overwrite uncommitted changes, in git's words; None when it
+        wouldn't. A dry run of the update itself, so nothing is touched."""
+        dry_run = self._git.run_captured(
+            "read-tree", "-m", "-u", "-n", _local_ref(self.branch), _origin_ref(self.branch)
+        )
+        return dry_run.stderr.strip() if dry_run.returncode != 0 else None
+
+    def fast_forward(self) -> None:
+        """Bring the branch to origin's tip; a branch already there, or ahead, stays. The branch must be the one
+        checked out, as the refusals before this make sure."""
+        if not self.clone.is_ancestor(_origin_ref(self.branch), _local_ref(self.branch)):
+            _run_or_refuse(self._git, "merge", "--ff-only", f"origin/{self.branch}")
+
+    def status_line(self) -> str:
+        """The first line of ``git status -sb``: the branch, and how it stands against origin's."""
+        return self._git.run_captured("status", "-sb").stdout.partition("\n")[0]
+
     @property
-    def git(self) -> Git:
-        """git, run in this checkout's working tree."""
+    def _git(self) -> Git:
         return Git(self.dir)
 
 
 @dataclass(frozen=True)
 class _ProjectSandboxClone:
-    """The project's sandbox clone: the refs, config and remote both checkouts share. It moves no working tree; a
-    _Checkout does that. The git details of reading refs stay in its methods."""
+    """The project's sandbox clone: the refs, config and remote both checkouts share. It moves no working tree; its
+    _Checkouts do that. The git details stay in the two classes' methods."""
 
     dir: Path
     """Where the clone's .git is: the code checkout's dir."""
@@ -93,6 +123,10 @@ class _ProjectSandboxClone:
         log = self._git.run_captured("log", "--format=%s", f"{_origin_ref(branch)}..{_local_ref(branch)}")
         return log.stdout.splitlines()
 
+    def checkout(self, name: Literal["code", "notes"], checkout_dir: Path, branch: str) -> _Checkout:
+        """The working tree at ``checkout_dir`` on ``branch``, whether or not it exists yet."""
+        return _Checkout(self, name, checkout_dir, branch)
+
     def add_checkout(self, checkout: _Checkout) -> None:
         """Add ``checkout`` as a working tree on its branch, tracking origin's when there is no local one yet."""
         if self.has_branch(checkout.branch):
@@ -124,13 +158,12 @@ def set_up(variables: contract.SessionVariables) -> None:
     if missing := role_dir.missing_files():
         raise SetupRefused(f"role {variables.agent_role!r}: {role_dir.dir} has no {' or '.join(missing)}")
     _set_identity(variables, agent_kit, role_dir)
-    _prepare_checkouts(variables, agent_kit)
-    task_md_path = variables.agent_notes_checkout_dir / variables.agent_task_file
-    _write_instructions(home, agent_kit, role_dir, task_md_path)
+    code, notes = _prepare_checkouts(variables, agent_kit)
+    _write_instructions(home, agent_kit, role_dir, notes.dir / variables.agent_task_file)
     _link_skills(home, role_dir)
     _LOGGER.info("session-setup: checkouts ready")
-    for checkout_dir in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
-        _LOGGER.info(Git(checkout_dir).run_captured("status", "-sb").stdout.partition("\n")[0])
+    for checkout in (code, notes):
+        _LOGGER.info(checkout.status_line())
 
 
 def _set_identity(variables: contract.SessionVariables, agent_kit: AgentKit, role_dir: RoleDir) -> None:
@@ -143,21 +176,25 @@ def _set_identity(variables: contract.SessionVariables, agent_kit: AgentKit, rol
     _run_or_refuse(Git(), "config", "--global", "gpg.ssh.allowedSignersFile", str(agent_kit.allowed_signers))
 
 
-def _prepare_checkouts(variables: contract.SessionVariables, agent_kit: AgentKit) -> None:
-    """Bring both checkouts to origin's tips. Every refusal comes before any checkout moves, so a refusal leaves both
-    exactly as they were. The one exception is the switch, when the code checkout started on another branch."""
-    code = _Checkout("code", variables.agent_code_checkout_dir, variables.agent_task_branch)
-    notes = _Checkout("notes", variables.agent_notes_checkout_dir, variables.agent_notes_branch)
-    project_sandbox_clone = _ProjectSandboxClone.clone_if_missing(variables.agent_repo_url, code.dir)
+def _prepare_checkouts(variables: contract.SessionVariables, agent_kit: AgentKit) -> tuple[_Checkout, _Checkout]:
+    """Bring both checkouts to origin's tips, and return them: (code, notes). Every refusal comes before any checkout
+    moves, so a refusal leaves both exactly as they were. The one exception is the switch, when the code checkout
+    started on another branch."""
+    project_sandbox_clone = _ProjectSandboxClone.clone_if_missing(
+        variables.agent_repo_url, variables.agent_code_checkout_dir
+    )
+    code = project_sandbox_clone.checkout("code", variables.agent_code_checkout_dir, variables.agent_task_branch)
+    notes = project_sandbox_clone.checkout("notes", variables.agent_notes_checkout_dir, variables.agent_notes_branch)
     project_sandbox_clone.use_hooks_in(agent_kit.git_hooks)  # read-only mount
     project_sandbox_clone.fetch()
     _require_task_on_origin(project_sandbox_clone, variables)
-    _switch_to_task_branch(project_sandbox_clone, code)
-    _require_checkouts_can_update(project_sandbox_clone, code, notes)
-    _fast_forward(project_sandbox_clone, code)
+    code.switch_to_branch()
+    _require_checkouts_can_update(code, notes)
+    code.fast_forward()
     if not notes.dir.is_dir():
         project_sandbox_clone.add_checkout(notes)
-    _fast_forward(project_sandbox_clone, notes)
+    notes.fast_forward()
+    return code, notes
 
 
 def _require_task_on_origin(project_sandbox_clone: _ProjectSandboxClone, variables: contract.SessionVariables) -> None:
@@ -183,27 +220,18 @@ def _require_task_on_origin(project_sandbox_clone: _ProjectSandboxClone, variabl
         )
 
 
-def _switch_to_task_branch(project_sandbox_clone: _ProjectSandboxClone, code: _Checkout) -> None:
-    if project_sandbox_clone.has_branch(code.branch):
-        _run_or_refuse(code.git, "switch", code.branch)
-    else:
-        _run_or_refuse(code.git, "switch", "-c", code.branch, "--track", f"origin/{code.branch}")
-
-
-def _require_checkouts_can_update(
-    project_sandbox_clone: _ProjectSandboxClone, code: _Checkout, notes: _Checkout
-) -> None:
+def _require_checkouts_can_update(code: _Checkout, notes: _Checkout) -> None:
     """Refuse, changing nothing, unless both checkouts can be brought to origin's tips."""
     _require_notes_on_branch(notes)
-    _require_fast_forward(project_sandbox_clone, code)
-    _require_fast_forward(project_sandbox_clone, notes)
+    _require_fast_forward(code)
+    _require_fast_forward(notes)
 
 
 def _require_notes_on_branch(notes: _Checkout) -> None:
     """An existing notes checkout must be on the notes branch, or the agent would read another branch's files."""
     if not notes.dir.is_dir():
         return
-    current_branch = notes.git.current_branch()
+    current_branch = notes.current_branch()
     if current_branch != notes.branch:
         where = f"on branch {current_branch}" if current_branch else "detached"
         raise _checkout_refusal(
@@ -213,32 +241,26 @@ def _require_notes_on_branch(notes: _Checkout) -> None:
         )
 
 
-def _require_fast_forward(project_sandbox_clone: _ProjectSandboxClone, checkout: _Checkout) -> None:
+def _require_fast_forward(checkout: _Checkout) -> None:
     """Refuse when the checkout's branch can't be fast-forwarded to origin's: it has diverged, or the update would
     overwrite uncommitted changes. A branch only ahead of origin is fine, and so is one not made yet."""
-    local_ref, origin_ref = _local_ref(checkout.branch), _origin_ref(checkout.branch)
-    if not project_sandbox_clone.has_branch(checkout.branch) or project_sandbox_clone.is_ancestor(
-        origin_ref, local_ref
-    ):
+    clone, local_ref, origin_ref = checkout.clone, _local_ref(checkout.branch), _origin_ref(checkout.branch)
+    if not clone.has_branch(checkout.branch) or clone.is_ancestor(origin_ref, local_ref):
         return
-    if not project_sandbox_clone.is_ancestor(local_ref, origin_ref):
-        subjects = project_sandbox_clone.commits_origin_lacks(checkout.branch)
+    if not clone.is_ancestor(local_ref, origin_ref):
+        subjects = clone.commits_origin_lacks(checkout.branch)
         listed = "".join(f"\n    {subject}" for subject in subjects)
         raise _checkout_refusal(
             checkout,
             f"it has diverged from origin/{checkout.branch}. Local commits origin lacks:{listed}",
             f"those {len(subjects)} local commits",
         )
-    if checkout.dir.is_dir():
-        # A dry run of the update itself, so git gives the reason and nothing is touched.
-        dry_run = checkout.git.run_captured("read-tree", "-m", "-u", "-n", local_ref, origin_ref)
-        if dry_run.returncode != 0:
-            raise _checkout_refusal(
-                checkout,
-                f"updating it to origin/{checkout.branch} would overwrite uncommitted changes: "
-                f"{dry_run.stderr.strip()}",
-                "those uncommitted changes",
-            )
+    if checkout.dir.is_dir() and (reason := checkout.update_would_overwrite()):
+        raise _checkout_refusal(
+            checkout,
+            f"updating it to origin/{checkout.branch} would overwrite uncommitted changes: {reason}",
+            "those uncommitted changes",
+        )
 
 
 def _checkout_refusal(checkout: _Checkout, diagnosis: str, discards: str) -> SetupRefused:
@@ -248,13 +270,6 @@ def _checkout_refusal(checkout: _Checkout, diagnosis: str, discards: str) -> Set
         '  To start over, see the README\'s "Recreating a sandbox". Recreating discards '
         f"{discards}."
     )
-
-
-def _fast_forward(project_sandbox_clone: _ProjectSandboxClone, checkout: _Checkout) -> None:
-    """Bring the checkout's branch to origin's tip; a branch already there, or ahead, stays. The branch is the one
-    checked out: the refusals before it made sure of that."""
-    if not project_sandbox_clone.is_ancestor(_origin_ref(checkout.branch), _local_ref(checkout.branch)):
-        _run_or_refuse(checkout.git, "merge", "--ff-only", f"origin/{checkout.branch}")
 
 
 def _local_ref(branch: str) -> str:
