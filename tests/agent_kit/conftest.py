@@ -21,7 +21,7 @@ def kit_env(
 
     def env(task: Task) -> dict[str, str]:
         variables = dataclasses.replace(
-            session_variables(task), agent_kit_dir=built_kit, project_dir=str(tmp_path / "work" / "p")
+            session_variables(task), agent_kit_dir=built_kit, code_checkout_dir=str(tmp_path / "work" / "p")
         )
         return variables.to_env()
 

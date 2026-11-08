@@ -1,7 +1,7 @@
 """session_init's order, in-process: set up, harden as root while sudo works, then check, on one temporary machine.
 
 Root mode is reached through ``run_as_root``: here it calls harden in-process with the machine's root view,
-where the real launch goes through sudo. tests/agent_kit/test_session_init.py checks that hand-over itself.
+where the real launch goes through sudo. tests/agent_kit/test_session_init.py checks that sudo call itself.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ import pytest
 
 from agent_runtime import hardening, session_init
 from agent_runtime.session_setup import SetupError
-from tests.support import SessionFor
+from tests.support import VariablesFor
 from tests.support.machine import SUDO_USER, TemporaryMachine
 
 
@@ -27,7 +27,7 @@ def in_process_root(machine: TemporaryMachine, calls: list[Path], exit_code: int
 
 
 def test_a_first_launch_sets_up_hardens_as_root_then_checks(
-    session_for: SessionFor,
+    variables_for: VariablesFor,
     created_task: Path,
     machine: TemporaryMachine,
     read_only_kit: Path,
@@ -36,7 +36,7 @@ def test_a_first_launch_sets_up_hardens_as_root_then_checks(
     calls: list[Path] = []
 
     returncode = session_init.session_init(
-        session_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls)
+        variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls)
     )
 
     assert returncode == 0, capsys.readouterr().err
@@ -46,7 +46,7 @@ def test_a_first_launch_sets_up_hardens_as_root_then_checks(
 
 
 def test_a_relaunch_only_checks(
-    session_for: SessionFor,
+    variables_for: VariablesFor,
     created_task: Path,
     machine: TemporaryMachine,
     read_only_kit: Path,
@@ -54,16 +54,16 @@ def test_a_relaunch_only_checks(
 ) -> None:
     """Root mode left sudo mode 0: it can't execute, which counts as no sudo, so root mode doesn't run again."""
     calls: list[Path] = []
-    session = session_for(read_only_kit, created_task)
-    session_init.session_init(session, machine.agent_mode, in_process_root(machine, calls))
+    variables = variables_for(read_only_kit, created_task)
+    session_init.session_init(variables, machine.agent_mode, in_process_root(machine, calls))
 
-    assert session_init.session_init(session, machine.agent_mode, in_process_root(machine, calls)) == 0
+    assert session_init.session_init(variables, machine.agent_mode, in_process_root(machine, calls)) == 0
     assert calls == [read_only_kit]
     assert capsys.readouterr().out.endswith("check-hardening: hardened\n")
 
 
 def test_a_failing_root_mode_stops_the_launch_before_the_check(
-    session_for: SessionFor,
+    variables_for: VariablesFor,
     created_task: Path,
     machine: TemporaryMachine,
     read_only_kit: Path,
@@ -72,7 +72,7 @@ def test_a_failing_root_mode_stops_the_launch_before_the_check(
     calls: list[Path] = []
 
     returncode = session_init.session_init(
-        session_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls, exit_code=3)
+        variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, calls, exit_code=3)
     )
 
     assert returncode == 3
@@ -80,7 +80,7 @@ def test_a_failing_root_mode_stops_the_launch_before_the_check(
 
 
 def test_a_failing_setup_stops_the_launch_before_root(
-    session_for: SessionFor, created_task: Path, machine: TemporaryMachine, tmp_path: Path
+    variables_for: VariablesFor, created_task: Path, machine: TemporaryMachine, tmp_path: Path
 ) -> None:
     calls: list[Path] = []
     no_roles = tmp_path / "kit-without-roles"
@@ -88,13 +88,13 @@ def test_a_failing_setup_stops_the_launch_before_root(
 
     with pytest.raises(SetupError, match=r"^session-setup: role 'dev': .* has no ROLE.md or gitconfig$"):
         session_init.session_init(
-            session_for(no_roles, created_task), machine.agent_mode, in_process_root(machine, calls)
+            variables_for(no_roles, created_task), machine.agent_mode, in_process_root(machine, calls)
         )
     assert calls == []
 
 
 def test_an_unhardened_machine_is_refused_naming_what_the_agent_can_still_do(
-    session_for: SessionFor,
+    variables_for: VariablesFor,
     created_task: Path,
     machine: TemporaryMachine,
     read_only_kit: Path,
@@ -102,13 +102,13 @@ def test_an_unhardened_machine_is_refused_naming_what_the_agent_can_still_do(
 ) -> None:
     """Root mode ran, but the agent can still write the settings: the check stops the launch."""
     session_init.session_init(
-        session_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
+        variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
     )
     machine.root_mode.managed_settings.chmod(0o646)
 
     assert (
         session_init.session_init(
-            session_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
+            variables_for(read_only_kit, created_task), machine.agent_mode, in_process_root(machine, [])
         )
         == 1
     )

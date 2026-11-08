@@ -37,11 +37,11 @@ def test_the_definition_carries_the_variables_the_agent_kit_reads(tmp_path: Path
 
     assert opened.definition.variables == {
         "AGENT_ROLE": "dev",
-        "AGENT_TASK": "wcf-0042",
+        "AGENT_TASK_ID": "wcf-0042",
         "AGENT_KIT_DIR": str(tmp_path / "agent-kit"),
         "AGENT_REPO_URL": "git@github.com:o/tkt-store.git",
-        "AGENT_PROJECT_DIR": "/home/agent/work/tkt-store",
-        "AGENT_NOTES_DIR": "/home/agent/work/tkt-store-notes",
+        "AGENT_CODE_CHECKOUT_DIR": "/home/agent/work/tkt-store",
+        "AGENT_NOTES_CHECKOUT_DIR": "/home/agent/work/tkt-store-notes",
         "AGENT_TASK_BRANCH": "task/wcf-0042",
         "AGENT_NOTES_BRANCH": "agent-notes",
         "AGENT_NOTES_ROOT": ".agent",
@@ -94,10 +94,10 @@ def test_a_sandbox_for_another_role_task_or_repository_is_refused(
         session.open_or_create(tmp_path, project=project, role=role, task=task)
 
 
-def test_the_init_command_runs_the_foundrys_agent_kit(tmp_path: Path) -> None:
+def test_the_init_command_runs_the_agent_kit_of_this_foundry(tmp_path: Path) -> None:
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
-    assert opened.init_command == AgentKit(tmp_path / "agent-kit").command("session-init")
+    assert opened.init_command == AgentKit(tmp_path / "agent-kit").runtime_command("session-init")
 
 
 def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> None:
@@ -118,7 +118,7 @@ def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> Non
     )
 
 
-def test_a_moved_foundrys_sandbox_needs_recreating(tmp_path: Path) -> None:
+def test_the_sandbox_of_a_moved_foundry_needs_recreating(tmp_path: Path) -> None:
     """The kit the sandbox mounts is gone with the move: sbx can't mount it again."""
     session.open_or_create(tmp_path / "before", project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     (tmp_path / "before").rename(tmp_path / "after")
@@ -180,7 +180,7 @@ def test_the_session_carries_its_variables(tmp_path: Path) -> None:
         task=Task.as_open("wcf-0042"),
         repo_url="git@github.com:o/tkt-store.git",
         agent_kit_dir=tmp_path / "agent-kit",
-        project_dir="/home/agent/work/tkt-store",
+        code_checkout_dir="/home/agent/work/tkt-store",
     )
     assert opened.variables.to_env() == opened.definition.variables
 
@@ -218,10 +218,16 @@ def test_a_sandbox_created_with_another_name_is_refused_naming_both(tmp_path: Pa
 
 def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
     variables = SessionVariables(
-        role_name="dev", task=Task.as_open("tst-0001"), repo_url="u", agent_kit_dir=Path("/kit"), project_dir="/w/p"
+        role_name="dev",
+        task=Task.as_open("tst-0001"),
+        repo_url="u",
+        agent_kit_dir=Path("/kit"),
+        code_checkout_dir="/w/p",
     )
 
-    assert variables.is_same_sandbox(dataclasses.replace(variables, agent_kit_dir=Path("/moved"), project_dir="/w/q"))
+    assert variables.is_same_sandbox(
+        dataclasses.replace(variables, agent_kit_dir=Path("/moved"), code_checkout_dir="/w/q")
+    )
     for other in (
         dataclasses.replace(variables, role_name="qa"),
         dataclasses.replace(variables, task=Task.as_open("tst-0002")),

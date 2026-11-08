@@ -21,7 +21,7 @@ _SANDBOX_NAME = re.compile(r"[A-Za-z0-9.+-]+")
 """The characters sbx accepts in a name."""
 
 
-def valid_sandbox_name(name: str) -> bool:
+def is_valid_sandbox_name(name: str) -> bool:
     """Whether sbx, and the ssh-agent socket it names, accept ``name``."""
     return 0 < len(name) <= MAX_SANDBOX_NAME_LENGTH and _SANDBOX_NAME.fullmatch(name) is not None
 
@@ -40,7 +40,7 @@ class SandboxDefinition:
     """Environment variables set inside the sandbox."""
 
     def __post_init__(self) -> None:
-        if not valid_sandbox_name(self.name):
+        if not is_valid_sandbox_name(self.name):
             raise SandboxError(
                 f"{self.name!r} isn't a sandbox name sbx accepts: letters, digits, '.', '+' and '-', at most "
                 f"{MAX_SANDBOX_NAME_LENGTH} characters"
@@ -52,11 +52,11 @@ class SandboxDefinition:
         definition_path = definition_dir / cls.FILE_NAME
         try:
             document = yaml.safe_load(definition_path.read_text())
-            (agent_kit,) = document["additionalWorkspaces"]
+            (agent_kit_workspace,) = document["additionalWorkspaces"]
             return cls(
                 name=str(document["name"]),
                 workspace_dir=Path(document["workspace"]),
-                agent_kit_dir=Path(agent_kit["path"]),
+                agent_kit_dir=Path(agent_kit_workspace["path"]),
                 variables={str(key): str(value) for key, value in document["env"].items()},
             )
         except FileNotFoundError:

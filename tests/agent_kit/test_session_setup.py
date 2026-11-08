@@ -24,13 +24,13 @@ def session_setup(kit_env: dict[str, str], origin: Path) -> subprocess.Completed
     )
 
 
-def test_a_created_task_gets_both_checkouts_with_the_kits_hooks(built_kit, kit_env, created_task) -> None:
+def test_a_created_task_gets_both_checkouts_with_the_git_hooks_from_the_kit(built_kit, kit_env, created_task) -> None:
     env = kit_env(TASK)
 
     result = session_setup(env, created_task)
 
     assert result.returncode == 0, result.stderr
-    code, notes = Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
+    code, notes = Path(env["AGENT_CODE_CHECKOUT_DIR"]), Path(env["AGENT_NOTES_CHECKOUT_DIR"])
     assert git(code, "branch", "--show-current").stdout.strip() == TASK.branch
     assert git(notes, "branch", "--show-current").stdout.strip() == NOTES_BRANCH
     assert (notes / TASK.task_file).read_text() == "# Task\n"

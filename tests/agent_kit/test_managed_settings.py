@@ -22,9 +22,9 @@ def test_only_managed_hooks_and_rules_apply() -> None:
     assert SETTINGS["allowManagedPermissionRulesOnly"] is True
 
 
-def test_every_hook_runs_the_kits_runtime_isolated() -> None:
+def test_every_hook_runs_the_runtime_in_the_kit_isolated() -> None:
     """The template's own interpreter, with PYTHON_FLAGS, on the runtime through the link root mode makes
-    to the kit's: a fixed path in a root-owned folder. No variable: a settings file the agent writes can set Claude
+    to the kit's: a fixed path in a root-owned dir. No variable: a settings file the agent writes can set Claude
     Code's."""
     runtime = f"{PYTHON} {PYTHON_FLAGS} {hardening.SANDBOX.hooks_runtime_link} claude-hook "
     assert HOOK_COMMANDS == {

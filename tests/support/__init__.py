@@ -40,8 +40,8 @@ def run_pytest(*args: str, env: Mapping[str, str] | None = None) -> subprocess.C
     )
 
 
-SessionFor = Callable[[Path, Path], contract.Environ]
-"""Makes the session a sandbox for TASK gets, given the kit's folder and a local origin's."""
+VariablesFor = Callable[[Path, Path], contract.SessionVariables]
+"""Makes the session variables a sandbox for TASK gets, given the kit's dir and a local origin's."""
 
 UNSIGNED = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
 """git's environment override turning commit signing off, which beats any config file: the roles sign with keys

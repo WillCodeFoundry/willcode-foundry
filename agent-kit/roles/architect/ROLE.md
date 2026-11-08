@@ -41,7 +41,7 @@ already exists, as after the planner replanned, revise it for what changed in
 4. Draft `DESIGN.md` in the form below, and present it in the session for
    approval.
 5. Once the human approves it, write it to
-   `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/DESIGN.md`, then commit and push it
+   `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/DESIGN.md`, then commit and push it
    on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules describe.
    Never write it before that approval.
 6. End your turn, as "Taking turns" in `AGENTS.md` says.

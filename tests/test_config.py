@@ -20,7 +20,7 @@ roles:
 
 
 def give_kit_roles(foundry_root: Path, *role_names: str) -> Path:
-    """Folders in the foundry's agent kit for these roles, with the files a role must have."""
+    """Dirs in the foundry's agent kit for these roles, with the files a role must have."""
     for role_name in role_names:
         role_dir = foundry_root / "agent-kit" / "roles" / role_name
         role_dir.mkdir(parents=True)
@@ -141,23 +141,19 @@ def test_a_role_has_its_token_when_the_token_file_exists(foundry_root: Path) -> 
     assert config.load(foundry_root).role("dev").github_token_path == token
 
 
-# --- a role's folder in the agent kit ----------------------------------------------
+# --- a role's dir in the agent kit ----------------------------------------------
 
 
-def test_a_role_without_a_folder_in_the_agent_kit_is_refused(foundry_root: Path) -> None:
+def test_a_role_without_a_dir_in_the_agent_kit_is_refused(foundry_root: Path) -> None:
     config_path = foundry_root / "config" / "foundry.yaml"
     config_path.write_text(CONFIG + "  tester: {}\n")
 
-    with pytest.raises(
-        FoundryError, match=r"role 'tester' has no folder in the agent kit: .*roles/tester doesn't exist"
-    ):
+    with pytest.raises(FoundryError, match=r"role 'tester' has no dir in the agent kit: .*roles/tester doesn't exist"):
         config.load(foundry_root)
 
 
 @pytest.mark.parametrize("missing", [["ROLE.md"], ["gitconfig"], ["ROLE.md", "gitconfig"]])
-def test_a_role_folder_without_what_a_sandbox_needs_is_refused_naming_it(
-    foundry_root: Path, missing: list[str]
-) -> None:
+def test_a_role_dir_without_what_a_sandbox_needs_is_refused_naming_it(foundry_root: Path, missing: list[str]) -> None:
     for name in missing:
         (foundry_root / "agent-kit" / "roles" / "dev" / name).unlink()
 
@@ -165,12 +161,12 @@ def test_a_role_folder_without_what_a_sandbox_needs_is_refused_naming_it(
         config.load(foundry_root)
 
 
-def test_a_role_needs_no_skills_folder(foundry_root: Path) -> None:
+def test_a_role_needs_no_skills_dir(foundry_root: Path) -> None:
     assert not (foundry_root / "agent-kit" / "roles" / "dev" / "skills").exists()
 
     assert config.load(foundry_root).role("dev").name == "dev"
 
 
-def test_this_foundrys_roles_are_all_in_its_agent_kit() -> None:
-    """A role added to config/foundry.yaml without its folder in agent-kit/roles/ fails here, not in a sandbox."""
+def test_every_role_in_this_foundry_is_in_its_agent_kit() -> None:
+    """A role added to config/foundry.yaml without its dir in agent-kit/roles/ fails here, not in a sandbox."""
     assert config.load(REPO_ROOT).roles

@@ -1,4 +1,4 @@
-"""foundry run, up to the hand-over to agent_sandbox: prepare_launch against a foundry under tmp_path, and whose
+"""foundry run, up to the call into agent_sandbox: prepare_launch against a foundry under tmp_path, and whose
 turn it launches."""
 
 import os
@@ -65,7 +65,7 @@ def test_the_role_s_model_is_passed_to_the_launch(foundry_root: Path) -> None:
 
 
 def test_a_failed_build_aborts_the_launch(foundry_root: Path) -> None:
-    AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the folder goes\n")
+    AgentKit(foundry_root / "agent-kit").runtime.parent.write_text("a file where the dir goes\n")
 
     with pytest.raises(FoundryError, match="can't build the agent runtime"):
         prepare_launch(foundry_root, project_name="tkt-store", role_name="dev", task=Task.as_open("wcf-0042"))

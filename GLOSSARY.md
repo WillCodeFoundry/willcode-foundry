@@ -174,4 +174,4 @@ A level of tests. The **host** tier runs everywhere; the **docker** tier runs th
 - "notes dir" meant both a task's dir on the notes branch and the notes checkout. Resolved: **task notes dir** and **notes checkout**.
 - "launcher" meant both the whole foundry and `agent_sandbox/launcher.py`. Resolved: **foundry** for the whole.
 - "template" meant both the task template and the template image. Resolved: always say which.
-- "handoff" means a task's turn passing on, but `agent_runtime/session_init.py` uses it for root mode handing over to the agent. Resolved: **handoff** is the turn's; the runtime's says "handoff to root".
+- "handoff" means a task's turn passing on, but `agent_runtime/session_init.py` uses it for root mode handing over to the agent. Resolved: **handoff** is only the turn's; the runtime says "the sudo call into root mode".

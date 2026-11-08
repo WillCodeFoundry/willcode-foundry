@@ -1,5 +1,5 @@
 """agent_runtime.agent_kit: where things sit in the agent kit, spelled out once more here as literals, and
-the rule for what a role's folder must hold, and how the runtime in it is called."""
+the rule for what a role's dir must hold, and how the runtime in it is called."""
 
 import subprocess
 import sys
@@ -12,20 +12,20 @@ REPO_ROOT = Path(__file__).parents[2]
 SOURCE_KIT = AgentKit(REPO_ROOT / "agent-kit")
 
 
-def test_the_kits_paths() -> None:
+def test_paths_in_the_kit() -> None:
     kit = AgentKit(Path("/kit"))
 
     assert RUNTIME_PYZ == PurePosixPath(".build/agent_runtime.pyz")
     assert kit.runtime == Path("/kit/.build/agent_runtime.pyz")
     assert kit.managed_settings == Path("/kit/claude/managed-settings.json")
-    assert kit.hooks == Path("/kit/hooks")
+    assert kit.git_hooks == Path("/kit/hooks")
     assert kit.allowed_signers == Path("/kit/git/allowed_signers")
     assert kit.agents_md == Path("/kit/AGENTS.md")
     assert kit.skills == Path("/kit/skills")
 
 
-def test_a_roles_paths() -> None:
-    role = AgentKit(Path("/kit")).role("dev")
+def test_paths_in_a_role_dir() -> None:
+    role = AgentKit(Path("/kit")).role_dir("dev")
 
     assert role.dir == Path("/kit/roles/dev")
     assert role.role_md == Path("/kit/roles/dev/ROLE.md")
@@ -33,35 +33,35 @@ def test_a_roles_paths() -> None:
     assert role.skills == Path("/kit/roles/dev/skills")
 
 
-def test_a_role_folder_names_the_files_it_lacks_in_order(tmp_path: Path) -> None:
-    role = AgentKit(tmp_path).role("dev")
-    assert role.missing() == ["ROLE.md", "gitconfig"]  # no folder at all
+def test_a_role_dir_names_the_files_it_lacks_in_order(tmp_path: Path) -> None:
+    role = AgentKit(tmp_path).role_dir("dev")
+    assert role.missing_files() == ["ROLE.md", "gitconfig"]  # no dir at all
 
     role.dir.mkdir(parents=True)
     (role.dir / "gitconfig").write_text("")
-    assert role.missing() == ["ROLE.md"]
+    assert role.missing_files() == ["ROLE.md"]
 
     (role.dir / "ROLE.md").write_text("")
     (role.dir / "gitconfig").unlink()
-    assert role.missing() == ["gitconfig"]
+    assert role.missing_files() == ["gitconfig"]
 
     (role.dir / "gitconfig").write_text("")
-    assert role.missing() == []
+    assert role.missing_files() == []
 
 
-def test_a_folder_where_a_file_should_be_is_missing(tmp_path: Path) -> None:
-    role = AgentKit(tmp_path).role("dev")
+def test_a_dir_where_a_file_should_be_is_missing(tmp_path: Path) -> None:
+    role = AgentKit(tmp_path).role_dir("dev")
     (role.dir / "ROLE.md").mkdir(parents=True)
     (role.dir / "gitconfig").write_text("")
 
-    assert role.missing() == ["ROLE.md"]
+    assert role.missing_files() == ["ROLE.md"]
 
 
 def test_the_real_kit_has_every_path_the_module_names(built_kit: Path) -> None:
     """The runtime only once built; everything else as checked in."""
     assert AgentKit(built_kit).runtime.is_file()
     assert SOURCE_KIT.managed_settings.is_file()
-    assert SOURCE_KIT.hooks.is_dir()
+    assert SOURCE_KIT.git_hooks.is_dir()
     assert SOURCE_KIT.allowed_signers.is_file()
     assert SOURCE_KIT.agents_md.is_file()
     assert SOURCE_KIT.skills.is_dir()
@@ -71,11 +71,11 @@ def test_every_configured_role_lacks_nothing() -> None:
     roles = yaml_io.load(REPO_ROOT / "config" / "foundry.yaml")["roles"]
 
     assert roles
-    assert {name: SOURCE_KIT.role(name).missing() for name in roles} == {name: [] for name in roles}
+    assert {name: SOURCE_KIT.role_dir(name).missing_files() for name in roles} == {name: [] for name in roles}
 
 
-def test_a_command_runs_the_kits_runtime_isolated() -> None:
-    assert AgentKit(Path("/kit")).command("claude-hook", "guard-bash") == (
+def test_a_runtime_command_runs_the_runtime_in_the_kit_isolated() -> None:
+    assert AgentKit(Path("/kit")).runtime_command("claude-hook", "guard-bash") == (
         "/usr/bin/python3",
         "-IS",
         "/kit/.build/agent_runtime.pyz",

@@ -58,7 +58,7 @@ def image(pytestconfig: pytest.Config) -> str:
 
 @pytest.fixture(scope="session")
 def writable_kit(built_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A copy of the built kit with every file and folder in it writable by anyone, links aside."""
+    """A copy of the built kit with every file and dir in it writable by anyone, links aside."""
     kit = tmp_path_factory.mktemp("writable") / "agent-kit"
     shutil.copytree(built_kit, kit, symlinks=True)
     for path in [kit, *kit.rglob("*")]:
@@ -102,7 +102,7 @@ def sandbox_env(session_variables: Callable[[Task], SessionVariables]) -> Callab
 
     def env(kit: Path, repo_url: str) -> dict[str, str]:
         variables = dataclasses.replace(
-            session_variables(TASK), agent_kit_dir=kit, project_dir=f"{AGENT_HOME}/work/p", repo_url=repo_url
+            session_variables(TASK), agent_kit_dir=kit, code_checkout_dir=f"{AGENT_HOME}/work/p", repo_url=repo_url
         )
         return variables.to_env()
 

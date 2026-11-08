@@ -19,7 +19,7 @@ class Pruned:
 def prune() -> Pruned:
     """Composition root: everything agent_sandbox can clean up on this machine.
 
-    sbx lists all its user's sandboxes, so other foundry instances' live sandboxes keep their agents.
+    sbx lists all its user's sandboxes, so other foundries' live sandboxes keep their agents.
     """
     host = SystemHost()
     ssh_agent_registry = SshAgentRegistry(host, uid=os.getuid())

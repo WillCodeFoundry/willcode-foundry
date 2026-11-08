@@ -44,7 +44,7 @@ def git_output(env: dict[str, str], *args: str) -> str:
 
 
 def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClone:
-    """A ProjectClone of ``url`` in a new folder in ``parent_dir``."""
+    """A ProjectClone of ``url`` in a new dir in ``parent_dir``."""
     return ProjectClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
 
 
@@ -72,7 +72,7 @@ class ProjectRepository:
         return git_output(self.git_env, f"--git-dir={self.path}", *args)
 
     def clone(self, env: dict[str, str] | None = None) -> ProjectClone:
-        """A ProjectClone of it in a new folder, with git run in ``env``, or ``git_env``."""
+        """A ProjectClone of it in a new dir, with git run in ``env``, or ``git_env``."""
         return clone_in(self.path.parent, env or self.git_env, str(self.path))
 
     def fetched_clone(self) -> ProjectClone:

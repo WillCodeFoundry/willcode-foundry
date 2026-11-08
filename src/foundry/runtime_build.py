@@ -26,7 +26,7 @@ _ENTRY_TIME: Final = (1980, 1, 1, 0, 0, 0)
 def build_runtime(agent_kit_dir: Path, *, source: Path = _SOURCE_DIR) -> Path:
     """Build the agent_runtime package at ``source`` into the kit's .build/ and return the zipapp's path.
 
-    Every .py file of the package goes in, in its folders. An unchanged archive leaves the old file in place;
+    Every .py file of the package goes in, in its dirs. An unchanged archive leaves the old file in place;
     a changed one replaces it whole. Raises FoundryError if the kit is missing or can't be written.
     """
     target = AgentKit(agent_kit_dir).runtime
@@ -55,11 +55,11 @@ def _archive(source: Path) -> bytes:
         for path in source.rglob("*.py")
         if "__pycache__" not in path.relative_to(source).parts
     )
-    folders = sorted({folder for file in files for folder in file.parents if folder != PurePosixPath(".")})
+    dirs = sorted({parent for file in files for parent in file.parents if parent != PurePosixPath(".")})
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as zip_file:
-        for folder in folders:
-            zip_file.writestr(_entry(f"{folder}/", mode=0o40755), b"")
+        for dir_path in dirs:
+            zip_file.writestr(_entry(f"{dir_path}/", mode=0o40755), b"")
         for file in files:
             zip_file.writestr(
                 _entry(str(file), mode=0o100644), (source / file.relative_to("agent_runtime")).read_bytes()

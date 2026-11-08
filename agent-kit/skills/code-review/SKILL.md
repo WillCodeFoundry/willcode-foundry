@@ -48,14 +48,14 @@ Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents j
 
 The settled list holds findings, never code. Code and names a fix introduced are new surface for this round, even in a round that focuses on one concern.
 
-After an architect turn, read what changed in `DESIGN.md` from the commits the architect's `Answers R<n>` and `Answers D<n>` entries name: `git -C "$AGENT_NOTES_DIR" show <commit> -- <path to DESIGN.md>`. Judge each design question, and each finding that waited for it, by the dev's answer, against that `DESIGN.md`.
+After an architect turn, read what changed in `DESIGN.md` from the commits the architect's `Answers R<n>` and `Answers D<n>` entries name: `git -C "$AGENT_NOTES_CHECKOUT_DIR" show <commit> -- <path to DESIGN.md>`. Judge each design question, and each finding that waited for it, by the dev's answer, against that `DESIGN.md`.
 
 ### 2. Identify the spec source
 
 The spec is the task's `TASK.md`, in the version your `ROLE.md`'s check settled on: the last one written by an allowed commit. Read that version from the notes checkout:
 
 ```bash
-git -C "$AGENT_NOTES_DIR" show "<commit>:$AGENT_TASK_FILE"
+git -C "$AGENT_NOTES_CHECKOUT_DIR" show "<commit>:$AGENT_TASK_FILE"
 ```
 
 If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spec available".
@@ -143,7 +143,7 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 
 - The diff command and commit list.
 - How the project sets up its environment and runs its tests, from its `AGENTS.md` or `CONTRIBUTING.md`: the setup commands as well as the test commands, since a fresh clone has neither its dependencies nor its tools.
-- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_PROJECT_DIR\" \"$(mktemp -d)/repro\"`. Run the project's setup commands in that clone before its tests. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Before building a situation, say who causes it and how often. Skip anything that needs a deliberate bypass, or two actors within the same few seconds. Under 400 words."
+- The brief: "Find what breaks when the changed code runs. For each suspicion, construct the concrete situation that triggers it: an input, a missing file, a failing command, a checkout or environment in an unexpected state. Also try the same outcome reached another way, such as `revert`, `cherry-pick`, `merge` or `--amend` for anything a git hook checks. Follow every error path to its end, and check that a failure leaves things as they were. Reproduce what you can, with a small script or the project's own tests, in a throwaway clone: `git clone -q \"$AGENT_CODE_CHECKOUT_DIR\" \"$(mktemp -d)/repro\"`. Run the project's setup commands in that clone before its tests. Never change the code or notes checkout. For each finding, say the situation, what goes wrong, and whether you reproduced it. A suspicion you can't turn into a failing situation isn't a finding. Before building a situation, say who causes it and how often. Skip anything that needs a deliberate bypass, or two actors within the same few seconds. Under 400 words."
 
 **Smells sub-agent prompt** should include:
 

@@ -31,7 +31,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 
 
 def main(args: argparse.Namespace) -> NoReturn:
-    """Composition root: find the role, prepare the launch from this foundry, say what it created, then hand over."""
+    """Composition root: find the role, prepare the launch from this foundry, say what it created, then attach."""
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
     url = foundry_config.project(args.project_name).url
@@ -69,28 +69,28 @@ def require_open_task_and_role(
 def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
     """The role to launch for ``turn``; FoundryError when the turn is HUMAN, since the task waits for you, or
     names no role in ``roles``."""
-    override = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
+    override_hint = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
     if turn == HUMAN:
-        raise FoundryError(f"task {task.id} is waiting for you: see the last entry in its {LOG_FILE}. {override}")
+        raise FoundryError(f"task {task.id} is waiting for you: see the last entry in its {LOG_FILE}. {override_hint}")
     if turn not in roles:
         known = ", ".join(sorted(roles)) or "none"
         raise FoundryError(
             f"task {task.id}'s {task.turn_file} on {NOTES_BRANCH} names {turn!r}, which is not a role; "
-            f"known: {known}, or {HUMAN}. {override}"
+            f"known: {known}, or {HUMAN}. {override_hint}"
         )
     return turn
 
 
 @dataclass(frozen=True)
 class Launch:
-    """A launch ready to hand over: the request, and whether this launch created the session."""
+    """A launch ready to attach: the request, and whether this launch created the session."""
 
     request: agent_sandbox.LaunchRequest
     created: bool
 
 
 def prepare_launch(foundry_root: Path, *, project_name: str, role_name: str, task: Task) -> Launch:
-    """Everything up to the hand-over: the session, created the first time, the agent runtime built into its
+    """Everything up to attaching: the session, created the first time, the agent runtime built into its
     kit, and the request to launch it. A failed build aborts."""
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(project_name)

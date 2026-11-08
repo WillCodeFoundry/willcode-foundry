@@ -111,7 +111,7 @@ def remove_the_smoke_sandbox(session_dir: Path) -> None:
 
     sbx is asked to remove the sandbox only when it has one by the definition's name: a session prepared but
     never launched has none, and sbx would fail on it. When sbx fails to remove one it has, the run fails naming
-    the command, and the folder stays: the sandbox can still be removed by its path.
+    the command, and the dir stays: the sandbox can still be removed by its path.
     """
     if not session_dir.exists():
         return
@@ -133,7 +133,7 @@ def smoke() -> Iterator[Smoke]:
     if missing := missing_prerequisites(foundry_root):
         pytest.fail("-m sbx needs:\n" + "\n".join(f"  - {line}" for line in missing), pytrace=False)
     smoke = Smoke(foundry_root)
-    # The session names the sandbox; a leftover from an earlier run is removed from its folder.
+    # The session names the sandbox; a leftover from an earlier run is removed from its dir.
     try:
         definition_dir = smoke.prepare().definition_dir
     except FoundryError as error:
@@ -156,7 +156,7 @@ def smoke() -> Iterator[Smoke]:
 def test_a_first_launch_hardens_the_sandbox(smoke: Smoke) -> None:
     smoke.launch()  # raises unless session-init exited 0
 
-    checked = smoke.run(*AgentKit(smoke.agent_kit).command("check-hardening"))
+    checked = smoke.run(*AgentKit(smoke.agent_kit).runtime_command("check-hardening"))
 
     assert checked.returncode == 0, checked.stdout + checked.stderr
     assert "check-hardening: hardened" in checked.stdout
@@ -194,7 +194,7 @@ def test_a_relaunch_only_checks(smoke: Smoke) -> None:
 def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
     """dockerd recreates its socket when the sandbox starts again, in the group daemon.json names."""
     assert smoke.started is not None
-    # sbx env has no stop; the top-level sbx stop takes the sandbox's name, not its definition folder.
+    # sbx env has no stop; the top-level sbx stop takes the sandbox's name, not its definition dir.
     stopped = subprocess.run(
         ["sbx", "stop", smoke.started.definition.name], capture_output=True, text=True, check=False
     )

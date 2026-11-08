@@ -7,10 +7,10 @@ SyntaxError from a module further in.
 
 import sys
 
-MINIMUM_PYTHON = (3, 11)
+_MINIMUM_PYTHON = (3, 11)
 
-if sys.version_info < MINIMUM_PYTHON:
-    needed = ".".join(map(str, MINIMUM_PYTHON))
+if sys.version_info < _MINIMUM_PYTHON:
+    needed = ".".join(map(str, _MINIMUM_PYTHON))
     found = ".".join(map(str, sys.version_info[:2]))
     sys.stderr.write(f"agent_runtime: needs Python >= {needed}; {sys.executable} is {found}\n")
     sys.exit(1)
@@ -45,7 +45,7 @@ GIT_HOOKS: dict[str, Callable[[Sequence[str]], None]] = {
     "pre-push": lambda _args: git_hooks.pre_push(),
 }
 """What agent-kit/hooks/pre-commit runs, by the name git ran it as: the other two hooks link to it."""
-_EXPECTED = (
+_EXPECTED_ERRORS = (
     contract.MissingVariables,
     hardening.HardeningRefused,
     session_setup.SetupError,
@@ -86,7 +86,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         func = args.func
     try:
         return func()
-    except _EXPECTED as error:
+    except _EXPECTED_ERRORS as error:
         if isinstance(error, (contract.MissingVariables, GitError)):
             # Messages that don't say which command they come from; a hook says its own name.
             command = args.name if args.command in ("claude-hook", "git-hook") else args.command

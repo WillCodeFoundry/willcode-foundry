@@ -74,32 +74,32 @@ def test_task_ids_not_matching_the_pattern_are_refused_as_given(build, task_id: 
     )
 
 
-# --- load_template ----------------------------------------------------------------
+# --- load_task_template ----------------------------------------------------------------
 
 
-def test_the_template_is_every_file_directly_in_its_folder(tmp_path: Path) -> None:
+def test_the_task_template_is_every_file_directly_in_its_dir(tmp_path: Path) -> None:
     (tmp_path / "TASK.md").write_text("# Task\n")
     (tmp_path / "PROGRESS.md").write_text("# Progress\n")
     (tmp_path / "drafts").mkdir()
     (tmp_path / "drafts" / "ignored.md").write_text("no\n")
 
-    assert task.load_template(tmp_path) == {"PROGRESS.md": "# Progress\n", "TASK.md": "# Task\n"}
+    assert task.load_task_template(tmp_path) == {"PROGRESS.md": "# Progress\n", "TASK.md": "# Task\n"}
 
 
 def test_a_template_without_a_task_md_is_refused(tmp_path: Path) -> None:
-    template_dir = tmp_path / "task-template"
-    template_dir.mkdir()
-    (template_dir / "PROGRESS.md").write_text("# Progress\n")
+    task_template_dir = tmp_path / "task-template"
+    task_template_dir.mkdir()
+    (task_template_dir / "PROGRESS.md").write_text("# Progress\n")
 
     with pytest.raises(FoundryError, match=r"task-template has no TASK\.md; every task needs one$"):
-        task.load_template(template_dir)
+        task.load_task_template(task_template_dir)
 
 
-def test_a_missing_template_folder_is_named(tmp_path: Path) -> None:
+def test_a_missing_task_template_dir_is_named(tmp_path: Path) -> None:
     with pytest.raises(FoundryError, match=r"task-template is missing$"):
-        task.load_template(tmp_path / "task-template")
+        task.load_task_template(tmp_path / "task-template")
 
 
 def test_the_task_template_starts_with_the_planner_s_turn() -> None:
-    template = task.load_template(Path(__file__).parents[1] / "config" / "task-template")
+    template = task.load_task_template(Path(__file__).parents[1] / "config" / "task-template")
     assert template[task.TURN_FILE].strip() == "planner"

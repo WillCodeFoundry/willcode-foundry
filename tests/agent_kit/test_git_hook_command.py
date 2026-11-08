@@ -15,7 +15,7 @@ from agent_runtime.agent_kit import PYTHON, PYTHON_FLAGS, AgentKit
 from tests.support import AGENT_KIT_SOURCE, TASK, git
 from tests.support.kit import runtime_command
 
-HOOKS = sorted(AgentKit(AGENT_KIT_SOURCE).hooks.iterdir())
+HOOKS = sorted(AgentKit(AGENT_KIT_SOURCE).git_hooks.iterdir())
 
 
 def test_there_is_a_stub_for_each_git_hook_the_runtime_has() -> None:

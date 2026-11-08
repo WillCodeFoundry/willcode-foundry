@@ -14,6 +14,6 @@ def test_find_foundry_root_walks_up(tmp_path: Path) -> None:
     assert paths.find_foundry_root(deep) == tmp_path
 
 
-def test_find_foundry_root_fails_outside_an_instance(tmp_path: Path) -> None:
-    with pytest.raises(FoundryError, match="not inside a foundry instance"):
+def test_find_foundry_root_fails_outside_a_foundry(tmp_path: Path) -> None:
+    with pytest.raises(FoundryError, match="not inside a foundry:"):
         paths.find_foundry_root(tmp_path)

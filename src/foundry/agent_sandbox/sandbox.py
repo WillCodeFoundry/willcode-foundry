@@ -44,7 +44,7 @@ class Sandbox(Protocol):
         ...
 
     def attach(self, model: str | None) -> NoReturn:
-        """Replace this process with the agent's session in the sandbox, which starts on the opening prompt, on
+        """Replace this process with an agent run in the sandbox, which starts on the opening prompt, on
         ``model``, or its default when None."""
         ...
 
@@ -128,9 +128,9 @@ class SbxCli:
         return self._host.run(("sbx", *args), env=self._sbx_env)
 
 
-def _sbx_env(environ: Mapping[str, str], ssh_agent_socket_path: Path) -> dict[str, str]:
+def _sbx_env(host_env: Mapping[str, str], ssh_agent_socket_path: Path) -> dict[str, str]:
     """The environment every sbx call aimed at a sandbox carries: that sandbox's own ssh-agent socket."""
-    sbx_env = {key: value for key, value in environ.items() if key != "SSH_AGENT_PID"}
+    sbx_env = {key: value for key, value in host_env.items() if key != "SSH_AGENT_PID"}
     sbx_env["SSH_AUTH_SOCK"] = str(ssh_agent_socket_path)
     return sbx_env
 

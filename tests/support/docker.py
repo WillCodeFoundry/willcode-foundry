@@ -58,7 +58,7 @@ class Container:
 
     def session_init(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         """What the launcher runs, as the agent: the runtime's session-init from the mounted kit."""
-        return self.run("agent", *AgentKit(self.agent_kit).command("session-init"), env=env)
+        return self.run("agent", *AgentKit(self.agent_kit).runtime_command("session-init"), env=env)
 
 
 def copy_origin(container: Container, origin: Path) -> str:

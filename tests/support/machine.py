@@ -95,7 +95,7 @@ class TemporaryMachine:
 
 @contextlib.contextmanager
 def writable(directory: Path) -> Iterator[None]:
-    """Let the test, as the kit's owner, add something to a read-only folder of it."""
+    """Let the test, as the kit's owner, add something to a read-only dir of it."""
     directory.chmod(0o755)
     try:
         yield

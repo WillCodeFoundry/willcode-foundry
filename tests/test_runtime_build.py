@@ -21,7 +21,7 @@ def kit_dir(tmp_path: Path) -> Path:
 
 
 def files_in(archive: Path) -> list[str]:
-    """The archive's files, without the entries for its folders."""
+    """The archive's files, without the entries for its dirs."""
     return [name for name in zipfile.ZipFile(archive).namelist() if not name.endswith("/")]
 
 
@@ -35,7 +35,7 @@ def test_the_runtime_is_built_into_the_kit_with_its_entry_point(kit_dir: Path) -
     assert not any("__pycache__" in name or name.endswith(".pyc") for name in names)
 
 
-def test_the_sandboxs_user_can_read_it(kit_dir: Path) -> None:
+def test_the_sandbox_user_can_read_it(kit_dir: Path) -> None:
     assert stat.S_IMODE(build_runtime(kit_dir).stat().st_mode) == 0o644
 
 
@@ -88,7 +88,7 @@ def test_the_same_files_build_the_same_bytes_whatever_order_and_time_they_were_w
     assert built[0] == built[1]
 
 
-def test_every_python_file_of_the_package_is_built_in_its_folders_too(kit_dir: Path, tmp_path: Path) -> None:
+def test_every_python_file_of_the_package_is_built_in_its_dirs_too(kit_dir: Path, tmp_path: Path) -> None:
     source = tmp_path / "source"
     (source / "sub" / "__pycache__").mkdir(parents=True)
     for name in (
@@ -123,7 +123,7 @@ def test_a_missing_kit_is_reported(tmp_path: Path) -> None:
 
 
 def test_a_kit_that_cant_be_written_is_reported(kit_dir: Path) -> None:
-    (kit_dir / ".build").write_text("a file where the folder goes\n")
+    (kit_dir / ".build").write_text("a file where the dir goes\n")
 
     with pytest.raises(FoundryError, match="can't build the agent runtime"):
         build_runtime(kit_dir)

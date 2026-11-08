@@ -1,8 +1,8 @@
 """Launch one sandbox from its definition, with its own ssh-agent.
 
 Imports nothing from the rest of foundry: it is given a directory holding the
-sandbox definition, a private key, and what to run before handing the
-terminal to the agent. The sandbox's name and agent kit come from the
+sandbox definition, a private key, and what to run before attaching the
+agent. The sandbox's name and agent kit come from the
 definition.
 """
 
@@ -47,9 +47,9 @@ class PreparedSandbox:
 
 
 def launch(request: LaunchRequest) -> NoReturn:
-    """Prepare the sandbox and replace this process with the agent's session in it.
+    """Prepare the sandbox and replace this process with an agent run in it.
 
-    Composition root. Raises SandboxError if anything before the hand-over fails.
+    Composition root. Raises SandboxError if anything before attaching fails.
     """
     prepared = start(request, report=lambda line: print(line, file=sys.stderr))
     print(launch_summary(request, prepared.definition, prepared.ssh_agent_socket_path), file=sys.stderr)
@@ -57,7 +57,7 @@ def launch(request: LaunchRequest) -> NoReturn:
 
 
 def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: None) -> PreparedSandbox:
-    """Everything launch does before handing over: prune, then prepare the sandbox, up to but not including
+    """Everything launch does before attaching: prune, then prepare the sandbox, up to but not including
     attaching the agent. Raises SandboxError if any of it fails."""
     definition = SandboxDefinition.read(request.definition_dir)
     host = SystemHost()
@@ -89,8 +89,8 @@ def prepare(request: LaunchRequest, definition: SandboxDefinition, ssh_agent: Ss
 
 
 def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_agent_socket_path: Path) -> str:
-    """The lines launch prints before handing over: what the sandbox was given."""
-    notes = (
+    """The lines launch prints before attaching: what the sandbox was given."""
+    lines = (
         f"ssh-agent:  {ssh_agent_socket_path}",
         f"key:        {request.ssh_key_path}",
         f"sandbox:    {definition.name}",
@@ -101,7 +101,7 @@ def launch_summary(request: LaunchRequest, definition: SandboxDefinition, ssh_ag
         else "github:     no token",
         f"model:      {request.model or 'the agent default'}",
     )
-    return "\n".join(f"==> {note}" for note in notes)
+    return "\n".join(f"==> {line}" for line in lines)
 
 
 def _require_safe_layout(request: LaunchRequest, definition: SandboxDefinition) -> None:
@@ -133,9 +133,9 @@ def _require_forwarded_keys(ssh_agent: SshAgent, sandbox: Sandbox) -> None:
         raise SandboxError(f"the ssh-agent at {ssh_agent.socket_path} holds no keys after loading them")
     seen = sandbox.forwarded_key_fingerprints()
     if seen != expected:
-        found = "no ssh-agent" if seen is None else f"keys {sorted(seen)}"
+        seen_text = "no ssh-agent" if seen is None else f"keys {sorted(seen)}"
         raise SandboxError(
-            f"the sandbox sees {found}, expected {sorted(expected)}.\n"
+            f"the sandbox sees {seen_text}, expected {sorted(expected)}.\n"
             "  check: sbx settings get ssh.agentForwardingEnabled  (must be true)\n"
             "         sbx settings get ssh.agentSocketPath         (must be empty)\n"
             "  then:  sbx daemon restart"

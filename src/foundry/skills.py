@@ -1,6 +1,6 @@
 """The agent kit's copied skills, and merging upstream's changes into them.
 
-A copied skill is a folder in agent-kit/skills/ whose SKILL.md has a metadata.source: the upstream repo, the
+A copied skill is a dir in agent-kit/skills/ whose SKILL.md has a metadata.source: the upstream repo, the
 skill's path there, and the commit it's up to date with. Updating one applies upstream's changes since that
 commit, without agents/, with git's three-way merge, and records the new commit. A line both sides changed is
 left as a merge conflict, to review (git diff HEAD), resolve and commit.
@@ -49,7 +49,7 @@ def update(
 
     Runs git in ``foundry_root``, which must be a git checkout: upstream's commits are fetched into it. Each
     repository's ``ref`` is resolved once, so its skills all reach the same commit. A copied skill with
-    uncommitted changes stops the run before anything changes. Each skill's outcome goes to ``report`` as soon
+    uncommitted changes stops the run before anything changes. What happened to each skill goes to ``report`` as soon
     as it is known. A skill that fails, its patch rejected outright, say, keeps its commit; every skill is still
     tried, and the run then raises FoundryError naming the failed ones and any left conflicted.
     """
@@ -62,30 +62,30 @@ def update(
     ]
     for skill_md, _ in copied:
         _refuse_uncommitted(git, skill_md.parent.relative_to(foundry_root))
-    new_shas: dict[str, str] = {}
+    new_sha_by_repo: dict[str, str] = {}
     conflicted: list[str] = []
     failed: list[str] = []
     for skill_md, source in copied:
         name, url = skill_md.parent.name, url_for(source.repo)
         try:
-            if source.repo not in new_shas:
-                new_shas[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
-            new_sha = new_shas[source.repo]
+            if source.repo not in new_sha_by_repo:
+                new_sha_by_repo[source.repo] = _fetch(git, url, ref, into=f"refs/foundry/skills/{source.repo}")
+            new_sha = new_sha_by_repo[source.repo]
             if new_sha == source.commit:
                 report(f"{name}: already at {source.commit[:12]}")
                 continue
             git.output("fetch", "--quiet", "--no-tags", url, source.commit)
-            outcome = _apply(git, _plan(git, foundry_root, skill_md, source, new_sha))
+            merge = _write_plan(git, _plan_update(git, foundry_root, skill_md, source, new_sha))
         except (FoundryError, GitError) as error:
             failed.append(f"{name}: {error}")
             report(f"{name}: failed, still at {source.commit[:12]}")
             continue
-        if outcome == "rejected":
+        if merge == "rejected":
             failed.append(
                 f"{name}: git apply rejected upstream's changes, so it stays at its commit; see git's message above"
             )
             report(f"{name}: rejected, still at {source.commit[:12]}")
-        elif outcome == "conflicted":
+        elif merge == "conflicted":
             conflicted.append(name)
             report(f"{name}: conflicted at {new_sha[:12]}")
         else:
@@ -112,7 +112,7 @@ class _Plan:
     licence: bytes
 
 
-def _plan(git: Git, foundry_root: Path, skill_md: Path, source: Source, new_sha: str) -> _Plan:
+def _plan_update(git: Git, foundry_root: Path, skill_md: Path, source: Source, new_sha: str) -> _Plan:
     """Every read and check for updating ``skill_md`` to ``new_sha``, both commits already fetched; writes nothing."""
     skill_md_text = skill_md.read_text()
     _require_one_commit_line(skill_md, skill_md_text, source.commit)
@@ -121,17 +121,17 @@ def _plan(git: Git, foundry_root: Path, skill_md: Path, source: Source, new_sha:
     return _Plan(skill_md, skill_md.parent.relative_to(foundry_root), source, new_sha, licence)
 
 
-def _apply(git: Git, plan: _Plan) -> Literal["updated", "conflicted", "rejected"]:
+def _write_plan(git: Git, plan: _Plan) -> Literal["updated", "conflicted", "rejected"]:
     """Write the plan: "updated", "conflicted" (conflict markers left, commit recorded), or "rejected" (nothing
     applied, nothing written)."""
-    outcome: Literal["updated", "conflicted"] = "updated"
+    merge: Literal["updated", "conflicted"] = "updated"
     if not _apply_upstream_changes(git, plan):
         if not git.output("ls-files", "--unmerged", "--", str(plan.skill_dir_in_repo)):
             return "rejected"
-        outcome = "conflicted"
+        merge = "conflicted"
     plan.skill_md.write_text(_with_commit(plan.skill_md.read_text(), plan.source.commit, plan.new_sha))
     (plan.skill_md.parent.parent / plan.source.licence_name).write_bytes(plan.licence)
-    return outcome
+    return merge
 
 
 def _refuse_uncommitted(git: Git, skill_dir: Path) -> None:
@@ -157,10 +157,10 @@ def read_source(skill_md: Path) -> Source | None:
         return None
     try:
         # Every value as a string: a SHA of digits must not become a number.
-        front = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}  # noqa: S506  BaseLoader builds only strings, lists and dicts
+        front_matter = yaml.load(text.split("---", 2)[1], Loader=yaml.BaseLoader) or {}  # noqa: S506  BaseLoader builds only strings, lists and dicts
     except yaml.YAMLError as error:
         raise FoundryError(f"{skill_md}: its front matter is not valid YAML: {error}") from None
-    metadata = front.get("metadata", {}) if isinstance(front, dict) else None
+    metadata = front_matter.get("metadata", {}) if isinstance(front_matter, dict) else None
     if not isinstance(metadata, dict):
         raise FoundryError(f"{skill_md}: its front matter, or its metadata, isn't a mapping")
     raw = metadata.get("source")
@@ -173,7 +173,7 @@ def read_source(skill_md: Path) -> Source | None:
 
 
 def _apply_upstream_changes(git: Git, plan: _Plan) -> bool:
-    """Apply upstream's diff of the skill's folder, without agents/ (Codex-only), with a three-way merge. False
+    """Apply upstream's diff of the skill's dir, without agents/ (Codex-only), with a three-way merge. False
     if git left conflicts or rejected the patch, which it reports as it goes."""
     path = plan.source.path
     pathspec = [path, f":(exclude){path}/agents"]
@@ -181,16 +181,16 @@ def _apply_upstream_changes(git: Git, plan: _Plan) -> bool:
     return git.run_visibly("apply", "--3way", "--allow-empty", f"--directory={plan.skill_dir_in_repo}", input=diff)
 
 
-def _commit_line(old: str) -> re.Pattern[str]:
-    return re.compile(rf"^(    commit:[ \t]*){re.escape(old)}[ \t]*$", flags=re.MULTILINE)
+def _commit_line_pattern(old_sha: str) -> re.Pattern[str]:
+    return re.compile(rf"^(    commit:[ \t]*){re.escape(old_sha)}[ \t]*$", flags=re.MULTILINE)
 
 
-def _require_one_commit_line(skill_md: Path, text: str, old: str) -> None:
-    """The line recording ``old`` is there once, for _with_commit to rewrite."""
-    if (count := len(_commit_line(old).findall(text))) != 1:
-        raise FoundryError(f"{skill_md}: found {count} lines recording commit {old[:12]}; expected one")
+def _require_one_commit_line(skill_md: Path, text: str, old_sha: str) -> None:
+    """The line recording ``old_sha`` is there once, for _with_commit to rewrite."""
+    if (count := len(_commit_line_pattern(old_sha).findall(text))) != 1:
+        raise FoundryError(f"{skill_md}: found {count} lines recording commit {old_sha[:12]}; expected one")
 
 
-def _with_commit(text: str, old: str, new: str) -> str:
-    """``text`` with ``new`` recorded in place of ``old``, the rest of the file as it was."""
-    return _commit_line(old).sub(rf"\g<1>{new}", text)
+def _with_commit(text: str, old_sha: str, new_sha: str) -> str:
+    """``text`` with ``new_sha`` recorded in place of ``old_sha``, the rest of the file as it was."""
+    return _commit_line_pattern(old_sha).sub(rf"\g<1>{new_sha}", text)

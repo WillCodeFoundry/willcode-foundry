@@ -14,13 +14,13 @@ from agent_runtime.git import Git
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 from tests.support import TASK, git
 
-ENVIRON = contract.Environ(
+VARIABLES = contract.SessionVariables(
     agent_role="dev",
-    agent_task="tst-0001",
+    agent_task_id="tst-0001",
     agent_kit_dir=Path("/kit"),
     agent_repo_url="git@github.com:o/p.git",
-    agent_project_dir=Path("/work/p"),
-    agent_notes_dir=Path("/work/p-notes"),
+    agent_code_checkout_dir=Path("/work/p"),
+    agent_notes_checkout_dir=Path("/work/p-notes"),
     agent_task_branch="task/tst-0001",
     agent_notes_branch="notes",
     agent_notes_root=".notes",
@@ -44,7 +44,7 @@ def test_pushing_the_task_and_notes_branches_is_accepted(local_sha: str, remote_
         f"refs/heads/task/tst-0001 {local_sha} refs/heads/task/tst-0001 {remote_sha}\n",
         f"refs/heads/notes {local_sha} refs/heads/notes {remote_sha}\n",
     ]
-    git_hooks.pre_push(refs, ENVIRON)
+    git_hooks.pre_push(refs, VARIABLES)
 
 
 @pytest.mark.parametrize(
@@ -54,7 +54,7 @@ def test_pushing_anything_else_is_refused(remote_ref: str, named: str) -> None:
     refs = [f"refs/heads/task/tst-0001 {OLD} refs/heads/task/tst-0001 {NEW}\n", f"HEAD {OLD} {remote_ref} {NEW}\n"]
 
     with pytest.raises(git_hooks.GitHookRefused) as refused:
-        git_hooks.pre_push(refs, ENVIRON)
+        git_hooks.pre_push(refs, VARIABLES)
 
     assert str(refused.value) == (  # what was wrong, then what to do instead
         "pre-push: refusing\n\n"
@@ -67,18 +67,18 @@ def test_a_blank_line_is_skipped_and_the_lines_after_it_still_checked() -> None:
     refs = ["\n", f"refs/heads/task/tst-0001 {OLD} refs/heads/task/tst-0002 {NEW}\n"]
 
     with pytest.raises(git_hooks.GitHookRefused, match=r"not task/tst-0002\.\n"):
-        git_hooks.pre_push(refs, ENVIRON)
+        git_hooks.pre_push(refs, VARIABLES)
 
 
 def test_a_line_without_a_remote_ref_is_refused_on_its_own() -> None:
     with pytest.raises(git_hooks.GitHookRefused, match=r"not \.\n"):
-        git_hooks.pre_push([f"refs/heads/task/tst-0001 {OLD}\n"], ENVIRON)
+        git_hooks.pre_push([f"refs/heads/task/tst-0001 {OLD}\n"], VARIABLES)
 
 
 # --- against real checkouts --------------------------------------------------
 
 
-Checkouts = tuple[contract.Environ, Path, Path]
+Checkouts = tuple[contract.SessionVariables, Path, Path]
 OTHER_TASK = Task.as_open("tst-0002")
 
 
@@ -105,10 +105,10 @@ def refusal_of(call: Callable[[], None]) -> str:
     [f"{TASK.task_notes_dir}/PROGRESS.md", f"src/{TASK.task_notes_dir}/PROGRESS.md", f"{NOTES_ROOT}/PROGRESS.md"],
 )
 def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts, path: str) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     stage(code, path)
 
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(code)))
+    refusal = refusal_of(lambda: git_hooks.pre_commit(variables, Git(code)))
 
     assert refusal.startswith("pre-commit: refusing\n\n")
     assert f"Task notes belong on {NOTES_BRANCH}" in refusal and f"    {path}" in refusal
@@ -116,44 +116,44 @@ def test_notes_on_the_task_branch_are_refused_at_any_depth(checkouts: Checkouts,
 
 @pytest.mark.parametrize("path", ["NOTES.md", "PROGRESS.md", "src/main.py"])
 def test_code_files_are_accepted_on_the_task_branch(checkouts: Checkouts, path: str) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     stage(code, path)
 
-    git_hooks.pre_commit(session, Git(code))
+    git_hooks.pre_commit(variables, Git(code))
 
 
 @pytest.mark.parametrize("path", [f"{TASK.task_notes_dir}/PROGRESS.md", TASK.task_file])
-def test_this_tasks_notes_are_accepted_on_the_notes_branch(checkouts: Checkouts, path: str) -> None:
-    session, _, notes = checkouts
+def test_notes_of_this_task_are_accepted_on_the_notes_branch(checkouts: Checkouts, path: str) -> None:
+    variables, _, notes = checkouts
     stage(notes, path)
 
-    git_hooks.pre_commit(session, Git(notes))
+    git_hooks.pre_commit(variables, Git(notes))
 
 
-def test_another_tasks_folder_is_refused(checkouts: Checkouts) -> None:
-    session, _, notes = checkouts
+def test_the_notes_dir_of_another_task_is_refused(checkouts: Checkouts) -> None:
+    variables, _, notes = checkouts
     stage(notes, f"{OTHER_TASK.task_notes_dir}/PROGRESS.md")
 
     assert f"only change files in {TASK.task_notes_dir}/" in refusal_of(
-        lambda: git_hooks.pre_commit(session, Git(notes))
+        lambda: git_hooks.pre_commit(variables, Git(notes))
     )
 
 
-def test_moving_another_tasks_file_into_own_folder_is_refused(checkouts: Checkouts) -> None:
-    """A rename stages a deletion in the other task's folder; git's rename detection would list only the new
-    path, inside this task's folder."""
-    session, _, notes = checkouts
+def test_moving_a_file_from_another_task_into_this_task_is_refused(checkouts: Checkouts) -> None:
+    """A rename stages a deletion in the other task's dir; git's rename detection would list only the new
+    path, inside this task's dir."""
+    variables, _, notes = checkouts
     theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
     stage(notes, theirs)
     commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
     git(notes, "mv", theirs, f"{TASK.task_notes_dir}/x.md")
 
-    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(variables, Git(notes)))
 
 
-def test_replacing_another_tasks_file_with_a_link_is_refused(checkouts: Checkouts) -> None:
-    """A type change: the file in the other task's folder becomes a link, its content gone."""
-    session, _, notes = checkouts
+def test_replacing_a_file_of_another_task_with_a_link_is_refused(checkouts: Checkouts) -> None:
+    """A type change: the file in the other task's dir becomes a link, its content gone."""
+    variables, _, notes = checkouts
     theirs = f"{OTHER_TASK.task_notes_dir}/PROGRESS.md"
     stage(notes, theirs)
     commit_unchecked(notes, f"{OTHER_TASK.id}: progress")
@@ -161,16 +161,16 @@ def test_replacing_another_tasks_file_with_a_link_is_refused(checkouts: Checkout
     (notes / theirs).symlink_to("elsewhere")
     git(notes, "add", theirs)
 
-    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert f"    {theirs}" in refusal_of(lambda: git_hooks.pre_commit(variables, Git(notes)))
 
 
 def test_a_commit_on_another_branch_is_left_alone(checkouts: Checkouts) -> None:
     """It can't be pushed: pre-push refuses it."""
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     git(code, "switch", "-q", "-c", "scratch")
     stage(code, f"{TASK.task_notes_dir}/PROGRESS.md")
 
-    git_hooks.pre_commit(session, Git(code))
+    git_hooks.pre_commit(variables, Git(code))
 
 
 LOG = f"{TASK.task_notes_dir}/{git_hooks.LOG_FILE}"
@@ -192,22 +192,22 @@ def entry(number: int, role: str, body: str = "Done: a step.\n") -> str:
 
 
 def test_an_entry_numbered_on_under_your_role_is_accepted(checkouts: Checkouts) -> None:
-    session, _, notes = checkouts
+    variables, _, notes = checkouts
     pushed_log(notes, "# Log\n" + entry(1, "planner"))
-    write_log(notes, "# Log\n" + entry(1, "planner") + entry(2, session.agent_role) + entry(3, session.agent_role))
+    write_log(notes, "# Log\n" + entry(1, "planner") + entry(2, variables.agent_role) + entry(3, variables.agent_role))
 
-    git_hooks.pre_commit(session, Git(notes))
+    git_hooks.pre_commit(variables, Git(notes))
 
 
 def test_an_entry_not_yet_pushed_may_still_change(checkouts: Checkouts) -> None:
     """So amending your own last notes commit works."""
-    session, _, notes = checkouts
+    variables, _, notes = checkouts
     pushed_log(notes, "# Log\n")
-    write_log(notes, "# Log\n" + entry(1, session.agent_role))
+    write_log(notes, "# Log\n" + entry(1, variables.agent_role))
     commit_unchecked(notes, f"{TASK.id}: progress")
-    write_log(notes, "# Log\n" + entry(1, session.agent_role, "Done: a step, corrected.\n"))
+    write_log(notes, "# Log\n" + entry(1, variables.agent_role, "Done: a step, corrected.\n"))
 
-    git_hooks.pre_commit(session, Git(notes))
+    git_hooks.pre_commit(variables, Git(notes))
 
 
 @pytest.mark.parametrize(
@@ -220,23 +220,23 @@ def test_an_entry_not_yet_pushed_may_still_change(checkouts: Checkouts) -> None:
     ids=["an entry changed", "an entry put before it", "an entry deleted"],
 )
 def test_changing_what_is_pushed_is_refused(checkouts: Checkouts, change: Callable[[str, str], str]) -> None:
-    session, _, notes = checkouts
+    variables, _, notes = checkouts
     pushed = "# Log\n" + entry(1, "planner")
     pushed_log(notes, pushed)
-    write_log(notes, change(pushed, session.agent_role))
+    write_log(notes, change(pushed, variables.agent_role))
 
-    refusal = refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    refusal = refusal_of(lambda: git_hooks.pre_commit(variables, Git(notes)))
 
     assert refusal.startswith("pre-commit: refusing\n\n")
     assert "LOG.md only grows" in refusal
 
 
 def test_removing_the_log_is_refused(checkouts: Checkouts) -> None:
-    session, _, notes = checkouts
+    variables, _, notes = checkouts
     pushed_log(notes, "# Log\n" + entry(1, "planner"))
     git(notes, "rm", "-q", LOG)
 
-    assert "LOG.md only grows" in refusal_of(lambda: git_hooks.pre_commit(session, Git(notes)))
+    assert "LOG.md only grows" in refusal_of(lambda: git_hooks.pre_commit(variables, Git(notes)))
 
 
 def message_file(tmp_path: Path, text: str) -> Path:
@@ -246,37 +246,37 @@ def message_file(tmp_path: Path, text: str) -> Path:
 
 
 def test_the_task_trailer_is_added_once(checkouts: Checkouts, tmp_path: Path) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     message = message_file(tmp_path, "feat: hello\n\nWhy.\n")
 
-    git_hooks.prepare_commit_msg([str(message)], session, Git(code))
-    git_hooks.prepare_commit_msg([str(message)], session, Git(code))
+    git_hooks.prepare_commit_msg([str(message)], variables, Git(code))
+    git_hooks.prepare_commit_msg([str(message)], variables, Git(code))
 
     assert message.read_text() == f"feat: hello\n\nWhy.\n\nTask: {TASK.id}\n"
 
 
 @pytest.mark.parametrize("text", ["", "# only a comment\n"])
 def test_an_empty_message_gets_no_trailer_so_git_still_aborts(checkouts: Checkouts, tmp_path: Path, text: str) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     message = message_file(tmp_path, text)
 
-    git_hooks.prepare_commit_msg([str(message)], session, Git(code))
+    git_hooks.prepare_commit_msg([str(message)], variables, Git(code))
 
     assert message.read_text() == text
 
 
 def test_no_trailer_off_the_task_branch(checkouts: Checkouts, tmp_path: Path) -> None:
-    session, _, notes = checkouts
+    variables, _, notes = checkouts
     message = message_file(tmp_path, f"{TASK.id}: progress\n")
 
-    git_hooks.prepare_commit_msg([str(message)], session, Git(notes))
+    git_hooks.prepare_commit_msg([str(message)], variables, Git(notes))
 
     assert message.read_text() == f"{TASK.id}: progress\n"
 
 
 def test_prepare_commit_msg_without_its_file_is_refused(checkouts: Checkouts) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
 
-    assert refusal_of(lambda: git_hooks.prepare_commit_msg([], session, Git(code))) == (
+    assert refusal_of(lambda: git_hooks.prepare_commit_msg([], variables, Git(code))) == (
         "prepare-commit-msg: refusing: git passed no message file"
     )

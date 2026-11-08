@@ -89,7 +89,7 @@ def test_a_missing_file_is_none_and_other_errors_still_raise() -> None:
 
 
 def test_a_path_that_is_not_a_file_is_none() -> None:
-    """GitHub answers a folder with a list of its entries, and a link with an object of another type."""
+    """GitHub answers a dir with a list of its entries, and a link with an object of another type."""
     gh = RecordedGh(
         {
             "repos/o/r/contents/.github": ok([{"type": "dir", "name": "workflows"}]),

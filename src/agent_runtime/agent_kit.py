@@ -22,12 +22,12 @@ One argument, as a shebang line passes."""
 
 @dataclass(frozen=True)
 class RoleDir:
-    """A role's folder in the kit: its ROLE.md, gitconfig, and skills/, a link to each of its skills."""
+    """A role's dir in the kit: its ROLE.md, gitconfig, and skills/, a link to each of its skills."""
 
     dir: Path
 
     REQUIRED: ClassVar[tuple[str, ...]] = ("ROLE.md", "gitconfig")
-    """What a role's folder must hold. Without gitconfig the agent has no identity; without ROLE.md it starts
+    """What a role's dir must hold. Without gitconfig the agent has no identity; without ROLE.md it starts
     with no role at all, since CLAUDE.md imports it and a missing import is skipped without a word. skills/ is
     optional: a role without it has none."""
 
@@ -43,8 +43,8 @@ class RoleDir:
     def skills(self) -> Path:
         return self.dir / "skills"
 
-    def missing(self) -> list[str]:
-        """The required files the folder lacks, in REQUIRED's order; empty when it has them all."""
+    def missing_files(self) -> list[str]:
+        """The required files the dir lacks, in REQUIRED's order; empty when it has them all."""
         return [name for name in self.REQUIRED if not (self.dir / name).is_file()]
 
 
@@ -59,7 +59,7 @@ class AgentKit:
         """The built runtime, which every hook and the launch run."""
         return self.dir / RUNTIME_PYZ
 
-    def command(self, *args: str) -> tuple[str, ...]:
+    def runtime_command(self, *args: str) -> tuple[str, ...]:
         """A call into the runtime, isolated, so nothing the agent sets or installs can shadow it or run first."""
         return (PYTHON, PYTHON_FLAGS, str(self.runtime), *args)
 
@@ -69,8 +69,8 @@ class AgentKit:
         return self.dir / "claude" / "managed-settings.json"
 
     @property
-    def hooks(self) -> Path:
-        """The git hooks' folder, where core.hooksPath points."""
+    def git_hooks(self) -> Path:
+        """The git hooks' dir, where core.hooksPath points."""
         return self.dir / "hooks"
 
     @property
@@ -85,8 +85,8 @@ class AgentKit:
 
     @property
     def skills(self) -> Path:
-        """Every skill, each in its own folder."""
+        """Every skill, each in its own dir."""
         return self.dir / "skills"
 
-    def role(self, name: str) -> RoleDir:
+    def role_dir(self, name: str) -> RoleDir:
         return RoleDir(self.dir / "roles" / name)

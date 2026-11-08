@@ -3,7 +3,7 @@ the checkouts, and the agent's instructions.
 
 Idempotent: safe to run again on a re-attached sandbox. Never needs root, so the tests run it outside a
 sandbox. The sandbox has no host checkout: the project is cloned here from AGENT_REPO_URL into
-AGENT_PROJECT_DIR. Assumes `foundry task create` has already created the task: its branch, and its notes
+AGENT_CODE_CHECKOUT_DIR. Assumes `foundry task create` has already created the task: its branch, and its notes
 folder, holding its TASK.md, on the notes branch. Anything missing is an error, not something to create.
 """
 
@@ -20,100 +20,101 @@ class SetupError(Exception):
     """A precondition setup doesn't create is missing; the message, the whole of it, says what to do."""
 
 
-def session_setup(session: contract.Environ | None = None, home: Path | None = None) -> None:
+def session_setup(variables: contract.SessionVariables | None = None, home: Path | None = None) -> None:
     """Set the sandbox up, the agent's instructions under ``home`` (the user's by default). Raises SetupError
     on a missing precondition."""
-    session = session or contract.read_environ()
+    variables = variables or contract.read_session_variables()
     try:
-        _set_up(session, home or Path.home())
+        _set_up(variables, home or Path.home())
     except SetupError as error:
         raise SetupError(f"session-setup: {error}") from None
 
 
-def _set_up(session: contract.Environ, home: Path) -> None:
-    agent_kit = AgentKit(session.agent_kit_dir)
-    role_dir = agent_kit.role(session.agent_role)
+def _set_up(variables: contract.SessionVariables, home: Path) -> None:
+    agent_kit = AgentKit(variables.agent_kit_dir)
+    role_dir = agent_kit.role_dir(variables.agent_role)
     # The rule foundry's config applies on the host, applied again here, before anything changes.
-    if missing := role_dir.missing():
-        raise SetupError(f"role {session.agent_role!r}: {role_dir.dir} has no {' or '.join(missing)}")
-    _set_identity(session, agent_kit, role_dir)
-    _prepare_checkouts(session, agent_kit)
-    task_md_path = session.agent_notes_dir / session.agent_task_file
+    if missing := role_dir.missing_files():
+        raise SetupError(f"role {variables.agent_role!r}: {role_dir.dir} has no {' or '.join(missing)}")
+    _set_identity(variables, agent_kit, role_dir)
+    _prepare_checkouts(variables, agent_kit)
+    task_md_path = variables.agent_notes_checkout_dir / variables.agent_task_file
     # Every task has a TASK.md: foundry task create refuses a template without one.
     if not task_md_path.is_file():
         raise SetupError(
-            f"{session.agent_notes_branch} has no {session.agent_task_file}; push the task's TASK.md there, "
+            f"{variables.agent_notes_branch} has no {variables.agent_task_file}; push the task's TASK.md there, "
             "then run again."
         )
     _write_instructions(home, agent_kit, role_dir, task_md_path)
     _link_skills(home, role_dir)
     print("session-setup: checkouts ready", flush=True)
-    for checkout in (session.agent_project_dir, session.agent_notes_dir):
+    for checkout in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
         print(Git(checkout).run_captured("status", "-sb").stdout.partition("\n")[0], flush=True)
 
 
-def _set_identity(session: contract.Environ, agent_kit: AgentKit, role_dir: RoleDir) -> None:
+def _set_identity(variables: contract.SessionVariables, agent_kit: AgentKit, role_dir: RoleDir) -> None:
     """Global, so both checkouts share it. Name, email, signing key and shared behaviour all come from the
     role's gitconfig and what it includes."""
     _step(Git(), "config", "--global", "include.path", str(role_dir.gitconfig))
     # Lets agents verify commits signed by any role, or by you.
     _step(Git(), "config", "--global", "gpg.ssh.allowedSignersFile", str(agent_kit.allowed_signers))
     if _git_config("commit.gpgsign") == "true" and not _git_config("user.signingkey"):
-        raise SetupError(f"{session.agent_role} signs commits but {role_dir.gitconfig} sets no user.signingkey")
+        raise SetupError(f"{variables.agent_role} signs commits but {role_dir.gitconfig} sets no user.signingkey")
 
 
-def _prepare_checkouts(session: contract.Environ, agent_kit: AgentKit) -> None:
-    project = _clone_if_missing(session)
-    _step(project, "config", "core.hooksPath", str(agent_kit.hooks))  # read-only mount
+def _prepare_checkouts(variables: contract.SessionVariables, agent_kit: AgentKit) -> None:
+    project = _clone_if_missing(variables)
+    _step(project, "config", "core.hooksPath", str(agent_kit.git_hooks))  # read-only mount
     _step(project, "fetch", "origin")
-    _require_task_on_origin(project, session)
-    _switch_to_task_branch(project, session)
-    _require_notes_on_branch(session)
+    _require_task_on_origin(project, variables)
+    _switch_to_task_branch(project, variables)
+    _require_notes_on_branch(variables)
     # Every refusal comes before any checkout moves, so a refusal leaves both exactly as they were. The one
     # exception is the switch above, when the code checkout started on another branch.
-    _require_fast_forward(project, session.agent_project_dir, session.agent_task_branch, "code")
-    _require_fast_forward(project, session.agent_notes_dir, session.agent_notes_branch, "notes")
-    _fast_forward(project, session.agent_task_branch)
-    _add_notes_worktree(project, session)
-    _fast_forward(Git(session.agent_notes_dir), session.agent_notes_branch)
+    _require_fast_forward(project, variables.agent_code_checkout_dir, variables.agent_task_branch, "code")
+    _require_fast_forward(project, variables.agent_notes_checkout_dir, variables.agent_notes_branch, "notes")
+    _fast_forward(project, variables.agent_task_branch)
+    _add_notes_checkout(project, variables)
+    _fast_forward(Git(variables.agent_notes_checkout_dir), variables.agent_notes_branch)
 
 
-def _clone_if_missing(session: contract.Environ) -> Git:
+def _clone_if_missing(variables: contract.SessionVariables) -> Git:
     """The project's checkout. A blobless partial clone: full history of commits, file contents fetched on
     demand, which keeps large repositories fast without the limits of --depth."""
-    project = session.agent_project_dir
+    project = variables.agent_code_checkout_dir
     if not (project / ".git").is_dir():
         project.parent.mkdir(parents=True, exist_ok=True)
-        _step(Git(), "clone", "--filter=blob:none", session.agent_repo_url, str(project))
+        _step(Git(), "clone", "--filter=blob:none", variables.agent_repo_url, str(project))
     return Git(project)
 
 
-def _require_task_on_origin(project: Git, session: contract.Environ) -> None:
+def _require_task_on_origin(project: Git, variables: contract.SessionVariables) -> None:
     """The task must already exist on origin, created with its branch and a TASK.md on the notes branch before
     any agent runs. Say so plainly rather than let git fail."""
     missing = [
         f"branch {branch}"
-        for branch in (session.agent_task_branch, session.agent_notes_branch)
+        for branch in (variables.agent_task_branch, variables.agent_notes_branch)
         if not project.succeeds("show-ref", "-q", "--verify", f"refs/remotes/origin/{branch}")
     ]
     if missing:
         raise SetupError(
-            f"task {session.agent_task} has not been created on {session.agent_repo_url}: missing "
+            f"task {variables.agent_task_id} has not been created on {variables.agent_repo_url}: missing "
             f"{' '.join(missing)}.\n"
-            f"  Create it with: foundry task create <project> {session.agent_task}, write its TASK.md, then run again."
+            f"  Create it with: foundry task create <project> {variables.agent_task_id}, "
+            "write its TASK.md, then run again."
         )
 
 
-def _switch_to_task_branch(project: Git, session: contract.Environ) -> None:
-    branch = session.agent_task_branch
+def _switch_to_task_branch(project: Git, variables: contract.SessionVariables) -> None:
+    branch = variables.agent_task_branch
     if project.succeeds("show-ref", "-q", "--verify", f"refs/heads/{branch}"):
         _step(project, "switch", branch)
     else:
         _step(project, "switch", "-c", branch, "--track", f"origin/{branch}")
 
 
-def _add_notes_worktree(project: Git, session: contract.Environ) -> None:
-    notes, branch = session.agent_notes_dir, session.agent_notes_branch
+def _add_notes_checkout(project: Git, variables: contract.SessionVariables) -> None:
+    notes, branch = variables.agent_notes_checkout_dir, variables.agent_notes_branch
     if notes.is_dir():
         return
     if project.succeeds("show-ref", "-q", "--verify", f"refs/heads/{branch}"):
@@ -122,18 +123,18 @@ def _add_notes_worktree(project: Git, session: contract.Environ) -> None:
         _step(project, "worktree", "add", "--track", "-b", branch, str(notes), f"origin/{branch}")
 
 
-def _require_notes_on_branch(session: contract.Environ) -> None:
-    """An existing notes worktree must be on the notes branch, or the agent would read another branch's files."""
-    if not session.agent_notes_dir.is_dir():
+def _require_notes_on_branch(variables: contract.SessionVariables) -> None:
+    """An existing notes checkout must be on the notes branch, or the agent would read another branch's files."""
+    if not variables.agent_notes_checkout_dir.is_dir():
         return
-    found = Git(session.agent_notes_dir).current_branch()
-    if found != session.agent_notes_branch:
+    found = Git(variables.agent_notes_checkout_dir).current_branch()
+    if found != variables.agent_notes_branch:
         where = f"on branch {found}" if found else "detached"
         raise _refusal(
             "notes",
-            session.agent_notes_dir,
-            session.agent_notes_branch,
-            f"it is {where}, expected {session.agent_notes_branch}.",
+            variables.agent_notes_checkout_dir,
+            variables.agent_notes_branch,
+            f"it is {where}, expected {variables.agent_notes_branch}.",
             "any unpushed commits or uncommitted changes in it",
         )
 
@@ -184,9 +185,9 @@ def _fast_forward(checkout: Git, branch: str) -> None:
 
 
 def _write_instructions(home: Path, agent_kit: AgentKit, role_dir: RoleDir, task_md_path: Path) -> None:
-    """Claude Code loads ~/.claude/CLAUDE.md in every session and follows its @ imports without the approval
-    dialog it shows for imports in a project file. Rewritten at every launch, so edits made inside the sandbox
-    don't persist."""
+    """Claude Code loads ~/.claude/CLAUDE.md at the start of every agent run, and follows its @ imports without
+    the approval dialog it shows for imports in a project file. Rewritten at every launch, so edits made inside
+    the sandbox don't persist."""
     claude_md = home / ".claude" / "CLAUDE.md"
     imports = [agent_kit.agents_md, role_dir.role_md, task_md_path]
     text = "<!-- Written by session-init at every launch; edits here are discarded. -->\n" + "".join(

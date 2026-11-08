@@ -11,7 +11,7 @@ from agent_runtime.git import GitError
 from foundry import config, paths, task
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
-from foundry.project_tasks import ProjectTasks, TaskSummary
+from foundry.project_tasks import ProjectTasks, TaskTurn
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -80,7 +80,7 @@ def create_main(args: argparse.Namespace) -> int:
     """Composition root: the real config, task template and repository, in a scratch clone."""
     foundry_root = paths.find_foundry_root()
     project = config.load(foundry_root).project(args.project_name)
-    template = task.load_template(paths.task_template_dir(foundry_root))
+    template = task.load_task_template(paths.task_template_dir(foundry_root))
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
         created = project_tasks.create_task(args.task_id, template)
     print("\n".join(report(CREATED, project.name, created)))
@@ -111,7 +111,7 @@ def handoff_main(args: argparse.Namespace) -> int:
     project = foundry_config.project(args.project_name)
     require_valid_handoff_args(foundry_config, task_id=args.task_id, turn=args.turn, note=args.note)
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        project_tasks.handoff(args.task_id, args.turn, note=args.note)
+        project_tasks.hand_off(args.task_id, args.turn, note=args.note)
     print("\n".join(handoff_lines(project.name, args.task_id, turn=args.turn)))
     return 0
 
@@ -120,12 +120,14 @@ def list_main(args: argparse.Namespace) -> int:
     """Composition root: the real config and repositories, each in a scratch clone; exit 1 if any failed."""
     projects = chosen_projects(config.load(paths.find_foundry_root()), args.project_names)
     listings, errors = read_listings_and_errors(projects, os.environ)
-    stdout, stderr = listing_lines([filter_project_listing(listing, args.turn) for listing in listings], errors)
-    if stdout:
-        print("\n".join(stdout))
-    if stderr:
-        print("\n".join(stderr), file=sys.stderr)
-    return 1 if stderr else 0
+    stdout_lines, stderr_lines = listing_lines(
+        [filter_project_listing(listing, args.turn) for listing in listings], errors
+    )
+    if stdout_lines:
+        print("\n".join(stdout_lines))
+    if stderr_lines:
+        print("\n".join(stderr_lines), file=sys.stderr)
+    return 1 if stderr_lines else 0
 
 
 class Outcome(NamedTuple):
@@ -175,7 +177,7 @@ class ProjectListing(NamedTuple):
     """A project's open tasks. ``no_tasks_note`` is what the project's line says when it shows no task."""
 
     project_name: str
-    summaries: list[TaskSummary]
+    task_turns: list[TaskTurn]
     no_tasks_note: str = "no open tasks"
 
 
@@ -190,7 +192,7 @@ def read_project_listing(project: Project, env: Mapping[str, str]) -> ProjectLis
     ``env`` is the environment git runs in, as for ProjectClone.
     """
     with ProjectTasks.in_scratch_clone(project.url, env) as project_tasks:
-        return ProjectListing(project.name, project_tasks.list_open_task_summaries())
+        return ProjectListing(project.name, project_tasks.fetch_open_task_turns())
 
 
 def read_listings_and_errors(
@@ -221,8 +223,8 @@ def filter_project_listing(listing: ProjectListing, turn: str | None) -> Project
         return listing
     return ProjectListing(
         project_name=listing.project_name,
-        summaries=[summary for summary in listing.summaries if summary.turn == turn],
-        no_tasks_note=f"no open tasks with turn {turn}" if listing.summaries else listing.no_tasks_note,
+        task_turns=[task_turn for task_turn in listing.task_turns if task_turn.turn == turn],
+        no_tasks_note=f"no open tasks with turn {turn}" if listing.task_turns else listing.no_tasks_note,
     )
 
 
@@ -232,15 +234,16 @@ def listing_lines(listings: Sequence[ProjectListing], errors: Sequence[FoundryEr
     A task line is its project, id and turn, in columns as wide as the widest across every task line. A project
     with no task gets its note, outside the columns. Each error is an error line.
     """
-    name_width = max((len(listing.project_name) for listing in listings if listing.summaries), default=0)
-    id_width = max((len(summary.task.id) for listing in listings for summary in listing.summaries), default=0)
-    stdout = []
+    name_width = max((len(listing.project_name) for listing in listings if listing.task_turns), default=0)
+    id_width = max((len(task_turn.task.id) for listing in listings for task_turn in listing.task_turns), default=0)
+    stdout_lines = []
     for listing in listings:
-        if listing.summaries:
-            stdout += [
-                f"{listing.project_name:<{name_width}}  {s.task.id:<{id_width}}  {s.turn}" for s in listing.summaries
+        if listing.task_turns:
+            stdout_lines += [
+                f"{listing.project_name:<{name_width}}  {task_turn.task.id:<{id_width}}  {task_turn.turn}"
+                for task_turn in listing.task_turns
             ]
         else:
-            stdout.append(f"{listing.project_name}  {listing.no_tasks_note}")
-    stderr = [f"error: {error}" for error in errors]
-    return stdout, stderr
+            stdout_lines.append(f"{listing.project_name}  {listing.no_tasks_note}")
+    stderr_lines = [f"error: {error}" for error in errors]
+    return stdout_lines, stderr_lines

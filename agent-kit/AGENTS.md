@@ -20,10 +20,10 @@ paths.
 
 | Variable | What |
 |---|---|
-| `AGENT_TASK` | your task id |
+| `AGENT_TASK_ID` | your task id |
 | `AGENT_ROLE` | your role |
-| `AGENT_PROJECT_DIR` | the code checkout. You start in an empty directory, so `cd` here first |
-| `AGENT_NOTES_DIR` | the notes checkout, a git worktree of the same repo |
+| `AGENT_CODE_CHECKOUT_DIR` | the code checkout. You start in an empty directory, so `cd` here first |
+| `AGENT_NOTES_CHECKOUT_DIR` | the notes checkout, a git worktree of the same repo |
 | `AGENT_REPO_URL` | the project repository on GitHub; your checkout was cloned from it |
 | `AGENT_KIT_DIR` | the `agent-kit` directory: shared instructions, roles, skills, memory. Mounted read-only. |
 | `AGENT_TASK_BRANCH` | your task's branch, where the code goes |
@@ -34,9 +34,9 @@ paths.
 
 | What | Where | Branch |
 |---|---|---|
-| Code checkout | `$AGENT_PROJECT_DIR` | `$AGENT_TASK_BRANCH` |
-| Notes checkout | `$AGENT_NOTES_DIR` | `$AGENT_NOTES_BRANCH` |
-| Your task's notes | `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/` | `$AGENT_NOTES_BRANCH` |
+| Code checkout | `$AGENT_CODE_CHECKOUT_DIR` | `$AGENT_TASK_BRANCH` |
+| Notes checkout | `$AGENT_NOTES_CHECKOUT_DIR` | `$AGENT_NOTES_BRANCH` |
+| Your task's notes | `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/` | `$AGENT_NOTES_BRANCH` |
 
 The `agent-kit` directory contains:
 
@@ -227,7 +227,7 @@ If you run out of turns or time, push a `progress` entry whose `Done` and
 ### Code checkout (`$AGENT_TASK_BRANCH`)
 
 Write commit messages as `$AGENT_KIT_DIR/skills/git-conventions/SKILL.md`
-describes: a typed summary and a body saying why. A `Task: $AGENT_TASK`
+describes: a typed summary and a body saying why. A `Task: $AGENT_TASK_ID`
 trailer is added for you on this branch; you don't need to write it. No
 `Co-Authored-By` or other attribution lines.
 
@@ -245,8 +245,8 @@ git push -u origin "$AGENT_TASK_BRANCH"
 ### Notes checkout (`$AGENT_NOTES_BRANCH`)
 
 ```bash
-cd "$AGENT_NOTES_DIR"
-git add "$AGENT_TASK_NOTES_DIR/" && git commit -m "$AGENT_TASK: progress"
+cd "$AGENT_NOTES_CHECKOUT_DIR"
+git add "$AGENT_TASK_NOTES_DIR/" && git commit -m "$AGENT_TASK_ID: progress"
 git pull --rebase origin "$AGENT_NOTES_BRANCH"
 git push origin "$AGENT_NOTES_BRANCH"
 ```
@@ -263,7 +263,7 @@ the rules above. If one refuses an action, read its message:
 it says what was wrong and what to do instead. Never bypass a hook. If you
 believe a hook is wrong, ask, as "When to stop and ask" says.
 
-You will not be allowed to end the session while either checkout has
+You will not be allowed to stop while either checkout has
 uncommitted or unpushed changes.
 
 ## 5. Sharing what you learn
@@ -275,7 +275,7 @@ uncommitted or unpushed changes.
   the `agent-kit` directory is read-only, so you cannot edit it. Describe the
   proposed change in `LEARNINGS.md` under a `[proposal]` entry; it is reviewed
   and applied to the `agent-kit` directory by the human. **TBD:** whether agents
-  may instead push a branch to the instance repository.
+  may instead push a branch to the foundry's repository.
 - **Only relevant to this task**: keep it in `LEARNINGS.md`.
 
 ## 6. When to stop and ask

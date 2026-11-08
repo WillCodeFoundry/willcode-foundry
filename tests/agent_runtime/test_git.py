@@ -44,7 +44,7 @@ def test_succeeds_answers_without_printing(repo: Path, capfd: pytest.CaptureFixt
     assert capfd.readouterr() == ("", "")
 
 
-def test_succeeds_can_show_gits_own_output(repo: Path, capfd: pytest.CaptureFixture[str]) -> None:
+def test_run_visibly_shows_the_output_git_writes(repo: Path, capfd: pytest.CaptureFixture[str]) -> None:
     assert Git(repo).run_visibly("rev-parse", "--verify", "refs/heads/nope") is False
 
     assert "fatal:" in capfd.readouterr().err
@@ -72,12 +72,12 @@ def test_input_reaches_git(repo: Path) -> None:
     assert Git(repo).run_visibly("hash-object", "--stdin", input=b"one\r\ntwo\r\n\xff") is True
 
 
-def test_output_bytes_raises_on_failure_with_gits_message(repo: Path) -> None:
+def test_output_bytes_raises_on_failure_with_the_message_from_git(repo: Path) -> None:
     with pytest.raises(GitError, match=r"^git -C \S+ show HEAD:absent failed: fatal: "):
         Git(repo).output_bytes("show", "HEAD:absent")
 
 
-def test_a_failure_names_the_command_as_typed_and_gits_message(repo: Path) -> None:
+def test_a_failure_names_the_command_as_typed_and_the_message_from_git(repo: Path) -> None:
     with pytest.raises(GitError) as raised:
         Git(repo).output("rev-parse", "--verify", "refs/heads/nope")
 
@@ -105,7 +105,7 @@ def test_output_that_isnt_utf_8_is_text_all_the_same(repo: Path) -> None:
         Git(repo).output("show", "HEAD:caf\udce9")  # a path holding the byte 0xe9, which git's message repeats
 
 
-def test_a_folder_is_acted_on_wherever_this_runs(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_work_dir_is_acted_on_wherever_this_runs(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)

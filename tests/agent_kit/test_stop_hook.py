@@ -40,10 +40,10 @@ def repo(monkeypatch, kit_env, created_task, tmp_path):
         check=False,
     )
     assert setup.returncode == 0, setup.stderr
-    code, notes = Path(env["AGENT_PROJECT_DIR"]), Path(env["AGENT_NOTES_DIR"])
+    code, notes = Path(env["AGENT_CODE_CHECKOUT_DIR"]), Path(env["AGENT_NOTES_CHECKOUT_DIR"])
     no_hooks = tmp_path / "no-hooks"
     no_hooks.mkdir()
-    git(code, "config", "core.hooksPath", str(no_hooks))  # the notes worktree shares the repository's config
+    git(code, "config", "core.hooksPath", str(no_hooks))  # the notes checkout shares the clone's config
     return code, notes
 
 
