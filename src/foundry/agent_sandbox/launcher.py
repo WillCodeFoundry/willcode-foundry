@@ -71,7 +71,7 @@ def start(request: LaunchRequest, report: Callable[[str], None] = lambda line: N
     )
     if pruned := ssh_agent_registry.prune(live_sandboxes=list_live_sandboxes(host)):
         # Reported now, not returned: the preparation below can fail, and what was pruned stays pruned.
-        report(f"==> killed the ssh-agents of stopped or removed sandboxes: {', '.join(pruned)}")
+        report(f"==> pruned the ssh-agents of stopped or removed sandboxes: {', '.join(pruned)}")
     init_output = prepare(request, definition, ssh_agent, sandbox)
     return PreparedSandbox(definition, ssh_agent.socket_path, sandbox, init_output)
 

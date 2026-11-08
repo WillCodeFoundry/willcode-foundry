@@ -1,4 +1,4 @@
-"""foundry prune: clean up what stopped or removed sandboxes leave behind on this machine."""
+"""foundry prune: prune the remnants of stopped or removed sandboxes on this machine."""
 
 import argparse
 
@@ -8,9 +8,9 @@ from foundry import agent_sandbox
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     parser = subparsers.add_parser(
         "prune",
-        help="clean up what stopped or removed sandboxes leave behind",
+        help="prune the remnants of stopped or removed sandboxes",
         description=(
-            "Kill the ssh-agents of sandboxes that are stopped or removed. "
+            "Prune the remnants of sandboxes that are stopped or removed: their ssh-agents. "
             "foundry run does the same before each launch; this does it without launching."
         ),
     )
@@ -23,7 +23,7 @@ def main(_args: argparse.Namespace) -> int:
     return 0
 
 
-def report(pruned: agent_sandbox.Pruned) -> list[str]:
-    """The lines prune prints: each thing it removed, or that there was nothing to remove."""
-    lines = [f"killed the ssh-agent of {sandbox_name}" for sandbox_name in pruned.ssh_agents]
+def report(pruned: list[agent_sandbox.Remnant]) -> list[str]:
+    """The lines prune prints: each remnant it pruned, or that there was nothing to prune."""
+    lines = [f"pruned the {remnant.kind} of {remnant.sandbox_name}" for remnant in pruned]
     return lines or ["nothing to prune"]

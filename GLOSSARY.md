@@ -98,6 +98,9 @@ One `foundry run`: starting a sandbox, or re-attaching to it. The **first launch
 **Opening prompt**:
 The fixed first message foundry sends when it attaches the agent.
 
+**Remnant**:
+Something of a sandbox that outlives it on this machine, such as its ssh-agent. Every remnant belongs to one sandbox, and is pruned once that sandbox is stopped or removed: by every launch, and by `foundry prune`.
+
 **Agent run**:
 One run of Claude Code inside a sandbox, from start until the agent stops.
 _Avoid_: session

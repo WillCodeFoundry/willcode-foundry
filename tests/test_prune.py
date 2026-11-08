@@ -7,22 +7,20 @@ from pathlib import Path
 import pytest
 
 from foundry import cli
-from foundry.agent_sandbox import Pruned
+from foundry.agent_sandbox import Remnant, RemnantKind
 from foundry.commands.prune import report
 
 
-def test_each_killed_ssh_agent_is_reported() -> None:
-    assert report(Pruned(ssh_agents=["dev-p-a", "dev-p-b"])) == [
-        "killed the ssh-agent of dev-p-a",
-        "killed the ssh-agent of dev-p-b",
-    ]
+def test_each_pruned_remnant_is_reported_with_its_kind_and_sandbox() -> None:
+    pruned = [Remnant("dev-p-a", RemnantKind.SSH_AGENT), Remnant("dev-p-b", RemnantKind.SSH_AGENT)]
+    assert report(pruned) == ["pruned the ssh-agent of dev-p-a", "pruned the ssh-agent of dev-p-b"]
 
 
 def test_nothing_to_prune_says_so() -> None:
-    assert report(Pruned(ssh_agents=[])) == ["nothing to prune"]
+    assert report([]) == ["nothing to prune"]
 
 
-def test_prune_prints_what_it_killed_or_an_error_and_exits_accordingly(
+def test_prune_prints_what_it_pruned_or_an_error_and_exits_accordingly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, with stand-ins on PATH: sbx lists no live sandbox, and ps lists one process. That
@@ -40,7 +38,7 @@ def test_prune_prints_what_it_killed_or_an_error_and_exits_accordingly(
 
     try:
         assert cli.main(["prune"]) == 0
-        assert capsys.readouterr() == ("killed the ssh-agent of dev-p-gone\n", "")
+        assert capsys.readouterr() == ("pruned the ssh-agent of dev-p-gone\n", "")
         assert sleeping.wait(timeout=10) != 0
     finally:
         sleeping.kill()

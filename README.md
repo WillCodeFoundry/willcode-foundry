@@ -49,7 +49,7 @@ When you write `TASK.md` yourself, you take the planner's place. Hand it off to 
 | `foundry task handoff PROJECT TASK ROLE` | Hands the open task off to ROLE, or `human`: writes `TURN` and appends a `human · handoff` entry to `LOG.md`. `--note TEXT` adds one line to it. |
 | `foundry task list [PROJECT ...]` | Lists the open tasks of the projects named, or of all, with whose turn each is. `--turn human` shows those waiting for you. |
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
-| `foundry prune` | Stops the ssh-agents of sandboxes that are stopped or removed, sparing any started in the last 10 minutes. `foundry run` does this too. |
+| `foundry prune` | Prunes the remnants of sandboxes that are stopped or removed (their ssh-agents), sparing any started in the last 10 minutes. `foundry run` does this too. |
 | `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
 
 foundry approves each sandbox's plan for you (`--auto-approve`). Each plan mounts only `agent-kit/`, read-only, and an empty dir.
