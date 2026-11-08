@@ -33,7 +33,7 @@ The checks hold the smells a tool can see. Code review holds the rest.
 
 | Check | Catches |
 |---|---|
-| `ruff check` | unused parameters, blanket and silent `except`, `assert` in `src/`, functions past the size limits, boolean flag parameters, private access across objects, `print` outside the entry points, commented-out code, blanket `noqa` and `type: ignore`, unsafe calls, too-broad `pytest.raises`, and `unittest.mock` in tests |
+| `ruff check` | unused parameters, blanket and silent `except`, `assert` in `src/`, functions past the size limits, boolean flag parameters, private access across objects, `print`, `sys.stdout` and `sys.stderr` outside the entry points, commented-out code, blanket `noqa` and `type: ignore`, unsafe calls, too-broad `pytest.raises`, and `unittest.mock` in tests |
 | `mypy` | strict typing, plus unreachable code, redundant checks, conditions that are always true, and an `ignore` without its error code |
 | `vulture` | functions, classes and attributes in `src/` that nothing uses |
 | `pylint src` | the same five or more lines in two places in `src/`; it runs only this check |

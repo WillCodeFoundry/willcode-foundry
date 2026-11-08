@@ -3,7 +3,7 @@ deep, the remote's name, refspecs) stay in this module.
 
 | Class | Does |
 |---|---|
-| ProjectClone | fetches, checks out, writes, commits and pushes: everything that changes the clone or the remote |
+| ProjectScratchClone | fetches, checks out, writes, commits and pushes: all that changes the clone or the remote |
 | FetchedBranch | reads one fetched branch at its commit, without a checkout: it can change nothing |
 """
 
@@ -30,8 +30,8 @@ class PathNotOnBranchError(FoundryError):
 
 class FetchedBranch:
     """A branch of the project repository as one fetch found it: its name, and the commit it pointed at. Made by
-    ProjectClone.fetch_branch. Its files are read at that commit, whatever the remote has since, and no read makes a
-    network call. ProjectClone.check_out checks it out at that commit too."""
+    ProjectScratchClone.fetch_branch. Its files are read at that commit, whatever the remote has since, and no read
+    makes a network call. ProjectScratchClone.check_out checks it out at that commit too."""
 
     def __init__(self, git: Git, name: str, commit: str) -> None:
         self._git = git
@@ -65,7 +65,7 @@ class FetchedBranch:
             raise PathNotOnBranchError(f"{self.name} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
 
 
-class ProjectClone:
+class ProjectScratchClone:
     """A scratch clone: a shallow clone of the project repository at a URL, made with your own access in a dir you
     give it. It holds nothing until a branch is fetched; the FetchedBranch it returns is read without a checkout.
     Only the branches needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key
@@ -80,7 +80,7 @@ class ProjectClone:
         self._git = Git(work_dir, dict(env))
 
     @classmethod
-    def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "ProjectClone":
+    def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "ProjectScratchClone":
         """Make ``work_dir``, an existing empty dir, into an empty clone with the remote at ``url``.
 
         It signs every commit, with SSH (not GPG, which allowed_signers can't verify) and your user.signingkey.

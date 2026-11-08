@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectClone
+from foundry.project_scratch_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectScratchClone
 from foundry.task import CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
@@ -53,9 +53,9 @@ class TaskTurn:
 
 
 class ProjectTasks:
-    """The operations on a project's tasks, through its ProjectClone. Holds no state of its own."""
+    """The operations on a project's tasks, through its ProjectScratchClone. Holds no state of its own."""
 
-    def __init__(self, clone: ProjectClone) -> None:
+    def __init__(self, clone: ProjectScratchClone) -> None:
         self._clone = clone
 
     @classmethod
@@ -63,10 +63,10 @@ class ProjectTasks:
     def in_scratch_clone(cls, url: str, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
         """The tasks of the project repository at ``url``, through a scratch clone removed afterwards.
 
-        ``env`` is the environment git runs in, as for ProjectClone.
+        ``env`` is the environment git runs in, as for ProjectScratchClone.
         """
         with tempfile.TemporaryDirectory(prefix="foundry-clone-") as scratch_dir:
-            yield cls(ProjectClone.init(url, Path(scratch_dir), env))
+            yield cls(ProjectScratchClone.init(url, Path(scratch_dir), env))
 
     def fetch_task(self, task_id: str) -> Task:
         """The task named ``task_id``, with the status of the dir on NOTES_BRANCH that holds its notes.
@@ -146,7 +146,7 @@ class ProjectTasks:
         - fetch_task refuses the task id, or the task is closed (ClosedTaskError);
         - its turn is already ``turn``;
         - it has no LOG_FILE;
-        - its TURN_FILE or LOG_FILE is a link, as ProjectClone.write refuses.
+        - its TURN_FILE or LOG_FILE is a link, as ProjectScratchClone.write refuses.
         """
         notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
         task = _read_task(notes_branch, task_id)

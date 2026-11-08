@@ -1,4 +1,4 @@
-"""ProjectClone, where ProjectTasks can't reach it, against real repositories on disk."""
+"""ProjectScratchClone, where ProjectTasks can't reach it, against real repositories on disk."""
 
 from pathlib import Path
 
@@ -7,10 +7,10 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_clone import BranchNotFoundError, PathNotOnBranchError, ProjectClone
+from foundry.project_scratch_clone import BranchNotFoundError, PathNotOnBranchError, ProjectScratchClone
 from tests.support.project_repository import clone_in, git_output
 
-# --- ProjectClone: what ProjectTasks can't reach ----------------------------------------
+# --- ProjectScratchClone: what ProjectTasks can't reach ----------------------------------------
 
 
 def test_a_push_of_no_branches_is_refused(tmp_path: Path, git_env) -> None:
@@ -30,7 +30,7 @@ def test_move_dir_refuses_an_existing_destination(tmp_path: Path, git_env) -> No
 def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_env) -> None:
     work_dir = tmp_path / "clone"
     work_dir.mkdir()
-    clone = ProjectClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
+    clone = ProjectScratchClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
     outside = tmp_path / "outside.md"
     outside.write_text("outside\n")
     (work_dir / "link.md").symlink_to(outside)
@@ -40,7 +40,7 @@ def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_
     assert outside.read_text() == "outside\n"
 
 
-# --- ProjectClone.fetch_branch, FetchedBranch: subdir_names, read_text -------------------
+# --- ProjectScratchClone.fetch_branch, FetchedBranch: subdir_names, read_text -------------------
 
 
 def test_fetch_branch_refuses_a_branch_the_remote_lacks(project_repository) -> None:
@@ -96,7 +96,7 @@ def test_reads_use_the_commit_fetched_even_after_a_later_fetch(project_repositor
     assert second.subdir_names(task.OPEN_DIR) == ["tst-0000", "tst-0002"]
 
 
-# --- ProjectClone: check_out, start_orphan ----------------------------------------------
+# --- ProjectScratchClone: check_out, start_orphan ----------------------------------------------
 
 
 def test_check_out_checks_out_the_commit_fetched_not_a_later_one(project_repository) -> None:
@@ -115,7 +115,7 @@ def test_check_out_checks_out_the_commit_fetched_not_a_later_one(project_reposit
 def test_start_orphan_starts_a_branch_with_no_history(tmp_path: Path, git_env) -> None:
     work_dir = tmp_path / "clone"
     work_dir.mkdir()
-    clone = ProjectClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
+    clone = ProjectScratchClone.init(str(tmp_path / "origin.git"), work_dir, git_env)
 
     clone.start_orphan("new")
 

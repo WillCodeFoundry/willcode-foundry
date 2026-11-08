@@ -10,7 +10,7 @@ import pytest
 from agent_runtime.git import GitError
 from foundry import task
 from foundry.errors import FoundryError
-from foundry.project_clone import BranchNotFoundError, ProjectClone
+from foundry.project_scratch_clone import BranchNotFoundError, ProjectScratchClone
 from foundry.project_tasks import (
     ClosedTaskError,
     MissingTurnError,
@@ -224,7 +224,7 @@ def test_finding_reading_and_refusing_change_no_file(project_repository, git_env
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
     work_dir = tmp_path / "clone"
     work_dir.mkdir()
-    project_tasks = ProjectTasks(ProjectClone.init(str(project_repository.path), work_dir, git_env))
+    project_tasks = ProjectTasks(ProjectScratchClone.init(str(project_repository.path), work_dir, git_env))
 
     with contextlib.suppress(FoundryError):
         operation(project_tasks)

@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from foundry.project_clone import ProjectClone
+from foundry.project_scratch_clone import ProjectScratchClone
 from foundry.project_tasks import ProjectTasks
 from foundry.task import NOTES_BRANCH, Task
 
@@ -43,9 +43,9 @@ def git_output(env: dict[str, str], *args: str) -> str:
     return subprocess.run(["git", *args], env=env, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectClone:
-    """A ProjectClone of ``url`` in a new dir in ``parent_dir``."""
-    return ProjectClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
+def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectScratchClone:
+    """A ProjectScratchClone of ``url`` in a new dir in ``parent_dir``."""
+    return ProjectScratchClone.init(url, Path(tempfile.mkdtemp(dir=parent_dir, prefix="scratch-")), git_env)
 
 
 def project_tasks_of(repository_dir: Path, git_env: dict[str, str]) -> ProjectTasks:
@@ -71,8 +71,8 @@ class ProjectRepository:
         """git's stripped output, run on the bare repository."""
         return git_output(self.git_env, f"--git-dir={self.path}", *args)
 
-    def clone(self, env: dict[str, str] | None = None) -> ProjectClone:
-        """A ProjectClone of it in a new dir, with git run in ``env``, or ``git_env``."""
+    def clone(self, env: dict[str, str] | None = None) -> ProjectScratchClone:
+        """A ProjectScratchClone of it in a new dir, with git run in ``env``, or ``git_env``."""
         return clone_in(self.path.parent, env or self.git_env, str(self.path))
 
     def project_tasks(self, env: dict[str, str] | None = None) -> ProjectTasks:
