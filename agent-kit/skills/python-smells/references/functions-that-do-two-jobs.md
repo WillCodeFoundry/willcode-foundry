@@ -111,3 +111,89 @@ class TrackedCourier(Courier):
 - **Why:** callers lose the signature, and a change to the parent's parameters no longer shows up here. The `type: ignore` it needs is the tell.
 - **Fine when:** it is a generic decorator that must wrap any callable, typed with `ParamSpec`.
 - **Spot it:** `*args, **kwargs` in an override, especially beside an ignore comment.
+
+## 5.5 Several results in a tuple
+
+A function that returns a `tuple` of values with different meanings, which callers unpack by position.
+
+Bad:
+
+```python
+def price_order(order: Order) -> tuple[Decimal, Decimal, list[str]]:
+    net = sum((line.price for line in order.lines), Decimal(0))
+    warnings = [f"{line.sku} is low on stock" for line in order.lines if line.stock < line.quantity]
+    return net, net * order.tax_rate, warnings
+
+
+net, tax, _ = price_order(order)
+_, tax, _ = price_order(order)
+```
+
+Better:
+
+```python
+@dataclass(frozen=True)
+class Price:
+    net: Decimal
+    tax: Decimal
+
+
+def price_order(order: Order) -> Price:
+    net = sum((line.price for line in order.lines), Decimal(0))
+    return Price(net=net, tax=net * order.tax_rate)
+
+
+def stock_warnings(order: Order) -> list[str]:
+    return [f"{line.sku} is low on stock" for line in order.lines if line.stock < line.quantity]
+```
+
+- **Why:** two values of one type can swap at a call site and still pass mypy. A caller that needs one value names the rest `_`, and adding a value breaks every caller. Values of unrelated meaning, like the warnings here, usually mean two jobs.
+- **Fine when:** the pair is one idea that the standard library also returns as a tuple, such as `divmod` or `str.partition`.
+- **Spot it:** `-> tuple[` with two or more meanings; `_` in the unpacking at call sites.
+
+## 5.6 Effects inside a calculation
+
+A function that computes a value and also reads or writes the outside world: a file, a database, the network, the clock. A constructor that does I/O is the same smell.
+
+Bad:
+
+```python
+def invoice_total(order_id: str, db: Database, mailer: Mailer) -> Decimal:
+    order = db.load_order(order_id)
+    total = sum((line.price * line.quantity for line in order.lines), Decimal(0))
+    if total > REVIEW_LIMIT:
+        mailer.send_review_request(order_id)
+    db.save_total(order_id, total)
+    return total
+
+
+class PriceList:
+    def __init__(self, path: Path) -> None:
+        self.prices = {sku: Decimal(price) for sku, price in json.loads(path.read_text()).items()}
+```
+
+Better:
+
+```python
+def invoice_total(order: Order) -> Decimal:
+    return sum((line.price * line.quantity for line in order.lines), Decimal(0))
+
+
+def needs_review(total: Decimal) -> bool:
+    return total > REVIEW_LIMIT
+
+
+class PriceList:
+    def __init__(self, prices: Mapping[str, Decimal]) -> None:
+        self.prices = dict(prices)
+
+    @classmethod
+    def read(cls, path: Path) -> "PriceList":
+        return cls({sku: Decimal(price) for sku, price in json.loads(path.read_text()).items()})
+```
+
+The caller loads the order, saves the total and sends the mail.
+
+- **Why:** a test of the arithmetic must fake the database and the mailer. A failure halfway leaves some writes done. The rule can't be reused for a preview that must not write. A constructor that reads a file makes every test write one.
+- **Fine when:** the function's job is to sequence effects, as an entry point or a composition root does; or the effect is the point, as in `save_total`.
+- **Spot it:** a test of a calculation that needs fakes; a function that returns a computed value and also calls a `save`, `send` or `write`; `open(`, `read_text(` or a client call inside `__init__`.

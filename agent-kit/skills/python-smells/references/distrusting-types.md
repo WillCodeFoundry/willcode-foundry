@@ -40,7 +40,7 @@ def handler_for(self, event: Event) -> Handler:
 
 ## 2.2 Types wider than the truth
 
-`object`, `Any`, `str` or `| None` where the real type is narrower: a known enum, a literal set, or a value that is never `None`.
+`object`, `Any`, `str` or `| None` where the real type is narrower: a known enum, a literal set, or a value that is never `None`. A function typed `-> None` that never returns is the same smell: `NoReturn` is narrower.
 
 Bad:
 
@@ -71,7 +71,7 @@ def find_order(order_id: str) -> Order:
 
 - **Why:** a wide type moves the checking to every consumer, and an optional that never happens grows dead branches at each caller.
 - **Fine when:** the value really can be absent or of several types, and callers must handle each.
-- **Spot it:** a return type with `| None` whose body has no `return None`. mypy `--strict` doesn't flag a redundant `is None` check, even with `--warn-unreachable`.
+- **Spot it:** a return type with `| None` whose body has no `return None`. mypy `--strict` doesn't flag a redundant `is None` check, even with `--warn-unreachable`. A function typed `-> None` whose every path calls `os.exec*` or `sys.exit`, or raises: type it `NoReturn`, and `--warn-unreachable` then flags code callers left after the call.
 
 ## 2.3 Casting instead of validating
 

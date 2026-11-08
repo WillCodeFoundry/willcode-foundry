@@ -27,8 +27,8 @@ Read a reference file only when a question points to it. Its examples are invent
 | 2 | Do I re-check, widen or cast what a type already guarantees? | [Distrusting your own types](references/distrusting-types.md) |
 | 3 | When something is wrong, does the code repair it, swallow it, fake a value, misreport it, or leave the caller guessing? | [Hiding failure](references/hiding-failure.md) |
 | 4 | Is each rule enforced in one place, where its state lives, on every path, and on the value actually used? | [Rules in the wrong place](references/rules-in-the-wrong-place.md) |
-| 5 | Does each function do one job that its name and signature say? | [Functions that do two jobs](references/functions-that-do-two-jobs.md) |
-| 6 | Did I copy or rebuild something that exists, or go around a helper, a name or a parser made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |
+| 5 | Does each function do one job that its name and signature say, return one thing, and keep its I/O apart from its calculation? | [Functions that do two jobs](references/functions-that-do-two-jobs.md) |
+| 6 | Did I copy or rebuild something that exists, or go around a helper, a name, a parser or the standard library made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |
 | 7 | Did I add one more branch, flag or case to code that every change already edits? | [Growing by accretion](references/growing-by-accretion.md) |
 | 8 | Does a comment or docstring repeat the code, describe callers or history, or promise what the code doesn't do? | [Narrating instead of naming](references/narrating-instead-of-naming.md) |
 | 9 | Does anything rebuild a constant per call, or block an event loop? | [Hidden costs](references/hidden-costs.md) |
