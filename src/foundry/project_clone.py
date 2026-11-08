@@ -1,5 +1,11 @@
-"""ProjectClone: a project's repository as branches and files; the git details (fetching one commit deep, the
-remote's name, refspecs) stay inside it."""
+"""A scratch clone of a project repository, and the branches fetched into it. The git details (fetching one commit
+deep, the remote's name, refspecs) stay in this module.
+
+| Class | Does |
+|---|---|
+| ProjectClone | fetches, checks out, writes, commits and pushes: everything that changes the clone or the remote |
+| FetchedBranch | reads one fetched branch at its commit, without a checkout: it can change nothing |
+"""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -13,16 +19,57 @@ _REMOTE_NAME = "origin"
 _ENTRY_WORD_BY_TYPE = {"tree": "dir", "blob": "file"}
 
 
+class BranchNotFoundError(FoundryError):
+    """The remote has no branch of that name."""
+
+
 class PathNotOnBranchError(FoundryError):
     """The dir or file asked for isn't on a fetched branch. Either nothing is at its path, or something of the
     other kind is, such as a dir where a file is wanted."""
 
 
+class FetchedBranch:
+    """A branch of the project repository as one fetch found it: its name, and the commit it pointed at. Made by
+    ProjectClone.fetch_branch. Its files are read at that commit, whatever the remote has since, and no read makes a
+    network call. ProjectClone.check_out checks it out at that commit too."""
+
+    def __init__(self, git: Git, name: str, commit: str) -> None:
+        self._git = git
+        self.name = name
+        self.commit = commit
+
+    def subdir_names(self, path: str) -> list[str]:
+        """The names of the dirs directly in ``path``; files and links are left out.
+
+        PathNotOnBranchError, which nothing else raises, when ``path`` isn't a dir here.
+        """
+        self._require_entry(path, "tree")
+        return [name for entry_type, name in _ls_tree(self._git, f"{self.commit}:{path}") if entry_type == "tree"]
+
+    def read_text(self, path: str) -> str:
+        """The text of the file ``path``; a link reads as its target's name.
+
+        PathNotOnBranchError when ``path`` isn't a file here.
+        """
+        self._require_entry(path, "blob")
+        return self._git.output("show", f"{self.commit}:{path}")
+
+    def _require_entry(self, path: str, entry_type: Literal["tree", "blob"]) -> None:
+        """Check ``path`` is an ``entry_type`` entry.
+
+        PathNotOnBranchError when nothing is at ``path``, or an entry of another type is. Any other git failure is a
+        GitError, never taken for a missing path.
+        """
+        entries = _ls_tree(self._git, self.commit, "--", path)
+        if (entry_type, path) not in entries:  # ls-tree lists a dir's contents for "dir/", so match the name exactly
+            raise PathNotOnBranchError(f"{self.name} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
+
+
 class ProjectClone:
-    """A shallow clone of the repository at a URL, made with your own access in a dir you give it. It holds
-    nothing until a branch is fetched or checked out. A fetched branch can be read without a checkout. Only the
-    branches needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key in your
-    git config.
+    """A scratch clone: a shallow clone of the project repository at a URL, made with your own access in a dir you
+    give it. It holds nothing until a branch is fetched; the FetchedBranch it returns is read without a checkout.
+    Only the branches needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key
+    in your git config.
 
     ``env`` is the environment git runs in: it carries your git config (identity, signing key) and SSH agent.
     A git failure is a GitError; a failed commit's adds how to sign.
@@ -34,7 +81,7 @@ class ProjectClone:
 
     @classmethod
     def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "ProjectClone":
-        """Create an empty repository in ``work_dir``, an existing empty dir, with ``url`` as its remote.
+        """Make ``work_dir``, an existing empty dir, into an empty clone with the remote at ``url``.
 
         It signs every commit, with SSH (not GPG, which allowed_signers can't verify) and your user.signingkey.
         """
@@ -46,7 +93,7 @@ class ProjectClone:
         return clone
 
     def default_branch(self) -> str | None:
-        """The remote's default branch, or None for a repository with no commits yet."""
+        """The remote's default branch, or None when it has no commits yet."""
         for line in self._git.output("ls-remote", "--symref", _REMOTE_NAME, "HEAD").splitlines():
             if line.startswith("ref: "):
                 return line.removeprefix("ref: refs/heads/").partition("\t")[0]
@@ -59,49 +106,28 @@ class ProjectClone:
             for line in self._git.output("ls-remote", "--heads", _REMOTE_NAME).splitlines()
         ]
 
-    def check_out(self, branch: str) -> None:
-        """Check out ``branch``: its latest commit if the remote has it, otherwise a start with no history or files."""
-        if branch in self.branches():  # listed here on purpose, so callers needn't say whether it exists
-            self._fetch(branch)
-            self._git.output("switch", "--quiet", branch)
-        else:
-            self._git.output("switch", "--quiet", "--orphan", branch)
+    def fetch_branch(self, branch: str) -> FetchedBranch:
+        """Fetch the remote's ``branch``, one commit deep, and return it as fetched.
 
-    def fetch_branch(self, branch: str) -> None:
-        """Fetch the remote's ``branch``, for fetched_subdir_names and fetched_text.
-
-        FoundryError when it has no such branch.
+        BranchNotFoundError when the remote has no such branch.
         """
         if branch not in self.branches():
-            raise FoundryError(f"the repository has no {branch} branch")
+            raise BranchNotFoundError(f"the project repository has no {branch} branch")
         self._fetch(branch)
+        commit = self._git.output("rev-parse", f"{self._tracking_ref(branch)}^{{commit}}").strip()
+        return FetchedBranch(self._git, branch, commit)
 
-    def fetched_subdir_names(self, branch: str, path: str) -> list[str]:
-        """The names of the dirs directly in ``path`` on ``branch``, as last fetched; files and links are left out.
+    def check_out(self, fetched: FetchedBranch) -> None:
+        """Check ``fetched`` out at its commit, so what is written next lands on what was read. Makes no network
+        call."""
+        self._git.output("switch", "--quiet", "--force-create", fetched.name, fetched.commit)
 
-        Makes no network call. FoundryError when the branch isn't fetched; PathNotOnBranchError, which nothing else
-        raises, when ``path`` isn't a dir there.
-        """
-        self._require_on_branch(branch, path, "tree")
-        return [
-            name for entry_type, name in self._ls_tree(f"{self._tracking_ref(branch)}:{path}") if entry_type == "tree"
-        ]
-
-    def fetched_text(self, branch: str, path: str) -> str:
-        """The text of the file ``path`` on ``branch``, as last fetched; a link reads as its target's name.
-
-        Makes no network call. FoundryError when the branch isn't fetched; PathNotOnBranchError when ``path`` isn't a
-        file there.
-        """
-        self._require_on_branch(branch, path, "blob")
-        return self._git.output("show", f"{self._tracking_ref(branch)}:{path}")
-
-    def exists(self, path: str) -> bool:
-        """Whether ``path``, relative to the repository root, exists in the checked-out files."""
-        return (self._work_dir / path).exists()
+    def start_orphan(self, branch: str) -> None:
+        """Check out a new ``branch`` with no history and no files, for one the remote doesn't have yet."""
+        self._git.output("switch", "--quiet", "--orphan", branch)
 
     def write(self, files: Mapping[str, str]) -> None:
-        """Write each file, by path relative to the repository root, creating dirs and replacing files as needed.
+        """Write each file, by path relative to the working tree's root, creating dirs and replacing files as needed.
 
         FoundryError when a path is a link, which could point outside the clone. Nothing is staged or committed.
         """
@@ -113,7 +139,7 @@ class ProjectClone:
             file_path.write_text(text)
 
     def move_dir(self, src: str, dst: str) -> None:
-        """Move the dir ``src``, with everything in it, to ``dst``, both relative to the repository root.
+        """Move the dir ``src``, with everything in it, to ``dst``, both relative to the working tree's root.
 
         Creates ``dst``'s parents. Raises FileExistsError if ``dst`` exists. The move is staged, not committed.
         git moves the files it tracks as they are, so your excludes and core.autocrlf can't drop or change one. A
@@ -153,29 +179,6 @@ class ProjectClone:
         ]
         self._git.output("push", "--quiet", "--atomic", _REMOTE_NAME, *refspecs)
 
-    def _require_fetched(self, branch: str) -> None:
-        if not self._git.succeeds("rev-parse", "--verify", "--quiet", f"{self._tracking_ref(branch)}^{{commit}}"):
-            raise FoundryError(f"{branch} isn't fetched: call fetch_branch first")
-
-    def _require_on_branch(self, branch: str, path: str, entry_type: Literal["tree", "blob"]) -> None:
-        """Check ``path`` is an ``entry_type`` entry on ``branch``, as last fetched.
-
-        FoundryError when the branch isn't fetched; PathNotOnBranchError when nothing is at ``path``, or an entry of
-        another type is. Any other git failure is a GitError, never taken for a missing path.
-        """
-        self._require_fetched(branch)
-        entries = self._ls_tree(self._tracking_ref(branch), "--", path)
-        if (entry_type, path) not in entries:  # ls-tree lists a dir's contents for "dir/", so match the name exactly
-            raise PathNotOnBranchError(f"{branch} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
-
-    def _ls_tree(self, *args: str) -> list[tuple[str, str]]:
-        """The type and name of each entry ``git ls-tree`` lists for ``args``."""
-        entries = []
-        for entry in filter(None, self._git.output("ls-tree", "-z", *args).split("\0")):
-            info, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
-            entries.append((info.split()[1], name))
-        return entries
-
     @staticmethod
     def _tracking_ref(branch: str) -> str:
         """The ref the remote's ``branch`` is fetched into."""
@@ -184,3 +187,12 @@ class ProjectClone:
     def _fetch(self, branch: str) -> None:
         """Fetch ``branch``'s latest commit, as refs/remotes/origin/<branch>."""
         self._git.output("fetch", "--quiet", "--depth=1", _REMOTE_NAME, branch)
+
+
+def _ls_tree(git: Git, *args: str) -> list[tuple[str, str]]:
+    """The type and name of each entry ``git ls-tree`` lists for ``args``."""
+    entries = []
+    for entry in filter(None, git.output("ls-tree", "-z", *args).split("\0")):
+        header, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
+        entries.append((header.split()[1], name))
+    return entries

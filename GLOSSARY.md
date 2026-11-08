@@ -12,7 +12,18 @@ _Avoid_: launcher (for the whole tool; `agent_sandbox/launcher.py` is one part o
 
 **Project**:
 A code repository agents work on, listed in `config/foundry.yaml`.
-_Avoid_: repo, repository (except for the GitHub repository behind a project, or the foundry's own)
+_Avoid_: repo, repository (say **project repository** for the one on GitHub)
+
+**Project repository**:
+The GitHub repository behind a project, at the URL `config/foundry.yaml` gives it. Every task branch and the notes branch are pushed there. A clone calls it its **remote**.
+_Avoid_: the repository (alone, when a clone is also meant)
+
+**Clone**:
+A local repository made from a project repository: a **scratch clone** on the host, made for one foundry command and deleted after it, or the **sandbox clone** inside a sandbox, whose two worktrees are the code checkout and the notes checkout. A clone's files are its **working tree**.
+_Avoid_: repository, repo (for a clone); repository root (say working tree)
+
+**Fetched branch**:
+A branch of the project repository as one fetch found it: its name, and the commit it pointed at. What is read from it, and a checkout of it, use that commit.
 
 **Repo policy**:
 What every project's GitHub repository must match: its rulesets, its CODEOWNERS and the `ci-gate` job of its CI.
@@ -72,7 +83,7 @@ A question about `TASK.md`, which the planner, who owns it, answers with the hum
 A question about `DESIGN.md`, which the architect, who owns it, answers with the human. The dev asks one when a decision won't work. The reviewer raises one for a finding the dev can't fix alone, such as one whose fix would change the design.
 
 **Code checkout** and **notes checkout**:
-The two working copies of a project inside a sandbox: one on the task branch, one on the notes branch.
+The two working trees of the sandbox clone: one on the task branch, one on the notes branch.
 
 **Task template**:
 `config/task-template/`, the files every new task's notes dir starts from.
