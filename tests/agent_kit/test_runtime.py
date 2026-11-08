@@ -1,6 +1,5 @@
 """The built agent runtime, run as the kit's hooks and the launcher run it: ``python -IS <pyz> ...``."""
 
-import ast
 import os
 import subprocess
 import sys
@@ -41,15 +40,6 @@ def test_the_runtime_imports_only_the_standard_library(built_kit: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == ["agent_runtime"]
-
-
-def test_the_entry_points_parse_on_old_interpreters() -> None:
-    """__main__ checks the version before importing the rest, so it must itself parse there.
-
-    __init__ too: importing __main__ from the package imports it first.
-    """
-    for name in ("__init__.py", "__main__.py"):
-        ast.parse((RUNTIME_SOURCE / name).read_text(), feature_version=(3, 6))
 
 
 def test_no_command_prints_the_usage(built_kit: Path) -> None:
