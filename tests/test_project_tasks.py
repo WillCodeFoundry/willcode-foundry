@@ -14,7 +14,7 @@ from foundry.project_tasks import (
     MissingTurnError,
     ProjectTasks,
     TaskNotFoundError,
-    TaskSummary,
+    TaskTurn,
     log_with_handoff_entry,
 )
 from foundry.task import Status, Task
@@ -126,7 +126,7 @@ def test_a_default_branch_that_is_not_a_branch_is_refused_and_nothing_is_pushed(
     assert project_repository.git("for-each-ref") == refs_before
 
 
-def test_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
+def test_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Path, git_env) -> None:
     with pytest.raises(
         GitError, match=r"^git -C \S+ ls-remote --heads origin failed: .*does not appear to be a git repo"
     ):
@@ -366,7 +366,7 @@ def test_handoff_writes_turn_and_appends_to_the_log_in_one_signed_commit(project
     files_before = project_repository.notes_files()
     commits_before = len(project_repository.notes_commits())
 
-    project_repository.project_tasks().handoff("tst-0000", "dev", note=" see R2 ")
+    project_repository.project_tasks().hand_off("tst-0000", "dev", note=" see R2 ")
     expected_log = LOG + "\n## 2 · human · handoff\nTurn: dev.\nNote: see R2\n"
     assert project_repository.notes_files() == {
         **files_before,
@@ -435,7 +435,7 @@ def test_handoff_refuses_and_pushes_nothing(project_repository, task_id, edits, 
     notes_before = project_repository.notes_head()
 
     with pytest.raises(error, match=message) as raised:
-        project_repository.project_tasks().handoff(task_id, "dev", note=None)
+        project_repository.project_tasks().hand_off(task_id, "dev", note=None)
     assert type(raised.value) is error
     assert project_repository.notes_head() == notes_before
 
@@ -445,17 +445,17 @@ def test_without_a_signing_key_handoff_pushes_nothing(project_repository, no_sig
     notes_before = project_repository.notes_head()
 
     with pytest.raises(GitError, match=r"(?s)commit --quiet --message .* failed: .*user\.signingkey.*ssh-add -L"):
-        project_repository.project_tasks().handoff("tst-0000", "dev", note=None)
+        project_repository.project_tasks().hand_off("tst-0000", "dev", note=None)
     assert project_repository.notes_head() == notes_before
 
 
-# --- list_open_task_summaries -----------------------------------------------------------
+# --- fetch_open_task_turns -----------------------------------------------------------
 
 
-def summaries_of(project_tasks: ProjectTasks) -> list[tuple[str, str]]:
-    found = project_tasks.list_open_task_summaries()
-    assert all(summary.task.status is Status.OPEN for summary in found)
-    return [(summary.task.id, summary.turn) for summary in found]
+def task_turns_of(project_tasks: ProjectTasks) -> list[tuple[str, str]]:
+    found = project_tasks.fetch_open_task_turns()
+    assert all(task_turn.task.status is Status.OPEN for task_turn in found)
+    return [(task_turn.task.id, task_turn.turn) for task_turn in found]
 
 
 def test_open_tasks_are_listed_in_id_order_with_their_stripped_turns(project_repository) -> None:
@@ -469,24 +469,24 @@ def test_open_tasks_are_listed_in_id_order_with_their_stripped_turns(project_rep
         },
     )
 
-    assert summaries_of(project_repository.project_tasks()) == [
+    assert task_turns_of(project_repository.project_tasks()) == [
         ("aaa-0002", "reviewer"),
         ("bbb-0001", "human"),
         ("tst-0000", "dev"),
     ]
-    assert isinstance(project_repository.project_tasks().list_open_task_summaries()[0], TaskSummary)
+    assert isinstance(project_repository.project_tasks().fetch_open_task_turns()[0], TaskTurn)
 
 
 def test_a_symlinked_turn_shows_the_link_s_target_name_and_reads_nothing_outside(project_repository) -> None:
     project_repository.edit_notes(symlink={".agent/tasks/open/tst-0000/TURN": "/etc/hostname"})
 
-    assert summaries_of(project_repository.project_tasks()) == [("tst-0000", "/etc/hostname")]
+    assert task_turns_of(project_repository.project_tasks()) == [("tst-0000", "/etc/hostname")]
 
 
 def test_no_open_dir_after_the_last_task_closed_lists_nothing(project_repository) -> None:
     project_repository.edit_notes(remove=[".agent/tasks/open"])
 
-    assert summaries_of(project_repository.project_tasks()) == []
+    assert task_turns_of(project_repository.project_tasks()) == []
 
 
 @pytest.mark.parametrize(
@@ -502,7 +502,7 @@ def test_listing_fails_on_a_task_without_a_turn(project_repository, files) -> No
         MissingTurnError,
         match=r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.$",
     ):
-        summaries_of(project_repository.project_tasks())
+        task_turns_of(project_repository.project_tasks())
 
 
 def test_a_dir_that_is_not_a_task_id_fails_naming_it(project_repository) -> None:
@@ -515,7 +515,7 @@ def test_a_dir_that_is_not_a_task_id_fails_naming_it(project_repository) -> None
         match=r"^.agent/tasks/open/Bad Dir/ is not a valid task id \(task id 'Bad Dir' is not valid: "
         r"use lowercase letters, .*\)\. Rename or remove it\.$",
     ):
-        summaries_of(project_repository.project_tasks())
+        task_turns_of(project_repository.project_tasks())
 
 
 def test_listing_a_repository_without_a_notes_branch_names_agent_notes(tmp_path: Path, git_env) -> None:
@@ -523,12 +523,12 @@ def test_listing_a_repository_without_a_notes_branch_names_agent_notes(tmp_path:
     git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
 
     with pytest.raises(FoundryError, match=r"^the repository has no agent-notes branch$"):
-        summaries_of(project_tasks_of(bare_dir, git_env))
+        task_turns_of(project_tasks_of(bare_dir, git_env))
 
 
-def test_listing_an_unreachable_repository_fails_with_gits_message(tmp_path: Path, git_env) -> None:
+def test_listing_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Path, git_env) -> None:
     with pytest.raises(GitError, match=r"ls-remote --heads origin failed: .*does not appear to be a git repo"):
-        summaries_of(project_tasks_of(tmp_path / "missing.git", git_env))
+        task_turns_of(project_tasks_of(tmp_path / "missing.git", git_env))
 
 
 def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env, tmp_path: Path) -> None:
@@ -542,7 +542,7 @@ def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env,
     shim.chmod(0o755)
     counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
 
-    found = project_repository.project_tasks(env=counting_env).list_open_task_summaries()
+    found = project_repository.project_tasks(env=counting_env).fetch_open_task_turns()
 
     assert len(found) == 6
     assert sum(" fetch " in f" {line} " for line in log.read_text().splitlines()) == 1

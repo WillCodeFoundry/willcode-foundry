@@ -13,7 +13,7 @@ from agent_runtime import contract, hardening, session_setup
 from agent_runtime.agent_kit import AgentKit
 from foundry.session import SessionVariables
 from foundry.task import Task
-from tests.support import AGENT_KIT_SOURCE, TASK, SessionFor
+from tests.support import AGENT_KIT_SOURCE, TASK, VariablesFor
 from tests.support.machine import (
     ME,
     SUDO_USER,
@@ -60,7 +60,7 @@ def machine(tmp_path: Path, socket_dir: Path) -> TemporaryMachine:
             root_owner=ME,
             euid=lambda: 0,
             can_write=other_can_write,
-            owner_of=lambda path: owners.get(path, ME.uid),
+            owner_uid_of=lambda path: owners.get(path, ME.uid),
         ),
         dir=machine_dir,
         passwd_log=passwd_log,
@@ -96,35 +96,39 @@ def refused(read_only_kit: Path, hardened: TemporaryMachine) -> Callable[..., No
 
 
 @pytest.fixture
-def session_for(tmp_path: Path, session_variables: Callable[[Task], SessionVariables]) -> SessionFor:
-    """The session a sandbox for TASK gets, as foundry sets it, with the kit and the local origin given, and
+def variables_for(tmp_path: Path, session_variables: Callable[[Task], SessionVariables]) -> VariablesFor:
+    """The session variables a sandbox for TASK gets, as foundry sets it, with the kit and the local origin given, and
     checkouts under tmp_path/work."""
 
-    def make(agent_kit_dir: Path, origin: Path) -> contract.Environ:
+    def make(agent_kit_dir: Path, origin: Path) -> contract.SessionVariables:
         variables = dataclasses.replace(
             session_variables(TASK),
             agent_kit_dir=agent_kit_dir,
-            project_dir=str(tmp_path / "work" / "p"),
+            code_checkout_dir=str(tmp_path / "work" / "p"),
             repo_url=f"file://{origin}",
         )
-        return contract.read_environ(variables.to_env())
+        return contract.read_session_variables(variables.to_env())
 
     return make
 
 
 @pytest.fixture
 def checkouts(
-    session_for: SessionFor, built_kit: Path, created_task: Path, git_identity: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[contract.Environ, Path, Path]:
-    """(the session, its code checkout, its notes checkout), set up by session_setup from a created task's origin,
-    both clean and pushed. Commits aren't signed: the role signs with a key there is no private half of here, so
+    variables_for: VariablesFor,
+    built_kit: Path,
+    created_task: Path,
+    git_identity: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[contract.SessionVariables, Path, Path]:
+    """(the session variables, its code checkout, its notes checkout), set up by session_setup from a created task's
+    origin, both clean and pushed. Commits aren't signed: the role signs with a key there is no private half of here, so
     signing is turned off by git's environment override, which beats any file."""
-    session = session_for(built_kit, created_task)
-    session_setup.session_setup(session, git_identity)
+    variables = variables_for(built_kit, created_task)
+    session_setup.session_setup(variables, git_identity)
     for name, value in {
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "commit.gpgsign",
         "GIT_CONFIG_VALUE_0": "false",
     }.items():
         monkeypatch.setenv(name, value)
-    return session, session.agent_project_dir, session.agent_notes_dir
+    return variables, variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir

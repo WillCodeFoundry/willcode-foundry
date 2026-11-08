@@ -58,7 +58,7 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
     session_variables: Callable[[Task], SessionVariables],
 ) -> None:
     """Read by name in the kit, outside AGENTS.md, which documents them all; or, in the runtime, as the field
-    contract.read_environ gives it (AGENT_TASK_BRANCH as ``.task_branch``) anywhere but the contract itself.
+    contract.read_session_variables gives it (AGENT_TASK_BRANCH as ``.task_branch``) anywhere but the contract itself.
     A variable read nowhere else is read by nothing."""
     kit_text = "\n".join(path.read_text() for path in agent_kit_files() if path.suffix != ".py" and path != AGENTS_MD)
     runtime_text = "\n".join(path.read_text() for path in AGENT_RUNTIME.glob("*.py") if path != CONTRACT)
@@ -67,7 +67,9 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
         field = name.lower()
         return bool(re.search(rf"\b{name}\b", kit_text) or re.search(rf"\.{field}\b", runtime_text))
 
-    assert {field.name for field in dataclasses.fields(contract.Environ)} == {name.lower() for name in contract.NAMES}
+    assert {field.name for field in dataclasses.fields(contract.SessionVariables)} == {
+        name.lower() for name in contract.NAMES
+    }
     assert [name for name in session_variables(Task.as_open("tst-0001")).to_env() if not is_read(name)] == []
 
 
@@ -118,7 +120,7 @@ def ref_name_lists_naming_task_branches() -> list[tuple[str, list[str]]]:
     return found
 
 
-def test_the_rulesets_name_a_tasks_branches_as_task_py_does() -> None:
+def test_the_rulesets_name_task_branches_as_task_py_does() -> None:
     lists = ref_name_lists_naming_task_branches()
 
     assert lists, f"no ruleset in {RULESETS.name} names a task's branch or {NOTES_BRANCH}"

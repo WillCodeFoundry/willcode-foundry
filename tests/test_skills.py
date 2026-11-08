@@ -22,7 +22,7 @@ def commit_all(cwd: Path, message: str) -> str:
 
 @pytest.fixture
 def upstream(tmp_path: Path) -> Path:
-    """mattpocock/skills, as far as the update needs it: a skill, its agents/ folder, and the licence."""
+    """mattpocock/skills, as far as the update needs it: a skill, its agents/ dir, and the licence."""
     repo = tmp_path / "upstream"
     skill = repo / "skills" / "engineering" / "tdd"
     (skill / "agents").mkdir(parents=True)
@@ -35,7 +35,7 @@ def upstream(tmp_path: Path) -> Path:
 
 
 def upstream_skill(upstream: Path, name: str = "tdd") -> Path:
-    """A skill's folder in the upstream repository."""
+    """A skill's dir in the upstream repository."""
     return upstream / "skills" / "engineering" / name
 
 
@@ -80,7 +80,7 @@ def update_from(foundry_root: Path, upstream: Path, ref: str = "HEAD") -> Update
     return Updated(reported, conflicted)
 
 
-def test_upstreams_changes_merge_with_the_foundrys_and_the_commit_is_recorded(foundry_root, upstream) -> None:
+def test_changes_upstream_merge_with_those_in_the_foundry_and_the_commit_is_recorded(foundry_root, upstream) -> None:
     skill_md = upstream_skill(upstream) / "SKILL.md"
     skill_md.write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     (upstream_skill(upstream) / "agents" / "codex.yaml").write_text("x: 2\n")
@@ -289,7 +289,7 @@ def test_each_copied_skill_names_its_repository_licence() -> None:
     ["---\nname: own\n---\n", "No front matter.\n", "---\nmetadata:\n  adapted: yes\n---\n"],
     ids=["no metadata", "no front matter", "no source"],
 )
-def test_a_skill_without_a_source_is_the_foundrys_own(tmp_path: Path, front_matter: str) -> None:
+def test_a_skill_without_a_source_belongs_to_the_foundry(tmp_path: Path, front_matter: str) -> None:
     skill_md = tmp_path / "SKILL.md"
     skill_md.write_text(front_matter)
 
@@ -328,7 +328,7 @@ def test_a_source_without_its_commit_is_reported(tmp_path: Path) -> None:
         skills.read_source(skill_md)
 
 
-def test_the_kits_copied_skills_all_have_a_source() -> None:
+def test_every_copied_skill_in_the_kit_has_a_source() -> None:
     """Every skill this repository copied records where from; its own skills don't."""
     skills_dir = Path(__file__).parents[1] / "agent-kit" / "skills"
     sources = {path.parent.name: skills.read_source(path) for path in skills_dir.glob("*/SKILL.md")}

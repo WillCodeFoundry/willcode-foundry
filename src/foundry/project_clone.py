@@ -10,16 +10,16 @@ from foundry.errors import FoundryError
 
 _REMOTE_NAME = "origin"
 # The word the messages use for each type of git tree entry a caller can ask for.
-_ENTRY_KIND = {"tree": "dir", "blob": "file"}
+_ENTRY_WORD_BY_TYPE = {"tree": "dir", "blob": "file"}
 
 
-class NotOnBranchError(FoundryError):
+class PathNotOnBranchError(FoundryError):
     """The dir or file asked for isn't on a fetched branch. Either nothing is at its path, or something of the
     other kind is, such as a dir where a file is wanted."""
 
 
 class ProjectClone:
-    """A shallow clone of the repository at a URL, made with your own access in a folder you give it. It holds
+    """A shallow clone of the repository at a URL, made with your own access in a dir you give it. It holds
     nothing until a branch is fetched or checked out. A fetched branch can be read without a checkout. Only the
     branches needed are fetched, one commit deep. Every commit is signed with SSH, using the signing key in your
     git config.
@@ -34,7 +34,7 @@ class ProjectClone:
 
     @classmethod
     def init(cls, url: str, work_dir: Path, env: Mapping[str, str]) -> "ProjectClone":
-        """Create an empty repository in ``work_dir``, an existing empty folder, with ``url`` as its remote.
+        """Create an empty repository in ``work_dir``, an existing empty dir, with ``url`` as its remote.
 
         It signs every commit, with SSH (not GPG, which allowed_signers can't verify) and your user.signingkey.
         """
@@ -68,7 +68,7 @@ class ProjectClone:
             self._git.output("switch", "--quiet", "--orphan", branch)
 
     def fetch_branch(self, branch: str) -> None:
-        """Fetch the remote's ``branch``, for fetched_list_dir and fetched_read.
+        """Fetch the remote's ``branch``, for fetched_subdir_names and fetched_text.
 
         FoundryError when it has no such branch.
         """
@@ -76,10 +76,10 @@ class ProjectClone:
             raise FoundryError(f"the repository has no {branch} branch")
         self._fetch(branch)
 
-    def fetched_list_dir(self, branch: str, path: str) -> list[str]:
+    def fetched_subdir_names(self, branch: str, path: str) -> list[str]:
         """The names of the dirs directly in ``path`` on ``branch``, as last fetched; files and links are left out.
 
-        Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError, which nothing else
+        Makes no network call. FoundryError when the branch isn't fetched; PathNotOnBranchError, which nothing else
         raises, when ``path`` isn't a dir there.
         """
         self._require_on_branch(branch, path, "tree")
@@ -87,10 +87,10 @@ class ProjectClone:
             name for entry_type, name in self._ls_tree(f"{self._tracking_ref(branch)}:{path}") if entry_type == "tree"
         ]
 
-    def fetched_read(self, branch: str, path: str) -> str:
+    def fetched_text(self, branch: str, path: str) -> str:
         """The text of the file ``path`` on ``branch``, as last fetched; a link reads as its target's name.
 
-        Makes no network call. FoundryError when the branch isn't fetched; NotOnBranchError when ``path`` isn't a
+        Makes no network call. FoundryError when the branch isn't fetched; PathNotOnBranchError when ``path`` isn't a
         file there.
         """
         self._require_on_branch(branch, path, "blob")
@@ -101,7 +101,7 @@ class ProjectClone:
         return (self._work_dir / path).exists()
 
     def write(self, files: Mapping[str, str]) -> None:
-        """Write each file, by path relative to the repository root, creating folders and replacing files as needed.
+        """Write each file, by path relative to the repository root, creating dirs and replacing files as needed.
 
         FoundryError when a path is a link, which could point outside the clone. Nothing is staged or committed.
         """
@@ -113,7 +113,7 @@ class ProjectClone:
             file_path.write_text(text)
 
     def move_dir(self, src: str, dst: str) -> None:
-        """Move the folder ``src``, with everything in it, to ``dst``, both relative to the repository root.
+        """Move the dir ``src``, with everything in it, to ``dst``, both relative to the repository root.
 
         Creates ``dst``'s parents. Raises FileExistsError if ``dst`` exists. The move is staged, not committed.
         git moves the files it tracks as they are, so your excludes and core.autocrlf can't drop or change one. A
@@ -160,13 +160,13 @@ class ProjectClone:
     def _require_on_branch(self, branch: str, path: str, entry_type: Literal["tree", "blob"]) -> None:
         """Check ``path`` is an ``entry_type`` entry on ``branch``, as last fetched.
 
-        FoundryError when the branch isn't fetched; NotOnBranchError when nothing is at ``path``, or an entry of
+        FoundryError when the branch isn't fetched; PathNotOnBranchError when nothing is at ``path``, or an entry of
         another type is. Any other git failure is a GitError, never taken for a missing path.
         """
         self._require_fetched(branch)
         entries = self._ls_tree(self._tracking_ref(branch), "--", path)
         if (entry_type, path) not in entries:  # ls-tree lists a dir's contents for "dir/", so match the name exactly
-            raise NotOnBranchError(f"{branch} has no {_ENTRY_KIND[entry_type]} {path}")
+            raise PathNotOnBranchError(f"{branch} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
 
     def _ls_tree(self, *args: str) -> list[tuple[str, str]]:
         """The type and name of each entry ``git ls-tree`` lists for ``args``."""

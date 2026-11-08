@@ -107,7 +107,7 @@ def table_commands(markdown: str, program: str = "") -> set[str]:
     return commands
 
 
-def test_the_readme_lists_exactly_foundrys_commands() -> None:
+def test_the_readme_lists_exactly_the_commands_foundry_defines() -> None:
     readme = (REPOSITORY / "README.md").read_text()
     assert table_commands(readme, "foundry") == subcommands(cli.build_parser())
 

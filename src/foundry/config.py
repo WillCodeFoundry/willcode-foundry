@@ -1,4 +1,4 @@
-"""config/foundry.yaml: the instance's registry of projects and roles."""
+"""config/foundry.yaml: the foundry's registry of projects and roles."""
 
 import re
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ from foundry.errors import FoundryError
 
 # A model as Claude Code's --model takes it: an alias (opus, sonnet[1m]) or a full name (claude-opus-5-5). Starting
 # with a letter or digit, so it can't be read as another option.
-_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:\[\]-]*")
+_MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:\[\]-]*")
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ class Project:
 class Role:
     """A role an agent can be given, as this foundry has it.
 
-    Listed in config/foundry.yaml, with its folder in the agent kit (load refuses one
+    Listed in config/foundry.yaml, with its dir in the agent kit (load refuses one
     without); its SSH key and, if it should have gh, its GitHub token, under secrets/.
     """
 
@@ -81,7 +81,7 @@ def parse(raw: object, *, foundry_root: Path, source: str = "config") -> Config:
     roles: dict[str, Role] = {}
     for role_name, value in (raw.get("roles") or {}).items():
         model = _role_model(value, f"{source}: roles.{role_name}")
-        roles[role_name] = _role(foundry_root, role_name, model=model, source=source)
+        roles[role_name] = _load_role(foundry_root, role_name, model=model, source=source)
 
     return Config(foundry_name=foundry_name, projects=projects, roles=roles)
 
@@ -98,20 +98,20 @@ def _role_model(options: object, where: str) -> str | None:
     model = options.get("model")
     if model is None:
         return None
-    if not isinstance(model, str) or not _MODEL.fullmatch(model):
+    if not isinstance(model, str) or not _MODEL_PATTERN.fullmatch(model):
         raise FoundryError(
             f"{where}.model {model!r} is not a model: use an alias or a full name, such as opus or claude-opus-5-5"
         )
     return model
 
 
-def _role(foundry_root: Path, role_name: str, *, model: str | None, source: str) -> Role:
-    """The role, refused unless its folder in the agent kit holds what a sandbox needs from it: the rule is
+def _load_role(foundry_root: Path, role_name: str, *, model: str | None, source: str) -> Role:
+    """The role, refused unless its dir in the agent kit holds what a sandbox needs from it: the rule is
     agent_kit's, which session-setup applies again in the sandbox."""
-    role_dir = AgentKit(paths.agent_kit_dir(foundry_root)).role(role_name)
+    role_dir = AgentKit(paths.agent_kit_dir(foundry_root)).role_dir(role_name)
     if not role_dir.dir.is_dir():
-        raise FoundryError(f"{source}: role {role_name!r} has no folder in the agent kit: {role_dir.dir} doesn't exist")
-    if missing := role_dir.missing():
+        raise FoundryError(f"{source}: role {role_name!r} has no dir in the agent kit: {role_dir.dir} doesn't exist")
+    if missing := role_dir.missing_files():
         raise FoundryError(f"{source}: role {role_name!r}: {role_dir.dir} has no {' or '.join(missing)}")
     github_token_path = paths.github_token_path(foundry_root, role_name)
     return Role(

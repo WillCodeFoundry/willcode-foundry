@@ -231,7 +231,7 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
 
 
 def policy_with_rulesets(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
-    return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate={})
+    return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate_section={})
 
 
 def test_fix_project_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:

@@ -112,18 +112,18 @@ def test_input_it_does_not_understand_is_let_through(raw_input: str) -> None:
 
 # --- session-check -----------------------------------------------------------
 
-Checkouts = tuple[contract.Environ, Path, Path]
+Checkouts = tuple[contract.SessionVariables, Path, Path]
 
 
-def stop(session: contract.Environ, raw_input: str = '{"stop_hook_active": false}') -> str:
+def stop(variables: contract.SessionVariables, raw_input: str = '{"stop_hook_active": false}') -> str:
     """session-check's decision on this stop, as the JSON it prints; empty when the stop goes through."""
     stdout = io.StringIO()
-    assert claude_hooks.session_check(io.StringIO(raw_input), stdout, session) == 0
+    assert claude_hooks.session_check(io.StringIO(raw_input), stdout, variables) == 0
     return stdout.getvalue()
 
 
-def block_reason(session: contract.Environ, raw_input: str = '{"stop_hook_active": false}') -> str:
-    decision = json.loads(stop(session, raw_input))
+def block_reason(variables: contract.SessionVariables, raw_input: str = '{"stop_hook_active": false}') -> str:
+    decision = json.loads(stop(variables, raw_input))
     assert decision["decision"] == "block"
     return str(decision["reason"])
 
@@ -136,17 +136,17 @@ def commit(cwd: Path, name: str, message: str) -> None:
 
 
 def test_a_stop_goes_through_when_both_checkouts_are_clean_and_pushed(checkouts: Checkouts) -> None:
-    session, _, _ = checkouts
+    variables, _, _ = checkouts
 
-    assert stop(session) == ""
+    assert stop(variables) == ""
 
 
 def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts) -> None:
-    session, code, notes = checkouts
+    variables, code, notes = checkouts
     (code / "wip.txt").write_text("x\n")
     commit(notes, f"{TASK.task_notes_dir}/PROGRESS.md", f"{TASK.id}: progress")
 
-    reason = block_reason(session)
+    reason = block_reason(variables)
 
     assert "code checkout has uncommitted changes; notes checkout has commits not pushed" in reason
     assert reason.endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
@@ -154,57 +154,57 @@ def test_a_stop_is_blocked_by_uncommitted_and_unpushed_work(checkouts: Checkouts
 
 def test_a_stop_is_blocked_by_commits_left_on_the_branch_after_switching_away(checkouts: Checkouts) -> None:
     """The branch is compared with origin, not only HEAD: a detached HEAD at origin's commit hides nothing."""
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     commit(code, "work.txt", "feat: work")
     git(code, "switch", "-q", "--detach", f"origin/{TASK.branch}")
 
-    assert f"code checkout has commits not pushed to origin/{TASK.branch}" in block_reason(session)
+    assert f"code checkout has commits not pushed to origin/{TASK.branch}" in block_reason(variables)
 
 
 def test_commits_origin_has_but_the_checkout_hasn_t_fetched_count_as_pushed(checkouts: Checkouts) -> None:
     """Pushed to origin's URL rather than to the remote, so origin/<branch> in the checkout stays behind: the
     check fetches it before comparing."""
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     commit(code, "work.txt", "feat: work")
     origin_url = git(code, "remote", "get-url", "origin").stdout.strip()
     git(code, "-c", "core.hooksPath=/dev/null", "push", "-q", origin_url, f"HEAD:refs/heads/{TASK.branch}")
 
-    assert stop(session) == ""
+    assert stop(variables) == ""
 
 
 def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts) -> None:
     """git failing is no evidence that nothing is unsaved."""
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     shutil.rmtree(code)
 
-    assert f"code checkout can't be checked: `git -C {code} status --porcelain` failed: " in block_reason(session)
+    assert f"code checkout can't be checked: `git -C {code} status --porcelain` failed: " in block_reason(variables)
 
 
 def test_a_stop_is_blocked_when_git_is_missing(
     checkouts: Checkouts, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    session, _, _ = checkouts
+    variables, _, _ = checkouts
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.setenv("PATH", str(empty))
 
-    assert "code checkout can't be checked: git not found in PATH" in block_reason(session)
+    assert "code checkout can't be checked: git not found in PATH" in block_reason(variables)
 
 
 @pytest.mark.parametrize(
     "raw_input", ['{"stop_hook_active": true}', '{"stop_hook_active" : true}', '{\n  "stop_hook_active":\ttrue\n}']
 )
-def test_a_stop_from_this_hooks_own_block_goes_through(checkouts: Checkouts, raw_input: str) -> None:
+def test_a_stop_caused_by_this_hook_blocking_goes_through(checkouts: Checkouts, raw_input: str) -> None:
     """Already looping on this hook: the stop goes through rather than spin, whatever the JSON's spacing."""
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     (code / "wip.txt").write_text("x\n")
 
-    assert stop(session, raw_input) == ""
+    assert stop(variables, raw_input) == ""
 
 
 @pytest.mark.parametrize("raw_input", ["not json", "[]", '{"stop_hook_active": "true"}'])
 def test_input_that_is_not_the_looping_flag_still_gets_checked(checkouts: Checkouts, raw_input: str) -> None:
-    session, code, _ = checkouts
+    variables, code, _ = checkouts
     (code / "wip.txt").write_text("x\n")
 
-    assert "code checkout has uncommitted changes" in block_reason(session, raw_input)
+    assert "code checkout has uncommitted changes" in block_reason(variables, raw_input)

@@ -82,7 +82,7 @@ code the task extends was replaced.
   suggests it, answer the finding `disagree, because <why>`.
 
 ## Review
-The reviewer writes its rounds in `$AGENT_NOTES_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
+The reviewer writes its rounds in `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`.
 
 - When the latest round says `Verdict: changes needed`, answer each open
   finding in `LOG.md`: `Answers R<n>: fixed in <commit>.` or `Answers R<n>:

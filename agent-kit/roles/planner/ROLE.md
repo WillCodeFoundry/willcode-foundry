@@ -28,7 +28,7 @@ and follow the steps below.
    "Open questions" and ask them in rounds.
 5. Check the draft against `checklist.md`. Fix what fails.
 6. Present the draft in the session for approval. Once the human approves
-   it, write it to `$AGENT_NOTES_DIR/$AGENT_TASK_FILE`, then commit
+   it, write it to `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_FILE`, then commit
    and push it on `$AGENT_NOTES_BRANCH` as `AGENTS.md`'s "Notes checkout" rules
    describe. Never write `TASK.md` before that approval. Write nothing else
    in the task notes but `TURN` and your entries in `LOG.md`.

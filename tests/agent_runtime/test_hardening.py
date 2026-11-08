@@ -54,7 +54,7 @@ def test_the_sandbox_is_the_real_machine(tmp_path: Path) -> None:
     for path in (writable, read_only, tmp_path / "absent"):
         assert sandbox.can_write(path) == os.access(path, os.W_OK), path
     for path in (writable, tmp_path):
-        assert sandbox.owner_of(path) == path.stat().st_uid, path
+        assert sandbox.owner_uid_of(path) == path.stat().st_uid, path
 
 
 def test_root_mode_then_agent_mode_on_one_machine(machine: TemporaryMachine, read_only_kit: Path) -> None:
@@ -132,23 +132,23 @@ def test_an_interpreter_root_doesnt_own_is_refused(hardened, refused, read_only_
     )
 
 
-def test_settings_in_a_folder_root_doesnt_own_are_refused(hardened, refused, read_only_kit) -> None:
-    """Whoever owns the folder can swap the settings in it during a session, whoever owns the file."""
-    folder = hardened.root_mode.managed_settings.parent
-    hardened.owners[folder] = SOMEONE_ELSE.uid
+def test_settings_in_a_dir_root_doesnt_own_are_refused(hardened, refused, read_only_kit) -> None:
+    """Whoever owns the dir can swap the settings in it during an agent run, whoever owns the file."""
+    settings_dir = hardened.root_mode.managed_settings.parent
+    hardened.owners[settings_dir] = SOMEONE_ELSE.uid
 
     refused(
-        f"replace Claude's managed settings: {folder} isn't owned by uid {ME.uid}",
+        f"replace Claude's managed settings: {settings_dir} isn't owned by uid {ME.uid}",
     )
 
 
-def test_settings_in_a_folder_the_agent_can_write_are_refused(hardened, refused, read_only_kit) -> None:
-    folder = hardened.root_mode.managed_settings.parent
-    folder.chmod(0o757)
+def test_settings_in_a_dir_the_agent_can_write_are_refused(hardened, refused, read_only_kit) -> None:
+    settings_dir = hardened.root_mode.managed_settings.parent
+    settings_dir.chmod(0o757)
 
     refused(
-        f"replace Claude's managed settings: {folder} is writable",
-        f"replace the hooks' runtime: {folder} is writable",
+        f"replace Claude's managed settings: {settings_dir} is writable",
+        f"replace the hooks' runtime: {settings_dir} is writable",
     )
 
 
@@ -169,7 +169,7 @@ def _a_link_elsewhere(link: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("replace_with", [_a_file, _a_link_elsewhere])
-def test_a_hooks_runtime_that_isnt_the_kits_is_refused(
+def test_a_hooks_runtime_link_not_to_the_kit_is_refused(
     hardened, refused, read_only_kit, tmp_path, replace_with: Callable[[Path, Path], None]
 ) -> None:
     """The managed hooks run whatever this path holds."""
@@ -208,7 +208,7 @@ def test_settings_whose_hooks_skip_the_link_are_refused(hardened, read_only_kit)
     )
 
 
-def test_settings_other_than_the_kits_are_refused(hardened, refused, read_only_kit) -> None:
+def test_settings_other_than_those_in_the_kit_are_refused(hardened, refused, read_only_kit) -> None:
     installed = hardened.root_mode.managed_settings
     installed.write_text('{"permissions": {}}\n')
     kit_copy = read_only_kit / "claude" / "managed-settings.json"
@@ -246,7 +246,7 @@ def test_a_writable_file_in_the_kit_is_refused(hardened, refused, read_only_kit)
     refused(f"change the agent kit: {agents_md} is writable")
 
 
-def test_a_link_to_a_writable_folder_outside_the_kit_is_refused(hardened, refused, read_only_kit, tmp_path) -> None:
+def test_a_link_to_a_writable_dir_outside_the_kit_is_refused(hardened, refused, read_only_kit, tmp_path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
     outside.chmod(0o777)
@@ -267,8 +267,8 @@ def test_a_link_to_nothing_in_the_kit_is_refused(hardened, refused, read_only_ki
     )
 
 
-def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, refused, read_only_kit) -> None:
-    """Listing is real, not modelled: the test user can't list a folder it has taken every permission from."""
+def test_a_kit_dir_that_cant_be_listed_is_refused(hardened, refused, read_only_kit) -> None:
+    """Listing is real, not modelled: the test user can't list a dir it has taken every permission from."""
     hooks = read_only_kit / "hooks"
     hooks.chmod(0o000)
     try:
@@ -279,8 +279,8 @@ def test_a_kit_folder_that_cant_be_listed_is_refused(hardened, refused, read_onl
         hooks.chmod(0o555)
 
 
-def test_a_folder_above_the_kit_the_agent_can_write_is_refused(hardened, refused, read_only_kit) -> None:
-    """Renaming a folder above the mount and putting another kit at its path would change what the hooks' link,
+def test_a_dir_above_the_kit_the_agent_can_write_is_refused(hardened, refused, read_only_kit) -> None:
+    """Renaming a dir above the mount and putting another kit at its path would change what the hooks' link,
     and every call into the runtime, reaches."""
     above = read_only_kit.parent
     above.chmod(0o757)
@@ -290,7 +290,7 @@ def test_a_folder_above_the_kit_the_agent_can_write_is_refused(hardened, refused
         above.chmod(0o755)
 
 
-def test_a_folder_above_the_kit_root_doesnt_own_is_refused(hardened, refused, read_only_kit) -> None:
+def test_a_dir_above_the_kit_root_doesnt_own_is_refused(hardened, refused, read_only_kit) -> None:
     above = read_only_kit.parent.parent
     hardened.owners[above] = SOMEONE_ELSE.uid
 
@@ -299,10 +299,10 @@ def test_a_folder_above_the_kit_root_doesnt_own_is_refused(hardened, refused, re
     )
 
 
-def test_a_sticky_folder_above_the_kit_counts_only_for_what_the_agent_owns(
+def test_a_sticky_dir_above_the_kit_counts_only_for_what_the_agent_owns(
     hardened, refused, read_only_kit, capsys
 ) -> None:
-    """In a sticky folder anyone can write, as /tmp, only an entry's owner can rename it."""
+    """In a sticky dir anyone can write, as /tmp, only an entry's owner can rename it."""
     sticky, child = read_only_kit.parent.parent, read_only_kit.parent
     sticky.chmod(0o1777)
     try:
@@ -439,14 +439,14 @@ def test_settings_from_an_older_kit_are_replaced(machine: TemporaryMachine, read
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
 
 
-def test_a_settings_folder_anyone_could_write_is_closed(machine: TemporaryMachine, read_only_kit: Path) -> None:
-    folder = machine.root_mode.managed_settings.parent
-    folder.mkdir(parents=True)
-    folder.chmod(0o777)
+def test_a_settings_dir_anyone_could_write_is_closed(machine: TemporaryMachine, read_only_kit: Path) -> None:
+    settings_dir = machine.root_mode.managed_settings.parent
+    settings_dir.mkdir(parents=True)
+    settings_dir.chmod(0o777)
 
     hardening.harden(read_only_kit, SUDO_USER, machine.root_mode)
 
-    assert stat.S_IMODE(folder.stat().st_mode) == 0o755
+    assert stat.S_IMODE(settings_dir.stat().st_mode) == 0o755
 
 
 def test_dockers_configuration_from_an_earlier_launch_is_kept(machine: TemporaryMachine, read_only_kit: Path) -> None:
@@ -459,7 +459,7 @@ def test_dockers_configuration_from_an_earlier_launch_is_kept(machine: Temporary
     assert daemon_config.read_text() == '{"group": "root"}\n'
 
 
-def test_a_templates_own_docker_configuration_is_refused_changing_nothing(
+def test_a_docker_configuration_shipped_by_the_template_is_refused_changing_nothing(
     machine: TemporaryMachine, read_only_kit: Path
 ) -> None:
     """Checked before any step: removing sudo can't be undone, so root mode refuses while it still could run again."""
@@ -540,8 +540,8 @@ def test_a_daemon_config_that_cant_be_read_is_refused_changing_nothing(
 
 
 def test_a_kit_reached_through_a_link_is_refused(hardened, read_only_kit, tmp_path) -> None:
-    """Whoever can write the link's folder can point the link, and with it the hooks' runtime, elsewhere: the
-    folders above the real kit prove nothing then."""
+    """Whoever can write the link's dir can point the link, and with it the hooks' runtime, elsewhere: the
+    dirs above the real kit prove nothing then."""
     through = tmp_path / "through"
     through.mkdir()
     via_link = through / "agent-kit"

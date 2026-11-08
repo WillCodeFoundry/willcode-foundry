@@ -21,7 +21,7 @@ from foundry.commands.task import (
 )
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
-from foundry.project_tasks import TaskSummary
+from foundry.project_tasks import TaskTurn
 from foundry.task import Task
 from tests.support.project_repository import git_output
 
@@ -108,21 +108,21 @@ def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accord
 
 
 def listing(name: str, *turns: tuple[str, str]) -> ProjectListing:
-    return ProjectListing(name, [TaskSummary(Task.as_open(task_id), turn) for task_id, turn in turns])
+    return ProjectListing(name, [TaskTurn(Task.as_open(task_id), turn) for task_id, turn in turns])
 
 
 def test_task_lines_are_aligned_across_every_project_with_two_spaces_between_columns() -> None:
-    stdout, stderr = listing_lines(
+    stdout_lines, stderr_lines = listing_lines(
         [listing("store", ("wcf-0007", "dev"), ("wcf-0010", "human")), listing("a", ("t-0001", "reviewer"))],
         [],
     )
 
-    assert stdout == [
+    assert stdout_lines == [
         "store  wcf-0007  dev",
         "store  wcf-0010  human",
         "a      t-0001    reviewer",
     ]
-    assert stderr == []
+    assert stderr_lines == []
 
 
 def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
@@ -131,8 +131,8 @@ def test_turn_keeps_only_the_tasks_whose_turn_is_exactly_that() -> None:
     kept = filter_project_listing(store, "dev")
 
     assert kept.project_name == "store"
-    assert kept.summaries == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev")).summaries
-    assert len(store.summaries) == 4  # a new listing; the one given is left as it was
+    assert kept.task_turns == listing("store", ("tst-0001", "dev"), ("tst-0003", "dev")).task_turns
+    assert len(store.task_turns) == 4  # a new listing; the one given is left as it was
 
 
 def test_no_turn_keeps_the_listing_as_it_is() -> None:
@@ -142,13 +142,16 @@ def test_no_turn_keeps_the_listing_as_it_is() -> None:
 
 
 def test_a_project_without_tasks_is_a_line_outside_the_columns() -> None:
-    stdout, _ = listing_lines([listing("empty-and-long"), listing("store", ("wcf-0007", "dev"))], [])
+    stdout_lines, _ = listing_lines([listing("empty-and-long"), listing("store", ("wcf-0007", "dev"))], [])
 
-    assert stdout == ["empty-and-long  no open tasks", "store  wcf-0007  dev"]  # its name doesn't widen the column
+    assert stdout_lines == [
+        "empty-and-long  no open tasks",
+        "store  wcf-0007  dev",
+    ]  # its name doesn't widen the column
 
 
 def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
-    stdout, _ = listing_lines(
+    stdout_lines, _ = listing_lines(
         [
             filter_project_listing(listing("store", ("tst-0001", "dev")), "human"),
             filter_project_listing(listing("empty"), "human"),
@@ -156,13 +159,13 @@ def test_turn_with_open_tasks_but_none_matching_says_so() -> None:
         [],
     )
 
-    assert stdout == ["store  no open tasks with turn human", "empty  no open tasks"]
+    assert stdout_lines == ["store  no open tasks with turn human", "empty  no open tasks"]
 
 
 def test_a_failed_project_is_an_error_line_and_the_others_are_still_listed() -> None:
-    stdout, stderr = listing_lines([listing("store", ("tst-0001", "dev"))], [FoundryError("bad: boom")])
+    stdout_lines, stderr_lines = listing_lines([listing("store", ("tst-0001", "dev"))], [FoundryError("bad: boom")])
 
-    assert (stdout, stderr) == (["store  tst-0001  dev"], ["error: bad: boom"])
+    assert (stdout_lines, stderr_lines) == (["store  tst-0001  dev"], ["error: bad: boom"])
 
 
 def test_list_takes_optional_projects_and_a_turn() -> None:
@@ -197,7 +200,7 @@ def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, 
 
     listings, errors = read_listings_and_errors(projects, git_env)
 
-    assert listings == [ProjectListing("store", [TaskSummary(Task.as_open("tst-0000"), "dev")])]
+    assert listings == [ProjectListing("store", [TaskTurn(Task.as_open("tst-0000"), "dev")])]
     assert [type(error) for error in errors] == [FoundryError, FoundryError]
     assert str(errors[0]) == "bare: the repository has no agent-notes branch"
     assert str(errors[1]).startswith("gone: ") and "does not appear to be a git repo" in str(errors[1])
@@ -206,7 +209,7 @@ def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
     project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real command, in a foundry instance of its own: one project lists, the other can't be reached."""
+    """The real command, in a foundry of its own: one project lists, the other can't be reached."""
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
     foundry_root = tmp_path / "foundry"
     (foundry_root / "config").mkdir(parents=True)
@@ -303,7 +306,7 @@ def test_handoff_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
 def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real command, in a foundry instance of its own with one role, dev: its output and exit code, for a
+    """The real command, in a foundry of its own with one role, dev: its output and exit code, for a
     handoff and for each argument it refuses, which pushes nothing.
 
     The refusals are made on project gone, whose repository doesn't exist. An argument checked after the repository

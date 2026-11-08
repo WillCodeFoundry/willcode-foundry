@@ -32,7 +32,7 @@ def start(socket):
 # --- environment ------------------------------------------------------------
 
 
-def test_ssh_add_calls_only_carry_path_and_the_sandboxs_socket(host, make_agent, socket):
+def test_ssh_add_calls_only_carry_path_and_the_socket_of_the_sandbox(host, make_agent, socket):
     host.responses = {LIST: NO_KEYS}
 
     make_agent().ensure_running()
@@ -291,7 +291,7 @@ def test_an_ssh_agent_whose_socket_is_gone_is_pruned(host, tmp_path):
     assert host.killed == [101]
 
 
-def test_a_live_sandboxs_ssh_agent_is_kept_even_without_its_socket(host, tmp_path):
+def test_the_ssh_agent_of_a_live_sandbox_is_kept_even_without_its_socket(host, tmp_path):
     host.processes = [ssh_agent_process(101, tmp_path, "dev-p-live")]
 
     assert make_registry(host, tmp_path).prune(live_sandboxes={"dev-p-live"}) == []

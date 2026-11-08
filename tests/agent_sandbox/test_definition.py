@@ -2,14 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from foundry.agent_sandbox import SandboxDefinition, valid_sandbox_name
+from foundry.agent_sandbox import SandboxDefinition, is_valid_sandbox_name
 from foundry.agent_sandbox.errors import SandboxError
 
 DEFINITION = SandboxDefinition(
     name="dev-p-t1",
     workspace_dir=Path("/tmp/ws"),
     agent_kit_dir=Path("/f/agent-kit"),
-    variables={"AGENT_ROLE": "dev", "AGENT_TASK": "T1"},
+    variables={"AGENT_ROLE": "dev", "AGENT_TASK_ID": "T1"},
 )
 
 
@@ -30,7 +30,7 @@ def test_it_is_written_in_sbxs_schema(tmp_path: Path) -> None:
         "  readOnly: true\n"
         "env:\n"
         "  AGENT_ROLE: dev\n"
-        "  AGENT_TASK: T1\n"
+        "  AGENT_TASK_ID: T1\n"
     )
 
 
@@ -56,13 +56,13 @@ def test_a_missing_definition_says_so(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("name", ["dev-p-t1", "a.b+c", "x" * 64])
 def test_names_sbx_accepts(name: str) -> None:
-    assert valid_sandbox_name(name)
+    assert is_valid_sandbox_name(name)
 
 
 @pytest.mark.parametrize("name", ["", "dev p", "dev/p", "x" * 65])
 def test_names_sbx_or_the_ssh_agent_socket_refuse(name: str) -> None:
     """The name also names the sandbox's ssh-agent socket, whose path is limited."""
-    assert not valid_sandbox_name(name)
+    assert not is_valid_sandbox_name(name)
 
 
 def test_a_definition_refuses_a_name_sbx_wouldnt_accept() -> None:

@@ -1,4 +1,4 @@
-"""Where things are in a foundry instance. The only module that knows the instance layout.
+"""Where things are in a foundry. The only module that knows its layout.
 
 Every function takes the foundry root and returns a path; none of them
 checks that the path exists. ``find_foundry_root`` locates the root by
@@ -10,19 +10,19 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 
-CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
+_CONFIG_RELATIVE_PATH = Path("config") / "foundry.yaml"
 
 
 def find_foundry_root(start_dir: Path | None = None) -> Path:
     here = (start_dir or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
-        if (candidate / CONFIG_RELATIVE_PATH).is_file():
+        if (candidate / _CONFIG_RELATIVE_PATH).is_file():
             return candidate
-    raise FoundryError(f"not inside a foundry instance: no {CONFIG_RELATIVE_PATH} found from {here} upwards")
+    raise FoundryError(f"not inside a foundry: no {_CONFIG_RELATIVE_PATH} found from {here} upwards")
 
 
 def config_path(foundry_root: Path) -> Path:
-    return foundry_root / CONFIG_RELATIVE_PATH
+    return foundry_root / _CONFIG_RELATIVE_PATH
 
 
 def agent_kit_dir(foundry_root: Path) -> Path:

@@ -1,6 +1,6 @@
 """Git, the one way the foundry runs git: the runtime in the sandbox, and foundry on the host.
 
-``Git(folder, env)`` runs git in ``folder``, named with git's own ``-C`` (a missing folder is then a failure git
+``Git(work_dir, env)`` runs git in ``work_dir``, named with git's own ``-C`` (a missing dir is then a failure git
 reports, not an exception), or in the current directory, where git runs its hooks. ``env``, when given, is the
 whole environment git runs in. The ways to run a command, for what callers need of it:
 
@@ -32,7 +32,7 @@ class GitError(Exception):
 class Git:
     """git, acting on one repository, in one environment."""
 
-    folder: Path | None = None
+    work_dir: Path | None = None
     """The repository git acts on; None for the current directory."""
     env: Mapping[str, str] | None = None
     """The whole environment git runs in; None for this process's."""
@@ -63,7 +63,7 @@ class Git:
         return self._run(args, input=input, text=False, output=None).returncode == 0
 
     def describe(self, *args: str) -> str:
-        """The command as a person would type it, ``-C <folder>`` included, quoted with shlex.join."""
+        """The command as a person would type it, ``-C <work_dir>`` included, quoted with shlex.join."""
         return shlex.join(self._argv(args))
 
     def current_branch(self) -> str | None:
@@ -98,5 +98,5 @@ class Git:
             raise GitError("git not found in PATH") from None
 
     def _argv(self, args: Sequence[str]) -> list[str]:
-        folder = ["-C", str(self.folder)] if self.folder is not None else []
-        return ["git", *folder, *args]
+        dir_args = ["-C", str(self.work_dir)] if self.work_dir is not None else []
+        return ["git", *dir_args, *args]

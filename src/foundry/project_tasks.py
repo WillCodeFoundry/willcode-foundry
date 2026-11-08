@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from foundry.errors import FoundryError
-from foundry.project_clone import NotOnBranchError, ProjectClone
+from foundry.project_clone import PathNotOnBranchError, ProjectClone
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
@@ -42,7 +42,7 @@ class MissingTurnError(FoundryError):
 
 
 @dataclass(frozen=True)
-class TaskSummary:
+class TaskTurn:
     """A task and whose turn it is: the stripped text of its TURN_FILE."""
 
     task: Task
@@ -58,7 +58,7 @@ class ProjectTasks:
     @classmethod
     @contextmanager
     def in_scratch_clone(cls, url: str, env: Mapping[str, str]) -> Iterator["ProjectTasks"]:
-        """The tasks of the repository at ``url``, through a clone in a temporary folder removed afterwards.
+        """The tasks of the repository at ``url``, through a clone in a temporary dir removed afterwards.
 
         ``env`` is the environment git runs in, as for ProjectClone.
         """
@@ -85,19 +85,19 @@ class ProjectTasks:
             )
         return open_candidate if is_open else closed_candidate
 
-    def create_task(self, task_id: str, template: Mapping[str, str]) -> Task:
-        """Create the task's branch from the default branch, and copy ``template`` into its open notes dir.
+    def create_task(self, task_id: str, task_template: Mapping[str, str]) -> Task:
+        """Create the task's branch from the default branch, and copy ``task_template`` into its open notes dir.
 
         Both branches are pushed at once, so either both change or neither does. Refuses if the task exists, open
         or closed, or its branch does. NOTES_BRANCH is created for the first task, as an orphan branch: it shares
         no history with the code.
         """
         try:
-            found = self.get_task_by_id(task_id)
+            existing = self.get_task_by_id(task_id)
         except TaskNotFoundError:
             pass  # the id is free; get_task_by_id has checked out NOTES_BRANCH, or started it with no history
         else:
-            raise FoundryError(f"task {found.id} already exists: {NOTES_BRANCH} has {found.task_notes_dir}/")
+            raise FoundryError(f"task {existing.id} already exists: {NOTES_BRANCH} has {existing.task_notes_dir}/")
         clone = self._clone
         new_task = Task.as_open(task_id)
         default_branch = clone.default_branch()
@@ -107,7 +107,7 @@ class ProjectTasks:
         if default_branch is None or default_branch not in branches:  # a repository with no commits yet
             raise FoundryError(f"the repository has no commits to branch {new_task.branch} from")
 
-        clone.write({f"{new_task.task_notes_dir}/{name}": text for name, text in template.items()})
+        clone.write({f"{new_task.task_notes_dir}/{name}": text for name, text in task_template.items()})
         clone.commit(f"Add task {new_task.id}")
         clone.push_atomic(from_remote={new_task.branch: default_branch}, from_local=[NOTES_BRANCH])
         return new_task
@@ -140,7 +140,7 @@ class ProjectTasks:
         task = self.get_task_by_id(task_id)  # it fetched NOTES_BRANCH, if the task exists
         return self._read_fetched_turn(task)
 
-    def handoff(self, task_id: str, turn: str, *, note: str | None) -> None:
+    def hand_off(self, task_id: str, turn: str, *, note: str | None) -> None:
         """Hand the open task off to ``turn``, in one commit pushed to NOTES_BRANCH.
 
         Writes ``turn`` to the task's TURN_FILE, and an entry saying so to its LOG_FILE, with ``note`` when it isn't
@@ -167,7 +167,7 @@ class ProjectTasks:
         )
         self._commit_and_push(f"Handoff of task {task.id} to {turn}")
 
-    def list_open_task_summaries(self) -> list[TaskSummary]:
+    def fetch_open_task_turns(self) -> list[TaskTurn]:
         """Every open task with whose turn it is, in id order; closed tasks and stray files are left out.
 
         Fetches NOTES_BRANCH once, then reads git objects. FoundryError when it isn't there, when a dir under
@@ -176,11 +176,11 @@ class ProjectTasks:
         clone = self._clone
         clone.fetch_branch(NOTES_BRANCH)
         try:
-            names = clone.fetched_list_dir(NOTES_BRANCH, OPEN_DIR)
-        except NotOnBranchError:
+            names = clone.fetched_subdir_names(NOTES_BRANCH, OPEN_DIR)
+        except PathNotOnBranchError:
             return []  # git keeps no empty dir, so OPEN_DIR is gone once its last task closed
         tasks = [_open_task_for_dir(name) for name in sorted(names)]
-        return [TaskSummary(task, self._read_fetched_turn(task)) for task in tasks]
+        return [TaskTurn(task, self._read_fetched_turn(task)) for task in tasks]
 
     def _read_fetched_turn(self, task: Task) -> str:
         """``task``'s turn: its TURN_FILE on NOTES_BRANCH as last fetched, stripped.
@@ -188,8 +188,8 @@ class ProjectTasks:
         MissingTurnError when the file is missing, not a file, or holds only blanks.
         """
         try:
-            turn = self._clone.fetched_read(NOTES_BRANCH, task.turn_file).strip()
-        except NotOnBranchError:
+            turn = self._clone.fetched_text(NOTES_BRANCH, task.turn_file).strip()
+        except PathNotOnBranchError:
             turn = ""
         if not turn:
             raise MissingTurnError(task)
@@ -199,8 +199,8 @@ class ProjectTasks:
         """``task``'s LOG_FILE on NOTES_BRANCH as last fetched; FoundryError, naming the file, when it is missing or
         not a file."""
         try:
-            return self._clone.fetched_read(NOTES_BRANCH, task.log_file)
-        except NotOnBranchError:
+            return self._clone.fetched_text(NOTES_BRANCH, task.log_file)
+        except PathNotOnBranchError:
             raise FoundryError(
                 f"task {task.id} has no {LOG_FILE}: {NOTES_BRANCH} has no file {task.log_file}"
             ) from None

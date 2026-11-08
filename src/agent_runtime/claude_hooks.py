@@ -1,7 +1,7 @@
 """Claude Code's hooks, as managed settings run them: the tool call or event as JSON on stdin.
 
 ``guard_bash`` (PreToolUse, on Bash) refuses a command that would skip or reconfigure the git hooks.
-``session_check`` (Stop) refuses to end the session while either checkout has uncommitted or unpushed work,
+``session_check`` (Stop) refuses to let the agent stop while either checkout has uncommitted or unpushed work,
 or can't be checked.
 Both are guardrails against mistakes, not boundaries: see docs/security-model.md. Both trust the
 environment Claude Code gives them, which a settings file the agent writes can change: session-check reads the
@@ -18,13 +18,13 @@ from typing import TextIO
 from agent_runtime import contract
 from agent_runtime.git import Git, GitError
 
-_BLOCK = 2
+_BLOCK_EXIT_CODE = 2
 """Claude Code: a PreToolUse hook exiting 2 blocks the tool call and shows its stderr to the agent."""
 _NO_VERIFY = re.compile(r"(?<![\w-])--no-verify(?![\w-])")
 _QUOTING = re.compile(r"['\"\\]")
 _SHELL_PUNCTUATION = "()$`;&|<>{}"
-_BYPASS = "git hooks must not be bypassed (--no-verify)"
-_RECONFIGURE = "git hook configuration must not be changed"
+_BYPASS_REASON = "git hooks must not be bypassed (--no-verify)"
+_RECONFIGURE_REASON = "git hook configuration must not be changed"
 
 
 def refusal_reason(command: str) -> str | None:
@@ -40,19 +40,19 @@ def refusal_reason(command: str) -> str | None:
     try:
         words = [word.strip(_SHELL_PUNCTUATION) for word in shlex.split(command)]
     except ValueError:  # unbalanced quotes, an apostrophe in prose say: scan the whole text, unquoted
-        return _scan(_QUOTING.sub("", command))
+        return _refusal_reason_in_text(_QUOTING.sub("", command))
     if "--no-verify" in words:
-        return _BYPASS
+        return _BYPASS_REASON
     if any("core.hookspath" in word.lower() for word in words):
-        return _RECONFIGURE
+        return _RECONFIGURE_REASON
     return None
 
 
-def _scan(text: str) -> str | None:
+def _refusal_reason_in_text(text: str) -> str | None:
     if _NO_VERIFY.search(text):
-        return _BYPASS
+        return _BYPASS_REASON
     if "core.hookspath" in text.lower():
-        return _RECONFIGURE
+        return _RECONFIGURE_REASON
     return None
 
 
@@ -72,27 +72,27 @@ def guard_bash(stdin: TextIO | None = None, stderr: TextIO | None = None) -> int
         '  as "When to stop and ask" in AGENTS.md says.',
         file=stderr or sys.stderr,
     )
-    return _BLOCK
+    return _BLOCK_EXIT_CODE
 
 
 def session_check(
-    stdin: TextIO | None = None, stdout: TextIO | None = None, session: contract.Environ | None = None
+    stdin: TextIO | None = None, stdout: TextIO | None = None, variables: contract.SessionVariables | None = None
 ) -> int:
     """Block the stop, with the reason as the agent's next instruction, while work is unsaved.
 
-    The rule: a session cannot end with uncommitted or unpushed changes.
+    The rule: an agent run cannot end with uncommitted or unpushed changes.
     """
-    session = session or contract.read_environ()
+    variables = variables or contract.read_session_variables()
     if _stop_hook_active(stdin or sys.stdin):
         return 0  # already looping on this hook: let the stop through rather than spin
     problems = [
-        *_unsaved_work(session.agent_project_dir, session.agent_task_branch, "code checkout"),
-        *_unsaved_work(session.agent_notes_dir, session.agent_notes_branch, "notes checkout"),
+        *_unsaved_work(variables.agent_code_checkout_dir, variables.agent_task_branch, "code checkout"),
+        *_unsaved_work(variables.agent_notes_checkout_dir, variables.agent_notes_branch, "notes checkout"),
     ]
     if not problems:
         return 0
     reason = (
-        f"Cannot end the session yet: {'; '.join(problems)}. "
+        f"Cannot stop yet: {'; '.join(problems)}. "
         'Commit and push that work (see "Git rules" in AGENTS.md), then finish.'
     )
     print(json.dumps({"decision": "block", "reason": reason}), file=stdout or sys.stdout)
@@ -118,25 +118,25 @@ def _unsaved_work(checkout: Path, branch: str, label: str) -> list[str]:
     blocked rather than let through unchecked."""
     git = Git(checkout)
     try:
-        return [*_uncommitted(git, label), *_unpushed(git, branch, label)]
+        return [*_uncommitted_problems(git, label), *_unpushed_problems(git, branch, label)]
     except (_CantCheck, GitError) as error:
         return [f"{label} can't be checked: {error}"]
 
 
-def _uncommitted(git: Git, label: str) -> list[str]:
-    return [f"{label} has uncommitted changes"] if _checked(git, "status", "--porcelain").strip() else []
+def _uncommitted_problems(git: Git, label: str) -> list[str]:
+    return [f"{label} has uncommitted changes"] if _checked_output(git, "status", "--porcelain").strip() else []
 
 
-def _unpushed(git: Git, branch: str, label: str) -> list[str]:
+def _unpushed_problems(git: Git, branch: str, label: str) -> list[str]:
     """Commits origin/``branch`` lacks: on the branch, and at HEAD, which a detached HEAD moves off it."""
     git.run_captured("fetch", "-q", "origin", branch)  # offline, the last fetched state is all there is
     for rev in (f"refs/heads/{branch}", "HEAD"):
-        if int(_checked(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0:
+        if int(_checked_output(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0:
             return [f"{label} has commits not pushed to origin/{branch}"]
     return []
 
 
-def _checked(git: Git, *args: str) -> str:
+def _checked_output(git: Git, *args: str) -> str:
     """The command's output; a failure raises _CantCheck naming it, with git's first line."""
     result = git.run_captured(*args)
     if result.returncode != 0:

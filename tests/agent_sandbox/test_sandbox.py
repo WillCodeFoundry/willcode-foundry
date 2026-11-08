@@ -30,7 +30,7 @@ def exec_in(definition_dir: Path, *command: str) -> tuple[str, ...]:
     return ("sbx", "env", "exec", str(definition_dir), "--", *command)
 
 
-def test_every_call_carries_the_sandboxs_socket_never_the_personal_ssh_agent(
+def test_every_call_carries_the_socket_of_the_sandbox_never_the_personal_ssh_agent(
     host, sbx_cli: SbxCli, definition_dir: Path
 ) -> None:
     host.responses = defaultdict(str)  # every command succeeds
@@ -145,7 +145,9 @@ def test_commands_run_inside_with_the_definitions_variables(host, sbx_cli: SbxCl
     assert sbx_cli.run(("/k/bin/session-init",)).stdout == "ok"
 
 
-def test_attaching_hands_over_to_sbx_run_by_name_with_the_opening_prompt_and_the_sandboxs_socket(host, sbx_cli: SbxCli):
+def test_attaching_hands_over_to_sbx_run_by_name_with_the_opening_prompt_and_the_socket_of_the_sandbox(
+    host, sbx_cli: SbxCli
+):
     with pytest.raises(host.ExecCalled) as handed_over:
         sbx_cli.attach(None)
     assert handed_over.value.command == ("sbx", "run", "--name", "n", "--", "Start your turn, as AGENTS.md says.")
@@ -185,7 +187,7 @@ def test_a_failing_sbx_ls_is_reported(host) -> None:
         list_live_sandboxes(host)
 
 
-def test_sbx_ls_runs_in_the_hosts_own_environment(host) -> None:
+def test_sbx_ls_runs_in_the_host_environment(host) -> None:
     host.environ_value = {"PATH": "/bin", "SSH_AUTH_SOCK": "/personal.sock"}
     host.responses = {SBX_LS: SBX_LS_JSON}
 

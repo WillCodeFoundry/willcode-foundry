@@ -32,6 +32,6 @@ def runtime_command(agent_kit_dir: Path, *args: str) -> tuple[str, ...]:
     The tests that run a command exactly as written (managed settings, the git hooks' stubs) use the
     template's interpreter, /usr/bin/python3, as the sandbox does.
     """
-    python, *rest = AgentKit(agent_kit_dir).command(*args)
+    python, *rest = AgentKit(agent_kit_dir).runtime_command(*args)
     assert python == PYTHON
     return (sys.executable, *rest)

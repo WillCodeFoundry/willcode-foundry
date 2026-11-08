@@ -43,7 +43,7 @@ def repo_slug_from_url(url: str) -> str:
     return f"{match['owner']}/{match['repo']}"
 
 
-def run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedProcess[str]:
+def _run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(list(command), check=False, input=stdin, capture_output=True, text=True)
     except FileNotFoundError:
@@ -69,7 +69,7 @@ class GitHub(Protocol):
 class GhCli:
     """GitHub through `gh api`, signed in as the owner. ``runner`` is the seam for this class's own tests."""
 
-    def __init__(self, runner: Runner = run_gh) -> None:
+    def __init__(self, runner: Runner = _run_gh) -> None:
         self._runner = runner
 
     def _api(self, method: str, endpoint: str, body: object = None) -> Any:

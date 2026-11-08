@@ -99,15 +99,15 @@ class Task:
         return f"{self.task_notes_dir}/{LOG_FILE}"
 
 
-def load_template(template_dir: Path) -> dict[str, str]:
-    """Every file directly in ``template_dir``, by name: what a new task's notes dir starts with.
+def load_task_template(task_template_dir: Path) -> dict[str, str]:
+    """Every file directly in ``task_template_dir``, by name: what a new task's notes dir starts with.
 
     Refuses a template without a TASK_FILE, since every task needs one.
     """
     try:
-        template = {path.name: path.read_text() for path in sorted(template_dir.iterdir()) if path.is_file()}
+        task_template = {path.name: path.read_text() for path in sorted(task_template_dir.iterdir()) if path.is_file()}
     except FileNotFoundError:
-        raise FoundryError(f"{template_dir} is missing") from None
-    if TASK_FILE not in template:
-        raise FoundryError(f"{template_dir} has no {TASK_FILE}; every task needs one")
-    return template
+        raise FoundryError(f"{task_template_dir} is missing") from None
+    if TASK_FILE not in task_template:
+        raise FoundryError(f"{task_template_dir} has no {TASK_FILE}; every task needs one")
+    return task_template

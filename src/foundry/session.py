@@ -20,7 +20,7 @@ from typing import Final
 from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit
 from foundry import paths
-from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, valid_sandbox_name
+from foundry.agent_sandbox import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, is_valid_sandbox_name
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
@@ -28,7 +28,7 @@ from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
 _UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
 """What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
 
-SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
+_SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
 """Inside the sandbox: where session-setup clones the project. Nothing on the host corresponds to it."""
 
 
@@ -46,23 +46,23 @@ class SessionVariables:
     repo_url: str
     agent_kit_dir: Path
     """Where the agent kit is mounted, read-only: the same path inside the sandbox as on the host."""
-    project_dir: str
+    code_checkout_dir: str
     """The code checkout, inside the sandbox; the notes checkout sits beside it."""
 
     @property
-    def notes_dir(self) -> str:
+    def notes_checkout_dir(self) -> str:
         """The notes checkout, inside the sandbox."""
-        return f"{self.project_dir}-notes"
+        return f"{self.code_checkout_dir}-notes"
 
     def to_env(self) -> dict[str, str]:
         """The variables, by name, as the sandbox definition carries them."""
         return {
             contract.ROLE: self.role_name,
-            contract.TASK: self.task.id,
+            contract.TASK_ID: self.task.id,
             contract.KIT_DIR: str(self.agent_kit_dir),
             contract.REPO_URL: self.repo_url,
-            contract.PROJECT_DIR: self.project_dir,
-            contract.NOTES_DIR: self.notes_dir,
+            contract.CODE_CHECKOUT_DIR: self.code_checkout_dir,
+            contract.NOTES_CHECKOUT_DIR: self.notes_checkout_dir,
             contract.TASK_BRANCH: self.task.branch,
             contract.NOTES_BRANCH: NOTES_BRANCH,
             contract.NOTES_ROOT: NOTES_ROOT,
@@ -83,10 +83,10 @@ class SessionVariables:
             raise FoundryError(f"missing {', '.join(missing)}")
         variables = cls(
             role_name=env[contract.ROLE],
-            task=Task.as_open(env[contract.TASK]),
+            task=Task.as_open(env[contract.TASK_ID]),
             repo_url=env[contract.REPO_URL],
             agent_kit_dir=Path(env[contract.KIT_DIR]),
-            project_dir=env[contract.PROJECT_DIR],
+            code_checkout_dir=env[contract.CODE_CHECKOUT_DIR],
         )
         differing = [
             f"{name}={env[name]!r}, now {value!r}" for name, value in variables.to_env().items() if env[name] != value
@@ -114,7 +114,7 @@ class Session:
     @property
     def init_command(self) -> tuple[str, ...]:
         """The runtime's session-init, from the agent kit, which open_or_create checked is this foundry's."""
-        return AgentKit(self.definition.agent_kit_dir).command("session-init")
+        return AgentKit(self.definition.agent_kit_dir).runtime_command("session-init")
 
 
 def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Task) -> Session:
@@ -130,7 +130,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     wanted = _wanted_variables(foundry_root, project, role, task)
     created = not (session_dir / SandboxDefinition.FILE_NAME).is_file()
     if created:
-        _create(session_dir, _definition(foundry_root, sandbox_name, wanted))
+        _create_session_dir(session_dir, _definition(foundry_root, sandbox_name, wanted))
     definition = SandboxDefinition.read(session_dir)
     recorded = _recorded_variables(definition)
     _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
@@ -145,7 +145,7 @@ def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Ta
         task=task,
         repo_url=project.url,
         agent_kit_dir=paths.agent_kit_dir(foundry_root),
-        project_dir=f"{SANDBOX_WORK_DIR}/{_slug(project.name)}",
+        code_checkout_dir=f"{_SANDBOX_WORK_DIR}/{_slug(project.name)}",
     )
 
 
@@ -165,14 +165,14 @@ def _slug(text: str) -> str:
 def _sandbox_name(*, role_name: str, project_name: str, task: Task) -> str:
     """Stable per (role, project, task), so a rerun re-attaches: dev-tkt-store-wcf-0042."""
     name = "-".join(_slug(part) for part in (role_name, project_name, task.id))
-    if not valid_sandbox_name(name):
+    if not is_valid_sandbox_name(name):
         raise FoundryError(
             f"sandbox name {name!r} is over {MAX_SANDBOX_NAME_LENGTH} characters; shorten the project or task name"
         )
     return name
 
 
-def _create(session_dir: Path, definition: SandboxDefinition) -> None:
+def _create_session_dir(session_dir: Path, definition: SandboxDefinition) -> None:
     """Create the session directory with its empty workspace, then the sandbox definition.
 
     The definition is written last, so a session with one is complete. A

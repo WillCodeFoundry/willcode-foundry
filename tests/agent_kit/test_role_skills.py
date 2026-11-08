@@ -11,14 +11,14 @@ SKILL_LINKS = sorted(AGENT_KIT.glob("roles/*/skills/*"))
 
 
 @pytest.mark.parametrize("link", SKILL_LINKS, ids=lambda path: f"{path.parts[-3]}/{path.name}")
-def test_each_link_is_a_relative_link_to_one_of_the_kits_skills(link: Path) -> None:
+def test_each_link_is_a_relative_link_to_a_skill_in_the_kit(link: Path) -> None:
     target = link.readlink() if link.is_symlink() else None
     assert target == Path("../../../skills") / link.name, f"{link} must link to ../../../skills/{link.name}"
     assert (link / "SKILL.md").is_file(), f"{link} points at no skill"
 
 
 @pytest.mark.parametrize("skills_dir", sorted(AGENT_KIT.glob("roles/*/skills")), ids=lambda path: path.parent.name)
-def test_every_skill_a_roles_skills_call_is_one_the_role_has(skills_dir: Path) -> None:
+def test_every_skill_called_by_a_role_skill_is_one_the_role_has(skills_dir: Path) -> None:
     role_skills = {link.name for link in skills_dir.iterdir()}
     missing = {
         (name, called)

@@ -31,7 +31,7 @@ _ALL_OTHER_JOBS = "<all other jobs>"
 class RepoPolicy:
     rulesets: list[dict[str, Any]]
     codeowners: str
-    ci_gate: dict[str, Any]
+    ci_gate_section: dict[str, Any]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -64,11 +64,11 @@ def load(policy_dir: Path) -> RepoPolicy:
 
     ci_gate_path = policy_dir / "ci-gate.yml"
     try:
-        ci_gate = _ci_gate_section(yaml_io.load(ci_gate_path))
+        ci_gate_section = _ci_gate_section(yaml_io.load(ci_gate_path))
     except (KeyError, TypeError, AttributeError) as error:
         raise FoundryError(f"{ci_gate_path}: not a workflow fragment foundry can read ({error!r})") from None
 
-    return RepoPolicy(rulesets_document["rulesets"], _read_text(policy_dir / "CODEOWNERS"), ci_gate)
+    return RepoPolicy(rulesets_document["rulesets"], _read_text(policy_dir / "CODEOWNERS"), ci_gate_section)
 
 
 def _read_text(file_path: Path) -> str:
@@ -81,22 +81,22 @@ def _read_text(file_path: Path) -> str:
 def _deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
     """How the repository differs from the policy; empty when it conforms."""
     actual_rulesets = github.rulesets(repo_slug)
-    found = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
-    found.append(
+    comparisons = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
+    comparisons.append(
         _compare(
             CODEOWNERS_PATH,
             actual=github.file_text(repo_slug=repo_slug, file_path=CODEOWNERS_PATH),
             expected=policy.codeowners,
         )
     )
-    found.append(
+    comparisons.append(
         _compare(
             CI_WORKFLOW_PATH,
-            actual=_project_ci_gate(github.file_text(repo_slug=repo_slug, file_path=CI_WORKFLOW_PATH)),
-            expected=policy.ci_gate,
+            actual=_project_ci_gate_section(github.file_text(repo_slug=repo_slug, file_path=CI_WORKFLOW_PATH)),
+            expected=policy.ci_gate_section,
         )
     )
-    return [deviation for deviation in found if deviation is not None]
+    return [deviation for deviation in comparisons if deviation is not None]
 
 
 def _apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[RulesetChange]:
@@ -161,7 +161,7 @@ def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -
     )
 
 
-def _project_ci_gate(workflow_text: str | None) -> dict[str, Any] | None:
+def _project_ci_gate_section(workflow_text: str | None) -> dict[str, Any] | None:
     """A project's ci.yml is what's being checked, so a broken one is a deviation, not an error."""
     try:
         workflow = yaml.safe_load(workflow_text) if workflow_text is not None else None

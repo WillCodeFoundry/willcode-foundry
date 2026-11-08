@@ -116,8 +116,8 @@ def _ensure_private_dir(private_dir: Path, uid: int) -> None:
     """
     try:
         private_dir.mkdir(mode=0o700, exist_ok=True)
-        info = os.lstat(private_dir)
-        ours = stat.S_ISDIR(info.st_mode) and info.st_uid == uid
+        dir_stat = os.lstat(private_dir)
+        ours = stat.S_ISDIR(dir_stat.st_mode) and dir_stat.st_uid == uid
     except FileExistsError:  # a file, or a dangling symlink
         ours = False
     if not ours:
@@ -183,8 +183,8 @@ class SshAgent:
 
     def _ssh_add(self, *args: str) -> subprocess.CompletedProcess[str]:
         # ssh-add only needs to find itself and reach the right agent - nothing else.
-        environ = self._host.environ()
-        env = {"SSH_AUTH_SOCK": str(self.socket_path)}
-        if "PATH" in environ:
-            env["PATH"] = environ["PATH"]
-        return self._host.run(("ssh-add", *args), env=env)
+        host_env = self._host.environ()
+        ssh_add_env = {"SSH_AUTH_SOCK": str(self.socket_path)}
+        if "PATH" in host_env:
+            ssh_add_env["PATH"] = host_env["PATH"]
+        return self._host.run(("ssh-add", *args), env=ssh_add_env)

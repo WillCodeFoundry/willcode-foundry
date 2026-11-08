@@ -25,10 +25,10 @@ class Checkouts:
         self.container, self.env = sandbox()
         launched = self.container.session_init(self.env)
         assert launched.returncode == 0, launched.stdout + launched.stderr
-        self.code, self.notes = self.env["AGENT_PROJECT_DIR"], self.env["AGENT_NOTES_DIR"]
+        self.code, self.notes = self.env["AGENT_CODE_CHECKOUT_DIR"], self.env["AGENT_NOTES_CHECKOUT_DIR"]
 
     def git(self, cwd: str, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        """git as the agent, with the session's variables; signing is off, as the roles' keys aren't here."""
+        """git as the agent, with the session variables; signing is off, as the roles' keys aren't here."""
         return self.container.run("agent", "git", "-C", cwd, *args, env={**self.env, **UNSIGNED, **(env or {})})
 
     def change(self, cwd: str, name: str) -> None:
@@ -68,7 +68,7 @@ def test_notes_on_the_task_branch_are_refused(checkouts: Checkouts) -> None:
     assert checkouts.commits(checkouts.code) == before
 
 
-def test_only_the_tasks_own_branch_and_the_notes_branch_can_be_pushed(checkouts: Checkouts) -> None:
+def test_only_the_task_branch_and_the_notes_branch_can_be_pushed(checkouts: Checkouts) -> None:
     checkouts.change(checkouts.code, "hello.sh")
     assert checkouts.git(checkouts.code, "commit", "-q", "-m", "feat: hello").returncode == 0
     checkouts.change(checkouts.notes, f"{TASK.task_notes_dir}/PROGRESS.md")
