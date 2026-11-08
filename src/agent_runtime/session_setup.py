@@ -40,11 +40,11 @@ class _Checkout:
         return Git(self.dir)
 
 
-def set_up(variables: contract.SessionVariables | None = None, home: Path | None = None) -> None:
-    """Set the sandbox up, the agent's instructions under ``home`` (the user's by default). Raises SetupRefused
-    when it can't."""
+def set_up(variables: contract.SessionVariables | None = None) -> None:
+    """Set the sandbox up: the git identity, both checkouts, and the agent's instructions and skills under ~/.claude.
+    Raises SetupRefused when it can't."""
     variables = variables or contract.read_session_variables()
-    home = home or Path.home()
+    home = Path.home()
     agent_kit = AgentKit(variables.agent_kit_dir)
     role_dir = agent_kit.role_dir(variables.agent_role)
     # The rule foundry's config applies on the host, applied again here, before anything changes.
@@ -53,12 +53,6 @@ def set_up(variables: contract.SessionVariables | None = None, home: Path | None
     _set_identity(variables, agent_kit, role_dir)
     _prepare_checkouts(variables, agent_kit)
     task_md_path = variables.agent_notes_checkout_dir / variables.agent_task_file
-    # Every task has a TASK.md: foundry task create refuses a template without one.
-    if not task_md_path.is_file():
-        raise SetupRefused(
-            f"{variables.agent_notes_branch} has no {variables.agent_task_file}; push the task's TASK.md there, "
-            "then run again."
-        )
     _write_instructions(home, agent_kit, role_dir, task_md_path)
     _link_skills(home, role_dir)
     print("session-setup: checkouts ready", flush=True)
@@ -68,12 +62,12 @@ def set_up(variables: contract.SessionVariables | None = None, home: Path | None
 
 def _set_identity(variables: contract.SessionVariables, agent_kit: AgentKit, role_dir: RoleDir) -> None:
     """Global, so both checkouts share it. Name, email, signing key and shared behaviour all come from the
-    role's gitconfig and what it includes."""
+    role's gitconfig and what it includes. A role that signs without a key is refused before anything is written."""
+    if _role_config(role_dir, "commit.gpgsign") == "true" and not _role_config(role_dir, "user.signingkey"):
+        raise SetupRefused(f"{variables.agent_role} signs commits but {role_dir.gitconfig} sets no user.signingkey")
     _run_or_refuse(Git(), "config", "--global", "include.path", str(role_dir.gitconfig))
     # Lets agents verify commits signed by any role, or by you.
     _run_or_refuse(Git(), "config", "--global", "gpg.ssh.allowedSignersFile", str(agent_kit.allowed_signers))
-    if _git_config("commit.gpgsign") == "true" and not _git_config("user.signingkey"):
-        raise SetupRefused(f"{variables.agent_role} signs commits but {role_dir.gitconfig} sets no user.signingkey")
 
 
 def _prepare_checkouts(variables: contract.SessionVariables, agent_kit: AgentKit) -> None:
@@ -106,7 +100,7 @@ def _clone_if_missing(variables: contract.SessionVariables) -> Git:
 
 def _require_task_on_origin(project_sandbox_clone: Git, variables: contract.SessionVariables) -> None:
     """The task must already exist on origin, created with its branch and a TASK.md on the notes branch before
-    any agent runs. Say so plainly rather than let git fail."""
+    any agent runs. Say so plainly rather than let git fail, and before any checkout moves."""
     missing = [
         f"branch {branch}"
         for branch in (variables.agent_task_branch, variables.agent_notes_branch)
@@ -118,6 +112,13 @@ def _require_task_on_origin(project_sandbox_clone: Git, variables: contract.Sess
             f"{' '.join(missing)}.\n"
             f"  Create it with: foundry task create <project> {variables.agent_task_id}, "
             "write its TASK.md, then run again."
+        )
+    # Every task has a TASK.md: foundry task create refuses a template without one.
+    task_md = f"refs/remotes/origin/{variables.agent_notes_branch}:{variables.agent_task_file}"
+    if not project_sandbox_clone.succeeds("cat-file", "-e", task_md):
+        raise SetupRefused(
+            f"{variables.agent_notes_branch} has no {variables.agent_task_file}; push the task's TASK.md there, "
+            "then run again."
         )
 
 
@@ -270,5 +271,6 @@ def _run_or_refuse(git: Git, *args: str) -> None:
         raise SetupRefused(f"`{git.describe(*args)}` failed; see git's message above")
 
 
-def _git_config(key: str) -> str:
-    return Git().run_captured("config", "--get", key).stdout.strip()
+def _role_config(role_dir: RoleDir, key: str) -> str:
+    """``key`` as the role's gitconfig and what it includes set it; empty when they don't."""
+    return Git().run_captured("config", "--file", str(role_dir.gitconfig), "--includes", "--get", key).stdout.strip()
