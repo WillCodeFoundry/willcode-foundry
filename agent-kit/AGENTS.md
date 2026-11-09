@@ -69,8 +69,8 @@ Each file but `TURN` has one writer, or only grows:
 
 | File | Written by | What it holds |
 |---|---|---|
-| `TASK.md` | the planner, once the human approves | The goal and acceptance criteria. Every other role: **never edit it.** |
-| `DESIGN.md` | the architect, once the human approves | How the task fits the code's structure, when it needs that. Every other role: **never edit it**, and follow it as you follow `TASK.md`. |
+| `TASK.md` | the planner, once the human approves | What the task does: its goal, acceptance criteria (`AC1`, …) and what it leaves alone (`OS1`, …). Never how. Every other role: **never edit it.** |
+| `PLAN.md` | the dev, approved before any code | How the dev will build it: the approach, steps, names, errors, a test for each criterion, and the docs to update. Every other role: **never edit it**. |
 | `REVIEW.md` | the reviewer | Review rounds and their findings, `R1`, `R2`, … |
 | `LOG.md` | every role, appending only | Everything roles tell each other: progress, questions, answers, outcomes. |
 | `LEARNINGS.md` | every role, appending only | What you found out and decided. |
@@ -123,14 +123,31 @@ Each `LEARNINGS.md` entry is short, dated and tagged by topic:
 ```markdown
 - 2026-10-20 [testing] — Tests need `PYTHONPATH=.` when run from a subdirectory;
   `python3 -m unittest` from the repo root works without it.
-- 2026-10-20 [decision] — Chose argparse over manual sys.argv parsing: handles
-  `--help` and combined flags for free. Rejected click (not stdlib).
 ```
 
-Record decisions with their reasons and rejected alternatives, dead ends you
-tried, and anything surprising about the codebase or tools. Do not record
+Record dead ends you tried, and anything surprising about the codebase or
+tools. A decision doesn't go here: it goes to its home, below. Do not record
 things already in the project's `AGENTS.md` or your role's `memory/`. Write
 entries as you go, not at the end.
+
+### Where rules and decisions live
+
+Every rule has one home and an id, and a decision cites the rule it follows
+with `Because: <id>`:
+
+| Rule or decision | Home | Id |
+|---|---|---|
+| What this task must do, or leaves alone | `TASK.md` | `AC3`, `OS2` |
+| How this task is built | `PLAN.md` | |
+| A code rule for the whole project | the design rules in `ARCHITECTURE.md` | `DR8` |
+| A decision that outlives the task | `docs/adr/` | `ADR-0015` |
+| A term | `GLOSSARY.md` | |
+| How agents work, in every project | the `agent-kit` directory | |
+
+Other files link to a rule's home rather than restate it. When the human
+states a rule in your session, ask its home's owner to write it down, as a
+question in `LOG.md`: the architect for a design rule or an ADR, the planner
+for `TASK.md`.
 
 **TBD:** the fixed list of tags.
 
@@ -149,23 +166,28 @@ Your turn ends with one **outcome**, from the list in your `ROLE.md`, or
    role in `TURN`, alone on one line.
 3. Commit and push the notes checkout.
 
-Every task is a **feature** for now: it starts at the planner and ends with a
-pull request the human merges.
+Every task starts at the planner and ends with a pull request the human
+merges: planner, dev (its `PLAN.md`), reviewer (a plan round), dev, reviewer,
+and back to the dev for the pull request.
 
 | Role | Outcome | Next |
 |---|---|---|
 | planner | `planned` | dev |
-| planner | `needs-design` | architect |
-| architect | `designed` | dev |
-| architect | `task-question` | planner |
+| dev | `plan-ready` | reviewer |
 | dev | `ready-for-review` | reviewer |
 | dev | `pr-ready` | human |
 | dev | `task-question` | planner |
-| dev | `design-question` | architect |
+| reviewer | `plan-approved` | dev |
+| reviewer | `plan-changes` | dev |
 | reviewer | `design-question` | architect |
 | reviewer | `changes-needed` | dev |
 | reviewer | `approved` | dev |
+| reviewer | `task-question` | planner |
 | reviewer | `no-agreement` | human |
+| architect | `plan-approved` | dev |
+| architect | `plan-changes` | dev |
+| architect | `design-answered` | dev |
+| architect | `task-question` | planner |
 | any role | `stuck` | human |
 
 Your first message is foundry's opening prompt, sent when it attaches you. The
@@ -173,7 +195,7 @@ human may type the next.
 
 ### Start
 
-1. Read `TASK.md`, and `DESIGN.md` if the task has one.
+1. Read `TASK.md`, and `PLAN.md` if the task has one.
 2. Read `LOG.md` from the end, `REVIEW.md`'s latest round, and `LEARNINGS.md`.
 3. Read the project's `AGENTS.md`, your `ROLE.md`, and the files in your
    role's `memory/` that relate to the task. If the project has them, read its
@@ -187,7 +209,8 @@ human may type the next.
    Deal with those first. Then continue from your role's latest `Next`, or
    start your main work.
 5. If starting fresh, append a short plan as a `progress` entry's `Next`,
-   then commit and push it before writing code.
+   then commit and push it before writing code. The dev's plan is its
+   `PLAN.md`, as its `ROLE.md` says.
 
 ### Work in small steps
 
@@ -221,7 +244,8 @@ The task is done when every acceptance criterion in `TASK.md` is met. Then:
    needs: `git diff --stat origin/HEAD...HEAD`
 3. Add any final learnings.
 4. End your turn, as "Taking turns" says, with an entry whose `Done` names the
-   criteria you met. Tick them there, not in `TASK.md`.
+   criteria you met, each with the test that shows it. Tick them there, not
+   in `TASK.md`.
 5. Tell the human what changed and anything they should check.
 
 If you run out of turns or time, push a `progress` entry whose `Done` and
@@ -294,17 +318,23 @@ When your `ROLE.md` lists `task-question`, ask the planner, with
 The planner settles these with the human, in its session. The reviewer raises
 them as findings.
 
-When your `ROLE.md` lists `design-question`, ask the architect, with
-`Asks <id> → architect` and that outcome, when:
+When the human decides a change to `TASK.md` in your session, log it as a
+question to the planner with its answer, `Asks <id> → planner: <the change>`
+then `Answers <id>: <the decision> (the human)`, and keep working. The planner
+folds it into `TASK.md` before the next review round. So before the dev hands
+the task to review, and before the reviewer writes a round, each checks
+`LOG.md` for a change the human decided, in any role's session, that
+`TASK.md` doesn't hold yet, and ends with `task-question` instead if there is
+one.
 
-- a decision in `DESIGN.md` won't work, as the code shows;
-- a finding's fix would change a decision in `DESIGN.md`, or its only fix
-  adds machinery.
-
-The architect settles these with the human, in its session, and answers each
-in `LOG.md`: a change to `DESIGN.md`, or why the design stands. The reviewer
-raises them as findings labelled Design question, as the `code-review` skill
-says.
+The reviewer asks the architect, with `Asks <id> → architect` and the outcome
+`design-question`, when a plan trips a trigger, or a finding's fix would break
+a design rule or an ADR, as the `code-review` skill says. Any role asks the
+architect the same way to write down a design rule the human stated in its
+session, and goes on; the reviewer hands the question over before the task
+closes. The architect decides each by the design rules and ADRs, asks the human
+only for a new or changed rule or ADR, or a choice that's hard to reverse,
+and answers it in `LOG.md`.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review a task branch''s changes since it left the default branch along five axes: Standards (does the code follow the project''s documented coding standards?), Spec (does the code do what the task''s TASK.md and DESIGN.md ask?), Behaviour (does it break in the situations it will meet?) and Smells (did the change leave its functions simpler or more tangled?) and Names (does each name it adds keep the words the project agrees on?). Runs the five reviews in parallel sub-agents and writes them side by side as a round in REVIEW.md. Use when the reviewer role reviews a task.'
+description: 'Review a task branch''s changes since it left the default branch along five axes: Standards (does the code follow the project''s documented coding standards?), Spec (does the code do what the task''s TASK.md and approved PLAN.md ask?), Behaviour (does it break in the situations it will meet?) and Smells (did the change leave its functions simpler or more tangled?) and Names (does each name it adds keep the words the project agrees on?). Runs the five reviews in parallel sub-agents and writes them side by side as a round in REVIEW.md. Also reviews a PLAN.md before any code, in a plan round. Use when the reviewer role reviews a task.'
 metadata:
   source:
     repo: mattpocock/skills
@@ -14,7 +14,7 @@ metadata:
 Five-axis review of the diff between `HEAD` and the point where the task branch left the default branch:
 
 - **Standards**: does the code conform to this repo's documented coding standards?
-- **Spec**: does the code faithfully implement the task's `TASK.md`, and its `DESIGN.md` when it has one?
+- **Spec**: does the code faithfully implement the task's `TASK.md`, as its approved `PLAN.md` says it will?
 - **Behaviour**: does the code still work in the situations it will meet, error paths included?
 - **Smells**: did the change leave each function it touches simpler, or more tangled?
 - **Names**: does each name the change adds or renames, in code or prose, tell a reader what it is, in the words the project already uses?
@@ -22,6 +22,22 @@ Five-axis review of the diff between `HEAD` and the point where the task branch 
 All five axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
 Each finding is **Blocking**, a **Follow-up** or a **Design question**, against a bar for its own axis (step 5). Blocking findings and design questions hold the verdict, so a round can approve with follow-ups open.
+
+## Plan rounds
+
+A plan round reviews the task's `PLAN.md` before any code is written for it, or a change to it before the code that depends on it. It runs three of the five axes, as parallel sub-agents: a plan has no code for Behaviour or Smells to read. Read `PLAN.md` at its latest commit and, when a plan round approved an earlier one, its diff since that commit:
+
+```bash
+git -C "$AGENT_NOTES_CHECKOUT_DIR" diff <approved commit> -- "$AGENT_TASK_NOTES_DIR/PLAN.md"
+```
+
+- **Spec:** every acceptance criterion in `TASK.md` has a test at a named seam, or a reason no test can show it. Every other test names the bug it catches. The steps cover every criterion, and nothing `TASK.md` rules out. Blocking: a criterion with no test and no reason, or a step that does what `TASK.md` rules out.
+- **Names:** every public name and error message the plan adds or changes, by the `python-naming-smells` skill, against `GLOSSARY.md` and its _Avoid_ lists and the code already there. Blocking: as the Names bar in step 5 says.
+- **Standards:** the plan against the project's `AGENTS.md`, the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`, and its "Docs" list against the docs and docstrings of each module it changes. Each decision that follows a rule cites it. Blocking: as the Standards bar in step 5 says, or a doc the change makes untrue that the list leaves out.
+
+A plan that trips one of these triggers is a **Design question**, for the architect to approve instead: it adds or breaks a design rule or an ADR, adds or moves a module, changes an interface used outside the task, or makes a choice that's hard to reverse.
+
+Write the round as step 6 says, with the three reports, and the verdict your `ROLE.md` gives a plan round.
 
 ## Process
 
@@ -48,7 +64,7 @@ Capture the fix diff, `git diff <last reviewed commit>...HEAD`. The sub-agents j
 
 The settled list holds findings, never code. Code and names a fix introduced are new surface for this round, even in a round that focuses on one concern.
 
-After an architect turn, read what changed in `DESIGN.md` from the commits the architect's `Answers R<n>` and `Answers D<n>` entries name: `git -C "$AGENT_NOTES_CHECKOUT_DIR" show <commit> -- <path to DESIGN.md>`. Judge each design question, and each finding that waited for it, by the dev's answer, against that `DESIGN.md`.
+After an architect turn, read what changed in the rules and ADRs from the commits the architect's `Answers R<n>` entries name. Judge each design question, and each finding that waited for it, by the dev's answer, against them.
 
 ### 2. Identify the spec source
 
@@ -60,7 +76,7 @@ git -C "$AGENT_NOTES_CHECKOUT_DIR" show "<commit>:$AGENT_TASK_FILE"
 
 If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spec available".
 
-When the task has a `DESIGN.md`, the architect's design agreed with the human, it is part of the spec too. Read it from the notes checkout, beside `TASK.md`.
+The task's `PLAN.md`, as last approved, is part of the spec too: its approach, its names and errors, and the test for each criterion. Read it from the notes checkout, and its diff since the approved commit, which the latest of these names: a plan round's verdict, the architect's `Answers <id>: plan approved at <commit>`, or the dev's `plan-approved (the human)` entry. A change to a name, an error, a seam or the approach in that diff, made without a plan round, is a Spec finding.
 
 ### 3. Identify the standards sources
 
@@ -112,18 +128,19 @@ Every brief also carries these rules, word for word:
 The bar for Blocking, each brief carrying its own axis's:
 
 - **Standards:** the breach would lead a reader, human or agent, into a wrong action. That covers an instruction that contradicts the code or another instruction, a contradicted ADR, or a broken design rule.
-- **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out or departs from a decision in `DESIGN.md`.
+- **Spec:** a requirement is missing or wrong, or the change does something `TASK.md` rules out or departs from the approved `PLAN.md`.
 - **Spec, partial:** a requirement the change doesn't show met, by the code and the test or check that shows it, is Blocking too.
 - **Behaviour:** the failure is reproduced on a plausible path, and it loses work, does the wrong thing, or leaves something stuck without a message.
-- **Smells:** the diff introduces the smell, or makes worse one the code already had, and its fix is local: one or two functions, with no change to an interface `DESIGN.md` decides. A smell the diff only touches is a Follow-up.
-- **Names:** the name misleads at a use, by the `python-naming-smells` skill's "Smells at the uses"; or it breaks a word the project already agrees on, by its "Smells against the project's words"; or it renames an existing interface name that neither `TASK.md` nor `DESIGN.md` calls for. A prose word that only reads poorly, or a name that passes but could be better, isn't reported.
+- **Smells:** the diff introduces the smell, or makes worse one the code already had, and its fix is local: one or two functions, with no change to an interface the approved `PLAN.md` decides. A smell the diff only touches is a Follow-up.
+- **Names:** the name misleads at a use, by the `python-naming-smells` skill's "Smells at the uses"; or it breaks a word the project already agrees on, by its "Smells against the project's words"; or it differs from the name the approved `PLAN.md` gives, or renames an existing interface name that `TASK.md` doesn't call for. A prose word that only reads poorly, or a name that passes but could be better, isn't reported.
 
 Any axis's finding is a **Design question** instead when its fix isn't a fix the dev can make alone:
 
-- its fix would change a decision in `DESIGN.md`: an interface, a module boundary or a type;
-- `DESIGN.md` asks for something a documented rule forbids;
-- one decision causes the same smell more than once;
+- its fix would break a design rule or an ADR, or needs a new one;
+- the approved `PLAN.md` asks for something a documented rule forbids;
 - no honest local fix exists.
+
+A finding whose fix would change a name, an error, a seam or the approach the approved `PLAN.md` gives is Blocking, and says so: the dev revises the plan, and a plan round approves it, before the code changes.
 
 From round 2 on, every brief also carries the fix diff command, the open findings to judge, and the settled list, with this rule: "Don't raise a settled finding again. Look for new problems only in the lines the fix diff touches."
 
@@ -136,7 +153,7 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 **Spec sub-agent prompt** should include:
 
 - The diff command and commit list.
-- The text of `TASK.md` from step 2, and the commit it came from, and the text of `DESIGN.md` when the task has one.
+- The text of `TASK.md` from step 2, and the commit it came from, and the approved `PLAN.md` with its diff since approval.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. A requirement is met only when you can name the code and the test, or the check you ran, that shows it; code that merely looks like it does the job is partial, and every partial requirement is a finding. Under 400 words."
 
 **Behaviour sub-agent prompt** should include:
@@ -150,15 +167,15 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 - The diff command, the commit list and the fixed point.
 - The smell baseline from step 4, pasted in full (the sub-agent has no other access to it).
 - When the diff changes Python, the `python-smells` skill's body, pasted in full with its base directory, so the sub-agent can read the `references/` files its checklist points to: call the Skill tool with "python-smells".
-- The text of `TASK.md` and, when the task has one, `DESIGN.md`. `TASK.md` is for one use: to check that something flagged as Speculative Generality isn't what the spec asks for. `DESIGN.md` is for telling a local fix from a design question.
+- The text of `TASK.md` and the approved `PLAN.md`. `TASK.md` is for one use: to check that something flagged as Speculative Generality isn't what the spec asks for. `PLAN.md` is for telling a local fix from one that changes the plan.
 - The brief: "Read each function the diff adds or changes whole, three ways. At `HEAD`. Against its version at the fixed point (`git show <fixed point>:<path>`), asking whether the change left it simpler or more tangled; a regression counts even when each hunk looks fine. And beside its siblings in the diff, and any existing code whose shape it copies. Match each against the smell baseline and, for Python, the python-smells checklist, reading the reference file for each question that applies. First list every function the diff adds or changes, as `file:function`, each marked 'clean', 'new' when it has no earlier version, or with its finding ids. Then report the findings. For this axis, 'who would hit it' is the next dev who changes that code, and 'fewer, or none, is a good result' doesn't apply: cover every function in the list. The five-finding cap still applies to the findings. Last, under 'Opportunities nearby', list what the skill's section of that name asks for in code the diff doesn't change; these aren't findings. Under 400 words."
 
 **Names sub-agent prompt** should include:
 
 - The diff command, the commit list and the fixed point.
 - The `python-naming-smells` skill's body, pasted in full: call the Skill tool with "python-naming-smells" (the sub-agent has no other access to it).
-- The text of `DESIGN.md` when the task has one, and whether this is the first round since it was written or changed.
-- The brief: "Judge names by the python-naming-smells skill's smells, and report only by the Names bar. In the first round after `DESIGN.md` is written or changed, also check the names that version adds or changes. A poor name the diff leaves as it was isn't reported. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Smells in prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Last, under 'Opportunities nearby', list what the skill's section of that name asks for in names the diff doesn't change; these aren't findings. Under 400 words."
+- The approved `PLAN.md`'s "Names" and "Errors".
+- The brief: "Judge names by the python-naming-smells skill's smells, and report only by the Names bar. Check each name the code adds against the one the approved PLAN.md gives. A poor name the diff leaves as it was isn't reported. First list every name the diff adds or renames, of every kind: identifiers, glossary terms, interface names, and new terms its prose introduces. Add each existing name whose behaviour the diff changes. Mark each 'clean' or with its finding ids. For each, search the whole repository for its uses, its synonyms, its homonyms, and other instances of its class. Then check the diff's added prose for words that break the agreed one, as the skill's 'Smells in prose' says, and nothing else in prose. Then report the findings. 'Who would hit it' is the next reader of the name. Cover every name in the list; the five-finding cap applies to the findings. Last, under 'Opportunities nearby', list what the skill's section of that name asks for in names the diff doesn't change; these aren't findings. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report. If the diff changes nothing that runs, such as docs only, skip the Behaviour and Smells sub-agents and say so. Never skip the Names sub-agent: prose has names too.
 
@@ -170,11 +187,11 @@ Before writing the round, check every cited `file:line` against the file at `HEA
 
 Check the coverage lists against the diff: Smells must list every function it adds or changes, and Names every name it adds or renames. Ask the sub-agent again for any that are missing.
 
-Check each label against its axis's bar, and downgrade a Blocking finding that misses it. Drop a finding that raises a settled one again. Where two axes find one cause, keep both, each saying it shares a cause with the other. Never drop a finding because `DESIGN.md` decides it: label it a Design question.
+Check each label against its axis's bar, and downgrade a Blocking finding that misses it. Drop a finding that raises a settled one again. Where two axes find one cause, keep both, each saying it shares a cause with the other. Never drop a finding because the approved `PLAN.md` decides it: label it Blocking, as a plan change, or a Design question when a rule decides it.
 
 Write each sub-agent's opportunities nearby as a `Follow-up` line in your turn's `LOG.md` entry, as `agent-kit/AGENTS.md` describes, not in the round. Drop any the diff does change: that is a finding.
 
-List every Design question in its own `### Design questions` section, after the five reports. Each names its finding id, and the `DESIGN.md` decision or documented rule it puts in question. Mark each other finding whose fix depends on one "Waits for R<n>", with that question's id. Your `ROLE.md` says how the architect is asked.
+List every Design question in its own `### Design questions` section, after the five reports. Each names its finding id, and the design rule, ADR or plan trigger it puts in question. Mark each other finding whose fix depends on one "Waits for R<n>", with that question's id. Your `ROLE.md` says how the architect is asked.
 
 End the reports with a one-line summary, before the round's verdict: findings per axis, how many block, how many design questions are open, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 
@@ -194,4 +211,4 @@ Reading the diff finds the first two. The third shows only when the code is run 
 
 Fresh reviewers always find something. Without a bar, every finding holds the verdict, so a round approves only when it finds nothing, and it rarely will. Without a scope, each round sweeps the whole branch again, including the last round's fixes, and each fix is new surface to find fault with. The bar ends a review once nothing blocks. The scope stops each fix from opening a new round on code already settled.
 
-A design question is neither. The dev can't fix it alone, and a Follow-up would let it through. So it goes to the architect, who settles it with the human before the dev fixes anything that waits for it.
+A design question is neither. The dev can't fix it alone, and a Follow-up would let it through. So it goes to the architect, who settles it, with the human when it needs a new or changed rule, before the dev fixes anything that waits for it.

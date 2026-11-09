@@ -71,7 +71,7 @@ The runtime targets Python 3.11, like foundry. `__main__.py` checks the version 
 
 ## Design rules
 
-Follow these when changing the code. Each names what holds it today.
+Follow these when changing the code. Each names what holds it today. Cite a rule by its number, as `DR7`. The architect writes a new one, in the task that needs it.
 
 1. **One spelling per shared name.** A name or path used on both sides of a boundary is spelled in one module, and tests hold every other copy to it: the kit's layout in `agent_runtime/agent_kit.py`, the session variables in `agent_runtime/contract.py`, a task's names in `foundry/task.py`, which the rulesets must agree with. The hook stubs and the managed settings can't import anything, so they spell the runtime's link, held to it by tests. *Held by `tests/agent_runtime/test_agent_kit.py`, `tests/test_task_contract.py`, `tests/agent_kit/test_git_hook_command.py` and `tests/agent_kit/test_managed_settings.py`.*
 2. **Programs meet only at named seams.** foundry imports four runtime modules and no others, plus the package itself to build it; the runtime imports only the standard library; `agent_sandbox` imports nothing else from foundry. *Held by `tests/test_runtime_boundary.py`, `tests/agent_kit/test_runtime.py` and `tests/agent_sandbox/test_boundary.py`.*

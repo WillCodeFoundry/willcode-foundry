@@ -6,7 +6,7 @@ The agents' skills live in `agent-kit/skills/`. Six are copied from [mattpocock/
 
 A copied skill records its source in its `SKILL.md` front matter, under `metadata.source`: the upstream repository, the path there, the commit it is up to date with, the author and the licence. The licence text is `agent-kit/skills/LICENSE-mattpocock-skills`. `pr` also keeps its credit to Dex Horthy (Humanlayer), in its `CREDITS.md`.
 
-The copies are adapted to how the foundry hands out work: through `TASK.md` on `agent-notes`, with only the planner talking to you, and reviews in rounds in `REVIEW.md`. The adaptations are plain edits, so change a skill as you would any file in the kit.
+The copies are adapted to how the foundry hands out work: through `TASK.md` and the dev's `PLAN.md` on `agent-notes`, with the planner and the architect talking to you, and reviews in rounds in `REVIEW.md`, plan rounds included. The adaptations are plain edits, so change a skill as you would any file in the kit.
 
 ## Which role has which skill
 

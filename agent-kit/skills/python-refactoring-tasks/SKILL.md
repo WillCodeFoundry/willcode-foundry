@@ -5,7 +5,7 @@ description: Hunt a Python codebase for refactors that make it simpler, and writ
 
 # Finding refactoring opportunities in Python
 
-Find changes across a Python codebase that make it simpler to read, test and change, and write a `TASK.md` for each one worth doing. You change no code. Nobody checks in with you along the way: you decide what is worth a task, and the human decides which tasks to create. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Writing no task is a good result when nothing clears the bar.
+Find changes across a Python codebase that make it simpler to read, test and change, and write a `TASK.md` for each one worth doing. You change no code. Unless you run in a planner session, nobody checks in with you along the way: you decide what is worth a task, and the human decides which tasks to create. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Writing no task is a good result when nothing clears the bar.
 
 This skill decides where to look and how to propose. What to look for comes from two skills:
 
@@ -24,6 +24,17 @@ Both are written for reviewing a diff. Here, apply them to existing functions an
 | Hints: follow-ups or other notes naming places, each with a smell or a cost | Start from the hints (step 0), then run steps 1 and 2 as well, more lightly, so you don't see only what others saw. |
 
 Use only the hints you are given. Don't go looking for follow-ups or notes yourself; collecting them is someone else's job.
+
+## In a planner session
+
+When the planner uses this skill, the human is in the session and the task already exists, so it ends in one `TASK.md`:
+
+1. Run steps 0 to 4. The hints are the ones the human or the planner gives, such as follow-ups on the code.
+2. Show the human the candidates, most valuable first, each with its location, its smell, what it removes, and your sketch. The human picks one.
+3. Draft that one as the task's `TASK.md`, with the sections step 5 gives, and take it through the planner's method: its checklist, the human's approval, then writing it. Write no other file.
+4. Give the other candidates in the report, each with its location and smell, for the human to create as tasks later.
+
+The sketch stays in the session. The dev writes the plan, as for any task.
 
 ## Before you start
 
@@ -121,12 +132,11 @@ Most valuable first, at most five per run; report the rest.
 | Section | What to put there |
 |---|---|
 | `# Task <id>: <title>` | The change, in a few words: what goes away or what becomes simpler. |
-| Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. |
-| Acceptance criteria | Checkable statements. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
-| Out of scope | The neighbouring smells you saw and are leaving, so the dev doesn't widen the task. |
-| Context | Where, as `path.py:line` and the function, class or flow. How it was found: the hint, the signal from step 1, or the exploring step from step 2. The smell, by `python-smells` number and name or `python-naming-smells` smell. Your sketch, as a direction the dev may improve on. Another task this one depends on, by slug. |
-| Seams to test | The public functions or commands whose tests prove behaviour is kept. |
-| Terms and decisions | Glossary terms the change adds, renames or retires. A decision worth an ADR. Empty if none. |
+| Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. Where, as `path.py:line` and the function, class or flow; the smell, by `python-smells` number and name or `python-naming-smells` smell; and how it was found: the hint, the signal from step 1, or the exploring step from step 2. |
+| Acceptance criteria | Checkable statements, each with an id (`AC1`, …), checkable from outside the code or by a search. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
+| Out of scope | The neighbouring smells you saw and are leaving, each with an id (`OS1`, …), so the dev doesn't widen the task. |
+| Risks | What could go wrong, such as callers outside the code you read. Another task this one needs merged first goes as an `After:` line under the title. |
+| Terms | Glossary terms the change adds, renames or retires. Empty if none. A decision worth an ADR goes to the architect, as a question in your report. |
 | Open questions | Choices only the human can make, each with the options and your recommendation. Empty otherwise. |
 
 After a restructure you've written up, explore the flow again as it would look after. The change often shows the next simplification, or a new thing that is hard to name. Write that as a second task that depends on the first.
@@ -136,6 +146,7 @@ After a restructure you've written up, explore the flow again as it would look a
 End the run with a short report:
 
 - the tasks you wrote, one line each, in the order to do them, saying which depend on others;
+- for each task, your sketch of the change: a direction for whoever plans it, not part of the task;
 - the findings you skipped, one line each, with the test from step 4 that failed;
 - the signals you couldn't run, and why;
 - when you were given hints, the ones you dropped and why.
