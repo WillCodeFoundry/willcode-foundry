@@ -105,3 +105,13 @@ Done: plan round 3 on PLAN.md at 6694061, against TASK.md at cf2da31. The histor
 are closed, with no new findings on any axis and no design questions. No human change to TASK.md is waiting to
 be folded in. Verdict: plan approved at 6694061.
 Next: the dev starts step 1 of PLAN.md, the refactor in `task.py`, then ends with ready-for-review.
+
+## 13 · dev · progress
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Steps 1–4 of PLAN.md in ac5b7e0: `BRANCH_PREFIX`,
+the `task_prefix`/`number` groups, `next_task_id` and `NoNextTaskIdError` in `task.py`; `create_next_task` sharing
+`_create` with `create_task` in `project_tasks.py`; TASK optional on `foundry task create`. Tests for AC1–AC8 and
+AC10 at the seams PLAN.md names; ruff, mypy, vulture, pylint and the host tier (808 passed) pass.
+- `_create` checks a given id before any git call, as `create_task` did, so AC8 holds for an invalid id too.
+- The AC7 test gives the competing create another `GIT_COMMITTER_DATE`. Two creates of one id by one identity in the
+  same second make the very same commit, so the second push changes nothing and succeeds.
+Next: step 5, the docs (README, GLOSSARY, ARCHITECTURE, docstrings already done), then the draft PR.
