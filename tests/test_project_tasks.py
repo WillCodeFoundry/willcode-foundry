@@ -136,6 +136,79 @@ def test_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Pat
         create(project_tasks_of(tmp_path / "missing.git", git_env))
 
 
+# --- create_next_task -------------------------------------------------------------------
+
+SEEDED_TASK_NOTES_DIRS = (".agent/tasks/open/tst-0000", ".agent/tasks/closed/cls-0000")
+
+
+def take_task_ids(project_repository, *, open_ids=(), closed_ids=(), branch_ids=(), keep_seeded=False) -> None:
+    """Take task ids on the project repository: notes dirs for open and closed tasks, task branches from main for
+    ``branch_ids``. The seeded tasks are removed unless ``keep_seeded``."""
+    notes = {Task.as_open(task_id).task_file: f"{task_id}\n" for task_id in open_ids}
+    notes |= {Task.as_closed(task_id).task_file: f"{task_id}\n" for task_id in closed_ids}
+    project_repository.edit_notes(write=notes, remove=() if keep_seeded else SEEDED_TASK_NOTES_DIRS)
+    for task_id in branch_ids:
+        project_repository.git("branch", Task.as_open(task_id).branch, "main")
+
+
+def test_the_next_task_is_created_as_create_task_would_create_it(project_repository) -> None:
+    take_task_ids(project_repository, open_ids=["wcf-0030"], closed_ids=["wcf-0032"], branch_ids=["wcf-0033"])
+    notes_before = project_repository.notes_head()
+
+    assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("wcf-0034")
+
+    assert project_repository.head("task/wcf-0034") == project_repository.head("main")
+    assert project_repository.notes_files() == {
+        ".agent/tasks/closed/wcf-0032/TASK.md": "wcf-0032\n",
+        ".agent/tasks/open/wcf-0030/TASK.md": "wcf-0030\n",
+        ".agent/tasks/open/wcf-0034/PROGRESS.md": "# Progress\n",
+        ".agent/tasks/open/wcf-0034/TASK.md": "# Task <id>: <title>\n",
+    }
+    assert project_repository.notes_commits()[0] == "Add task wcf-0034"
+    assert project_repository.git("rev-parse", f"{task.NOTES_BRANCH}^") == notes_before
+    assert project_repository.notes_signed_with_your_key()
+
+
+@pytest.mark.parametrize("kind", ["open", "closed", "branch"])
+def test_the_highest_taken_number_counts_whichever_kind_holds_it(project_repository, kind: str) -> None:
+    taken = {"open_ids": ["wcf-0003"]}
+    taken[f"{kind}_ids"] = [*taken.get(f"{kind}_ids", []), "wcf-0007"]
+    take_task_ids(project_repository, **taken)
+
+    assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("wcf-0008")
+
+
+def test_task_branches_that_aren_t_task_ids_are_ignored(project_repository) -> None:
+    take_task_ids(project_repository, open_ids=["wcf-0005"])
+    project_repository.git("branch", "task/spike", "main")
+    project_repository.git("branch", "task/WCF-0099", "main")
+
+    assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("wcf-0006")
+
+
+def test_the_task_prefix_most_task_ids_use_is_followed(project_repository) -> None:
+    take_task_ids(project_repository, open_ids=["wcf-0001", "wcf-0002"], keep_seeded=True)
+
+    assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("wcf-0003")
+
+
+def test_a_task_s_branch_and_notes_count_as_one_task_id(project_repository) -> None:
+    take_task_ids(project_repository, branch_ids=["sbx-0050", "sbx-0051", "sbx-0052"])
+    for task_id in ("wcf-0001", "wcf-0002"):
+        create(project_repository.project_tasks(), task_id)
+
+    assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("sbx-0053")
+
+
+def test_with_no_task_id_taken_nothing_is_pushed(project_repository) -> None:
+    project_repository.git("branch", "--quiet", "-D", task.NOTES_BRANCH)
+    refs_before = project_repository.git("for-each-ref")
+
+    with pytest.raises(task.NoNextTaskIdError, match=r"^the project repository has no task id to follow$"):
+        project_repository.project_tasks().create_next_task(TEMPLATE)
+    assert project_repository.git("for-each-ref") == refs_before
+
+
 # --- fetch_task_turn ---------------------------------------------------------------------
 
 

@@ -2,8 +2,10 @@
 turn and handing them off, and listing the open ones with their turns.
 
 The project repository decides a task's status, by which dir under NOTES_ROOT holds its notes: fetch_task finds it,
-every operation on one task goes through it, and callers pass task ids. Listing is the exception: it reads every dir
-under OPEN_DIR from one fetch, since fetch_task would fetch once per task.
+every operation on one task goes through it, and callers pass task ids. There are two exceptions:
+- Listing reads every dir under OPEN_DIR from one fetch, since fetch_task would fetch once per task.
+- create_next_task takes no id. It reads the dirs under OPEN_DIR and CLOSED_DIR from one fetch of NOTES_BRANCH, and
+  the task branches from the remote's branch list.
 
 Finding and reading only fetch NOTES_BRANCH and read what was fetched: they change no file. An operation that writes
 checks out the fetched NOTES_BRANCH itself, after every check that can refuse it, so it writes on what it read.
@@ -18,7 +20,7 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_scratch_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectScratchClone
-from foundry.task import CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
+from foundry.task import BRANCH_PREFIX, CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task, next_task_id
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
@@ -81,10 +83,24 @@ class ProjectTasks:
         or closed, or its branch does. NOTES_BRANCH is created for the first task, as an orphan branch: it shares
         no history with the code.
         """
+        return self._create(task_template, task_id=task_id)
+
+    def create_next_task(self, task_template: Mapping[str, str]) -> Task:
+        """Create the project's next task, as create_task does, under the id next_task_id picks from the taken ones.
+
+        A task id is taken by an open or closed task's notes dir, or by a task branch. They are read once, and the
+        task is written on what was read. NoNextTaskIdError, with nothing written or pushed, when no id can be
+        picked. A create that picked the same id and pushed first makes this one's push fail, as GitError.
+        """
+        return self._create(task_template, task_id=None)
+
+    def _create(self, task_template: Mapping[str, str], *, task_id: str | None) -> Task:
+        """create_task with ``task_id``; given None, create_next_task."""
         clone = self._clone
-        new_task = Task.as_open(task_id)
+        given_task = None if task_id is None else Task.as_open(task_id)  # refuses an invalid id before git runs
         branches, default_branch = clone.branches(), clone.default_branch()
         notes_branch = clone.fetch_branch(NOTES_BRANCH) if NOTES_BRANCH in branches else None  # None: the first task
+        new_task = given_task or Task.as_open(next_task_id(_taken_task_ids(branches, notes_branch)))
         if notes_branch is not None:
             _require_no_task(notes_branch, new_task.id)  # first, as its message says whether the task is closed
         if new_task.branch in branches:
@@ -219,6 +235,18 @@ def _require_no_task(notes_branch: FetchedBranch, task_id: str) -> None:
     except TaskNotFoundError:
         return
     raise FoundryError(f"task {existing.id} already exists: {NOTES_BRANCH} has {existing.task_notes_dir}/")
+
+
+def _taken_task_ids(branches: list[str], notes_branch: FetchedBranch | None) -> set[str]:
+    """The names that take a task id, valid or not.
+
+    They are the dirs under OPEN_DIR and CLOSED_DIR on ``notes_branch`` (none when it is None), and each of
+    ``branches`` starting with BRANCH_PREFIX, with BRANCH_PREFIX cut off.
+    """
+    taken = {branch.removeprefix(BRANCH_PREFIX) for branch in branches if branch.startswith(BRANCH_PREFIX)}
+    if notes_branch is not None:
+        taken |= {*_read_task_ids(notes_branch, OPEN_DIR), *_read_task_ids(notes_branch, CLOSED_DIR)}
+    return taken
 
 
 def _read_task_ids(notes_branch: FetchedBranch, status_dir: str) -> list[str]:
