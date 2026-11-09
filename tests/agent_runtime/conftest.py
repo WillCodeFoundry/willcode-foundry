@@ -1,6 +1,5 @@
 """Fixtures for the runtime's in-process tests: a temporary machine to harden, and a kit to harden it with."""
 
-import dataclasses
 import functools
 import shutil
 import tempfile
@@ -11,8 +10,7 @@ import pytest
 
 from agent_runtime import contract, hardening, session_setup
 from agent_runtime.agent_kit import AgentKit
-from foundry.session import SessionVariables
-from foundry.task import Task
+from foundry import session
 from tests.support import AGENT_KIT_SOURCE, TASK, VariablesFor
 from tests.support.machine import (
     ME,
@@ -96,18 +94,18 @@ def refused(read_only_kit: Path, hardened: TemporaryMachine) -> Callable[..., No
 
 
 @pytest.fixture
-def variables_for(tmp_path: Path, session_variables: Callable[[Task], SessionVariables]) -> VariablesFor:
+def variables_for(tmp_path: Path) -> VariablesFor:
     """The session variables a sandbox for TASK gets, as foundry sets it, with the kit and the local origin given, and
     checkouts under tmp_path/work."""
 
     def make(agent_kit_dir: Path, origin: Path) -> contract.SessionVariables:
-        variables = dataclasses.replace(
-            session_variables(TASK),
-            agent_kit_dir=agent_kit_dir,
-            code_checkout_dir=str(tmp_path / "work" / "p"),
+        return session.session_variables(
+            role_name="dev",
+            task=TASK,
             repo_url=f"file://{origin}",
+            agent_kit_dir=agent_kit_dir,
+            code_checkout_dir=tmp_path / "work" / "p",
         )
-        return contract.read_session_variables(variables.to_env())
 
     return make
 

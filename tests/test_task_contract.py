@@ -14,7 +14,6 @@ from typing import Any
 
 from agent_runtime import contract, git_hooks
 from foundry import yaml_io
-from foundry.session import SessionVariables
 from foundry.task import HUMAN, LOG_FILE, NOTES_BRANCH, NOTES_ROOT, TURN_FILE, Task
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -42,7 +41,7 @@ def agent_kit_files() -> list[Path]:
 
 
 def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
-    session_variables: Callable[[Task], SessionVariables],
+    session_variables: Callable[[Task], contract.SessionVariables],
 ) -> None:
     variables = session_variables(Task.as_open("tst-0001")).to_env()
     used = {
@@ -55,7 +54,7 @@ def test_every_variable_the_agent_kit_uses_is_one_the_sandbox_definition_sets(
 
 
 def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
-    session_variables: Callable[[Task], SessionVariables],
+    session_variables: Callable[[Task], contract.SessionVariables],
 ) -> None:
     """Read by name in the kit, outside AGENTS.md, which documents them all; or, in the runtime, as the field
     contract.read_session_variables gives it (AGENT_TASK_BRANCH as ``.task_branch``) anywhere but the contract itself.
@@ -74,13 +73,13 @@ def test_every_variable_the_sandbox_definition_sets_is_one_the_agent_kit_reads(
 
 
 def test_the_sandbox_definition_lists_the_variables_in_the_contracts_order(
-    session_variables: Callable[[Task], SessionVariables],
+    session_variables: Callable[[Task], contract.SessionVariables],
 ) -> None:
     assert list(session_variables(Task.as_open("tst-0001")).to_env()) == list(contract.NAMES)
 
 
 def test_agents_md_lists_exactly_the_variables_the_sandbox_definition_sets(
-    session_variables: Callable[[Task], SessionVariables],
+    session_variables: Callable[[Task], contract.SessionVariables],
 ) -> None:
     listed = re.findall(r"^\| `(AGENT_[A-Z_]+)` \|", AGENTS_MD.read_text(), flags=re.MULTILINE)
 

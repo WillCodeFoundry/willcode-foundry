@@ -1,17 +1,18 @@
-"""Sessions, through open_or_create against a foundry root under tmp_path; and SessionVariables."""
+"""Sessions, through open_or_create against a foundry root under tmp_path; and the session variables."""
 
 import dataclasses
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from agent_runtime import contract
 from agent_runtime.agent_kit import AgentKit
 from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
-from foundry.session import SessionVariables
 from foundry.task import Task
 
 TKT_STORE = Project(name="tkt-store", url="git@github.com:o/tkt-store.git")
@@ -172,20 +173,19 @@ def test_a_file_where_the_session_directory_goes_is_refused(tmp_path: Path) -> N
 def test_the_definition_holds_the_session_variables_for_its_role_and_task(tmp_path: Path) -> None:
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
-    assert SessionVariables.from_env(opened.definition.variables) == SessionVariables(
-        role_name="dev",
-        task=Task.as_open("wcf-0042"),
-        repo_url="git@github.com:o/tkt-store.git",
-        agent_kit_dir=tmp_path / "agent-kit",
-        code_checkout_dir="/home/agent/work/tkt-store",
-    )
-
-
-def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
-    variables = SessionVariables.from_env(opened.definition.variables)
-
-    assert SessionVariables.from_env(variables.to_env()) == variables
+    assert opened.definition.variables == {
+        "AGENT_ROLE": "dev",
+        "AGENT_TASK_ID": "wcf-0042",
+        "AGENT_KIT_DIR": str(tmp_path / "agent-kit"),
+        "AGENT_REPO_URL": "git@github.com:o/tkt-store.git",
+        "AGENT_CODE_CHECKOUT_DIR": "/home/agent/work/tkt-store",
+        "AGENT_NOTES_CHECKOUT_DIR": "/home/agent/work/tkt-store-notes",
+        "AGENT_TASK_BRANCH": "task/wcf-0042",
+        "AGENT_NOTES_BRANCH": "agent-notes",
+        "AGENT_NOTES_ROOT": ".agent",
+        "AGENT_TASK_NOTES_DIR": ".agent/tasks/open/wcf-0042",
+        "AGENT_TASK_FILE": ".agent/tasks/open/wcf-0042/TASK.md",
+    }
 
 
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
@@ -213,21 +213,27 @@ def test_a_sandbox_created_with_another_name_is_refused_naming_both(tmp_path: Pa
         session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
 
-def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
-    variables = SessionVariables(
-        role_name="dev",
-        task=Task.as_open("tst-0001"),
-        repo_url="u",
-        agent_kit_dir=Path("/kit"),
-        code_checkout_dir="/w/p",
-    )
+def variables(**change: object) -> contract.SessionVariables:
+    """The session variables for role dev on task tst-0001 of repository u, with ``change`` made."""
+    given: dict[str, Any] = {
+        "role_name": "dev",
+        "task": Task.as_open("tst-0001"),
+        "repo_url": "u",
+        "agent_kit_dir": Path("/kit"),
+        "code_checkout_dir": Path("/w/p"),
+    }
+    return session.session_variables(**{**given, **change})
 
-    assert variables.is_same_sandbox(
-        dataclasses.replace(variables, agent_kit_dir=Path("/moved"), code_checkout_dir="/w/q")
-    )
-    for other in (
-        dataclasses.replace(variables, role_name="qa"),
-        dataclasses.replace(variables, task=Task.as_open("tst-0002")),
-        dataclasses.replace(variables, repo_url="v"),
-    ):
-        assert not variables.is_same_sandbox(other)
+
+def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
+    assert session.is_same_sandbox(variables(), variables(agent_kit_dir=Path("/moved"), code_checkout_dir=Path("/w/q")))
+    for other in (variables(role_name="qa"), variables(task=Task.as_open("tst-0002")), variables(repo_url="v")):
+        assert not session.is_same_sandbox(variables(), other)
+
+
+def test_a_sandbox_created_with_an_empty_variable_is_refused_naming_it(tmp_path: Path) -> None:
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
+    rewrite_variables(opened.dir, {"AGENT_REPO_URL": ""})
+
+    with pytest.raises(FoundryError, match=r"missing AGENT_REPO_URL\)"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))

@@ -4,7 +4,7 @@
 sandbox is first launched (SandboxDefinition knows its format), and the
 empty ``workspace/`` directory sbx requires as the sandbox's primary
 workspace. The definition carries the session variables, the AGENT_*
-variables the sandbox is created with (SessionVariables knows their names).
+variables the sandbox is created with (``session_variables`` derives them; agent_runtime.contract names them).
 ``open_or_create`` names the sandbox, creates its session the first time, and on
 every later launch reads the definition back and refuses one written for another
 role, task, repository or agent kit. ``Session.launch_request`` is what a launch
@@ -13,7 +13,6 @@ asks agent_sandbox for. ``recreate_hint`` says how to start a sandbox over.
 
 import logging
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -31,76 +30,43 @@ _LOGGER = logging.getLogger(__name__)
 _UNSLUGGED = re.compile(r"[^A-Za-z0-9.+-]+")
 """What a sandbox name's parts lose: anything but letters, digits, '.', '+' and '-'."""
 
-_SANDBOX_WORK_DIR: Final = f"/home/{contract.SANDBOX_USER}/work"
+_SANDBOX_WORK_DIR: Final = Path(f"/home/{contract.SANDBOX_USER}/work")
 """Inside the sandbox: where session-setup clones the project. Nothing on the host corresponds to it."""
 
 
-@dataclass(frozen=True, kw_only=True)
-class SessionVariables:
-    """What a session's sandbox is told: the AGENT_* variables, as one value.
+def session_variables(
+    *, role_name: str, task: Task, repo_url: str, agent_kit_dir: Path, code_checkout_dir: Path
+) -> contract.SessionVariables:
+    """What a sandbox for this role on this task is told: five values, and the rest derived from them.
 
-    Their names come from agent_runtime.contract, which the runtime reads them back with;
-    AGENTS.md lists them, and tests/test_task_contract.py holds it and the kit to the contract.
-    They are fixed when the sandbox is created: sbx never rewrites its definition.
+    AGENTS.md lists the variables, and tests/test_task_contract.py holds it and the kit to the contract.
+    They are fixed when the sandbox is created, since sbx never rewrites its definition.
+
+    ``agent_kit_dir`` is mounted read-only at the same path inside the sandbox as on the host.
+    ``code_checkout_dir`` is inside the sandbox, and the notes checkout sits beside it.
     """
+    return contract.SessionVariables(
+        agent_role=role_name,
+        agent_task_id=task.id,
+        agent_kit_dir=agent_kit_dir,
+        agent_repo_url=repo_url,
+        agent_code_checkout_dir=code_checkout_dir,
+        agent_notes_checkout_dir=code_checkout_dir.with_name(f"{code_checkout_dir.name}-notes"),
+        agent_task_branch=task.branch,
+        agent_notes_branch=NOTES_BRANCH,
+        agent_notes_root=NOTES_ROOT,
+        agent_task_notes_dir=task.task_notes_dir,
+        agent_task_file=task.task_file,
+    )
 
-    role_name: str
-    task: Task
-    repo_url: str
-    agent_kit_dir: Path
-    """Where the agent kit is mounted, read-only: the same path inside the sandbox as on the host."""
-    code_checkout_dir: str
-    """The code checkout, inside the sandbox; the notes checkout sits beside it."""
 
-    @property
-    def notes_checkout_dir(self) -> str:
-        """The notes checkout, inside the sandbox."""
-        return f"{self.code_checkout_dir}-notes"
-
-    def to_env(self) -> dict[str, str]:
-        """The variables, by name, as the sandbox definition carries them."""
-        return {
-            contract.ROLE: self.role_name,
-            contract.TASK_ID: self.task.id,
-            contract.KIT_DIR: str(self.agent_kit_dir),
-            contract.REPO_URL: self.repo_url,
-            contract.CODE_CHECKOUT_DIR: self.code_checkout_dir,
-            contract.NOTES_CHECKOUT_DIR: self.notes_checkout_dir,
-            contract.TASK_BRANCH: self.task.branch,
-            contract.NOTES_BRANCH: NOTES_BRANCH,
-            contract.NOTES_ROOT: NOTES_ROOT,
-            contract.TASK_NOTES_DIR: self.task.task_notes_dir,
-            contract.TASK_FILE: self.task.task_file,
-        }
-
-    @classmethod
-    def from_env(cls, env: Mapping[str, str]) -> "SessionVariables":
-        """Read the variables back. ``from_env(v.to_env()) == v``.
-
-        Raises FoundryError naming every variable that is missing, or that holds another value than
-        this foundry would set for the same role, task and paths: a sandbox created before a name
-        changed keeps the old one, and its kit would use it.
-        """
-        missing = [name for name in contract.NAMES if name not in env]
-        if missing:
-            raise FoundryError(f"missing {', '.join(missing)}")
-        variables = cls(
-            role_name=env[contract.ROLE],
-            task=Task.as_open(env[contract.TASK_ID]),
-            repo_url=env[contract.REPO_URL],
-            agent_kit_dir=Path(env[contract.KIT_DIR]),
-            code_checkout_dir=env[contract.CODE_CHECKOUT_DIR],
-        )
-        differing = [
-            f"{name}={env[name]!r}, now {value!r}" for name, value in variables.to_env().items() if env[name] != value
-        ]
-        if differing:
-            raise FoundryError(f"other values: {'; '.join(differing)}")
-        return variables
-
-    def is_same_sandbox(self, other: "SessionVariables") -> bool:
-        """Whether both are for the same role, task and repository: what a sandbox's name stands for."""
-        return (self.role_name, self.task, self.repo_url) == (other.role_name, other.task, other.repo_url)
+def is_same_sandbox(recorded: contract.SessionVariables, wanted: contract.SessionVariables) -> bool:
+    """Whether both are for the same role, task and repository: what a sandbox's name stands for."""
+    return (recorded.agent_role, recorded.agent_task_id, recorded.agent_repo_url) == (
+        wanted.agent_role,
+        wanted.agent_task_id,
+        wanted.agent_repo_url,
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -149,18 +115,18 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     return Session(dir=session_dir, definition=definition, role=role)
 
 
-def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Task) -> SessionVariables:
+def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Task) -> contract.SessionVariables:
     """What this foundry would tell a new sandbox for this role on this task."""
-    return SessionVariables(
+    return session_variables(
         role_name=role.name,
         task=task,
         repo_url=project.url,
         agent_kit_dir=paths.agent_kit_dir(foundry_root),
-        code_checkout_dir=f"{_SANDBOX_WORK_DIR}/{_slug(project.name)}",
+        code_checkout_dir=_SANDBOX_WORK_DIR / _slug(project.name),
     )
 
 
-def _definition(foundry_root: Path, sandbox_name: str, variables: SessionVariables) -> SandboxDefinition:
+def _definition(foundry_root: Path, sandbox_name: str, variables: contract.SessionVariables) -> SandboxDefinition:
     return SandboxDefinition(
         name=sandbox_name,
         workspace_dir=paths.workspace_dir(foundry_root, sandbox_name),
@@ -208,28 +174,51 @@ def _holds_only_an_empty_workspace(session_dir: Path, workspace_dir: Path) -> bo
     )
 
 
-def _recorded_variables(definition: SandboxDefinition) -> SessionVariables:
-    """The session variables the existing sandbox was created with; raises if they aren't this foundry's."""
-    try:
-        return SessionVariables.from_env(definition.variables)
-    except FoundryError as error:
-        raise FoundryError(
-            f"sandbox {definition.name} was created with session variables this foundry doesn't set ({error}), "
-            f"so its agent kit would use them; {recreate_hint(definition.name)}"
-        ) from None
+def _recorded_variables(definition: SandboxDefinition) -> contract.SessionVariables:
+    """The session variables the existing sandbox was created with; raises if they aren't this foundry's.
+
+    They are this foundry's when none is missing, and each holds what session_variables derives from the recorded
+    role, task, repository and paths. A sandbox created before a name changed keeps the old one, and its kit would
+    use it.
+    """
+    env = definition.variables
+    if missing := contract.missing_names(env, contract.NAMES):
+        raise _not_this_foundrys(definition.name, f"missing {', '.join(missing)}")
+    recorded = contract.read_session_variables(env)
+    derived = session_variables(
+        role_name=recorded.agent_role,
+        task=Task.as_open(recorded.agent_task_id),
+        repo_url=recorded.agent_repo_url,
+        agent_kit_dir=recorded.agent_kit_dir,
+        code_checkout_dir=recorded.agent_code_checkout_dir,
+    )
+    if differing := [
+        f"{name}={env[name]!r}, now {value!r}" for name, value in derived.to_env().items() if env[name] != value
+    ]:
+        raise _not_this_foundrys(definition.name, f"other values: {'; '.join(differing)}")
+    return recorded
 
 
-def _require_same_sandbox(sandbox_name: str, *, recorded: SessionVariables, wanted: SessionVariables) -> None:
+def _not_this_foundrys(sandbox_name: str, reason: str) -> FoundryError:
+    return FoundryError(
+        f"sandbox {sandbox_name} was created with session variables this foundry doesn't set ({reason}), "
+        f"so its agent kit would use them; {recreate_hint(sandbox_name)}"
+    )
+
+
+def _require_same_sandbox(
+    sandbox_name: str, *, recorded: contract.SessionVariables, wanted: contract.SessionVariables
+) -> None:
     """Raise unless the existing sandbox is for this role, task and repository.
 
     Sandbox names are slugs, so different launches can share one: role dev on
     project foundry, task test-1, and on project foundry-test, task 1, are both
     dev-foundry-test-1. Re-attaching would then work on the other one's task.
     """
-    if not recorded.is_same_sandbox(wanted):
+    if not is_same_sandbox(recorded, wanted):
         raise FoundryError(
             f"sandbox {sandbox_name} already exists for a different role, task or repository "
-            f"(role {recorded.role_name!r}, task {recorded.task.id!r}, repository {recorded.repo_url!r}); "
+            f"(role {recorded.agent_role!r}, task {recorded.agent_task_id!r}, repository {recorded.agent_repo_url!r}); "
             "either its name collides with this one, so use a task id that gives a different name, "
             f"or the project's url has changed since, so {recreate_hint(sandbox_name)}"
         )
