@@ -11,7 +11,7 @@ import pytest
 from agent_runtime import contract, hardening, session_setup
 from agent_runtime.agent_kit import AgentKit
 from foundry import session
-from tests.support import AGENT_KIT_SOURCE, TASK, VariablesFor
+from tests.support import AGENT_KIT_SOURCE, TASK, UNSIGNED, ProcessEnvironment, VariablesFor
 from tests.support.machine import (
     ME,
     SUDO_USER,
@@ -116,17 +116,12 @@ def checkouts(
     built_kit: Path,
     created_task: Path,
     git_identity: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    process_environment: ProcessEnvironment,
 ) -> tuple[contract.SessionVariables, Path, Path]:
     """(the session variables, its code checkout, its notes checkout), set up by session_setup from a created task's
     origin, both clean and pushed. Commits aren't signed: the role signs with a key there is no private half of here, so
     signing is turned off by git's environment override, which beats any file."""
     variables = variables_for(built_kit, created_task)
     session_setup.set_up(variables)
-    for name, value in {
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "commit.gpgsign",
-        "GIT_CONFIG_VALUE_0": "false",
-    }.items():
-        monkeypatch.setenv(name, value)
+    process_environment.set_env(UNSIGNED)
     return variables, variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir

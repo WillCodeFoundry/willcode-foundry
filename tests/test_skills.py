@@ -7,7 +7,7 @@ import pytest
 
 from foundry import cli, skills
 from foundry.errors import FoundryError
-from tests.support import git
+from tests.support import ProcessEnvironment, git
 
 pytestmark = pytest.mark.usefixtures("git_identity")
 
@@ -381,27 +381,27 @@ def test_a_later_skills_failure_doesnt_hide_an_earlier_conflict(
 
 
 def test_skills_update_without_git_says_so(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, process_environment: ProcessEnvironment, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in this repository, with no git on PATH: an error line, not a traceback."""
     empty = tmp_path / "empty"
     empty.mkdir()
-    monkeypatch.chdir(Path(__file__).parents[1])
-    monkeypatch.setenv("PATH", str(empty))
+    process_environment.change_dir(Path(__file__).parents[1])
+    process_environment.set_env({"PATH": str(empty)})
 
     assert cli.main(["skills", "update"]) == 1
     assert capsys.readouterr().err == "error: git not found in PATH\n"
 
 
 def test_skills_update_exits_0_when_clean_and_1_with_the_conflicts_on_stderr(
-    foundry_root: Path, upstream: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    foundry_root: Path, upstream: Path, process_environment: ProcessEnvironment, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry of its own. git's url.<base>.insteadOf, in the throwaway global config,
     points the skill's GitHub URL at the local upstream. Any other GitHub URL goes to a path that doesn't exist,
     so a URL that stops matching fails here rather than reaching the network."""
     git(upstream, "config", "--global", f"url.{upstream}.insteadOf", skills.github_url("mattpocock/skills"))
     git(upstream, "config", "--global", f"url.{upstream.parent / 'no-github'}/.insteadOf", "https://github.com/")
-    monkeypatch.chdir(foundry_root)
+    process_environment.change_dir(foundry_root)
     (upstream_skill(upstream) / "SKILL.md").write_text(UPSTREAM_SKILL.replace("Third.", "Third, improved."))
     second = commit_all(upstream, "second")
 

@@ -23,6 +23,7 @@ from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import TaskTurn
 from foundry.task import Task
+from tests.support.foundry_root import write_foundry
 from tests.support.project_repository import git_output
 
 # --- the command ------------------------------------------------------------------
@@ -64,19 +65,14 @@ def test_close_and_reopen_take_a_project_and_a_task(action: str) -> None:
 
 
 def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accordingly(
-    project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    project_repository, enter_foundry, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real commands, in a foundry of its own: each one's output and exit code, for a change and for
     a refusal."""
-    foundry_root = tmp_path / "foundry"
-    (foundry_root / "config" / "task-template").mkdir(parents=True)
+    foundry_root = write_foundry(tmp_path / "foundry", {"store": project_repository.path})
+    (foundry_root / "config" / "task-template").mkdir()
     (foundry_root / "config" / "task-template" / "TASK.md").write_text("# Task\n")
-    (foundry_root / "config" / "foundry.yaml").write_text(
-        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\nroles: {{}}\n"
-    )
-    monkeypatch.chdir(foundry_root)
-    for name, value in git_env.items():
-        monkeypatch.setenv(name, value)
+    enter_foundry(foundry_root)
 
     assert cli.main(["task", "create", "store", "tst-0001"]) == 0
     assert capsys.readouterr() == (
@@ -209,20 +205,14 @@ def test_each_project_gives_a_listing_or_an_error_naming_it(project_repository, 
 
 
 def test_list_prints_tasks_on_stdout_errors_on_stderr_and_exits_1_if_a_project_failed(
-    project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    project_repository, enter_foundry, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry of its own: one project lists, the other can't be reached."""
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/TURN": "dev\n"})
-    foundry_root = tmp_path / "foundry"
-    (foundry_root / "config").mkdir(parents=True)
-    (foundry_root / "config" / "foundry.yaml").write_text(
-        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\n"
-        f"  gone: {{url: '{tmp_path / 'missing.git'}'}}\n"
-        "roles: {}\n"
+    foundry_root = write_foundry(
+        tmp_path / "foundry", {"store": project_repository.path, "gone": tmp_path / "missing.git"}
     )
-    monkeypatch.chdir(foundry_root)
-    for name, value in git_env.items():
-        monkeypatch.setenv(name, value)
+    enter_foundry(foundry_root)
 
     assert cli.main(["task", "list"]) == 1
     printed = capsys.readouterr()
@@ -306,7 +296,7 @@ def test_handoff_takes_a_project_a_task_a_role_and_an_optional_note() -> None:
 
 
 def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
-    project_repository, git_env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    project_repository, enter_foundry, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry of its own with one role, dev: its output and exit code, for a
     handoff and for each argument it refuses, which pushes nothing.
@@ -314,19 +304,10 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     The refusals are made on project gone, whose repository doesn't exist. An argument checked after the repository
     is read would fail with git's error instead."""
     project_repository.edit_notes(write={".agent/tasks/open/tst-0000/LOG.md": "# Log\n"})
-    foundry_root = tmp_path / "foundry"
-    (foundry_root / "config").mkdir(parents=True)
-    (foundry_root / "config" / "foundry.yaml").write_text(
-        f"name: f\nprojects:\n  store: {{url: '{project_repository.path}'}}\n"
-        f"  gone: {{url: '{tmp_path / 'gone.git'}'}}\nroles:\n  dev: {{}}\n"
+    foundry_root = write_foundry(
+        tmp_path / "foundry", {"store": project_repository.path, "gone": tmp_path / "gone.git"}, roles=["dev"]
     )
-    role_dir = foundry_root / "agent-kit" / "roles" / "dev"
-    role_dir.mkdir(parents=True)
-    (role_dir / "ROLE.md").write_text("dev\n")
-    (role_dir / "gitconfig").write_text("")
-    monkeypatch.chdir(foundry_root)
-    for name, value in git_env.items():
-        monkeypatch.setenv(name, value)
+    enter_foundry(foundry_root)
 
     assert cli.main(["task", "handoff", "store", "tst-0000", "dev", "--note", "go"]) == 0
     assert capsys.readouterr() == (

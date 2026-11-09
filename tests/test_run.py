@@ -18,6 +18,7 @@ from foundry.project_tasks import MissingTurnError, ProjectTasks
 from foundry.session import Session, open_or_create
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
+from tests.support.machine import scripted_stand_in, stand_in
 
 CONFIG = """\
 name: test
@@ -107,7 +108,7 @@ def test_a_new_session_is_shown_as_progress_and_an_existing_one_is_not(
 
 
 def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
-    project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    project_repository, enter_foundry, process_environment, foundry_root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.
 
@@ -119,13 +120,10 @@ def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
     )
     stand_ins = foundry_root / "stand-ins"
     stand_ins.mkdir()
-    for name, script in {"sbx": "echo '{\"sandboxes\": []}'", "ps": "exit 0"}.items():
-        (stand_ins / name).write_text(f"#!/bin/sh\n{script}\n")
-        (stand_ins / name).chmod(0o755)
-    monkeypatch.chdir(foundry_root)
-    for name, value in git_env.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv("PATH", f"{stand_ins}:{git_env['PATH']}")
+    scripted_stand_in(stand_ins, "sbx", "echo '{\"sandboxes\": []}'")
+    stand_in(stand_ins, "ps", 0)
+    enter_foundry(foundry_root)
+    process_environment.prepend_to_path(stand_ins)
 
     assert cli.main(["run", "tkt-store", "tst-0000"]) == 1
 

@@ -31,13 +31,19 @@ def make_socket(socket_path: Path, mode: int) -> Path:
     return socket_path
 
 
-def stand_in(tmp_path: Path, name: str, exit_code: int) -> str:
-    """A command that only exits with the code given, replacing any file of that name, as a new one."""
-    command = tmp_path / name
+def scripted_stand_in(directory: Path, name: str, script: str) -> str:
+    """A command in ``directory`` that runs the shell ``script``, replacing any file of that name, as a new one.
+    Put ``directory`` first on PATH for it to stand in for the real one."""
+    command = directory / name
     command.unlink(missing_ok=True)  # it may be the stand-in root mode left mode 0
-    command.write_text(f"#!/bin/sh\nexit {exit_code}\n")
+    command.write_text(f"#!/bin/sh\n{script}\n")
     command.chmod(0o755)
     return str(command)
+
+
+def stand_in(directory: Path, name: str, exit_code: int) -> str:
+    """A command that only exits with the code given, as scripted_stand_in makes it."""
+    return scripted_stand_in(directory, name, f"exit {exit_code}")
 
 
 @contextlib.contextmanager
@@ -69,10 +75,7 @@ def other_can_write(path: Path) -> bool:
 def recording_stand_in(directory: Path, name: str) -> tuple[str, Path]:
     """A command that records the arguments of each run, one line each, and exits 0."""
     log = directory / f"{name}.log"
-    command = directory / name
-    command.write_text(f'#!/bin/sh\nprintf \'%s\\n\' "$*" >> "{log}"\n')
-    command.chmod(0o755)
-    return str(command), log
+    return scripted_stand_in(directory, name, f'printf \'%s\\n\' "$*" >> "{log}"'), log
 
 
 @dataclasses.dataclass(frozen=True)

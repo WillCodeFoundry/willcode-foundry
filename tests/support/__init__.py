@@ -1,9 +1,9 @@
-"""Helpers the tests share: plain functions and constants. Fixtures and pytest hooks stay in the conftests."""
+"""Helpers the tests share. Fixtures and pytest hooks stay in the conftests."""
 
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
 
 import pytest
@@ -28,6 +28,13 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
+def commit_unchecked(cwd: Path, message: str) -> None:
+    """A commit the kit's hooks never see, unsigned: setup for a case, or another task's agent's commit. Empty
+    when nothing is staged."""
+    unchecked = ("-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null")
+    git(cwd, *unchecked, "commit", "-q", "--allow-empty", "-m", message)
+
+
 def run_pytest(*args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     """pytest in a process of its own, in this repository, with this one's environment plus ``env``."""
     return subprocess.run(
@@ -46,3 +53,56 @@ VariablesFor = Callable[[Path, Path], contract.SessionVariables]
 UNSIGNED = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
 """git's environment override turning commit signing off, which beats any config file: the roles sign with keys
 whose private halves the tests don't have."""
+
+
+UNREACHABLE_PROXY = "http://127.0.0.1:9"
+"""A proxy nothing listens on: a request that reaches for the network fails at once rather than going out."""
+
+PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+
+
+def isolate_from_the_developer(environ: MutableMapping[str, str], home: Path) -> None:
+    """Make ``environ`` a fresh machine's, so a test that passes in it passes on any machine.
+
+    | Left out | How |
+    |---|---|
+    | The developer's home and git configuration | ``home`` as HOME, holding XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL |
+    | The system's git configuration | GIT_CONFIG_NOSYSTEM |
+    | SSH and GPG agents, which sign commits | their variables unset, and GNUPGHOME in ``home`` |
+    | The network | git allowed only local repositories, and every proxy variable pointed at a closed port |"""
+    (home / ".gitconfig").touch()
+    environ.update(
+        {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GNUPGHOME": str(home / ".gnupg"),
+            "GIT_ALLOW_PROTOCOL": "file",
+            **dict.fromkeys(
+                ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"), UNREACHABLE_PROXY
+            ),
+        }
+    )
+    for name in ("SSH_AUTH_SOCK", "GPG_AGENT_INFO", "NO_PROXY", "no_proxy"):
+        environ.pop(name, None)
+
+
+class ProcessEnvironment:
+    """What a test may change in its own process: environment variables and the working directory, each put back
+    when the test ends. Tests never patch code, so nothing else of pytest's monkeypatch is reachable, and no other
+    code uses monkeypatch: tests/test_monkeypatch.py checks that."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._monkeypatch = monkeypatch
+
+    def set_env(self, env: Mapping[str, str]) -> None:
+        for name, value in env.items():
+            self._monkeypatch.setenv(name, value)
+
+    def prepend_to_path(self, directory: Path) -> None:
+        """Put ``directory`` first on PATH, so the commands in it stand in for the real ones."""
+        self._monkeypatch.setenv("PATH", str(directory), prepend=os.pathsep)
+
+    def change_dir(self, directory: Path) -> None:
+        self._monkeypatch.chdir(directory)
