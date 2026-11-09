@@ -14,11 +14,6 @@ The tools hold only the smells they can see. Before every commit, check your dif
 
 The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything else that runs in a sandbox is the runtime, in Python.
 
-## Code
-
-- **A check that raises is named `require_<what must hold>`**, with a leading underscore when private. It returns None, and raises where it finds the problem, as `_require_own_kit` in `src/foundry/session.py` does.
-- **Don't hand a failure to the caller to raise.** No function returns a reason for its caller to raise, and no helper builds an exception for another function to raise. [python-smells](agent-kit/skills/python-smells/references/hiding-failure.md) 3.8 says why.
-
 ## Docs
 
 - **Record a decision as an ADR** when it is hard to reverse, surprising without context, and the result of a real trade-off. Use the next number in `docs/adr/`.
