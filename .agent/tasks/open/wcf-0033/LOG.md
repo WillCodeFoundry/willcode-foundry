@@ -214,3 +214,15 @@ Done: merged origin/HEAD into task/wcf-0033 (already up to date, so no new commi
 from the `pr` skill and marked it ready. Every review Follow-up is answered: R18 deferred (entry 19), R17 accepted as
 is, plan-round ones answered in PLAN.md. AC1–AC11 are met by the tests entries 14, 17 and 19 name.
 Next: the human reviews and merges PR 80.
+
+## 22 · dev · progress
+Done: the human, in my session after round 6's approval, asked that create without TASK not have its own method:
+the entry point picks the next id, then takes the same `create_task` path as a given TASK. PR 80 is back to draft.
+- Asks D2 → human: drop `ProjectTasks.create_next_task` and `_create`'s None branch, restoring `create_task`; add a
+  read-only `ProjectTasks.taken_task_ids()`; `commands/task.py`'s `pick_next_task_id(project_tasks)` returns
+  `next_task_id(project_tasks.taken_task_ids())` with the "Give TASK" hint, and `create_main` calls `create_task` with
+  the id. Costs a second fetch of `agent-notes`; a lost race may refuse as "already exists" instead of git's push
+  rejection, still exit 1 with nothing written (AC7).
+- Answers D2: approved as proposed (the human).
+- plan-approved (the human) at the PLAN.md commit that follows this entry; PLAN.md's changed lines say `Amended: D2`.
+Next: implement D2 test-first, run the checks, wait for CI, end with ready-for-review.
