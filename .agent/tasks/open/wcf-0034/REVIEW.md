@@ -76,3 +76,68 @@ None.
 Summary: Standards 2 findings, none blocking (worst: R5, a support module docstring left out). Spec 3, of which 2 block (worst: R1, AC6 not shown end to end). Names 2, both blocking (worst: R6, `counting_git` outside the stand-in family with two return shapes). Behaviour and Smells were not run. No design questions are open.
 
 Verdict: plan changes needed
+
+## Round 2, plan (reviewing PLAN.md at 9aa5346)
+
+Reviewed against `TASK.md` at e475e61, unchanged since round 1. That commit is signed by the planner's identity, which the architect shares, so it could equally be the architect's. `PLAN.md` 92170f5 and 9aa5346 are signed by the dev. No other role changed either file. `LOG.md` holds no change to `TASK.md` that the human decided and `TASK.md` lacks. This round reviews the fix diff `24ff9dd..9aa5346` of `PLAN.md`.
+
+### Earlier findings
+
+- **R1: closed.** AC6 is now tested end to end through `cli.main`: one fetch, no `commit` or `push`, and refs unchanged. So a second fetch in `show_main` fails it. Foundry runs a bare `git` (`src/agent_runtime/git.py:102`) in `os.environ` (`src/foundry/commands/task.py:84`), so a stand-in first on `PATH` is reached. AC6 shows the setup records git, which gives AC4's empty record meaning. R9 notes one condition on that.
+- **R2: closed.** A new test in `tests/test_docs.py` checks the sentence at `README.md:35`.
+- **R3: closed.** `counting_stand_in` has one return shape, the calls file. The caller puts its dir on `PATH`.
+- **R4: closed.** `_ls_tree`'s docstring is in the Docs list.
+- **R5: closed.** `tests/support/project_repository.py`'s module docstring is in the Docs list.
+- **R6: closed.** The helper is now `counting_stand_in(directory, name)` in `tests/support/machine.py`. Its parameters match its siblings' (`tests/support/machine.py:34,44,75`), and it has one return shape.
+- **R7: closed.** The function is now `fetch_count(git_calls)`, so "log" stays the glossary's Log (`GLOSSARY.md:73`). "log" is also in the _Avoid_ list at `GLOSSARY.md:129`.
+
+### Standards
+
+- The `tests/support/machine.py` docstring names none of its helpers, so adding one leaves it true.
+- `tests/conftest.py` has no module docstring.
+- Step 1 is a refactor kept apart from the behaviour change, as git-conventions asks.
+- No design trigger: no module is added or moved, and no interface used outside the task changes.
+- When the dev edits the stand-ins row (`CONTRIBUTING.md:78`), its Need text should also cover "records its arguments, then runs the real command". That falls within the row edit the plan already names.
+
+- **R8 · Follow-up.** Step 1 makes `no_signing_key` a shared fixture by moving it to `tests/conftest.py`. CONTRIBUTING.md's helper table (`CONTRIBUTING.md:76-84`) lists the shared fixtures, and `CONTRIBUTING.md:74` says "A copy of one is a review finding". The Docs list doesn't add the fixture to that table.
+  - Who hits it: a later dev who needs git without a signing key reads the table, misses the fixture, and writes their own. This is rare.
+  - Direction: add `no_signing_key` to the Docs list's CONTRIBUTING.md entry.
+
+### Spec
+
+Every criterion from AC1 to AC9 has a test at a named seam, and no step does anything OS1–OS9 rules out. The README sentence AC8 names exists (`README.md:35`). The existing inline stand-in (`tests/test_project_tasks.py:574-576`) is a `scripted_stand_in` call plus `which git`, so step 1's move is straightforward.
+
+- **R9 · Follow-up.** AC4's empty record proves nothing unless its test sets up `PATH` in the same order as AC6's, and the plan doesn't fix that order (PLAN.md, Tests, AC4).
+  - `enter_foundry` calls `set_env(git_env)`, which replaces `PATH` (`tests/conftest.py:146-148`). So a `prepend_to_path` called before `enter_foundry` is silently undone.
+  - In AC6 that mistake fails `fetch_count == 1`. In AC4 it passes, because "no record" looks the same as "no git ran". That is R1's gap 2 again.
+  - Who hits it: the dev writing the AC4 test, once. The precedent at `tests/test_run.py:125-126` prepends after entering, so the risk is low.
+  - Direction: have AC4 and AC6 share one setup, so AC6's proof carries over.
+
+### Behaviour
+
+Not run: a plan round.
+
+### Smells
+
+Not run: a plan round.
+
+### Names
+
+Clean:
+
+- `counting_stand_in`: "counting" comes from AC6.
+- Its parameters `directory` and `name`, the same as its siblings'.
+- `fetch_count(git_calls)`.
+- "calls file" and "the file of recorded calls" in prose. Neither is introduced as a term.
+- `no_signing_key`, moved with its name unchanged.
+- The stand-ins row edit in the helper table.
+
+No new findings.
+
+### Design questions
+
+None.
+
+Summary: Standards 1 finding, none blocking (worst: R8, the newly shared `no_signing_key` missing from the helper table). Spec 1, none blocking (worst: R9, AC4's `PATH` setup order not fixed). Names 0. Behaviour and Smells were not run. R1–R7 are closed. No design questions are open.
+
+Verdict: plan approved at 9aa5346

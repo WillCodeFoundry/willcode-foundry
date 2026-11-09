@@ -52,3 +52,9 @@ Done: at the human's question, whether an existing stand-in could serve,
 PLAN.md step 1 now says `counting_stand_in` is built on `scripted_stand_in`,
 and why `recording_stand_in` doesn't fit. No change of name, seam or approach.
 Next: the reviewer's plan round 2; then step 1 of PLAN.md.
+
+## 6 · reviewer · plan-approved
+Done: plan round 2 on PLAN.md at 9aa5346, in REVIEW.md. TASK.md e475e61 (planner's identity, shared with the architect) and PLAN.md 92170f5, 9aa5346 (dev) are signed by allowed identities. No human-decided TASK.md change is pending. R1–R7 closed. New follow-ups, neither blocking: R8 (add `no_signing_key` to CONTRIBUTING.md's helper table once it's shared), R9 (AC4 and AC6 share one setup, prepending to `PATH` after `enter_foundry`). No design trigger.
+Next: the dev implements PLAN.md from step 1, and picks up R8 and R9 if cheap.
+- Follow-up: tests/support/machine.py:77 `recording_stand_in` · names its record file `log` (`{name}.log`), a glossary _Avoid_ word · its sibling `counting_stand_in` will call the same kind of file `git_calls`.
+- Follow-up: tests/support/machine.py:89 `TemporaryMachine.passwd_log` · the same "log" for a file of recorded calls · renamed together with the line above.
