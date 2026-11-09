@@ -433,6 +433,13 @@ WELL_FORMED = {f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"}
         (
             "store",
             "tst-0000",
+            {f"{TST_0000}/TURN/x": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"},
+            {},
+            r"task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.",
+        ),
+        (
+            "store",
+            "tst-0000",
             {f"{TST_0000}/TURN": " \n"},
             {},
             r"task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.",
@@ -474,6 +481,7 @@ WELL_FORMED = {f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"}
         "neither-open-nor-closed",
         "both-open-and-closed",
         "turn-missing",
+        "turn-dir",
         "turn-blank",
         "log-missing",
         "log-dir",
