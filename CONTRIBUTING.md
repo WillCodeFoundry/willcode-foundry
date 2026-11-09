@@ -75,11 +75,13 @@ Use these before writing setup of your own. A copy of one is a review finding.
 
 | Need | Helper |
 |---|---|
-| A command on `PATH` that runs a script, exits with a code, or records its arguments | `scripted_stand_in`, `stand_in`, `recording_stand_in` in `tests/support/machine.py` |
+| A command on `PATH` that runs a script, exits with a code, records its arguments, or records them then runs the real command | `scripted_stand_in`, `stand_in`, `recording_stand_in`, `counting_stand_in` in `tests/support/machine.py` |
+| How many fetches git made, from the calls `counting_stand_in` recorded | `fetch_count` in `tests/support/project_repository.py` |
 | A foundry of the test's own: its config, projects and roles | `write_foundry` in `tests/support/foundry_root.py` |
 | A project's GitHub repository, its tasks, or a change to its notes branch | the `project_repository` fixture: `ProjectRepository.project_tasks`, `edit_notes`, `head`, `notes_head` |
 | git in a directory, or a commit the hooks never see | `git`, `commit_unchecked` in `tests/support/__init__.py` |
 | git with an identity of its own | the `git_env` and `git_identity` fixtures |
+| git with no signing key | the `no_signing_key` fixture |
 | An environment variable, `PATH` or the working directory, for this test only | the `process_environment` fixture: `set_env`, `prepend_to_path`, `change_dir` |
 | The real CLI, run in a foundry of the test's own | the `enter_foundry` fixture |
 

@@ -2,7 +2,6 @@
 and reading and listing their turns."""
 
 import contextlib
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,16 +19,10 @@ from foundry.project_tasks import (
     log_with_handoff_entry,
 )
 from foundry.task import Status, Task
-from tests.support.machine import scripted_stand_in
-from tests.support.project_repository import git_output, project_tasks_of
+from tests.support.machine import counting_stand_in
+from tests.support.project_repository import fetch_count, git_output, project_tasks_of
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
-
-
-@pytest.fixture
-def no_signing_key(git_env) -> None:
-    """Your git config, without a signing key."""
-    git_output(git_env, "config", "--global", "--unset", "user.signingkey")
 
 
 def create(project_tasks: ProjectTasks, task_id: str = "tst-0001") -> Task:
@@ -568,17 +561,15 @@ def test_listing_an_unreachable_repository_fails_with_the_message_from_git(tmp_p
 
 def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env, tmp_path: Path) -> None:
     project_repository.edit_notes(write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(6)})
-    log = tmp_path / "git-calls.log"
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
-    real_git = subprocess.run(["which", "git"], env=git_env, capture_output=True, text=True, check=True).stdout.strip()
-    scripted_stand_in(shim_dir, "git", f'echo "$*" >> {log}\nexec {real_git} "$@"')
+    git_calls = counting_stand_in(shim_dir, "git")
     counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
 
     found = project_repository.project_tasks(env=counting_env).fetch_open_task_turns()
 
     assert len(found) == 6
-    assert sum(" fetch " in f" {line} " for line in log.read_text().splitlines()) == 1
+    assert fetch_count(git_calls) == 1
 
 
 # --- foundry task list: the lines and the arguments -----------------------------------------
