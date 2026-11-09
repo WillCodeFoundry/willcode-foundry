@@ -39,35 +39,11 @@ default branch's change means `TASK.md` no longer holds. For example, the
 code the task extends was replaced.
 
 ## Plan
-Before any code, write how you will build the task in
-`$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/PLAN.md`. It holds decisions,
-not code, and its length follows them: a one-line fix needs a three-line plan.
-
-```markdown
-# Plan: <task id>
-
-## Approach
-<How the change works, in a few sentences, and the alternative you turned down.>
-
-## Steps
-1. <A refactor the change needs comes first, in commits that change no
-   behaviour. Then the behaviour change.>
-
-## Names
-- <Each public name the plan adds or renames, and where its word comes from.>
-
-## Errors
-- <Each message a user or caller can see, word for word.>
-
-## Tests
-- AC1: <the test that will show it, at which seam, and the test helpers it
-  uses>. An AC no test can show says why.
-- <A test no AC needs, with the bug it catches.>
-
-## Docs
-- <Each doc and docstring, modules' and classes' included, the change makes
-  untrue.>
-```
+Before any code, write how you will build the task in the task's `PLAN.md`,
+in `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/`. The task starts with it
+from the foundry's task template: fill in its sections, as its comment says.
+A task without one gets one with the sections Approach, Steps, Names,
+Errors, Tests and Docs.
 
 - Read the code first, and the project's test helpers, so the plan names
   them rather than rebuilding them.
