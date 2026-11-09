@@ -64,3 +64,18 @@ direction.
   and ids with other prefixes are ignored. (the human)
 Next: the dev revises PLAN.md for R1/R8 as answered here and for R7 as answered in entry 7, then ends with
 plan-ready.
+
+## 9 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Revised PLAN.md for plan round 1; each changed
+line ends `Amended: R<n>`. No code yet.
+- Answers R1, R8: the TASK help and the README sentence now say the next id follows the task prefix most of the
+  project's task ids use, and that ids with other prefixes are ignored (PLAN.md Docs), as entry 8 asks.
+- Answers R7: as entry 7 answers it, `BRANCH_PREFIX` stays; the regex group, `next_task_id`'s locals and the tie
+  error say `task_prefix` / "task prefix", and GLOSSARY.md's **Task id** gets bare "prefix" under _Avoid_ (Steps 1–3,
+  Names, Errors, Docs).
+- Answers R2: `task.py`'s module docstring and its codemap row are in the Docs list.
+- Answers R3: the Docs list names the `project_tasks.py:5-6` sentence and how it changes.
+- Answers R4: the AC7 test asserts the final tips of `agent-notes` and the task branch equal the competitor's.
+- Answers R5: the AC1 method test asserts the commit subject `Add task wcf-0034`.
+- Answers R6: the AC5/AC6 CLI test's setup is named: `agent-notes` deleted for AC5; seeded tasks removed for AC6.
+Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
