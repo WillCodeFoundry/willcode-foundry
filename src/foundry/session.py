@@ -13,6 +13,7 @@ asks agent_sandbox for. ``recreate_hint`` says how to start a sandbox over.
 
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -175,15 +176,23 @@ def _holds_only_an_empty_workspace(session_dir: Path, workspace_dir: Path) -> bo
 
 
 def _recorded_variables(definition: SandboxDefinition) -> contract.SessionVariables:
-    """The session variables the existing sandbox was created with; raises if they aren't this foundry's.
+    """The session variables the existing sandbox was created with; raises if they aren't this foundry's."""
+    if reason := _why_not_this_foundrys(definition.variables):
+        raise FoundryError(
+            f"sandbox {definition.name} was created with session variables this foundry doesn't set ({reason}), "
+            f"so its agent kit would use them; {recreate_hint(definition.name)}"
+        )
+    return contract.read_session_variables(definition.variables)
 
-    They are this foundry's when none is missing, and each holds what session_variables derives from the recorded
-    role, task, repository and paths. A sandbox created before a name changed keeps the old one, and its kit would
-    use it.
+
+def _why_not_this_foundrys(env: Mapping[str, str]) -> str | None:
+    """Why these variables aren't what this foundry sets, or None when they are.
+
+    They are when none is missing, and each holds what session_variables derives from the recorded role, task,
+    repository and paths. A sandbox created before a name changed keeps the old one, and its kit would use it.
     """
-    env = definition.variables
     if missing := contract.missing_names(env, contract.NAMES):
-        raise _not_this_foundrys(definition.name, f"missing {', '.join(missing)}")
+        return f"missing {', '.join(missing)}"
     recorded = contract.read_session_variables(env)
     derived = session_variables(
         role_name=recorded.agent_role,
@@ -195,15 +204,8 @@ def _recorded_variables(definition: SandboxDefinition) -> contract.SessionVariab
     if differing := [
         f"{name}={env[name]!r}, now {value!r}" for name, value in derived.to_env().items() if env[name] != value
     ]:
-        raise _not_this_foundrys(definition.name, f"other values: {'; '.join(differing)}")
-    return recorded
-
-
-def _not_this_foundrys(sandbox_name: str, reason: str) -> FoundryError:
-    return FoundryError(
-        f"sandbox {sandbox_name} was created with session variables this foundry doesn't set ({reason}), "
-        f"so its agent kit would use them; {recreate_hint(sandbox_name)}"
-    )
+        return f"other values: {'; '.join(differing)}"
+    return None
 
 
 def _require_same_sandbox(
