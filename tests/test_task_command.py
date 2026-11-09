@@ -145,6 +145,7 @@ def test_create_without_a_task_creates_the_next_one(
     assert capsys.readouterr() == ("created task wcf-0034 in store\nrun it with: foundry run store wcf-0034\n", "")
     assert project_repository.head("task/wcf-0034") == project_repository.head("main")
     assert project_repository.notes_files()[f"{OPEN_DIR}/wcf-0034/TASK.md"] == "# Task\n"
+    assert project_repository.notes_commits()[0] == "Add task wcf-0034"
 
 
 def take_no_task_id(project_repository) -> None:

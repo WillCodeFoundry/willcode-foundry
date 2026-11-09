@@ -91,20 +91,19 @@ def create_main(args: argparse.Namespace) -> int:
     project = config.load(foundry_root).project(args.project_name)
     template = task.load_task_template(paths.task_template_dir(foundry_root))
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        created = create_task(project_tasks, args.task_id, template)
+        task_id = args.task_id or pick_next_task_id(project_tasks)
+        created = project_tasks.create_task(task_id, template)
     print("\n".join(report(CREATED, project.name, created)))
     return 0
 
 
-def create_task(project_tasks: ProjectTasks, task_id: str | None, task_template: Mapping[str, str]) -> task.Task:
-    """Create the task ``task_id``, or the project's next task when it is None.
+def pick_next_task_id(project_tasks: ProjectTasks) -> str:
+    """The project's next task id, from the ids its tasks and task branches take.
 
-    When no next task id can be picked, the FoundryError says to give TASK.
+    When none can be picked, the FoundryError says to give TASK.
     """
-    if task_id is not None:
-        return project_tasks.create_task(task_id, task_template)
     try:
-        return project_tasks.create_next_task(task_template)
+        return task.next_task_id(project_tasks.taken_task_ids())
     except task.NoNextTaskIdError as error:
         raise FoundryError(f"{error}. Give TASK to say which task to create.") from error
 
