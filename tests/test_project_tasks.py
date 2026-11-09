@@ -138,15 +138,13 @@ def test_an_unreachable_repository_fails_with_the_message_from_git(tmp_path: Pat
 
 # --- create_next_task -------------------------------------------------------------------
 
-SEEDED_TASK_NOTES_DIRS = (".agent/tasks/open/tst-0000", ".agent/tasks/closed/cls-0000")
-
 
 def take_task_ids(project_repository, *, open_ids=(), closed_ids=(), branch_ids=(), keep_seeded=False) -> None:
     """Take task ids on the project repository: notes dirs for open and closed tasks, task branches from main for
     ``branch_ids``. The seeded tasks are removed unless ``keep_seeded``."""
     notes = {Task.as_open(task_id).task_file: f"{task_id}\n" for task_id in open_ids}
     notes |= {Task.as_closed(task_id).task_file: f"{task_id}\n" for task_id in closed_ids}
-    project_repository.edit_notes(write=notes, remove=() if keep_seeded else SEEDED_TASK_NOTES_DIRS)
+    project_repository.edit_notes(write=notes, remove=() if keep_seeded else project_repository.seeded_task_notes_dirs)
     for task_id in branch_ids:
         project_repository.git("branch", Task.as_open(task_id).branch, "main")
 
@@ -169,10 +167,18 @@ def test_the_next_task_is_created_as_create_task_would_create_it(project_reposit
     assert project_repository.notes_signed_with_your_key()
 
 
-@pytest.mark.parametrize("kind", ["open", "closed", "branch"])
-def test_the_highest_taken_number_counts_whichever_kind_holds_it(project_repository, kind: str) -> None:
-    taken = {"open_ids": ["wcf-0003"]}
-    taken[f"{kind}_ids"] = [*taken.get(f"{kind}_ids", []), "wcf-0007"]
+@pytest.mark.parametrize(
+    "taken",
+    [
+        {"open_ids": ["wcf-0003", "wcf-0007"]},
+        {"open_ids": ["wcf-0003"], "closed_ids": ["wcf-0007"]},
+        {"open_ids": ["wcf-0003"], "branch_ids": ["wcf-0007"]},
+    ],
+    ids=["open", "closed", "branch"],
+)
+def test_the_highest_taken_number_counts_whichever_kind_holds_it(
+    project_repository, taken: dict[str, list[str]]
+) -> None:
     take_task_ids(project_repository, **taken)
 
     assert project_repository.project_tasks().create_next_task(TEMPLATE) == Task.as_open("wcf-0008")

@@ -67,6 +67,7 @@ class ProjectRepository:
 
     open_task = Task.as_open("tst-0000")
     closed_task = Task.as_closed("cls-0000")
+    seeded_task_notes_dirs = (open_task.task_notes_dir, closed_task.task_notes_dir)
 
     def __init__(self, path: Path, git_env: dict[str, str]) -> None:
         self.path = path

@@ -120,8 +120,6 @@ def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accord
 
 # --- foundry task create without TASK ---------------------------------------------------------
 
-SEEDED_TASK_NOTES_DIRS = (f"{OPEN_DIR}/tst-0000", f"{CLOSED_DIR}/cls-0000")
-
 
 @pytest.fixture
 def foundry_of_store(project_repository, enter_foundry, tmp_path: Path) -> Path:
@@ -138,7 +136,7 @@ def test_create_without_a_task_creates_the_next_one(
 ) -> None:
     project_repository.edit_notes(
         write={f"{OPEN_DIR}/wcf-0030/TASK.md": "x\n", f"{CLOSED_DIR}/wcf-0032/TASK.md": "x\n"},
-        remove=SEEDED_TASK_NOTES_DIRS,
+        remove=project_repository.seeded_task_notes_dirs,
     )
     project_repository.git("branch", "task/wcf-0033", "main")
 
@@ -149,22 +147,29 @@ def test_create_without_a_task_creates_the_next_one(
     assert project_repository.notes_files()[f"{OPEN_DIR}/wcf-0034/TASK.md"] == "# Task\n"
 
 
+def take_no_task_id(project_repository) -> None:
+    project_repository.git("branch", "--quiet", "-D", "agent-notes")
+
+
+def tie_two_task_prefixes(project_repository) -> None:
+    project_repository.edit_notes(
+        write={f"{CLOSED_DIR}/wcf-0002/TASK.md": "x\n"}, remove=project_repository.seeded_task_notes_dirs
+    )
+    project_repository.git("branch", "task/abc-0001", "main")
+
+
 @pytest.mark.parametrize(
-    "error",
+    "take_task_ids, error",
     [
-        "the project repository has no task id to follow",
-        "the project repository's task ids tie for the most common task prefix: abc, wcf",
+        (take_no_task_id, "the project repository has no task id to follow"),
+        (tie_two_task_prefixes, "the project repository's task ids tie for the most common task prefix: abc, wcf"),
     ],
     ids=["no-task-id", "tie"],
 )
 def test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_nothing(
-    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str], error: str
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str], take_task_ids, error: str
 ) -> None:
-    if "tie" in error:
-        project_repository.edit_notes(write={f"{CLOSED_DIR}/wcf-0002/TASK.md": "x\n"}, remove=SEEDED_TASK_NOTES_DIRS)
-        project_repository.git("branch", "task/abc-0001", "main")
-    else:
-        project_repository.git("branch", "--quiet", "-D", "agent-notes")
+    take_task_ids(project_repository)
     refs_before = project_repository.git("for-each-ref")
 
     assert cli.main(["task", "create", "store"]) == 1
@@ -180,7 +185,9 @@ def test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winne
 
     The competitor commits at another date: two creates in the same second, by the same identity, make the same
     commit, and the second push changes nothing."""
-    project_repository.edit_notes(write={f"{OPEN_DIR}/wcf-0030/TASK.md": "x\n"}, remove=SEEDED_TASK_NOTES_DIRS)
+    project_repository.edit_notes(
+        write={f"{OPEN_DIR}/wcf-0030/TASK.md": "x\n"}, remove=project_repository.seeded_task_notes_dirs
+    )
     notes_before = project_repository.notes_head()
     bin_dir, tips = tmp_path / "bin", tmp_path / "winner-tips"
     bin_dir.mkdir()
