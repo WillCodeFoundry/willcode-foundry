@@ -20,9 +20,15 @@ prints them as `error: <message>` and exits 1 (AC5). Because: DR6.
 
 ## Steps
 1. Refactor, no behaviour change: move the counting stand-in for git out of
-   `test_listing_costs_one_fetch_however_many_tasks` into `tests/support/project_repository.py` as
-   `counting_git(directory, git_env)`, returning the env with it first on `PATH` and its call log; and
-   `fetch_count(log)`. The existing test uses them. Add it to CONTRIBUTING.md's helper table.
+   `test_listing_costs_one_fetch_however_many_tasks` into `tests/support/machine.py`, beside its siblings, as
+   `counting_stand_in(directory, name) -> Path`: a command in `directory` that records each run's arguments, one
+   line each, then runs the real `name`, found on `PATH` when it is made. It returns the file of recorded calls,
+   its one return shape; the caller puts `directory` first on `PATH`, as for `scripted_stand_in`. Add
+   `fetch_count(git_calls) -> int` to `tests/support/project_repository.py`, the git fetches that file records.
+   Move the `no_signing_key` fixture from `tests/test_project_tasks.py` to `tests/conftest.py`, so the end-to-end
+   AC6 test can use it. The existing tests use all three. Amended: R3, R6, R7. Because: one shape serves both the
+   env a `ProjectTasks` takes and `process_environment.prepend_to_path`; the family word is `stand_in`; `log` is
+   the glossary's Log.
 2. `FetchedBranch.is_link`, with `_ls_tree` returning each entry's mode too. Tests in
    `tests/test_project_scratch_clone.py`.
 3. `last_log_entry`, `TaskTurnAndLog` and `ProjectTasks.fetch_task_turn_and_log`, test-first in
@@ -39,6 +45,9 @@ prints them as `error: <message>` and exits 1 (AC5). Because: DR6.
   glossary's **Log**, the whole text of `LOG.md`.
 - `last_log_entry(log) -> str | None`: the last entry, or None when the log has none. "entry" is the glossary's word.
 - `show_main`, `show_lines(turn_and_log) -> list[str]`: as `handoff_main` and `handoff_lines`.
+- Tests only: `counting_stand_in(directory, name) -> Path`, in the family of `scripted_stand_in`, `stand_in` and
+  `recording_stand_in`; "counting" is TASK.md's word. `fetch_count(git_calls) -> int`: `git_calls` names what the
+  file holds, git's calls, and keeps "log" for `LOG.md`. Amended: R6, R7. Because: R6, R7.
 
 ## Errors
 New:
@@ -69,19 +78,25 @@ Printed on stdout: `status: closed`, `turn: <TURN>`, a blank line, then the entr
   stdout exactly `turn: dev\n\n## 2 · dev · progress\n…\n`, stderr empty, exit 0.
 - AC2: `show_lines` for a closed task starts with `status: closed`; end to end on `cls-0000`.
 - AC3: `last_log_entry("# Log\n")` is None; `show_lines` gives `no log entry yet`; end to end, exit 0.
-- AC4: end to end with `counting_git`'s dir prepended to `PATH` (`process_environment.prepend_to_path`): an
-  unknown project and an invalid id each print the message above and leave the call log empty.
+- AC4: end to end with `counting_stand_in(dir, "git")` and `dir` prepended to `PATH`
+  (`process_environment.prepend_to_path`): an unknown project and an invalid id each print the message above and
+  leave the calls file absent or empty. The AC6 test below shows the same setup records git when it runs.
+  Amended: R1, R3. Because: an empty record proves nothing unless the setup is shown to record.
 - AC5: `test_project_tasks.py`, parametrized: each malformed case (TURN missing, a dir, blank, a link; LOG.md
   missing, a dir, a link; via `edit_notes`) raises its message. End to end, parametrized over every AC5 failure,
   including an unreachable repository and a bare one with no `agent-notes`: stdout empty, stderr one
   `error: <message>` line, exit 1.
-- AC6: `test_project_tasks.py`, with the `no_signing_key` fixture and `counting_git`: `fetch_count(log) == 1`, no
-  `commit` or `push` in the log, and `git for-each-ref` on the repository the same before and after.
+- AC6: end to end through `cli.main`, in `test_task_command.py`, with the `no_signing_key` fixture and the same
+  `counting_stand_in` setup as AC4: a successful `foundry task show` exits 0, `fetch_count(git_calls) == 1`, no
+  recorded call is a `commit` or a `push`, and `git for-each-ref` on the project repository is the same before
+  and after. So a `show_main` that fetched again fails it. Amended: R1. Because: counted at `ProjectTasks` only, a
+  second fetch in `show_main` would pass.
 - AC7: `TURN` linked to `/etc/hostname`, and `LOG.md` linked to a notes file holding a marker line: end to end,
   neither the marker nor the target's text appears on stdout or stderr, and the failure is AC5's. `is_link` in
   `test_project_scratch_clone.py`: a link is one, and a file, a dir and a missing path are not.
 - AC8: `test_task_command.py`: `foundry task --help` names `show`. `tests/test_docs.py` checks the README's command
-  table against the parser.
+  table against the parser, and a new test there checks that the README sentence holding "the question at the end
+  of its `LOG.md`" also names `foundry task show`. Amended: R2. Because: the table test reads table rows only.
 - AC9: the checks in CONTRIBUTING.md, run before each push.
 
 ## Docs
@@ -91,4 +106,8 @@ Printed on stdout: `status: closed`, `turn: <TURN>`, a blank line, then the entr
 - The module docstrings of `commands/task.py` and `project_tasks.py`, and the `task` parser's help, which list the
   actions.
 - `FetchedBranch.read_text`'s docstring points to `is_link`.
-- CONTRIBUTING.md's helper table: `counting_git` and `fetch_count`.
+- CONTRIBUTING.md's helper table: `counting_stand_in` in the stand-ins' row, and `fetch_count`. Amended: R6.
+  Because: R6.
+- `_ls_tree`'s docstring: it gives each entry's mode too. Amended: R4. Because: R4.
+- `tests/support/project_repository.py`'s module docstring: it also counts git's fetches. Amended: R5.
+  Because: R5.
