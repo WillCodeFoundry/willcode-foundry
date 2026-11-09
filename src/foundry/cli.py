@@ -1,8 +1,8 @@
 """The foundry command: one subcommand per module in foundry.commands.
 
 A command prints its result, such as the tasks it created. Progress, such as a new session or a pruned remnant, goes
-to the ``foundry`` logger from the module where it happens. main shows it on stderr as ``==>`` lines, at INFO, and
-with ``-v`` the detail at DEBUG too.
+to the ``foundry`` logger from the module where it happens. main shows it on stderr through progress_on_stderr: ``==>``
+lines at INFO, and with ``-v`` the detail at DEBUG too.
 """
 
 import argparse
@@ -35,7 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Commands either return an exit code or replace this process; errors are reported here only."""
     args = build_parser().parse_args(argv)
     handler: Callable[[argparse.Namespace], int] = args.func
-    with _progress_on_stderr(verbose=args.verbose):
+    with progress_on_stderr(verbose=args.verbose):
         try:
             return handler(args)
         except (FoundryError, SandboxError, GitError) as error:
@@ -44,7 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 @contextmanager
-def _progress_on_stderr(*, verbose: bool) -> Iterator[None]:
+def progress_on_stderr(*, verbose: bool) -> Iterator[None]:
     """Show progress on stderr while one command runs, and detail too when ``verbose``.
 
     The handler and level are removed afterwards, so nothing carries over to the next call of main.
