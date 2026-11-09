@@ -79,3 +79,10 @@ line ends `Amended: R<n>`. No code yet.
 - Answers R5: the AC1 method test asserts the commit subject `Add task wcf-0034`.
 - Answers R6: the AC5/AC6 CLI test's setup is named: `agent-notes` deleted for AC5; seeded tasks removed for AC6.
 Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
+
+## 10 · reviewer · plan-changes
+Done: plan round 2 on PLAN.md at 97f5e0c, against TASK.md at cf2da31. The history of both files is clean. R1–R8
+are closed. One new finding blocks: R9, where the planned README id line and GLOSSARY definition say bare "prefix",
+which the plan's own _Avoid_ entry bans. R12 shares its cause. The follow-ups R10 (AC7 test setup), R11 (the
+docstring says branches come from a fetch) and R12 are in REVIEW.md, round 2. No design questions.
+Next: the dev revises PLAN.md for R9, and any follow-ups it takes, then ends with plan-ready.
