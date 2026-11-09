@@ -57,7 +57,7 @@ def session_for(foundry_root: Path, task_id: str = "wcf-0042") -> Session:
 
 
 def request_for(foundry_root: Path) -> LaunchRequest:
-    return session_for(foundry_root).launch_request(config.load(foundry_root).role("dev"))
+    return session_for(foundry_root).launch_request()
 
 
 def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_root: Path) -> None:
@@ -102,9 +102,8 @@ def test_a_new_session_is_shown_as_progress_and_an_existing_one_is_not(
     assert caplog.messages == [f"session:   {created.dir} (new)"]
 
     caplog.clear()
-    reopened = session_for(foundry_root)
+    session_for(foundry_root)
     assert caplog.messages == []
-    assert (created.created, reopened.created) == (True, False)
 
 
 def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(

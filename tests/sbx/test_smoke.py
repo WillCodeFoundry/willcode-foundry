@@ -83,10 +83,11 @@ class Smoke:
     def make_launch_request(self) -> LaunchRequest:
         """The session, created if missing, and the runtime built into the kit, as foundry run does: no sbx call yet."""
         foundry_config = config.load(self.foundry_root)
-        role = foundry_config.role(ROLE)
-        session = open_or_create(self.foundry_root, project=foundry_config.project(PROJECT), role=role, task=TASK)
+        session = open_or_create(
+            self.foundry_root, project=foundry_config.project(PROJECT), role=foundry_config.role(ROLE), task=TASK
+        )
         build_runtime(paths.agent_kit_dir(self.foundry_root))
-        self.request = session.launch_request(role)
+        self.request = session.launch_request()
         return self.request
 
     def provision_sandbox(self) -> None:

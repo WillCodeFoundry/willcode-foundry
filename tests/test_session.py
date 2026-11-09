@@ -22,7 +22,6 @@ def test_the_first_open_creates_the_session_with_its_workspace_inside(tmp_path: 
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
     session_dir = tmp_path / "sessions" / "dev-tkt-store-wcf-0042"
-    assert opened.created
     assert opened.dir == session_dir
     assert opened.definition == SandboxDefinition.read(session_dir)
     assert opened.definition.name == "dev-tkt-store-wcf-0042"
@@ -70,7 +69,6 @@ def test_a_reopen_reuses_the_definition_unchanged(tmp_path: Path) -> None:
 
     second = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
-    assert not second.created
     assert (second.dir, second.definition) == (first.dir, first.definition)
     assert definition_path.read_text() == before
 
@@ -97,7 +95,7 @@ def test_a_sandbox_for_another_role_task_or_repository_is_refused(
 def test_the_init_command_runs_the_agent_kit_of_this_foundry(tmp_path: Path) -> None:
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
-    assert opened.init_command == AgentKit(tmp_path / "agent-kit").runtime_command("session-init")
+    assert opened.launch_request().init_command == AgentKit(tmp_path / "agent-kit").runtime_command("session-init")
 
 
 def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> None:
@@ -144,7 +142,6 @@ def test_a_session_left_without_its_definition_is_finished(tmp_path: Path) -> No
 
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
-    assert opened.created
     assert opened.definition == SandboxDefinition.read(opened.dir)
 
 
@@ -172,21 +169,21 @@ def test_a_file_where_the_session_directory_goes_is_refused(tmp_path: Path) -> N
 # --- session variables ---------------------------------------------------------
 
 
-def test_the_session_carries_its_variables(tmp_path: Path) -> None:
+def test_the_definition_holds_the_session_variables_for_its_role_and_task(tmp_path: Path) -> None:
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
-    assert opened.variables == SessionVariables(
+    assert SessionVariables.from_env(opened.definition.variables) == SessionVariables(
         role_name="dev",
         task=Task.as_open("wcf-0042"),
         repo_url="git@github.com:o/tkt-store.git",
         agent_kit_dir=tmp_path / "agent-kit",
         code_checkout_dir="/home/agent/work/tkt-store",
     )
-    assert opened.variables.to_env() == opened.definition.variables
 
 
 def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
-    variables = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001")).variables
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
+    variables = SessionVariables.from_env(opened.definition.variables)
 
     assert SessionVariables.from_env(variables.to_env()) == variables
 

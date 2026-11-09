@@ -44,7 +44,7 @@ def main(args: argparse.Namespace) -> NoReturn:
         )
     session = open_or_create(foundry_root, project=project, role=role, task=task)  # creates it the first time
     build_runtime(paths.agent_kit_dir(foundry_root))  # writes it when it changed
-    agent_sandbox.launch(session.launch_request(role))
+    agent_sandbox.launch(session.launch_request())
 
 
 def fetch_open_task(project_tasks: ProjectTasks, *, project_name: str, task_id: str) -> Task:
