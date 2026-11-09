@@ -20,7 +20,7 @@ def require_valid_order_args(shop: Shop, order_id: str, quantity: int) -> Custom
 Better:
 
 ```python
-def check_order_args(order_id: str, quantity: int) -> None:
+def require_valid_order_args(order_id: str, quantity: int) -> None:
     if not Order.is_valid_id(order_id):
         raise ShopError(f"{order_id!r} is not an order id")
     if quantity < 1:
@@ -30,7 +30,7 @@ def check_order_args(order_id: str, quantity: int) -> None:
 customer = shop.customer_for(order_id)
 ```
 
-- **Why:** the name has to say both jobs, or it lies about one. Neither job can be reused alone, and a constructor called for its side effect looks like dead code.
+- **Why:** the name has to say both jobs, or it lies about one. The check keeps its name once it returns nothing, since it now does only what the name says. Neither job can be reused alone, and a constructor called for its side effect looks like dead code.
 - **Fine when:** the pair is atomic by nature, such as `dict.pop` or a compare-and-set.
 - **Spot it:** names with "and"; a return value most callers ignore; a call whose result is discarded but whose comment says it "refuses" or "checks".
 
