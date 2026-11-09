@@ -17,6 +17,8 @@ from foundry.errors import FoundryError
 _REMOTE_NAME = "origin"
 # The word the messages use for each type of git tree entry a caller can ask for.
 _ENTRY_WORD_BY_TYPE = {"tree": "dir", "blob": "file"}
+# The mode git gives a symbolic link: a blob holding the link's target name.
+_LINK_MODE = "120000"
 
 
 class BranchNotFoundError(FoundryError):
@@ -44,15 +46,21 @@ class FetchedBranch:
         PathNotOnBranchError, which nothing else raises, when ``path`` isn't a dir here.
         """
         self._require_entry(path, "tree")
-        return [name for entry_type, name in _ls_tree(self._git, f"{self.commit}:{path}") if entry_type == "tree"]
+        entries = _ls_tree(self._git, f"{self.commit}:{path}")
+        return [name for _, entry_type, name in entries if entry_type == "tree"]
 
     def read_text(self, path: str) -> str:
-        """The text of the file ``path``; a link reads as its target's name.
+        """The text of the file ``path``; a link reads as its target's name, so check is_link first to refuse one.
 
         PathNotOnBranchError when ``path`` isn't a file here.
         """
         self._require_entry(path, "blob")
         return self._git.output("show", f"{self.commit}:{path}")
+
+    def is_link(self, path: str) -> bool:
+        """Whether ``path`` is a link here; False when nothing, a file or a dir is at ``path``."""
+        entries = _ls_tree(self._git, self.commit, "--", path)
+        return (_LINK_MODE, "blob", path) in entries
 
     def _require_entry(self, path: str, entry_type: Literal["tree", "blob"]) -> None:
         """Check ``path`` is an ``entry_type`` entry.
@@ -61,7 +69,8 @@ class FetchedBranch:
         GitError, never taken for a missing path.
         """
         entries = _ls_tree(self._git, self.commit, "--", path)
-        if (entry_type, path) not in entries:  # ls-tree lists a dir's contents for "dir/", so match the name exactly
+        # ls-tree lists a dir's contents for "dir/", so match the name exactly
+        if (entry_type, path) not in [(found_type, name) for _, found_type, name in entries]:
             raise PathNotOnBranchError(f"{self.name} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
 
 
@@ -189,10 +198,11 @@ class ProjectScratchClone:
         self._git.output("fetch", "--quiet", "--depth=1", _REMOTE_NAME, branch)
 
 
-def _ls_tree(git: Git, *args: str) -> list[tuple[str, str]]:
-    """The type and name of each entry ``git ls-tree`` lists for ``args``."""
+def _ls_tree(git: Git, *args: str) -> list[tuple[str, str, str]]:
+    """The mode, type and name of each entry ``git ls-tree`` lists for ``args``."""
     entries = []
     for entry in filter(None, git.output("ls-tree", "-z", *args).split("\0")):
         header, _, name = entry.partition("\t")  # "<mode> <type> <object>", a tab, the name
-        entries.append((header.split()[1], name))
+        mode, entry_type, _ = header.split()
+        entries.append((mode, entry_type, name))
     return entries

@@ -40,7 +40,7 @@ def test_write_refuses_a_link_and_writes_nothing_through_it(tmp_path: Path, git_
     assert outside.read_text() == "outside\n"
 
 
-# --- ProjectScratchClone.fetch_branch, FetchedBranch: subdir_names, read_text -------------------
+# --- ProjectScratchClone.fetch_branch, FetchedBranch: subdir_names, read_text, is_link ----------
 
 
 def test_fetch_branch_refuses_a_branch_the_remote_lacks(project_repository) -> None:
@@ -83,6 +83,16 @@ def test_read_text_of_a_missing_file_or_a_dir_raises_the_narrow_error(project_re
     for path in (f"{task.OPEN_DIR}/tst-0000/NOPE", f"{task.OPEN_DIR}/tst-0000", f"{task.OPEN_DIR}/tst-0000/"):
         with pytest.raises(PathNotOnBranchError):
             notes_branch.read_text(path)
+
+
+def test_is_link_is_true_for_a_link_only(project_repository) -> None:
+    project_repository.edit_notes(symlink={".agent/tasks/open/tst-0000/LINK": "/etc/hostname"})
+    notes_branch = project_repository.clone().fetch_branch(task.NOTES_BRANCH)
+    task_notes_dir = f"{task.OPEN_DIR}/tst-0000"
+
+    assert notes_branch.is_link(f"{task_notes_dir}/LINK")
+    for path in (f"{task_notes_dir}/TASK.md", task_notes_dir, f"{task_notes_dir}/", f"{task_notes_dir}/NOPE"):
+        assert not notes_branch.is_link(path), path
 
 
 def test_reads_use_the_commit_fetched_even_after_a_later_fetch(project_repository) -> None:
