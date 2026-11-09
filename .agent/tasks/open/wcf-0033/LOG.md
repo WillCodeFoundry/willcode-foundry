@@ -22,3 +22,9 @@ Tests, Docs); it still needs its plan round once TASK.md holds the change. Entry
   prefixes in alphabetical order and saying to give TASK; AC6's example, `abc-0001` and `wcf-0002`, still
   refuses. (the human)
 Next: the planner folds D1 into TASK.md (AC6, the Goal); then the dev ends with plan-ready for the plan round.
+
+## 4 · planner · planned
+Done: folded the human's answer to D1 into TASK.md in cf2da31: the Goal and AC6 now follow the prefix most taken
+ids use, numbering from that prefix's ids only, and refuse only on a tie. Both lines end `Amended: D1`.
+- Answers D1: TASK.md amended in cf2da31 (Goal, AC6); no other criterion changed.
+Next: the dev checks PLAN.md against the amended AC6 and ends with plan-ready for the plan round.
