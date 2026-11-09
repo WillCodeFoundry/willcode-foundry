@@ -21,17 +21,15 @@ from tests.support.kit import HOOK_COMMANDS, hook_command, runtime_command
 
 
 @pytest.fixture
-def repo(monkeypatch, kit_env, created_task, tmp_path):
+def repo(process_environment, kit_env, created_task, tmp_path):
     """(code checkout, notes checkout), made by session-setup from a created task's origin, both clean and
     pushed."""
     # session-setup includes the role's gitconfig, which signs with the role's key; there is no
     # private key here, so signing is turned off by git's environment override, which beats any file.
-    for name, value in UNSIGNED.items():
-        monkeypatch.setenv(name, value)
+    process_environment.set_env(UNSIGNED)
 
     env = {**kit_env(TASK), "AGENT_REPO_URL": f"file://{created_task}"}
-    for key, value in env.items():
-        monkeypatch.setenv(key, value)
+    process_environment.set_env(env)
     setup = subprocess.run(
         runtime_command(Path(env["AGENT_KIT_DIR"]), "session-setup"),
         env=os.environ,

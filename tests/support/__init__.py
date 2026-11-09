@@ -1,4 +1,4 @@
-"""Helpers the tests share: plain functions and constants. Fixtures and pytest hooks stay in the conftests."""
+"""Helpers the tests share. Fixtures and pytest hooks stay in the conftests."""
 
 import os
 import subprocess
@@ -86,3 +86,23 @@ def isolate_from_the_developer(environ: MutableMapping[str, str], home: Path) ->
     )
     for name in ("SSH_AUTH_SOCK", "GPG_AGENT_INFO", "NO_PROXY", "no_proxy"):
         environ.pop(name, None)
+
+
+class ProcessEnvironment:
+    """What a test may change in its own process: environment variables and the working directory, each put back
+    when the test ends. Tests never patch code, so nothing else of pytest's monkeypatch is reachable, and no other
+    code uses monkeypatch: tests/test_monkeypatch.py checks that."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._monkeypatch = monkeypatch
+
+    def set_env(self, env: Mapping[str, str]) -> None:
+        for name, value in env.items():
+            self._monkeypatch.setenv(name, value)
+
+    def prepend_to_path(self, directory: Path) -> None:
+        """Put ``directory`` first on PATH, so the commands in it stand in for the real ones."""
+        self._monkeypatch.setenv("PATH", str(directory), prepend=os.pathsep)
+
+    def change_dir(self, directory: Path) -> None:
+        self._monkeypatch.chdir(directory)

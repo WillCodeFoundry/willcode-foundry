@@ -1,6 +1,5 @@
 """foundry prune: its report, and end to end through cli.main."""
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -9,6 +8,7 @@ import pytest
 from foundry import cli
 from foundry.agent_sandbox import Remnant, RemnantKind
 from foundry.commands.prune import report
+from tests.support import ProcessEnvironment
 from tests.support.machine import scripted_stand_in
 
 
@@ -22,7 +22,7 @@ def test_nothing_to_prune_says_so() -> None:
 
 
 def test_prune_prints_what_it_pruned_or_an_error_and_exits_accordingly(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, process_environment: ProcessEnvironment, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, with stand-ins on PATH: sbx lists no live sandbox, and ps lists one process. That
     process is a sleep of the test's own, under the command line of a sandbox's ssh-agent. The real ps would
@@ -30,7 +30,7 @@ def test_prune_prints_what_it_pruned_or_an_error_and_exits_accordingly(
     sleeping = subprocess.Popen(["sleep", "60"])
     scripted_stand_in(tmp_path, "sbx", "echo '{\"sandboxes\": []}'")
     scripted_stand_in(tmp_path, "ps", f"echo '{sleeping.pid} ssh-agent -a /tmp/sbx-agents/dev-p-gone.sock -s'")
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    process_environment.prepend_to_path(tmp_path)
 
     try:
         assert cli.main(["prune"]) == 0

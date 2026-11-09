@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from agent_runtime.git import Git, GitError
-from tests.support import git
+from tests.support import ProcessEnvironment, git
 
 
 @pytest.fixture
@@ -105,10 +105,12 @@ def test_output_that_isnt_utf_8_is_text_all_the_same(repo: Path) -> None:
         Git(repo).output("show", "HEAD:caf\udce9")  # a path holding the byte 0xe9, which git's message repeats
 
 
-def test_a_work_dir_is_acted_on_wherever_this_runs(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_work_dir_is_acted_on_wherever_this_runs(
+    repo: Path, tmp_path: Path, process_environment: ProcessEnvironment
+) -> None:
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    monkeypatch.chdir(elsewhere)
+    process_environment.change_dir(elsewhere)
 
     assert Path(Git(repo).output("rev-parse", "--show-toplevel").strip()) == repo
 
@@ -123,11 +125,10 @@ def test_the_environment_given_is_the_one_git_runs_in(repo: Path) -> None:
 
 @pytest.mark.parametrize("env", [{}, {"PATH": "/usr/bin:/bin"}], ids=["empty", "PATH only"])
 def test_the_environment_given_replaces_this_process_environment(
-    repo: Path, monkeypatch: pytest.MonkeyPatch, env: dict[str, str]
+    repo: Path, process_environment: ProcessEnvironment, env: dict[str, str]
 ) -> None:
     """Nothing of this process's environment reaches git beside it, even with an empty one."""
-    for name, value in PROBE.items():
-        monkeypatch.setenv(name, value)
+    process_environment.set_env(PROBE)
 
     assert Git(repo, env).run_captured("config", "--get", "foundry.probe").returncode == 1
 
@@ -145,18 +146,18 @@ def test_the_environment_given_replaces_this_process_environment(
     ids=["output", "output_bytes", "run_captured", "succeeds", "run_visibly", "current_branch"],
 )
 def test_a_missing_git_is_named_by_every_method(
-    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call: Callable[[Git], object]
+    repo: Path, tmp_path: Path, process_environment: ProcessEnvironment, call: Callable[[Git], object]
 ) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
-    monkeypatch.setenv("PATH", str(empty))
+    process_environment.set_env({"PATH": str(empty)})
 
     with pytest.raises(GitError, match=r"^git not found in PATH$"):
         call(Git(repo))
 
 
-def test_the_current_branch_or_none_when_detached(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(repo)
+def test_the_current_branch_or_none_when_detached(repo: Path, process_environment: ProcessEnvironment) -> None:
+    process_environment.change_dir(repo)
     assert Git().current_branch() == "main"
 
     git(repo, "switch", "-q", "--detach")

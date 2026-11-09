@@ -2,7 +2,6 @@
 
 import base64
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -11,6 +10,7 @@ from foundry import cli
 from foundry.commands.repo import report
 from foundry.config import Project
 from foundry.repo_policy import Deviation, ProjectCheck, RulesetAction, RulesetChange
+from tests.support import ProcessEnvironment
 from tests.support.foundry_root import write_foundry
 from tests.support.machine import scripted_stand_in
 
@@ -79,7 +79,7 @@ CODEOWNERS = "* @o\n"
 
 
 def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, process_environment: ProcessEnvironment, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, in a foundry of its own, with a stand-in for gh on PATH: store's repository
     has exactly the repo policy, and elsewhere's URL isn't GitHub's."""
@@ -105,8 +105,8 @@ def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
     stand_ins = tmp_path / "bin"
     stand_ins.mkdir()
     scripted_stand_in(stand_ins, "gh", f'case "$4" in\n{cases}  *) echo "unexpected: $*" >&2; exit 1 ;;\nesac')
-    monkeypatch.chdir(foundry_root)
-    monkeypatch.setenv("PATH", f"{stand_ins}:{os.environ['PATH']}")
+    process_environment.change_dir(foundry_root)
+    process_environment.prepend_to_path(stand_ins)
 
     assert cli.main(["repo", "check", "store"]) == 0
     assert capsys.readouterr() == ("store (o/store)\n  conforms\n", "")

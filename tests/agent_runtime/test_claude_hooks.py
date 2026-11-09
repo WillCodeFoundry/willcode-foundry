@@ -13,7 +13,7 @@ import pytest
 
 from agent_runtime import contract
 from agent_runtime.commands import claude_hook
-from tests.support import TASK, git
+from tests.support import TASK, ProcessEnvironment, git
 
 
 def guard(command: str) -> tuple[int, str]:
@@ -182,12 +182,12 @@ def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts)
 
 
 def test_a_stop_is_blocked_when_git_is_missing(
-    checkouts: Checkouts, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    checkouts: Checkouts, tmp_path: Path, process_environment: ProcessEnvironment
 ) -> None:
     variables, _, _ = checkouts
     empty = tmp_path / "empty"
     empty.mkdir()
-    monkeypatch.setenv("PATH", str(empty))
+    process_environment.set_env({"PATH": str(empty)})
 
     assert "code checkout can't be checked: git not found in PATH" in block_reason(variables)
 

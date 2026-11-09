@@ -108,7 +108,7 @@ def test_a_new_session_is_shown_as_progress_and_an_existing_one_is_not(
 
 
 def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
-    project_repository, git_env, foundry_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    project_repository, enter_foundry, process_environment, foundry_root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The real command, up to the launcher's first check: the role has no SSH key, so the launch is refused there.
 
@@ -122,10 +122,8 @@ def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
     stand_ins.mkdir()
     scripted_stand_in(stand_ins, "sbx", "echo '{\"sandboxes\": []}'")
     stand_in(stand_ins, "ps", 0)
-    monkeypatch.chdir(foundry_root)
-    for name, value in git_env.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv("PATH", f"{stand_ins}:{git_env['PATH']}")
+    enter_foundry(foundry_root)
+    process_environment.prepend_to_path(stand_ins)
 
     assert cli.main(["run", "tkt-store", "tst-0000"]) == 1
 

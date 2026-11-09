@@ -13,7 +13,7 @@ from foundry import session
 from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
 from foundry.task import NOTES_BRANCH, Task
-from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git, isolate_from_the_developer
+from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, ProcessEnvironment, git, isolate_from_the_developer
 from tests.support.project_repository import ProjectRepository, make_git_env
 
 
@@ -133,7 +133,25 @@ GIT_INDEX_FILE, GIT_CONFIG_PARAMETERS, GIT_CONFIG_COUNT and the rest. A git hook
 
 
 @pytest.fixture
-def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def process_environment(monkeypatch: pytest.MonkeyPatch) -> ProcessEnvironment:
+    """This test's ProcessEnvironment: the one way a test changes its environment variables or working directory."""
+    return ProcessEnvironment(monkeypatch)
+
+
+@pytest.fixture
+def enter_foundry(process_environment: ProcessEnvironment, git_env: dict[str, str]) -> Callable[[Path], None]:
+    """Enter the foundry at a given root, as the real CLI needs: the CLI finds its foundry from the working
+    directory, and runs git in the process's environment, so both are set, the second to git_env."""
+
+    def enter(foundry_root: Path) -> None:
+        process_environment.change_dir(foundry_root)
+        process_environment.set_env(git_env)
+
+    return enter
+
+
+@pytest.fixture
+def git_identity(tmp_path: Path, process_environment: ProcessEnvironment) -> Path:
     """A throwaway HOME under tmp_path, with a global git identity and signing off: the developer's own git
     configuration, global or system, stays out. Returns the HOME.
 
@@ -141,10 +159,14 @@ def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     pointed into the throwaway HOME, or `git config --global` would write to the developer's own file."""
     home = tmp_path / "home"
     home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    process_environment.set_env(
+        {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
+            "GIT_CONFIG_NOSYSTEM": "1",
+        }
+    )
     for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
         git(tmp_path, "config", "--global", key, value)
     return home
