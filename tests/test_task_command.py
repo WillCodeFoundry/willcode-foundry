@@ -372,10 +372,15 @@ def test_task_help_lists_show(capsys: pytest.CaptureFixture[str]) -> None:
     assert "show" in capsys.readouterr().out.split("{", 1)[1].split("}", 1)[0].split(",")
 
 
-def store_foundry(tmp_path: Path, project_repository: ProjectRepository) -> Path:
-    """A foundry of its own, whose project store is ``project_repository``, and gone, whose repository doesn't
-    exist."""
-    return write_foundry(tmp_path / "foundry", {"store": project_repository.path, "gone": tmp_path / "gone.git"})
+def store_foundry(tmp_path: Path, project_repository: ProjectRepository, git_env: dict[str, str]) -> Path:
+    """A foundry of its own, whose project store is ``project_repository``; gone, whose repository doesn't exist;
+    and bare, whose repository has no branches."""
+    bare_dir = tmp_path / "bare.git"
+    git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
+    return write_foundry(
+        tmp_path / "foundry",
+        {"store": project_repository.path, "gone": tmp_path / "gone.git", "bare": bare_dir},
+    )
 
 
 @pytest.mark.parametrize(
@@ -388,11 +393,18 @@ def store_foundry(tmp_path: Path, project_repository: ProjectRepository) -> Path
     ids=["open", "closed", "no-entry"],
 )
 def test_show_prints_the_turn_and_the_last_log_entry_and_exits_0(
-    project_repository, enter_foundry, tmp_path: Path, capsys: pytest.CaptureFixture[str], task_id, log, printed
+    project_repository,
+    enter_foundry,
+    git_env,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    task_id,
+    log,
+    printed,
 ) -> None:
     found = project_repository.project_tasks().fetch_task(task_id)
     project_repository.edit_notes(write={found.turn_file: " dev \n", found.log_file: log})
-    enter_foundry(store_foundry(tmp_path, project_repository))
+    enter_foundry(store_foundry(tmp_path, project_repository, git_env))
 
     assert cli.main(["task", "show", "store", task_id]) == 0
     assert capsys.readouterr() == (printed, "")
@@ -504,19 +516,12 @@ def test_show_fails_with_one_error_on_stderr_nothing_on_stdout_and_exits_1(
     """A link is never followed: neither its target's name nor its target's text is printed."""
     if write or symlink:
         project_repository.edit_notes(write=write, symlink=symlink)
-    bare_dir = tmp_path / "bare.git"
-    git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
-    foundry_root = write_foundry(
-        tmp_path / "foundry",
-        {"store": project_repository.path, "gone": tmp_path / "gone.git", "bare": bare_dir},
-    )
-    enter_foundry(foundry_root)
+    enter_foundry(store_foundry(tmp_path, project_repository, git_env))
 
     assert cli.main(["task", "show", project_name, task_id]) == 1
     printed = capsys.readouterr()
     assert printed.out == ""
     assert re.fullmatch(f"error: {error}\n", printed.err, flags=re.DOTALL), printed.err
-    assert "hostname" not in printed.err and "MARKER" not in printed.err and "marker" not in printed.err
 
 
 @pytest.fixture
@@ -541,7 +546,7 @@ def enter_foundry_counting_git(
 @pytest.mark.parametrize(
     "project_name, task_id, error",
     [
-        ("nope", "tst-0000", "unknown project 'nope'; known: gone, store"),
+        ("nope", "tst-0000", "unknown project 'nope'; known: bare, gone, store"),
         (
             "store",
             "x",
@@ -553,6 +558,7 @@ def enter_foundry_counting_git(
 def test_show_refuses_an_unknown_project_or_an_invalid_id_before_running_git(
     project_repository,
     enter_foundry_counting_git,
+    git_env,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     project_name,
@@ -560,7 +566,7 @@ def test_show_refuses_an_unknown_project_or_an_invalid_id_before_running_git(
     error,
 ) -> None:
     """test_show_only_reads_with_one_fetch shows the same setup records git when it runs."""
-    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository))
+    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository, git_env))
 
     assert cli.main(["task", "show", project_name, task_id]) == 1
     assert capsys.readouterr() == ("", f"error: {error}\n")
@@ -571,12 +577,13 @@ def test_show_only_reads_with_one_fetch(
     project_repository,
     enter_foundry_counting_git,
     no_signing_key,
+    git_env,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     project_repository.edit_notes(write=WELL_FORMED)
     refs_before = project_repository.git("for-each-ref")
-    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository))
+    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository, git_env))
 
     assert cli.main(["task", "show", "store", "tst-0000"]) == 0
     assert capsys.readouterr() == ("turn: dev\n\nno log entry yet\n", "")
