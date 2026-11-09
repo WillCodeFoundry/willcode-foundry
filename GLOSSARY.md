@@ -56,7 +56,7 @@ _Avoid_: notes worktree (that is the notes checkout)
 The dir on the notes branch, `.agent/`, under which every task's notes sit. Nothing under it belongs on a task branch.
 
 **Task notes dir**:
-One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `DESIGN.md` when the task had an architect turn, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
+One task's dir on the notes branch, `.agent/tasks/open/<id>/` for an open task and `.agent/tasks/closed/<id>/` for a closed one: its `TASK.md`, `PLAN.md`, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` and `TURN`. Each role writes only in its own task's dir.
 _Avoid_: notes folder, notes dir (that is the notes checkout)
 
 **Open task**, **Closed task**:
@@ -84,7 +84,14 @@ How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed
 A question about `TASK.md`, which the planner, who owns it, answers with the human.
 
 **Design question**:
-A question about `DESIGN.md`, which the architect, who owns it, answers with the human. The dev asks one when a decision won't work. The reviewer raises one for a finding the dev can't fix alone, such as one whose fix would change the design.
+A question for the architect, who owns the project's design rules and ADRs, and answers it with the human. The reviewer raises one for a plan that changes how the code is structured, or for a finding whose fix would break a design rule or an ADR.
+
+**Plan**:
+A task's `PLAN.md`, written by the dev before any code: how it will build what `TASK.md` asks, with its names, errors and a test for each acceptance criterion. The code is reviewed against the plan as last approved.
+
+**Plan round**:
+A review round that approves a plan, or a change to its names, errors, seams or approach, before the code that depends on it. The reviewer runs it, or the architect when the plan changes the code's structure.
+_Avoid_: round 0
 
 **Code checkout** and **notes checkout**:
 The two working trees of the sandbox clone: one on the task branch, one on the notes branch.

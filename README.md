@@ -32,13 +32,13 @@ $ uv run foundry run tkt-store wcf-0042           # start the role whose turn it
 
 A task id is lowercase ASCII letters, `-`, then four or more digits, such as `wcf-0042`. foundry refuses any other id, and never changes its case. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
-A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. When a task changes how the code is structured, the planner hands it to the architect first, who agrees a `DESIGN.md` with you. A design question from the dev or a review goes back to the architect, who settles it with you. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once.
+A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. `TASK.md` says what the task does; before any code, the dev writes how it will build it in `PLAN.md`, which the reviewer approves in a plan round, or you do when you're in the dev's session. A plan that changes how the code is structured, or a finding whose fix would break a design rule or an ADR, goes to the architect, who settles it with you. [ADR 0015](docs/adr/0015-the-dev-plans-before-code.md) says why. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`. `foundry task list` shows every open task's turn at once.
 
 To hand a task off yourself, run `foundry task handoff`. It writes `TURN` and appends an entry to the task's `LOG.md`, so the next role sees why. Naming the role to `foundry run` instead starts it once and leaves `TURN` as it was.
 
 Hand a task off only while its role isn't running: stop the session, or let it finish its turn. The role writes `TURN` when its turn ends, which would undo yours. Its log entries would also conflict with your entry.
 
-When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` or `needs-design` row leads to with `foundry task handoff`, or the planner starts.
+When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` or `planned-adrs` row leads to with `foundry task handoff`, or the planner starts.
 
 | Command | What it does |
 |---|---|
@@ -63,7 +63,7 @@ Agents write nothing to this repository. Their work goes to the project's reposi
 | Branch | Holds | Written by |
 |---|---|---|
 | `task/<task>` | Code and project documentation | dev, qa |
-| `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `DESIGN.md`, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` | every role, each only in its own task's dir |
+| `agent-notes` | `.agent/tasks/open/<task>/`, or `closed/` once closed: `TASK.md`, `PLAN.md`, `REVIEW.md`, `LOG.md`, `LEARNINGS.md` | every role, each only in its own task's dir |
 
 `TASK.md` is yours. Nothing stops another role from changing it, so the reviewer checks its history and reports any change. Sign your own commits on `agent-notes` with SSH, since the reviewer reports unsigned changes to `TASK.md`. `foundry task create`, `close`, `reopen` and `handoff` always sign their commit with your key, and refuse if they can't:
 

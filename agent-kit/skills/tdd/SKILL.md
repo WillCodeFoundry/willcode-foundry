@@ -27,9 +27,9 @@ See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking g
 
 A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
 
-**Test only at pre-agreed seams.** The seams are agreed when the task is planned: they are under "Seams to test" in the task's `TASK.md`, each with what it catches. No test is written at a seam that isn't there. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+**Test only at pre-agreed seams.** The seams are agreed before any code, in the task's approved `PLAN.md`: under "Tests", each acceptance criterion with the test that will show it and its seam, and each other test with the bug it catches. No test is written at a seam that isn't there. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 
-If "Seams to test" names none, pick them yourself. Ask: "What's the public interface, and which seams should we test?" Give each seam a one-line note on what it catches and what it misses, and append them to `LOG.md` in a `progress` entry before writing any test. Then continue; there is no one to confirm them with.
+A seam the code shows you need, which the plan doesn't name, is a plan change. Amend `PLAN.md` and send it back for approval, as your `ROLE.md` says, before writing a test there.
 
 When the shape of that interface is itself in question (how deep the module is, where the seam belongs, what the interface should expose), call the Skill tool with "codebase-design" for the vocabulary. It is the shared source of the module, interface, depth, seam, adapter, leverage and locality terms, and it is a reference to consult, not a session to run.
 

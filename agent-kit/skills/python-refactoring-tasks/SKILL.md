@@ -122,11 +122,10 @@ Most valuable first, at most five per run; report the rest.
 |---|---|
 | `# Task <id>: <title>` | The change, in a few words: what goes away or what becomes simpler. |
 | Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. |
-| Acceptance criteria | Checkable statements. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
-| Out of scope | The neighbouring smells you saw and are leaving, so the dev doesn't widen the task. |
-| Context | Where, as `path.py:line` and the function, class or flow. How it was found: the hint, the signal from step 1, or the exploring step from step 2. The smell, by `python-smells` number and name or `python-naming-smells` smell. Your sketch, as a direction the dev may improve on. Another task this one depends on, by slug. |
-| Seams to test | The public functions or commands whose tests prove behaviour is kept. |
-| Terms and decisions | Glossary terms the change adds, renames or retires. A decision worth an ADR. Empty if none. |
+| Acceptance criteria | Checkable statements, each with an id (`AC1`, …), checkable from outside the code or by a search. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
+| Out of scope | The neighbouring smells you saw and are leaving, each with an id (`OS1`, …), so the dev doesn't widen the task. |
+| Risks | Where, as `path.py:line` and the function, class or flow, and how it was found: the hint, the signal from step 1, or the exploring step from step 2. The smell, by `python-smells` number and name or `python-naming-smells` smell. Your sketch, as a direction the dev's `PLAN.md` may improve on. Another task this one needs merged first, as an `After:` line under the title. |
+| Terms | Glossary terms the change adds, renames or retires. Empty if none. A decision worth an ADR goes to the architect, as a question in your report. |
 | Open questions | Choices only the human can make, each with the options and your recommendation. Empty otherwise. |
 
 After a restructure you've written up, explore the flow again as it would look after. The change often shows the next simplification, or a new thing that is hard to name. Write that as a second task that depends on the first.

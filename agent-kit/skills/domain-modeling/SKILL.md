@@ -1,6 +1,6 @@
 ---
 name: domain-modeling
-description: Build and sharpen a project's domain model. Use when the planner settles terms and decisions with the human, when the dev applies TASK.md's "Terms and decisions" to GLOSSARY.md or docs/adr/, or when any role finds a term or decision worth recording.
+description: Build and sharpen a project's domain model. Use when the planner settles terms with the human, when the architect settles a decision worth an ADR, when the dev applies TASK.md's "Terms" to GLOSSARY.md, or when any role finds a term or decision worth recording.
 metadata:
   source:
     repo: mattpocock/skills
@@ -15,7 +15,7 @@ metadata:
 
 Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
-**Who writes what.** Only the planner and the architect talk with the human, so the challenges below happen in their sessions. What they settle goes into the task's notes, not into the project's files: the planner's into `TASK.md`, under "Terms and decisions", and the architect's into `DESIGN.md`, under "Design rules and ADRs". The dev writes to the project's `GLOSSARY.md` and `docs/adr/`, on the task branch, exactly what those sections list, and nothing else. Any other term or decision a role thinks deserves recording goes in `LEARNINGS.md` as a `[proposal]` entry; a question that blocks the work follows "When to stop and ask" in `AGENTS.md`.
+**Who writes what.** The planner and the architect talk with the human, so the challenges below mostly happen in their sessions. A term the planner settles goes into `TASK.md`, under "Terms", and the dev writes exactly those to the project's `GLOSSARY.md`, on the task branch. A design rule or a decision the architect settles, the architect writes itself, into `ARCHITECTURE.md` or `docs/adr/` on the task branch. Any other term or decision a role thinks deserves recording goes in `LEARNINGS.md` as a `[proposal]` entry; a question that blocks the work follows "When to stop and ask" in `AGENTS.md`.
 
 ## File structure
 
@@ -69,7 +69,7 @@ When the user states how something works, check whether the code agrees. If you 
 
 ### Record terms as they're resolved
 
-The planner: when a term is resolved with the human, add it under "Terms and decisions" in the `TASK.md` draft right there, saying which `GLOSSARY.md` it goes in, with its entry in the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md). Don't batch these up: capture them as they happen.
+The planner: when a term is resolved with the human, add it under "Terms" in the `TASK.md` draft right there, saying which `GLOSSARY.md` it goes in, with its entry in the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md). Don't batch these up: capture them as they happen.
 
 The dev: write each term that section lists into the `GLOSSARY.md` it names, in the same format. A term you think is missing or wrong goes in `LEARNINGS.md` as a `[proposal]` entry, not in `GLOSSARY.md`.
 
@@ -85,4 +85,4 @@ Only offer an ADR when all three are true:
 
 If any of the three is missing, skip the ADR.
 
-The planner or the architect offers it to the human. Once they agree, it goes in the draft as a decision to record as an ADR, with its context, the decision and the alternatives rejected: under "Terms and decisions" in `TASK.md`, or "Design rules and ADRs" in `DESIGN.md`. The dev writes each ADR those sections list into `docs/adr/`, in the format in [ADR-FORMAT.md](./ADR-FORMAT.md). Any other decision you think meets all three goes in `LEARNINGS.md` as a `[proposal]` entry.
+The architect offers it to the human. Once they agree, the architect writes it into `docs/adr/`, on the task branch, in the format in [ADR-FORMAT.md](./ADR-FORMAT.md), with its context, the decision and the alternatives rejected. A role that thinks a decision needs an ADR asks the architect, with `Asks <id> → architect` in `LOG.md`. Any other decision you think meets all three goes in `LEARNINGS.md` as a `[proposal]` entry.

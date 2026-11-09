@@ -210,7 +210,7 @@ def _parse_sku(raw: str) -> str: ...
 
 ## Smells against the project's words
 
-The project's agreed word for a concept is, in order: the glossary's (`GLOSSARY.md`, or those a `GLOSSARY-MAP.md` points to), then `DESIGN.md`'s, then a class's own name for its instances, then a word the code uses for that concept and nothing else. A thing that comes from outside, such as a protocol's field, a vendor's parameter or a spec's header, takes the outside system's own term first.
+The project's agreed word for a concept is, in order: the glossary's (`GLOSSARY.md`, or those a `GLOSSARY-MAP.md` points to), then the task's approved `PLAN.md`'s, then a class's own name for its instances, then a word the code uses for that concept and nothing else. A thing that comes from outside, such as a protocol's field, a vendor's parameter or a spec's header, takes the outside system's own term first.
 
 | Smell | Bad | Better | Spot it |
 |---|---|---|---|
@@ -225,7 +225,7 @@ An instance may be named for its role instead of its class only when the scope h
 
 In prose, check only these two:
 
-1. **A word that breaks the agreed one:** a glossary _Avoid_ word, or a synonym for a term the glossary or `DESIGN.md` gives. Judge each hit by its sense; an ordinary word that matches a code identifier isn't one.
+1. **A word that breaks the agreed one:** a glossary _Avoid_ word, or a synonym for a term the glossary or the approved `PLAN.md` gives. Judge each hit by its sense; an ordinary word that matches a code identifier isn't one.
 2. **A new term that wasn't checked:** a word the prose introduces as a concept's name, marked by backticks, bold, a heading, or a sentence that defines it. Check it like any new name.
 
 Style and clarity in prose are not naming smells.
