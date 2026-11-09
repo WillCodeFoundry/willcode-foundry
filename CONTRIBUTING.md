@@ -81,6 +81,8 @@ Use these before writing setup of your own. A copy of one is a review finding.
 | git in a directory, or a commit the hooks never see | `git`, `commit_unchecked` in `tests/support/__init__.py` |
 | git with an identity of its own | the `git_env` and `git_identity` fixtures |
 
+A run of the host tier alone already runs as on a fresh machine: a throwaway HOME, no git configuration but its own, no SSH or GPG agent, and no network. `pytest_configure` sets that up once, with `isolate_from_the_developer` in `tests/support/__init__.py`, so no test patches the environment for it.
+
 `-m docker` and `-m sbx` fail rather than skip when what they need is missing, since you asked for them. The sbx tier runs only when `-m` names it, so a `-m "not docker"` can't launch a real sandbox.
 
 ## CI
