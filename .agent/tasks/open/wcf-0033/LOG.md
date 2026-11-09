@@ -177,3 +177,13 @@ TASK.md waits to be folded in. PLAN.md is unchanged: no name, error, seam or app
   tests), each fixed by a one-place change, so I didn't take it as a cluster needing a PLAN.md revision.
 - AC1–AC11 are met by the same tests as entry 14; the renamed parameters keep every test id.
 Next: the reviewer's code round 5.
+
+## 18 · reviewer · changes-needed
+Done: code round 5 on ac110e0, against TASK.md at cf2da31 and PLAN.md as approved at 6694061. The history of both files
+is clean. R13, R14, R15 and R16 are closed, and R17 stays accepted as is. Standards, Spec and Behaviour have no
+findings. Locally, ruff, mypy and the host tier pass (808 passed). One new Blocking finding, R19 (Names): the
+parametrize parameter `take_task_ids` at `tests/test_task_command.py:162` reads as the helper of the same name in
+`tests/test_project_tasks.py`. One new Follow-up, R18 (Smells): `tie_two_task_prefixes` and two other tests rebuild
+`take_task_ids`'s setup by hand. No design questions, and no human change to TASK.md waits to be folded in.
+Next: the dev renames the parameter for R19, answers R19 (and R18, if taken) by id, then ends with ready-for-review.
+- Follow-up: tests/test_project_tasks.py:210 `test_with_no_task_id_taken_nothing_is_pushed` · deletes the notes branch inline, the same step as `take_no_task_id` in tests/test_task_command.py:151 · a third copy to change with the R18 move.

@@ -297,3 +297,82 @@ Verdict: changes needed
   So round 4 has three Blocking findings: R13, R14 and R15. The verdict stays the same.
 
 Verdict: changes needed
+
+## Round 5 (reviewing ac110e0)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+cf2da31, signed by the planner's identity, which the architect shares, so a change by the architect can't be told
+apart from one by the planner. PLAN.md is unchanged since it was approved at 6694061, signed by the dev. This round
+reviews the fixes `df11854...ac110e0` (eb1b6b0, ac110e0). No human change to TASK.md waits to be folded in.
+
+Earlier findings:
+- R13: closed. The parametrize table at `tests/test_task_command.py:161-168` pairs each setup function with its
+  expected error, and the body only calls the setup it is given (:172).
+- R14: closed. `ProjectRepository.seeded_task_notes_dirs` (`tests/support/project_repository.py:70`) is built from
+  `open_task` and `closed_task`. Both hand-spelled constants are gone.
+- R15: closed. `tests/test_project_tasks.py:170-178` puts each case's `take_task_ids` arguments in the table, with the
+  same ids.
+- R16: closed. `src/foundry/commands/task.py:33-34` names both refusals without TASK, in the glossary's words.
+- R17: accepted as is (round 4).
+
+### Standards
+No new findings. `ProjectRepository`'s docstring is still true, and CONTRIBUTING.md asks for shared test setup in
+`tests/support/`, which the R14 fix follows. README and the module docstring of `commands/task.py` still match.
+
+### Spec
+No findings. The fixes keep every criterion shown with the same tests and ids. AC2: the `[open|closed|branch]` table.
+AC5 and AC6 on the CLI: `[no-task-id|tie]`, with the same errors and the `for-each-ref` check. AC1 and AC7: the
+seeded dirs give the same paths as before. AC10: the TASK argument is unchanged, and the description adds only what
+AC5 and AC6 say. PLAN.md doesn't set the description's text, so it doesn't depart from the plan. No scope creep.
+
+### Behaviour
+No findings. In a throwaway clone at ac110e0, the host tier, ruff and mypy pass. The class attribute is a plain
+tuple of `str`s built from attributes above it, with the same paths as before. The parametrize data is never changed,
+so nothing leaks between tests. `foundry task create --help` renders the new description. Mutations each fail their
+own case: not counting closed dirs fails `[closed]` and `[tie]`, not counting branches fails `[branch]` and `[tie]`,
+disabling the tie check fails `[tie]`, and changing the no-task-id message fails `[no-task-id]`.
+
+### Smells
+Functions the fix diff adds or changes:
+- `src/foundry/commands/task.py:add_parser` is clean (only the description text changed).
+- `tests/support/project_repository.py`: `ProjectRepository.seeded_task_notes_dirs` is new, clean.
+- `tests/test_project_tasks.py`: `take_task_ids` and `test_the_highest_taken_number_counts_whichever_kind_holds_it`
+  are clean.
+- `tests/test_task_command.py`: `test_create_without_a_task_creates_the_next_one`,
+  `test_create_without_a_task_that_can_t_pick_one_…` and `test_a_create_that_loses_the_race_…` are clean.
+  `take_no_task_id` is new, clean. `tie_two_task_prefixes` is new (R18).
+
+Findings:
+- R18 (Follow-up), possible python-smells 6, copying instead of finding the seam:
+  `tests/test_task_command.py:154-158`.
+  - What: `tie_two_task_prefixes` writes a notes path by hand, removes the seeded dirs and makes a `task/` branch. That
+    is the work `take_task_ids` (`tests/test_project_tasks.py:142`) does with `closed_ids` and `branch_ids`. The same
+    hand-built setup is at `tests/test_task_command.py:137-141` and :188-190.
+  - Why only a Follow-up: the fix moved setup that was already inline into a function. It didn't introduce the copy.
+  - Who hits it: whoever next changes how a test takes a task id. They edit three places here as well as the helper.
+  - Direction: move `take_task_ids` into `tests/support/` and call it from both test files.
+
+### Names
+Names the fix adds: `seeded_task_notes_dirs`, `take_no_task_id`, `tie_two_task_prefixes`, the `taken` parameter and
+the description's prose are clean. "Task prefix" is never bare "prefix". The parametrize parameter `take_task_ids` is
+R19. PLAN.md's Names section names none of these test helpers.
+
+- R19 (Blocking), a homonym that misleads at its use: `tests/test_task_command.py:162`, used at :170 and :172.
+  - What: `tests/test_project_tasks.py:142` defines the helper `take_task_ids(project_repository, *, open_ids=…, …)`.
+    Called with only the repository, it removes the seeded tasks and takes nothing. At
+    `tests/test_task_command.py:172`, the same text `take_task_ids(project_repository)` calls a parameter that holds
+    one of two setups: one deletes `agent-notes`, the other ties two task prefixes.
+  - Who hits it: anyone who greps `take_task_ids` to change or reuse the helper lands on :172. They will read it as
+    the helper with its defaults, and think the tie case takes no ids. If R18 is taken, the helper is imported into
+    this file and the parameter shadows it.
+  - Direction: name the parameter for its role in this test, not the helper's verb.
+
+### Summary
+- Standards: 0 findings.
+- Spec: 0 findings.
+- Behaviour: 0 findings.
+- Smells: 1 finding, 0 blocking. The worst is R18, the setup copied beside `take_task_ids`.
+- Names: 1 finding, 1 blocking. The worst is R19, the parameter that reads as the helper `take_task_ids`.
+- No design questions.
+
+Verdict: changes needed
