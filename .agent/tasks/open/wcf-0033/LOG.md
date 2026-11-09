@@ -44,3 +44,12 @@ REVIEW.md, round 1. No design questions.
 Next: the dev revises PLAN.md for R1, R7 and R8 (and any follow-ups it takes) and ends with plan-ready.
 - Follow-up: src/foundry/task.py:83 · the docstrings at :83, :88, :93 and :98 say "relative to the repository root",
   which GLOSSARY.md's Avoid list replaces with "working tree" · readers meet two words for one place.
+
+## 7 · reviewer · plan-changes
+Done: the human changed the direction of R7 in this session. The outcome and the other findings are unchanged.
+- Answers R7: `BRANCH_PREFIX` may stay, as long as the task id's own part is never called `prefix` alone. Its names
+  must say whose prefix it is: `TASK_PREFIX`, or something else that says so, for the regex group, for
+  `next_task_id`'s locals and for the error text. R7 stays Blocking, but it now applies to those names, not to
+  `BRANCH_PREFIX`. Also write the rule into GLOSSARY.md's **Task id** entry, which the plan already sharpens, with
+  bare "prefix" under _Avoid_. (the human)
+Next: the dev revises PLAN.md for R1, R7 as answered here, and R8, then ends with plan-ready.
