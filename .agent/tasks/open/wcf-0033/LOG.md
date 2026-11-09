@@ -226,3 +226,20 @@ the entry point picks the next id, then takes the same `create_task` path as a g
 - Answers D2: approved as proposed (the human).
 - plan-approved (the human) at the PLAN.md commit that follows this entry; PLAN.md's changed lines say `Amended: D2`.
 Next: implement D2 test-first, run the checks, wait for CI, end with ready-for-review.
+
+## 23 · dev · ready-for-review
+Done: D2 implemented in 83a4dfc, after round 6's approval of 59c516a, so it goes back for review. PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft again; its CI passes at 83a4dfc. Merged
+origin/HEAD first (already up to date). Locally ruff, mypy, vulture, pylint and `uv run pytest --cov` pass.
+- `ProjectTasks.create_next_task`, `_create` and `_taken_task_ids` are gone; `create_task` is byte for byte the
+  default branch's again. New read-only `ProjectTasks.taken_task_ids()`. `commands/task.py`: `pick_next_task_id`
+  replaces the module `create_task`; `create_main` does `task_id = args.task_id or pick_next_task_id(project_tasks)`,
+  then `project_tasks.create_task(task_id, template)`.
+- Tests: tests/test_project_tasks.py's create_next_task tests now check `taken_task_ids` (AC1's ids, and that
+  reading changes no ref; no notes branch gives no ids) and `next_task_id(taken_task_ids())` (AC2, AC4, AC6). The
+  AC1 CLI test also asserts the commit subject `Add task wcf-0034`, as amended PLAN.md says. The AC7 race test
+  passes unchanged.
+- ARCHITECTURE.md's `project_tasks.py` row: "reading the task ids their notes and task branches take" replaces
+  "creating them, under an id given or the next one". PLAN.md amended for it (D2).
+- AC1–AC11 are met by the tests PLAN.md names as amended for D2; the rest as in entries 14, 17 and 19.
+Next: the reviewer's code round 7, on 83a4dfc.

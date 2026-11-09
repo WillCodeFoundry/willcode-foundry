@@ -111,7 +111,8 @@ create path, with the id picked at the entry point, at the cost of a second fetc
   letters, `-`, then a number of four or more digits", so the definition itself never says bare "prefix", with
   "prefix (alone, for a task id's letters)" under its _Avoid_. Amended: R7, R9. Because: the human asked for the rule
   there (entry 7), and the definition must keep it.
-- `ARCHITECTURE.md`: `project_tasks.py`'s codemap row says "creating them, under an id given or the next one";
+- `ARCHITECTURE.md`: `project_tasks.py`'s codemap row adds "reading the task ids their notes and task branches take"
+  (Amended: D2. Because: `ProjectTasks` no longer creates under the next id);
   `task.py`'s row (`ARCHITECTURE.md:29`) adds "and `next_task_id`, which picks the next task id from the taken
   ones". Amended: R2. Because: the codemap is where a reader looks for it.
 - Docstrings: `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
