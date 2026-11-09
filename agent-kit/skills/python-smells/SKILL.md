@@ -25,7 +25,7 @@ Read a reference file only when a question points to it. Its examples are invent
 |---|---|---|
 | 1 | Does every new function, parameter, branch and case have a caller or a requirement today? | [Building for nobody](references/building-for-nobody.md) |
 | 2 | Do I re-check, widen or cast what a type already guarantees? | [Distrusting your own types](references/distrusting-types.md) |
-| 3 | When something is wrong, does the code repair it, swallow it, fake a value, misreport it, or leave the caller guessing? | [Hiding failure](references/hiding-failure.md) |
+| 3 | When something is wrong, does the code repair it, swallow it, fake a value, misreport it, leave the caller guessing, or raise away from where it found the problem? | [Hiding failure](references/hiding-failure.md) |
 | 4 | Is each rule enforced in one place, where its state lives, on every path, and on the value actually used? | [Rules in the wrong place](references/rules-in-the-wrong-place.md) |
 | 5 | Does each function do one job that its name and signature say, return one thing, and keep its I/O apart from its calculation? | [Functions that do two jobs](references/functions-that-do-two-jobs.md) |
 | 6 | Did I copy or rebuild something that exists, or go around a helper, a name, a parser or the standard library made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |

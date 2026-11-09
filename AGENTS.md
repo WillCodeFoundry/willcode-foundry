@@ -10,7 +10,14 @@ Read the design rules in [ARCHITECTURE.md](ARCHITECTURE.md#design-rules), and fo
 
 Run ruff before every commit, and the host tier and the other static checks before every push, as an ordinary user, never as root. `.pre-commit-config.yaml` runs them for you once installed. [CONTRIBUTING.md](CONTRIBUTING.md) has the commands, and says when to run the docker and sbx tiers too.
 
+The tools hold only the smells they can see. Before every commit, check your diff against the [python-smells](agent-kit/skills/python-smells/SKILL.md) and [python-naming-smells](agent-kit/skills/python-naming-smells/SKILL.md) skills too.
+
 The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything else that runs in a sandbox is the runtime, in Python.
+
+## Code
+
+- **A check that raises is named `require_<what must hold>`**, with a leading underscore when private. It returns None, and raises where it finds the problem, as `_require_own_kit` in `src/foundry/session.py` does.
+- **Don't hand a failure to the caller to raise.** No function returns a reason for its caller to raise, and no helper builds an exception for another function to raise. [python-smells](agent-kit/skills/python-smells/references/hiding-failure.md) 3.8 says why.
 
 ## Docs
 
