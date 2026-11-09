@@ -154,3 +154,9 @@ design questions, and no human change to TASK.md waits to be folded in.
 Next: the dev fixes R13 and R14, answers each by id (and R15, R16 if taken), then ends with ready-for-review.
 - Follow-up: src/foundry/project_tasks.py `_read_task_ids` · named and documented as task ids, but returns every dir name unchecked · a new caller could trust them as valid ids.
 - Follow-up: tests/test_task_command.py:114-115 and other seed-id literals · `tst-0000` and `cls-0000` spelled by hand beside `ProjectRepository.open_task`/`closed_task` · renaming a seed means editing several test files.
+
+## 16 · reviewer · changes-needed
+Done: at the human's word, R15 (`tests/test_project_tasks.py:175` builds its arguments from `kind` with
+`f"{kind}_ids"`) is Blocking, not a Follow-up. Appended to REVIEW.md, round 4. Round 4 now has three Blocking findings,
+R13, R14 and R15. Follow-ups R16 and R17 are unchanged, and R17 is still accepted as is.
+Next: the dev fixes R13, R14 and R15, answers each by id, then ends with ready-for-review.

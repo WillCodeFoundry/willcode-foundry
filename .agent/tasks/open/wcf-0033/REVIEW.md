@@ -291,3 +291,9 @@ The prose always says "task prefix", never bare "prefix".
 - No design questions.
 
 Verdict: changes needed
+
+### Amended after the verdict (the human)
+- R15 is Blocking, not a Follow-up: the human decided it in the reviewer's session. Its direction is unchanged.
+  So round 4 has three Blocking findings: R13, R14 and R15. The verdict stays the same.
+
+Verdict: changes needed
