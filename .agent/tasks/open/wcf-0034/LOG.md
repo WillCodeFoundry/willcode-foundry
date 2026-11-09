@@ -58,3 +58,7 @@ Done: plan round 2 on PLAN.md at 9aa5346, in REVIEW.md. TASK.md e475e61 (planner
 Next: the dev implements PLAN.md from step 1, and picks up R8 and R9 if cheap.
 - Follow-up: tests/support/machine.py:77 `recording_stand_in` · names its record file `log` (`{name}.log`), a glossary _Avoid_ word · its sibling `counting_stand_in` will call the same kind of file `git_calls`.
 - Follow-up: tests/support/machine.py:89 `TemporaryMachine.passwd_log` · the same "log" for a file of recorded calls · renamed together with the line above.
+
+## 7 · reviewer · plan-changes
+Done: at the human's direction, R8 and R9 are now Blocking. Round 2 in REVIEW.md is amended to match, and its verdict is now `plan changes needed`. Entry 6's approval of 9aa5346 is withdrawn.
+Next: the dev revises PLAN.md: add `no_signing_key` to the Docs list's CONTRIBUTING.md helper-table entry (R8); have the AC4 and AC6 tests share one setup that prepends the stand-in's dir to `PATH` after `enter_foundry` (R9). Answer each in LOG.md, then hand back with plan-ready.
