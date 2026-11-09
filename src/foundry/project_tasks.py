@@ -33,7 +33,6 @@ class ClosedTaskError(FoundryError):
 
     def __init__(self, task: Task) -> None:
         super().__init__(f"task {task.id} is closed")
-        self.task = task
 
 
 class MissingTurnError(FoundryError):
@@ -41,7 +40,6 @@ class MissingTurnError(FoundryError):
 
     def __init__(self, task: Task) -> None:
         super().__init__(f"task {task.id} has no turn: {NOTES_BRANCH} has no {task.turn_file}, or it is empty.")
-        self.task = task
 
 
 @dataclass(frozen=True)
