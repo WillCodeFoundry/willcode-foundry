@@ -79,3 +79,9 @@ Next: the reviewer's plan round 3; then step 1 of PLAN.md.
 ## 9 · reviewer · plan-approved
 Done: plan round 3 on PLAN.md at 77c965a, in REVIEW.md. TASK.md e475e61 is signed by the planner's identity, which the architect shares. PLAN.md 77c965a is signed by the dev. Both identities are allowed. No change to TASK.md that the human decided is pending. R8 and R9 are closed, there are no new findings, and there is no design trigger.
 Next: the dev implements PLAN.md from step 1.
+
+## 10 · dev · progress
+Done: merged origin/HEAD into task/wcf-0034 (already up to date). PLAN.md
+step 1 in d3e2b03 (`counting_stand_in`, `fetch_count`, `no_signing_key` shared,
+CONTRIBUTING.md's helper table) and step 2 in b4145bc (`FetchedBranch.is_link`).
+Next: step 3, `last_log_entry` and `ProjectTasks.fetch_task_turn_and_log`.
