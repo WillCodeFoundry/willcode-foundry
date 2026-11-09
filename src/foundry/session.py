@@ -105,28 +105,24 @@ class SessionVariables:
 
 @dataclass(frozen=True, kw_only=True)
 class Session:
-    """One sandbox's session: its directory, the sandbox definition in it, and the variables that carries."""
+    """One sandbox's session, opened for one role: its directory and the sandbox definition in it."""
 
     dir: Path
     definition: SandboxDefinition
-    variables: SessionVariables
-    """Read back from the definition, so it is what the sandbox was told, not what this launch would tell it."""
-    created: bool
-    """True when this call created the session, or finished one a stopped launch left without its definition."""
+    role: Role
+    """The role this launch is for: its key, token and model are read at each launch, not recorded."""
 
-    @property
-    def init_command(self) -> tuple[str, ...]:
-        """The runtime's session-init, from the agent kit, which open_or_create checked is this foundry's."""
-        return AgentKit(self.definition.agent_kit_dir).runtime_command("session-init")
+    def launch_request(self) -> LaunchRequest:
+        """What agent_sandbox needs to launch this session's sandbox. Reads and writes nothing.
 
-    def launch_request(self, role: Role) -> LaunchRequest:
-        """What agent_sandbox needs to launch this session's sandbox for ``role``. Reads and writes nothing."""
+        The agent kit is the definition's, which open_or_create checked is this foundry's.
+        """
         return LaunchRequest(
             definition_dir=self.dir,
-            ssh_key_path=role.ssh_key_path,
-            init_command=self.init_command,
-            github_token_path=role.github_token_path,
-            model=role.model,
+            ssh_key_path=self.role.ssh_key_path,
+            init_command=AgentKit(self.definition.agent_kit_dir).runtime_command("session-init"),
+            github_token_path=self.role.github_token_path,
+            model=self.role.model,
         )
 
 
@@ -150,7 +146,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
     if created:
         _LOGGER.info("session:   %s (new)", session_dir)
-    return Session(dir=session_dir, definition=definition, variables=recorded, created=created)
+    return Session(dir=session_dir, definition=definition, role=role)
 
 
 def _wanted_variables(foundry_root: Path, project: Project, role: Role, task: Task) -> SessionVariables:
