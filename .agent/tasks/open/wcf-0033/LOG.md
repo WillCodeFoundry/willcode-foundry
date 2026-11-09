@@ -10,3 +10,15 @@ Done: merged origin/HEAD into task/wcf-0033 (already up to date). Wrote PLAN.md:
 `task.py`, `ProjectTasks.create_next_task` sharing `create_task`'s reads and push, and an optional TASK in
 `foundry task create`, with a test named for each of AC1–AC11. No code yet.
 Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
+
+## 3 · dev · task-question
+Done: the human, in this session, changed how the prefix is chosen. PLAN.md is amended to it (step 2, Errors,
+Tests, Docs); it still needs its plan round once TASK.md holds the change. Entry 2's plan-ready is superseded.
+- Asks D1 → planner: AC6 refuses whenever the taken ids use more than one prefix. Should create instead follow
+  the most common prefix?
+- Answers D1: yes. The prefix is the one the most taken ids use, counting each open, closed or branch-only id
+  once. The number is one more than the highest among that prefix's ids only: `wcf-0001…wcf-0032` with
+  `sbx-0050` give `wcf-0033`. Create refuses only when two or more prefixes tie for the most ids, naming the tied
+  prefixes in alphabetical order and saying to give TASK; AC6's example, `abc-0001` and `wcf-0002`, still
+  refuses. (the human)
+Next: the planner folds D1 into TASK.md (AC6, the Goal); then the dev ends with plan-ready for the plan round.

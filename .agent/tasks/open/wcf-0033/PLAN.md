@@ -17,8 +17,9 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
 ## Steps
 1. Refactor, no behaviour change: in `task.py`, a `BRANCH_PREFIX = "task/"` constant that `Task.branch` uses, and
    `_TASK_ID` with named groups `prefix` and `number`.
-2. `task.py`: `NoNextTaskIdError(FoundryError)` and `next_task_id(taken_ids: Iterable[str]) -> str`. The number is
-   one more than the highest, formatted `{prefix}-{number:04d}`. Unit tests first.
+2. `task.py`: `NoNextTaskIdError(FoundryError)` and `next_task_id(taken_ids: Iterable[str]) -> str`. The prefix is
+   the one the most taken ids use, each id counted once (D1). The number is one more than the highest among that
+   prefix's ids only, formatted `{prefix}-{number:04d}`. Unit tests first.
 3. `project_tasks.py`: move `create_task`'s body into `_create(task_template, *, task_id: str | None)`, which, given
    None, takes `next_task_id` of `_taken_task_ids(branches, notes_branch)` after reading and before any check.
    `create_task` and `create_next_task` each call it. `_taken_task_ids` is the dir names under `OPEN_DIR` and
@@ -40,8 +41,8 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
 ## Errors
 - No task id taken (AC5):
   `error: the project repository has no task id to follow. Give TASK to say which task to create.`
-- Several prefixes (AC6), prefixes sorted and joined with ", ":
-  `error: the project repository's task ids use more than one prefix: abc, wcf. Give TASK to say which task to create.`
+- Prefixes tied for the most ids (AC6, as D1 changes it), the tied ones sorted and joined with ", ":
+  `error: the project repository's task ids tie for the most common prefix: abc, wcf. Give TASK to say which task to create.`
   `NoNextTaskIdError` holds the text up to the first full stop; `commands/task.py` adds the second sentence.
 - A lost race (AC7): git's own push rejection, as a `GitError`, printed by `cli.main` as `error: git -C … push … failed: …`.
 
@@ -62,6 +63,11 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
   `NoNextTaskIdError` with the exact text. `tests/test_task_command.py`, parametrized: the CLI on a repository with
   no `agent-notes` and no task branch, and on one with branch-only `abc-0001` and closed `wcf-0002`, exits 1 with
   the exact stderr, and `git for-each-ref` is unchanged.
+- The most common prefix wins (D1): `tests/test_task.py`, `["wcf-0001", "wcf-0002", "sbx-0050"]` → `wcf-0003`,
+  showing the other prefix's higher number is ignored; and a three-way tie with one loser,
+  `["abc-0001", "wcf-0002", "xyz-0003", "xyz-0004", "wcf-0005"]`, refuses naming only `wcf, xyz`.
+  `tests/test_project_tasks.py`: the seeded `tst-0000` and `cls-0000` kept beside `wcf-0001` and `wcf-0002` give
+  `wcf-0003`.
 - AC7: `tests/test_task_command.py`. A `git` stand-in on PATH (`scripted_stand_in`) runs the real git, but before
   its first `push` runs a competing `python -m foundry.cli task create store` in the same foundry, with real git
   on PATH. The test's `cli.main(["task", "create", "store"])` exits 1 with a line starting `error: ` on stderr.
@@ -76,7 +82,7 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
 
 ## Docs
 - `README.md`: the command table's row becomes `foundry task create PROJECT [TASK]`, adding "Without TASK, the next
-  task id: the prefix the project's tasks use, and one more than the highest number taken." The task id line says
+  task id: the prefix most of the project's task ids use, and one more than the highest number taken with it." The task id line says
   "a prefix of lowercase ASCII letters, `-`, then a number of four or more digits".
 - `GLOSSARY.md`: **Task id** as TASK.md's "Terms" sharpens it.
 - `ARCHITECTURE.md`: `project_tasks.py`'s codemap row says "creating them, under an id given or the next one".
