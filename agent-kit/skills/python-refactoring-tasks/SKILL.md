@@ -5,7 +5,7 @@ description: Hunt a Python codebase for refactors that make it simpler, and writ
 
 # Finding refactoring opportunities in Python
 
-Find changes across a Python codebase that make it simpler to read, test and change, and write a `TASK.md` for each one worth doing. You change no code. Nobody checks in with you along the way: you decide what is worth a task, and the human decides which tasks to create. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Writing no task is a good result when nothing clears the bar.
+Find changes across a Python codebase that make it simpler to read, test and change, and write a `TASK.md` for each one worth doing. You change no code. Unless you run in a planner session, nobody checks in with you along the way: you decide what is worth a task, and the human decides which tasks to create. A change counts only if it removes something: lines, branches, parameters, concepts, or a workaround in a test. Writing no task is a good result when nothing clears the bar.
 
 This skill decides where to look and how to propose. What to look for comes from two skills:
 
@@ -24,6 +24,17 @@ Both are written for reviewing a diff. Here, apply them to existing functions an
 | Hints: follow-ups or other notes naming places, each with a smell or a cost | Start from the hints (step 0), then run steps 1 and 2 as well, more lightly, so you don't see only what others saw. |
 
 Use only the hints you are given. Don't go looking for follow-ups or notes yourself; collecting them is someone else's job.
+
+## In a planner session
+
+When the planner uses this skill, the human is in the session and the task already exists, so it ends in one `TASK.md`:
+
+1. Run steps 0 to 4. The hints are the ones the human or the planner gives, such as follow-ups on the code.
+2. Show the human the candidates, most valuable first, each with its location, its smell, what it removes, and your sketch. The human picks one.
+3. Draft that one as the task's `TASK.md`, with the sections step 5 gives, and take it through the planner's method: its checklist, the human's approval, then writing it. Write no other file.
+4. Give the other candidates in the report, each with its location and smell, for the human to create as tasks later.
+
+The sketch stays in the session. The dev writes the plan, as for any task.
 
 ## Before you start
 
@@ -115,7 +126,7 @@ Skip the rest. A finding that needs a choice only the human can make, such as a 
 Most valuable first, at most five per run; report the rest.
 
 - **One concern per task.** Group small renames of one kind into one task. Give each restructure its own.
-- Write each task to `<slug>/TASK.md` in the directory you were told, or in `refactoring-tasks/` beside the code checkout, and your sketch of the change beside it, as `<slug>/PLAN.md`. The slug is a few words in kebab case. Leave the id as `<id>`: the human chooses it with `foundry task create`.
+- Write each task to `<slug>/TASK.md` in the directory you were told, or in `refactoring-tasks/` beside the code checkout. The slug is a few words in kebab case. Leave the id as `<id>`: the human chooses it with `foundry task create`.
 - Follow the task template's sections, in order. Write each for a planner and a dev who haven't seen your notes:
 
 | Section | What to put there |
@@ -128,8 +139,6 @@ Most valuable first, at most five per run; report the rest.
 | Terms | Glossary terms the change adds, renames or retires. Empty if none. A decision worth an ADR goes to the architect, as a question in your report. |
 | Open questions | Choices only the human can make, each with the options and your recommendation. Empty otherwise. |
 
-Write `PLAN.md` with the sections the dev's plan has, Approach, Steps, Names, Errors, Tests and Docs, and fill in only Approach: your sketch, as a direction the dev may keep, change or replace. Open it with the line "Suggested by python-refactoring-tasks; not yet approved." The plan is the dev's: it writes the rest, and a plan round approves it, as for any task.
-
 After a restructure you've written up, explore the flow again as it would look after. The change often shows the next simplification, or a new thing that is hard to name. Write that as a second task that depends on the first.
 
 ## 6. Report
@@ -137,6 +146,7 @@ After a restructure you've written up, explore the flow again as it would look a
 End the run with a short report:
 
 - the tasks you wrote, one line each, in the order to do them, saying which depend on others;
+- for each task, your sketch of the change: a direction for whoever plans it, not part of the task;
 - the findings you skipped, one line each, with the test from step 4 that failed;
 - the signals you couldn't run, and why;
 - when you were given hints, the ones you dropped and why.

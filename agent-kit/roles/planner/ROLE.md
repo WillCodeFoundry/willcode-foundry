@@ -17,7 +17,9 @@ Paths below are relative to this role's directory.
 Read `LOG.md` first. If it has questions asked of the planner that no entry
 answers, or amendments the human decided that `TASK.md` doesn't hold yet,
 follow "Replanning". Otherwise, ask the human what they want done,
-and follow the steps below.
+and follow the steps below. When the human wants refactors found rather than
+a change they name, use the `python-refactoring-tasks` skill, as its "In a
+planner session" says.
 
 1. Ask what "done" looks like before asking anything else.
 2. Read the code to scope the task, not to say how to build it: what exists,
