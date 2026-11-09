@@ -115,3 +115,31 @@ AC10 at the seams PLAN.md names; ruff, mypy, vulture, pylint and the host tier (
 - The AC7 test gives the competing create another `GIT_COMMITTER_DATE`. Two creates of one id by one identity in the
   same second make the very same commit, so the second push changes nothing and succeeds.
 Next: step 5, the docs (README, GLOSSARY, ARCHITECTURE, docstrings already done), then the draft PR.
+
+## 14 · dev · ready-for-review
+Done: PLAN.md's steps 1–5 are in ac5b7e0 (code and tests) and df11854 (docs: README, GLOSSARY **Task id** with bare
+"prefix" under _Avoid_, ARCHITECTURE codemap, `create_task`'s docstring). Draft PR:
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80. Its CI passes, the docker tier included. Locally, ruff,
+mypy, vulture, pylint and `uv run pytest --cov` pass (808 passed).
+- [x] AC1: `test_the_next_task_is_created_as_create_task_would_create_it` (tests/test_project_tasks.py);
+  `test_create_without_a_task_creates_the_next_one` (tests/test_task_command.py).
+- [x] AC2: `test_the_highest_taken_number_counts_whichever_kind_holds_it[open|closed|branch]`.
+- [x] AC3: `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits` (tests/test_task.py).
+- [x] AC4: `test_names_that_aren_t_task_ids_are_ignored`; `test_task_branches_that_aren_t_task_ids_are_ignored`.
+- [x] AC5: `test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie[none|none-valid]`;
+  `test_with_no_task_id_taken_nothing_is_pushed`;
+  `test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_nothing[no-task-id]`.
+- [x] AC6: `test_the_most_common_task_prefix_wins_and_the_other_task_prefix_s_higher_number_is_ignored`,
+  `test_each_id_is_counted_once`, `…_or_task_prefixes_tie[tie|tie-of-two-of-three]` (tests/test_task.py);
+  `test_the_task_prefix_most_task_ids_use_is_followed`, `test_a_task_s_branch_and_notes_count_as_one_task_id`
+  (tests/test_project_tasks.py); `…_changes_nothing[tie]` (tests/test_task_command.py).
+- [x] AC7: `test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winner_s`. The loser's stderr is
+  git's `! [rejected] agent-notes -> agent-notes (fetch first)`.
+- [x] AC8: every existing create test passes unchanged; `_create` still refuses an invalid given id before git runs.
+- [x] AC9: README row and task id line; `tests/test_docs.py` passes.
+- [x] AC10: `test_create_s_task_is_optional_and_its_help_says_what_is_picked_without_it`.
+- [x] AC11: ruff and the host tier pass, as above.
+- For the reviewer: two creates of one id, by one identity in the same second, make the same commit, so the second
+  succeeds with nothing to push (LEARNINGS.md). Its result is the same as the first's. The AC7 test avoids it with
+  `GIT_COMMITTER_DATE`.
+Next: the reviewer's code round.
