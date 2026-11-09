@@ -71,6 +71,16 @@ Each behaviour is tested once, at the cheapest tier that can catch its bug. A hi
 
 Shared helpers live in `tests/support/`; the conftests hold only fixtures and pytest hooks. Tests never patch: they fake GitHub and the host, run real git in temporary repositories, and put stand-in executables on `PATH` (design rule 3).
 
+Use these before writing setup of your own. A copy of one is a review finding.
+
+| Need | Helper |
+|---|---|
+| A command on `PATH` that runs a script, exits with a code, or records its arguments | `scripted_stand_in`, `stand_in`, `recording_stand_in` in `tests/support/machine.py` |
+| A foundry of the test's own: its config, projects and roles | `write_foundry` in `tests/support/foundry_root.py` |
+| A project's GitHub repository, its tasks, or a change to its notes branch | the `project_repository` fixture: `ProjectRepository.project_tasks`, `edit_notes`, `head`, `notes_head` |
+| git in a directory, or a commit the hooks never see | `git`, `commit_unchecked` in `tests/support/__init__.py` |
+| git with an identity of its own | the `git_env` and `git_identity` fixtures |
+
 `-m docker` and `-m sbx` fail rather than skip when what they need is missing, since you asked for them. The sbx tier runs only when `-m` names it, so a `-m "not docker"` can't launch a real sandbox.
 
 ## CI

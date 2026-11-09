@@ -28,6 +28,13 @@ def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProces
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
+def commit_unchecked(cwd: Path, message: str) -> None:
+    """A commit the kit's hooks never see, unsigned: setup for a case, or another task's agent's commit. Empty
+    when nothing is staged."""
+    unchecked = ("-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null")
+    git(cwd, *unchecked, "commit", "-q", "--allow-empty", "-m", message)
+
+
 def run_pytest(*args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     """pytest in a process of its own, in this repository, with this one's environment plus ``env``."""
     return subprocess.run(

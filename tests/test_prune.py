@@ -9,6 +9,7 @@ import pytest
 from foundry import cli
 from foundry.agent_sandbox import Remnant, RemnantKind
 from foundry.commands.prune import report
+from tests.support.machine import scripted_stand_in
 
 
 def test_each_pruned_remnant_is_reported_with_its_kind_and_sandbox() -> None:
@@ -27,13 +28,8 @@ def test_prune_prints_what_it_pruned_or_an_error_and_exits_accordingly(
     process is a sleep of the test's own, under the command line of a sandbox's ssh-agent. The real ps would
     list a developer's ssh-agents, for prune to kill."""
     sleeping = subprocess.Popen(["sleep", "60"])
-    stand_ins = {
-        "sbx": "echo '{\"sandboxes\": []}'",
-        "ps": f"echo '{sleeping.pid} ssh-agent -a /tmp/sbx-agents/dev-p-gone.sock -s'",
-    }
-    for name, script in stand_ins.items():
-        (tmp_path / name).write_text(f"#!/bin/sh\n{script}\n")
-        (tmp_path / name).chmod(0o755)
+    scripted_stand_in(tmp_path, "sbx", "echo '{\"sandboxes\": []}'")
+    scripted_stand_in(tmp_path, "ps", f"echo '{sleeping.pid} ssh-agent -a /tmp/sbx-agents/dev-p-gone.sock -s'")
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
 
     try:
@@ -43,6 +39,6 @@ def test_prune_prints_what_it_pruned_or_an_error_and_exits_accordingly(
     finally:
         sleeping.kill()
 
-    (tmp_path / "sbx").write_text("#!/bin/sh\necho 'not logged in' >&2\nexit 1\n")
+    scripted_stand_in(tmp_path, "sbx", "echo 'not logged in' >&2\nexit 1")
     assert cli.main(["prune"]) == 1
     assert capsys.readouterr() == ("", "error: sbx ls failed: not logged in\n")

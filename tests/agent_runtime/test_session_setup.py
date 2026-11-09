@@ -12,7 +12,7 @@ import pytest
 from agent_runtime import contract, session_setup
 from agent_runtime.session_setup import SetupRefused
 from foundry.task import NOTES_BRANCH
-from tests.support import TASK, VariablesFor, git
+from tests.support import TASK, VariablesFor, commit_unchecked, git
 
 
 @pytest.fixture
@@ -265,23 +265,6 @@ def push_to_origin(origin: Path, tmp_path: Path, branch: str, files: dict[str, s
     git(other, "push", "-q", "origin", branch)
 
 
-def commit_locally(checkout_dir: Path, message: str) -> None:
-    """An unpushed commit in a checkout session_setup made. Unsigned, and unseen by the kit's hooks, which need
-    the session variables this process doesn't have."""
-    git(
-        checkout_dir,
-        "-c",
-        "commit.gpgsign=false",
-        "-c",
-        "core.hooksPath=/dev/null",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        message,
-    )
-
-
 def tips(variables: contract.SessionVariables) -> tuple[str, str]:
     return (
         git(variables.agent_code_checkout_dir, "rev-parse", "HEAD").stdout.strip(),
@@ -358,7 +341,7 @@ def test_unpushed_commits_are_left_as_they_are(
     variables = variables_for(built_kit, created_task)
     session_setup.set_up(variables)
     for checkout_dir in (variables.agent_code_checkout_dir, variables.agent_notes_checkout_dir):
-        commit_locally(checkout_dir, "local")
+        commit_unchecked(checkout_dir, "local")
     before = tips(variables)
 
     session_setup.set_up(variables)
@@ -393,7 +376,7 @@ def test_a_diverged_branch_is_refused_naming_the_local_commits(
     variables = variables_for(built_kit, created_task)
     session_setup.set_up(variables)
     code_checkout_dir = variables.agent_code_checkout_dir
-    commit_locally(code_checkout_dir, "my unpushed work")
+    commit_unchecked(code_checkout_dir, "my unpushed work")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     before = snapshot(variables)
 
@@ -432,7 +415,7 @@ def test_a_refusal_in_the_notes_leaves_the_code_checkout_where_it_was(
 ) -> None:
     variables = variables_for(built_kit, created_task)
     session_setup.set_up(variables)
-    commit_locally(variables.agent_notes_checkout_dir, "local")
+    commit_unchecked(variables.agent_notes_checkout_dir, "local")
     push_to_origin(created_task, tmp_path, TASK.branch, {"new.py": "x\n"})
     push_to_origin(created_task, tmp_path, NOTES_BRANCH, {"other.md": "x\n"})
     before = snapshot(variables)
