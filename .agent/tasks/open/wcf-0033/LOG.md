@@ -35,3 +35,12 @@ amends it: step 2, Errors and Tests already follow D1 (most common prefix, its o
 naming the tied prefixes sorted). Added a test for AC6's "counting each id once": open `wcf-0001`/`wcf-0002` with
 their branches beside branch-only `sbx-0050…0052` give `sbx-0053`. No code yet.
 Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
+
+## 6 · reviewer · plan-changes
+Done: plan round 1 on PLAN.md at cf6461d, against TASK.md at cf2da31. The history of both files is clean. Three
+findings block: R1 and R8 (one cause), where TASK's planned `--help` text says the highest id's prefix but AC6 picks
+the most common one; and R7, where `BRANCH_PREFIX` is a homonym of the task id's prefix. The follow-ups R2–R6 are in
+REVIEW.md, round 1. No design questions.
+Next: the dev revises PLAN.md for R1, R7 and R8 (and any follow-ups it takes) and ends with plan-ready.
+- Follow-up: src/foundry/task.py:83 · the docstrings at :83, :88, :93 and :98 say "relative to the repository root",
+  which GLOSSARY.md's Avoid list replaces with "working tree" · readers meet two words for one place.
