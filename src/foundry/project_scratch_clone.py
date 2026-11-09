@@ -59,8 +59,7 @@ class FetchedBranch:
 
     def is_link(self, path: str) -> bool:
         """Whether ``path`` is a link here; False when nothing, a file or a dir is at ``path``."""
-        entries = _ls_tree(self._git, self.commit, "--", path)
-        return (_LINK_MODE, "blob", path) in entries
+        return self._entry(path) == (_LINK_MODE, "blob")
 
     def _require_entry(self, path: str, entry_type: Literal["tree", "blob"]) -> None:
         """Check ``path`` is an ``entry_type`` entry.
@@ -68,10 +67,17 @@ class FetchedBranch:
         PathNotOnBranchError when nothing is at ``path``, or an entry of another type is. Any other git failure is a
         GitError, never taken for a missing path.
         """
-        entries = _ls_tree(self._git, self.commit, "--", path)
-        # ls-tree lists a dir's contents for "dir/", so match the name exactly
-        if (entry_type, path) not in [(found_type, name) for _, found_type, name in entries]:
+        entry = self._entry(path)
+        if entry is None or entry[1] != entry_type:
             raise PathNotOnBranchError(f"{self.name} has no {_ENTRY_WORD_BY_TYPE[entry_type]} {path}")
+
+    def _entry(self, path: str) -> tuple[str, str] | None:
+        """The mode and type of the entry at ``path``, or None when nothing is there."""
+        # ls-tree lists a dir's contents for "dir/", so match the name exactly
+        for mode, entry_type, name in _ls_tree(self._git, self.commit, "--", path):
+            if name == path:
+                return mode, entry_type
+        return None
 
 
 class ProjectScratchClone:
