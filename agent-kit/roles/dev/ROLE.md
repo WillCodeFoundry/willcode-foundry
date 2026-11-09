@@ -13,8 +13,8 @@ take it through review to a pull request ready to merge.
    `git fetch origin && git merge origin/HEAD`, so GitHub can merge the pull
    request when it is ready. Run the project's checks, then push. If the
    merge conflicts, resolve it (see "Merge conflicts").
-2. Then do what the notes say is open, in this order: answers to your own
-   questions; the latest review round's findings you haven't answered, or
+2. Then do what the notes say is open, whatever outcome handed you the turn,
+   in this order: answers to your own questions; the latest review round's findings you haven't answered, or
    its verdict; then, with no approved plan, `PLAN.md`; otherwise `TASK.md`,
    from your latest `Next`. Leave a design question to the architect until
    its `Answers R<n>` entry; then answer it yourself, as for any finding.
@@ -148,7 +148,9 @@ The reviewer writes its rounds in `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_D
   resolving is a change of your own. If anything else must
   change, CI fixes included, make the change, keep the pull request a draft,
   and end your turn with `ready-for-review`. Name the commits made after the
-  approval in your `LOG.md` entry.
+  approval in your `LOG.md` entry. Do the same when anyone else, such as the
+  architect writing a design rule, pushed to the task branch after the commit
+  the approving round reviewed.
 
 ## CI
 CI runs on the pull request, draft or not, at every push. It runs checks you

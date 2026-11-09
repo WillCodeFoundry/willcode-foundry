@@ -182,6 +182,7 @@ and back to the dev for the pull request.
 | reviewer | `design-question` | architect |
 | reviewer | `changes-needed` | dev |
 | reviewer | `approved` | dev |
+| reviewer | `task-question` | planner |
 | reviewer | `no-agreement` | human |
 | architect | `plan-approved` | dev |
 | architect | `plan-changes` | dev |
@@ -320,9 +321,11 @@ them as findings.
 When the human decides a change to `TASK.md` in your session, log it as a
 question to the planner with its answer, `Asks <id> → planner: <the change>`
 then `Answers <id>: <the decision> (the human)`, and keep working. The planner
-folds it into `TASK.md` before the next review round: before you hand the task
-to review, end with `task-question` instead if any such change isn't in
-`TASK.md` yet.
+folds it into `TASK.md` before the next review round. So before the dev hands
+the task to review, and before the reviewer writes a round, each checks
+`LOG.md` for a change the human decided, in any role's session, that
+`TASK.md` doesn't hold yet, and ends with `task-question` instead if there is
+one.
 
 The reviewer asks the architect, with `Asks <id> → architect` and the outcome
 `design-question`, when a plan trips a trigger, or a finding's fix would break

@@ -76,7 +76,7 @@ git -C "$AGENT_NOTES_CHECKOUT_DIR" show "<commit>:$AGENT_TASK_FILE"
 
 If no allowed commit wrote one, the **Spec** sub-agent skips and reports "no spec available".
 
-The task's `PLAN.md`, as last approved, is part of the spec too: its approach, its names and errors, and the test for each criterion. Read it from the notes checkout, and its diff since the approved commit, which the latest plan round's verdict or the dev's `plan-approved (the human)` entry names. A change to a name, an error, a seam or the approach in that diff, made without a plan round, is a Spec finding.
+The task's `PLAN.md`, as last approved, is part of the spec too: its approach, its names and errors, and the test for each criterion. Read it from the notes checkout, and its diff since the approved commit, which the latest of these names: a plan round's verdict, the architect's `Answers <id>: plan approved at <commit>`, or the dev's `plan-approved (the human)` entry. A change to a name, an error, a seam or the approach in that diff, made without a plan round, is a Spec finding.
 
 ### 3. Identify the standards sources
 

@@ -121,10 +121,10 @@ Most valuable first, at most five per run; report the rest.
 | Section | What to put there |
 |---|---|
 | `# Task <id>: <title>` | The change, in a few words: what goes away or what becomes simpler. |
-| Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. |
+| Goal | What is hard now, for a reader, a test or a change, and what the change removes. One paragraph. Where, as `path.py:line` and the function, class or flow; the smell, by `python-smells` number and name or `python-naming-smells` smell; and how it was found: the hint, the signal from step 1, or the exploring step from step 2. |
 | Acceptance criteria | Checkable statements, each with an id (`AC1`, …), checkable from outside the code or by a search. Always: behaviour is unchanged, or exactly what changes; the existing tests pass, changed only where they reached into what was removed; the project's checks pass. Then what must be gone or true afterwards, such as "`move_notes` no longer exists" or "no test patches `_read_config`". |
 | Out of scope | The neighbouring smells you saw and are leaving, each with an id (`OS1`, …), so the dev doesn't widen the task. |
-| Risks | Where, as `path.py:line` and the function, class or flow, and how it was found: the hint, the signal from step 1, or the exploring step from step 2. The smell, by `python-smells` number and name or `python-naming-smells` smell. Your sketch, as a direction the dev's `PLAN.md` may improve on. Another task this one needs merged first, as an `After:` line under the title. |
+| Risks | What could go wrong, such as callers outside the code you read. Another task this one needs merged first goes as an `After:` line under the title. |
 | Terms | Glossary terms the change adds, renames or retires. Empty if none. A decision worth an ADR goes to the architect, as a question in your report. |
 | Open questions | Choices only the human can make, each with the options and your recommendation. Empty otherwise. |
 
@@ -135,6 +135,7 @@ After a restructure you've written up, explore the flow again as it would look a
 End the run with a short report:
 
 - the tasks you wrote, one line each, in the order to do them, saying which depend on others;
+- for each task, your sketch of the change, as a direction its dev's `PLAN.md` may take or improve on;
 - the findings you skipped, one line each, with the test from step 4 that failed;
 - the signals you couldn't run, and why;
 - when you were given hints, the ones you dropped and why.

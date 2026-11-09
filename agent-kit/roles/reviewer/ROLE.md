@@ -84,12 +84,17 @@ Never edit earlier rounds. In each round, in this order:
 Ask the architect each new design question in your last `LOG.md` entry, one
 line each: `Asks R<n> → architect: <the question>. See REVIEW.md, round <round>.`
 A plan that trips a trigger in the skill's "Plan rounds" is a design question
-too: the architect approves it instead of you.
+too: the architect approves it instead of you. That round's verdict is
+`Verdict: plan goes to the architect`, and the architect's answer names the
+commit it approves.
 
 Then end your turn, as "Taking turns" in `AGENTS.md` says, with the first
 outcome below that holds.
 
 ## Outcomes
+- `task-question`: a change to `TASK.md` the human decided, in any role's
+  session, isn't in `TASK.md` yet. Write no round; ask the planner to fold it
+  in, as "When to stop and ask" in `AGENTS.md` says.
 - `no-agreement`: a Blocking finding or a design question is still open after
   the third code round. Don't hand the task back for another round. In your
   `LOG.md` entry, ask the human about each by its id, saying where you and the

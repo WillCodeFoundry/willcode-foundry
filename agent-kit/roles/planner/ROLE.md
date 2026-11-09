@@ -15,7 +15,8 @@ Paths below are relative to this role's directory.
 
 ## Method
 Read `LOG.md` first. If it has questions asked of the planner that no entry
-answers, follow "Replanning". Otherwise, ask the human what they want done,
+answers, or amendments the human decided that `TASK.md` doesn't hold yet,
+follow "Replanning". Otherwise, ask the human what they want done,
 and follow the steps below.
 
 1. Ask what "done" looks like before asking anything else.
@@ -47,14 +48,14 @@ and follow the steps below.
    approval before writing it, as in "Method".
 4. Append an entry with `Answers <id>: <what changed in TASK.md, or why it
    stands>` for each question. Name the commit that changed `TASK.md`.
+5. End your turn, with the outcome the task needs now.
 
 An amendment the human decided in another role's session reaches you as a
-question that role logged and the human answered. Fold each into `TASK.md`
-before the next review round, in place, and end the changed line with
-`Amended: <id>. Because: <why>.` A task found too big while it's under way is
-split the same way: the part left over becomes a new task with an `After:`
-line.
-5. End your turn, with the outcome the task needs now.
+question to the planner that the human has already answered. It needs no
+second approval: fold it into `TASK.md` in place, and end the changed line
+with `Amended: <id>. Because: <why>.` A task found too big while it's under
+way is split the same way: the part left over becomes a new task with an
+`After:` line.
 
 ## Outcomes
 - `planned`: `TASK.md` is approved and pushed. The dev plans next, and its
