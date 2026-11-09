@@ -175,3 +175,119 @@ No new findings. These are clean: "most common task prefix" and "other task pref
 Standards: 0 findings. Spec: 0 findings. Names: 0 findings. R9–R12 are closed and none blocks. No design questions.
 
 Verdict: plan approved at 6694061
+
+## Round 4 (reviewing df11854)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+cf2da31, signed by the planner's identity, which the architect shares, so a change by the architect can't be told
+apart from one by the planner. PLAN.md is unchanged since it was approved at 6694061, signed by the dev. This is the
+first code round, so it reviews the whole diff `9e047ab...df11854` (ac5b7e0, df11854).
+
+Earlier findings: R1–R12 were closed in the plan rounds. None is open.
+
+### Standards
+- R16 (Follow-up): `src/foundry/commands/task.py:32-33`. The description of `create` still says only "Refuses a task
+  that already exists, open or closed." Without TASK, create now also refuses when no task id is taken and when task
+  prefixes tie. The other actions' descriptions list every refusal they make, such as `reopen` at :55-56. Nothing in
+  it is untrue, and the error itself says to give TASK, so a reader is rarely misled. Direction: add one sentence
+  naming both refusals.
+
+Compliant: DR1 (`BRANCH_PREFIX` spells "task/" once in `src/`), DR6 (`NoNextTaskIdError` says only what went wrong,
+and the command adds "Give TASK"), DR7 (`create_main` only builds and passes). No sentence the change made untrue in
+the docstrings of `task.py`, `project_tasks.py` or `commands/task.py`, the codemap rows, or README. "Task prefix" is
+in GLOSSARY.md.
+
+### Spec
+- R17 (Follow-up): AC7, "the second exits 1 with an `error:` line on stderr". When two creates run as one identity in
+  the same second, they make byte-identical commits. The second push then has nothing to push, so it exits 0. The
+  AC7 test (`tests/test_task_command.py:193`) dates the competitor's commit differently to avoid this case. Only a
+  script running two creates at once from one foundry hits it. The repository still holds exactly the first's
+  work, and two creates of one explicit id behave the same today (TASK.md Risks, OS5). The dev disclosed it in
+  LOG.md entry 14 and LEARNINGS.md. Direction: accept as is.
+
+Every criterion is met, each by its code and a test:
+- AC1: `ProjectTasks._create` and `commands.task.create_task`.
+  `test_the_next_task_is_created_as_create_task_would_create_it` checks the branch, the notes files, the commit
+  subject, the parent and the signature. `test_create_without_a_task_creates_the_next_one` checks the output.
+- AC2: `test_the_highest_taken_number_counts_whichever_kind_holds_it[open|closed|branch]`.
+- AC3: `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits`.
+- AC4: `test_names_that_aren_t_task_ids_are_ignored` and `test_task_branches_that_aren_t_task_ids_are_ignored`.
+- AC5: shown in `test_task.py`, `test_project_tasks.py` and the CLI test `[no-task-id]`, which checks exit 1, the
+  stderr and that `for-each-ref` is unchanged.
+- AC6: shown by the majority, counted-once and tie tests, and the CLI test `[tie]`.
+- AC7: the race test checks the winner's tips, one task branch and no second notes dir. The same-second case is R17.
+- AC8: `_create` still refuses an invalid given id before git runs. The existing tests are unchanged and pass.
+- AC9: the README row and the task id line. `tests/test_docs.py` passes.
+- AC10: `test_create_s_task_is_optional_and_its_help_says_what_is_picked_without_it`.
+- AC11: ruff check, ruff format and the four test files pass.
+
+The names, errors, seams and approach match the approved PLAN.md. No scope creep.
+
+### Behaviour
+No findings. Each case below was reproduced in a throwaway clone with the `project_repository` fixture, and passes:
+- no `agent-notes` branch but a branch `task/wcf-0010` gives `wcf-0011`, with the notes branch created as an orphan;
+- an id in both the open and closed dirs is counted once;
+- `wcf-0041` beside `task/wcf-00041` gives `wcf-0042`;
+- a tie with different numbers refuses, naming "abc, wcf", and leaves the remote's refs unchanged;
+- a nested branch `task/wcf-0009/x` is ignored.
+
+These were read and hold:
+- an empty TASK is refused as an invalid id; it isn't treated as "pick the next one";
+- `given_task or …` can't mistake a `Task` for None;
+- `next_task_id` raises before any checkout, write, commit or push.
+
+The host tier, ruff and mypy pass at df11854.
+
+### Smells
+Functions the diff adds or changes:
+- `src/foundry/commands/task.py`: `add_parser` and `create_main` are clean. `create_task` is new, clean.
+- `src/foundry/project_tasks.py`: `ProjectTasks.create_task` is clean, and `_create` is clean (its None switch is
+  what PLAN.md step 3 decides). `create_next_task` and `_taken_task_ids` are new, clean.
+- `src/foundry/task.py`: `Task.branch` is clean. `NoNextTaskIdError` and `next_task_id` are new, clean.
+- `tests/test_task.py`: all five new tests are clean.
+- `tests/test_project_tasks.py`: `take_task_ids` is new (R14).
+  `test_the_highest_taken_number_counts_whichever_kind_holds_it` is new (R15). The other five new tests are clean.
+- `tests/test_task_command.py`:
+  - `foundry_of_store` and `test_create_s_task_is_optional_…` are new, clean.
+  - `test_create_without_a_task_creates_the_next_one` is new (R14).
+  - `test_create_without_a_task_that_can_t_pick_one_…` is new (R13, R14).
+  - `test_a_create_that_loses_the_race_…` is new (R14). Its PATH stand-in is allowed by 10.4's "Fine when" and by
+    design rule 3.
+
+Findings:
+- R13 (Blocking), possible 10.6, a parametrized test that asks which case it is: `tests/test_task_command.py:163`.
+  - What: the shared body checks `if "tie" in error` to choose its setup. So the expected message also decides how
+    the repository is built.
+  - Who hits it: the next dev who adds a refusal case, or rewords the tie message. A message without "tie" quietly
+    runs the other setup.
+  - Direction: give the setup its own parameter, or split the test in two.
+- R14 (Blocking), possible Duplicated Code / 6.6, rebuilding a place the code already names:
+  - What: `SEEDED_TASK_NOTES_DIRS` is spelled by hand twice, at `tests/test_task_command.py:123` and
+    `tests/test_project_tasks.py:141`. Yet `ProjectRepository` already names the seeded tasks, as `open_task` and
+    `closed_task` (`tests/support/project_repository.py:68-69`).
+  - Who hits it: whoever changes a seeded task. They would have to edit three places. A missed one leaves the seed in
+    place, and the create-without-TASK tests then fail with a prefix tie, far from the edit.
+  - Direction: derive the dirs from the seeded tasks `ProjectRepository` already names.
+- R15 (Follow-up), possible 10.6: `tests/test_project_tasks.py:175`. The test builds its keyword arguments from
+  `kind` with `f"{kind}_ids"` and `taken.get`, so the reader works out each case's setup. Direction: put each
+  case's `take_task_ids` arguments in the parametrize table.
+
+### Names
+No findings. Every name the diff adds matches the one the approved PLAN.md gives:
+- in the code: `next_task_id`, `NoNextTaskIdError`, `create_next_task`, `_create`, `_taken_task_ids`,
+  `BRANCH_PREFIX`, the `task_prefix` and `number` groups, the `commands.task.create_task` function, and
+  `project_argument`;
+- in the tests: the helpers `take_task_ids` and `foundry_of_store`, and every test function;
+- in the docs: the GLOSSARY **Task id** with its _Avoid_ entry.
+
+The prose always says "task prefix", never bare "prefix".
+
+### Summary
+- Standards: 1 finding, 0 blocking. The worst is R16, where create's description leaves out the new refusals.
+- Spec: 1 finding, 0 blocking. The worst is R17, the same-second race, accepted as is.
+- Behaviour: 0 findings.
+- Smells: 3 findings, 2 blocking. The worst is R13, a test whose expected message picks its setup.
+- Names: 0 findings.
+- No design questions.
+
+Verdict: changes needed

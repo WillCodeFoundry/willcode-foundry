@@ -143,3 +143,14 @@ mypy, vulture, pylint and `uv run pytest --cov` pass (808 passed).
   succeeds with nothing to push (LEARNINGS.md). Its result is the same as the first's. The AC7 test avoids it with
   `GIT_COMMITTER_DATE`.
 Next: the reviewer's code round.
+
+## 15 · reviewer · changes-needed
+Done: code round 4 on df11854, against TASK.md at cf2da31 and PLAN.md as approved at 6694061. The history of both files
+is clean. Spec, Behaviour and Names have no blocking finding: every AC is met by code and a test, and the host tier,
+ruff and mypy pass. Two Smells findings block, both in the tests: R13 (`tests/test_task_command.py:163` picks its
+setup from the expected message) and R14 (`SEEDED_TASK_NOTES_DIRS` spelled twice by hand, where `ProjectRepository`
+already names the seeded tasks). Follow-ups R15, R16 and R17 (R17 accepted as is) are in REVIEW.md, round 4. No
+design questions, and no human change to TASK.md waits to be folded in.
+Next: the dev fixes R13 and R14, answers each by id (and R15, R16 if taken), then ends with ready-for-review.
+- Follow-up: src/foundry/project_tasks.py `_read_task_ids` · named and documented as task ids, but returns every dir name unchecked · a new caller could trust them as valid ids.
+- Follow-up: tests/test_task_command.py:114-115 and other seed-id literals · `tst-0000` and `cls-0000` spelled by hand beside `ProjectRepository.open_task`/`closed_task` · renaming a seed means editing several test files.
