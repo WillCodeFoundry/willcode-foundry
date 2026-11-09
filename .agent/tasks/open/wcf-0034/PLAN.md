@@ -50,6 +50,8 @@ prints them as `error: <message>` and exits 1 (AC5). Because: DR6.
 - Tests only: `counting_stand_in(directory, name) -> Path`, in the family of `scripted_stand_in`, `stand_in` and
   `recording_stand_in`; "counting" is TASK.md's word. `fetch_count(git_calls) -> int`: `git_calls` names what the
   file holds, git's calls, and keeps "log" for `LOG.md`. Amended: R6, R7. Because: R6, R7.
+- Tests only: the fixture `enter_foundry_counting_git`, a `Callable[[Path], Path]`: `enter_foundry` with git
+  counted, local to `tests/test_task_command.py`, its only user. Amended: R9. Because: R9.
 
 ## Errors
 New:
@@ -80,18 +82,22 @@ Printed on stdout: `status: closed`, `turn: <TURN>`, a blank line, then the entr
   stdout exactly `turn: dev\n\n## 2 · dev · progress\n…\n`, stderr empty, exit 0.
 - AC2: `show_lines` for a closed task starts with `status: closed`; end to end on `cls-0000`.
 - AC3: `last_log_entry("# Log\n")` is None; `show_lines` gives `no log entry yet`; end to end, exit 0.
-- AC4: end to end with `counting_stand_in(dir, "git")` and `dir` prepended to `PATH`
-  (`process_environment.prepend_to_path`): an unknown project and an invalid id each print the message above and
-  leave the calls file absent or empty. The AC6 test below shows the same setup records git when it runs.
-  Amended: R1, R3. Because: an empty record proves nothing unless the setup is shown to record.
+- AC4 and AC6 share one setup, a fixture in `tests/test_task_command.py`,
+  `enter_foundry_counting_git(foundry_root) -> Path`: it calls `enter_foundry(foundry_root)`, then
+  `counting_stand_in(dir, "git")`, then `process_environment.prepend_to_path(dir)`, in that order, since
+  `enter_foundry` replaces `PATH`; and returns the calls file. Amended: R9. Because: R9, so AC6's proof that the
+  setup records git holds for AC4.
+- AC4: end to end through `enter_foundry_counting_git`: an unknown project and an invalid id each print the
+  message above and leave the calls file absent or empty. The AC6 test below shows the same setup records git
+  when it runs. Amended: R1, R3, R9. Because: an empty record proves nothing unless the setup is shown to record.
 - AC5: `test_project_tasks.py`, parametrized: each malformed case (TURN missing, a dir, blank, a link; LOG.md
   missing, a dir, a link; via `edit_notes`) raises its message. End to end, parametrized over every AC5 failure,
   including an unreachable repository and a bare one with no `agent-notes`: stdout empty, stderr one
   `error: <message>` line, exit 1.
 - AC6: end to end through `cli.main`, in `test_task_command.py`, with the `no_signing_key` fixture and the same
-  `counting_stand_in` setup as AC4: a successful `foundry task show` exits 0, `fetch_count(git_calls) == 1`, no
+  `enter_foundry_counting_git` setup as AC4: a successful `foundry task show` exits 0, `fetch_count(git_calls) == 1`, no
   recorded call is a `commit` or a `push`, and `git for-each-ref` on the project repository is the same before
-  and after. So a `show_main` that fetched again fails it. Amended: R1. Because: counted at `ProjectTasks` only, a
+  and after. So a `show_main` that fetched again fails it. Amended: R1, R9. Because: counted at `ProjectTasks` only, a
   second fetch in `show_main` would pass.
 - AC7: `TURN` linked to `/etc/hostname`, and `LOG.md` linked to a notes file holding a marker line: end to end,
   neither the marker nor the target's text appears on stdout or stderr, and the failure is AC5's. `is_link` in
@@ -108,8 +114,9 @@ Printed on stdout: `status: closed`, `turn: <TURN>`, a blank line, then the entr
 - The module docstrings of `commands/task.py` and `project_tasks.py`, and the `task` parser's help, which list the
   actions.
 - `FetchedBranch.read_text`'s docstring points to `is_link`.
-- CONTRIBUTING.md's helper table: `counting_stand_in` in the stand-ins' row, and `fetch_count`. Amended: R6.
-  Because: R6.
+- CONTRIBUTING.md's helper table: `counting_stand_in` in the stand-ins' row, its Need also covering a command that
+  records its arguments, then runs the real one; `fetch_count`; and a row for the `no_signing_key` fixture, git
+  with no signing key. Amended: R6, R8. Because: R6, R8.
 - `_ls_tree`'s docstring: it gives each entry's mode too. Amended: R4. Because: R4.
 - `tests/support/project_repository.py`'s module docstring: it also counts git's fetches. Amended: R5.
   Because: R5.

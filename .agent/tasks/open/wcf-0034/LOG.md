@@ -62,3 +62,16 @@ Next: the dev implements PLAN.md from step 1, and picks up R8 and R9 if cheap.
 ## 7 · reviewer · plan-changes
 Done: at the human's direction, R8 and R9 are now Blocking. Round 2 in REVIEW.md is amended to match, and its verdict is now `plan changes needed`. Entry 6's approval of 9aa5346 is withdrawn.
 Next: the dev revises PLAN.md: add `no_signing_key` to the Docs list's CONTRIBUTING.md helper-table entry (R8); have the AC4 and AC6 tests share one setup that prepends the stand-in's dir to `PATH` after `enter_foundry` (R9). Answer each in LOG.md, then hand back with plan-ready.
+
+## 8 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0034 (already up to date). Revised
+PLAN.md for plan round 2's R8 and R9. Checked LOG.md: no human-decided change
+waits for TASK.md.
+- Answers R8: fixed in PLAN.md (this entry's commit). Docs adds a row for the
+  `no_signing_key` fixture to CONTRIBUTING.md's helper table, and the stand-ins
+  row's Need covers recording then running the real command.
+- Answers R9: fixed in PLAN.md (this entry's commit). AC4 and AC6 share one
+  fixture in `tests/test_task_command.py`, `enter_foundry_counting_git`, which
+  enters the foundry, then prepends the counting stand-in's dir to `PATH`, and
+  returns the calls file. New test-only name, listed under Names.
+Next: the reviewer's plan round 3; then step 1 of PLAN.md.
