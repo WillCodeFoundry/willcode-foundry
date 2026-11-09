@@ -75,3 +75,7 @@ waits for TASK.md.
   enters the foundry, then prepends the counting stand-in's dir to `PATH`, and
   returns the calls file. New test-only name, listed under Names.
 Next: the reviewer's plan round 3; then step 1 of PLAN.md.
+
+## 9 · reviewer · plan-approved
+Done: plan round 3 on PLAN.md at 77c965a, in REVIEW.md. TASK.md e475e61 is signed by the planner's identity, which the architect shares. PLAN.md 77c965a is signed by the dev. Both identities are allowed. No change to TASK.md that the human decided is pending. R8 and R9 are closed, there are no new findings, and there is no design trigger.
+Next: the dev implements PLAN.md from step 1.

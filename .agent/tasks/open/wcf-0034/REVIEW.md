@@ -143,3 +143,55 @@ Summary: Standards 1 finding, 1 blocking (worst: R8, the newly shared `no_signin
 The human raised R8 and R9 to Blocking after this round first approved the plan at 9aa5346, so that approval is withdrawn.
 
 Verdict: plan changes needed
+
+## Round 3, plan (reviewing PLAN.md at 77c965a)
+
+Reviewed against `TASK.md` at e475e61, which hasn't changed since round 1. That commit is signed by the planner's identity, which the architect shares, so it could equally be the architect's. `PLAN.md` 77c965a is signed by the dev, and no other role changed either file. `LOG.md` holds no change to `TASK.md` that the human decided and `TASK.md` lacks. This round reviews the fix diff `9aa5346..77c965a` of `PLAN.md`.
+
+### Earlier findings
+
+- **R8: closed.** The Docs list adds a row for the `no_signing_key` fixture to CONTRIBUTING.md's helper table, "git with no signing key", worded like the `git_env` row (`CONTRIBUTING.md:82`). It also widens the stand-ins row's Need (`CONTRIBUTING.md:78`) to cover a command that records its arguments, then runs the real one.
+- **R9: closed.** AC4 and AC6 now share one fixture, `enter_foundry_counting_git`. It calls `enter_foundry`, then `counting_stand_in`, then `prepend_to_path`, in that order, and the plan says why. The plan's claims match the code:
+  - `enter_foundry` returns a callable that replaces the environment with `git_env` (`tests/conftest.py:141-150`).
+  - `prepend_to_path` exists (`tests/support/__init__.py:103-105`).
+  - `tests/test_run.py:125-126` already uses the same order.
+  - `no_signing_key` changes the global config that `git_env` points to, so AC6's use of it still holds after `enter_foundry`.
+
+### Standards
+
+There is no breach.
+- CONTRIBUTING.md:72 doesn't stop a test module from having a fixture of its own, and several already do (e.g. `tests/test_run.py:33`). This one has a single user, so it doesn't belong in `tests/support/` or in the helper table.
+- It calls the listed helpers instead of copying them (`CONTRIBUTING.md:74`).
+- It changes `PATH` only through `ProcessEnvironment`'s existing `prepend_to_path`, so nothing is patched (DR3).
+- There is no design trigger.
+
+No new findings.
+
+### Spec
+
+Every criterion still has a test at a named seam in the lines the fix touched. AC4's empty record now means something, because AC6 shows the same setup records git. No step does anything OS1–OS9 rules out. No new findings.
+
+### Behaviour
+
+Not run: this is a plan round.
+
+### Smells
+
+Not run: this is a plan round.
+
+### Names
+
+All clean:
+- `enter_foundry_counting_git`, which names its sibling `enter_foundry` and the settled word "counting". It is local to one file, and no other fixture wraps `enter_foundry`.
+- "the calls file", which agrees with `git_calls`.
+- The helper-table prose ("records its arguments", "the real one", "git with no signing key"), which reuses the table's and the stand-ins' existing words.
+
+No new findings.
+
+### Design questions
+
+None.
+
+Summary: Standards 0 findings, Spec 0, Names 0, and none blocking. Behaviour and Smells were not run. R8 and R9 are closed, and no design questions are open.
+
+Verdict: plan approved at 77c965a
