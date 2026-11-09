@@ -160,3 +160,20 @@ Done: at the human's word, R15 (`tests/test_project_tasks.py:175` builds its arg
 `f"{kind}_ids"`) is Blocking, not a Follow-up. Appended to REVIEW.md, round 4. Round 4 now has three Blocking findings,
 R13, R14 and R15. Follow-ups R16 and R17 are unchanged, and R17 is still accepted as is.
 Next: the dev fixes R13, R14 and R15, answers each by id, then ends with ready-for-review.
+
+## 17 · dev · ready-for-review
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Answered code round 4 in eb1b6b0 (tests) and
+ac110e0 (create's description). PR https://github.com/WillCodeFoundry/willcode-foundry/pull/80 stays a draft; its CI
+passes at ac110e0. Locally ruff, mypy, vulture, pylint and `uv run pytest --cov` pass (808 passed). No human change to
+TASK.md waits to be folded in. PLAN.md is unchanged: no name, error, seam or approach moved.
+- Answers R13: fixed in eb1b6b0. The refusal test's parametrize table now pairs each case's setup function
+  (`take_no_task_id`, `tie_two_task_prefixes`) with its expected error; the body no longer reads the message.
+- Answers R14: fixed in eb1b6b0. `ProjectRepository.seeded_task_notes_dirs` is built from `open_task` and
+  `closed_task`; both hand-spelled `SEEDED_TASK_NOTES_DIRS` are gone.
+- Answers R15: fixed in eb1b6b0. Each case's `take_task_ids` arguments are in the parametrize table; ids unchanged.
+- Answers R16: fixed in ac110e0. create's description adds one sentence naming both refusals without TASK.
+- Answers R17: accepted as is, as the round says; no change.
+- R13 and R14 both touch the refusal test, but they are separate causes (the setup switch; a constant shared by three
+  tests), each fixed by a one-place change, so I didn't take it as a cluster needing a PLAN.md revision.
+- AC1–AC11 are met by the same tests as entry 14; the renamed parameters keep every test id.
+Next: the reviewer's code round 5.
