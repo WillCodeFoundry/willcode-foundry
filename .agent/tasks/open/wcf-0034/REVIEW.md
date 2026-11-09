@@ -195,3 +195,134 @@ None.
 Summary: Standards 0 findings, Spec 0, Names 0, and none blocking. Behaviour and Smells were not run. R8 and R9 are closed, and no design questions are open.
 
 Verdict: plan approved at 77c965a
+
+## Round 4 (reviewing ec3810a)
+
+Reviewed against `TASK.md` at e475e61, which is signed by the planner's identity. The architect shares that identity, so the commit could equally be the architect's. `PLAN.md` was approved at 77c965a and is unchanged since. It is signed by the dev. No other role changed either file. `LOG.md` holds no change to `TASK.md` that the human decided and `TASK.md` lacks. This is the first code round, so it reviews the whole diff `9e047ab...ec3810a` (commits d3e2b03, b4145bc, 69c69f5, 647fba9, ec3810a).
+
+### Earlier findings
+
+R1–R9 were closed in the plan rounds. No finding is open.
+
+### Standards
+
+- **R10 · Follow-up · `src/foundry/commands/task.py:131`.**
+  - `show_main` calls `task.Task.as_open(args.task_id)` itself, with a comment saying it refuses an invalid id.
+  - `handoff_main` instead calls this through `require_valid_handoff_args` (`:121`, `:177`), a function the tests call. So `show_main` is the one composition root whose body names a check (DR7).
+  - Reviewer's note: the reviewer downgraded this from Blocking.
+    - The check itself lives in `Task.as_open`, which the tests call, and `main` only calls it.
+    - The end-to-end AC4 test reaches the line.
+    - The approved PLAN.md chose this placement.
+    - Nobody is led into a wrong action.
+  - Who hits it: a dev who copies the newest command, now and then.
+  - Fix: optionally, move the call into a small `require_…` check beside handoff's. Otherwise accept as is.
+- **R11 · Follow-up · `src/foundry/project_tasks.py:156-157`.**
+  - The new link error chains the fault, the reason and the location behind "and" and a colon, against AGENTS.md "Writing" ("Give each reason its own sentence").
+  - It copies `ProjectScratchClone.write`'s existing message, and PLAN.md gives this exact text.
+  - Who hits it: a user whose `TURN` or `LOG.md` is a link. That is rare.
+  - Fix: accept as is. Rewording means a plan change, and the same rewording for `write`.
+
+Docstrings and docs: nothing the change made untrue. The module docstrings were checked, as were the class docstrings in `project_scratch_clone.py` and `project_tasks.py`, ARCHITECTURE.md's codemap rows, CONTRIBUTING.md's helper table, the README's table and its `LOG.md` sentence, and GLOSSARY.md's Log and Fetched branch.
+
+### Spec
+
+AC1–AC9 are all met in behaviour. The Spec reviewer ran every CONTRIBUTING.md check in a throwaway clone: `pytest --cov` 97.29%, ruff, format, mypy, vulture, pylint 10.00, and shellcheck.
+
+| AC | Code | Test |
+|---|---|---|
+| AC1 | `last_log_entry`, `fetch_task_turn_and_log`, `show_main`, `show_lines` | `test_the_last_log_entry_…`, `test_show_prints_…[open]` (exact stdout, empty stderr, exit 0) |
+| AC2 | `show_lines`' status line | `test_show_lines_…[closed]`, `test_show_prints_…[closed]` |
+| AC3 | `show_lines`' fallback | `[template]`, `[no-entry]` |
+| AC4 | `task.py:130-131`, before the scratch clone | `test_show_refuses_…_before_running_git` |
+| AC5 | existing errors, and the link check | `test_a_malformed_task_s_…` (7), `test_show_fails_…` (10). See R12 |
+| AC6 | one `fetch_branch` | `test_show_only_reads_with_one_fetch` |
+| AC7 | `is_link` before any read | `[turn-link]`, `[log-link]`, `test_is_link_is_true_for_a_link_only` |
+| AC8 | parser help, README | `test_task_help_lists_show`, the two README tests in `test_docs.py` |
+| AC9 | | all checks pass |
+
+- **R12 · Blocking · `tests/test_task_command.py:471-482`.**
+  - The end-to-end failure test has no case for a `TURN` that is a dir. PLAN.md's AC5 test says "End to end, parametrized over every AC5 failure", and LOG.md entry 11 claims "(all ten failures)".
+  - AC5 names eleven failures. The `TURN` cases are missing, not a file, a link, or empty.
+  - A `TURN` that is a dir is tested only at `ProjectTasks` (`test_a_malformed_task_s_…[turn-dir]`). `LOG.md` as a dir is tested end to end (`log-dir`).
+  - No user would see wrong behaviour, but the tests depart from the approved plan, and the claim overstates the coverage.
+  - Fix: add a `turn-dir` case to that list.
+
+### Behaviour
+
+No findings. The Behaviour reviewer ran the suite in a throwaway clone, plus cases of its own:
+- CRLF and trailing tabs or blanks in `LOG.md` and `TURN`;
+- a `LOG.md` that isn't UTF-8 and has no final newline;
+- a heading-like line in a code block, a risk TASK.md accepts;
+- a `TURN` with spaces around it, and a `TURN` that is a dir;
+- `is_link` on the paths it meets;
+- cleanup of the scratch clone on failure;
+- nothing on stderr on success.
+
+Each behaved as TASK.md asks. `rstrip()` (`project_tasks.py:295`) also drops trailing tabs and CRs, not only spaces. Accept as is: the output is the same in practice.
+
+### Smells
+
+Functions added or changed:
+
+| Function | Verdict |
+|---|---|
+| `commands/task.py`: `add_parser` | clean |
+| `commands/task.py`: `show_main`, `show_lines` | new, clean |
+| `project_scratch_clone.py`: `subdir_names`, `read_text` | clean |
+| `project_scratch_clone.py`: `is_link` | new, R13 |
+| `project_scratch_clone.py`: `_require_entry`, `_ls_tree` | R13 |
+| `project_tasks.py`: `TaskTurnAndLog` | new, clean. It repeats `TaskTurn`'s fields, as the plan names it |
+| `project_tasks.py`: `fetch_task_turn_and_log` | new, R15 |
+| `project_tasks.py`: `last_log_entry` | new, clean |
+| `machine.py`: `counting_stand_in` | new, clean |
+| `project_repository.py`: `fetch_count` | new, clean |
+| `conftest.py`: `no_signing_key` | moved, clean |
+| `test_listing_costs_one_fetch_however_many_tasks` | clean, and simpler than before |
+| `enter_foundry_counting_git` | new, clean |
+| `store_foundry` | new, R16 |
+| `test_show_fails_…` | new, R14, R16 |
+| The other new tests in `test_project_scratch_clone.py`, `test_project_tasks.py`, `test_task_command.py` and `test_docs.py` | clean |
+
+- **R13 · Blocking · `src/foundry/project_scratch_clone.py:60-63` and `:71-73`.** Possible copying instead of the seam (python-smells #6).
+  - `is_link` repeats `_require_entry`'s `ls-tree` lookup of one path.
+  - Widening `_ls_tree` to three fields made `_require_entry` rebuild a list of pairs just to keep its membership test (`:73`), so the change left it more tangled.
+  - Who hits it: the next dev who adds an entry check, who would copy the lookup a third time.
+  - Fix: one private lookup of the entry at `path` that both use. It is local, and `is_link`'s interface stays as PLAN.md gives it.
+  - Shares a cause with R17.
+- **R14 · Follow-up · `tests/test_task_command.py:511`.** Possible test that proves nothing (#10).
+  - The `hostname`/`MARKER`/`marker` assertion can't fail on its own: `:509` fixes stdout as empty, and `:510` fixes the whole of stderr.
+  - Reviewer's note: the reviewer downgraded this from Blocking. AC7 is still shown by `:509-510`, so nobody is misled about what is proven.
+  - Fix: drop it, or leave it as is.
+- **R15 · Follow-up · `src/foundry/project_tasks.py:153-158`.** Possible half-guard (#4.2).
+  - "foundry reads only files" is enforced for `show` only.
+  - `_read_turn` and `_read_log` still read a link as its target's name for `fetch_task_turn`, `hand_off` and listing.
+  - This is acceptable for now: PLAN.md puts the check here, and OS6 keeps listing as it is.
+- **R16 · Follow-up · `tests/test_task_command.py:499-504`.** Possible near-twin (#6).
+  - The failure test rebuilds `store_foundry` (`:375-378`) by hand, with `bare` added.
+  - Fix: let `store_foundry` include `bare`.
+- **R17 · Follow-up · `src/foundry/project_scratch_clone.py:60-73`.** Possible hidden cost (#9).
+  - `show` runs `ls-tree` twice per file, once in `is_link` and once in `_require_entry`.
+  - R13's fix removes this. On its own, accept as is. Shares a cause with R13.
+
+### Names
+
+No findings. Every name the diff adds matches PLAN.md's Names and Errors and the glossary's words:
+- `foundry task show`, `is_link`, `_LINK_MODE`, `fetch_task_turn_and_log`, `TaskTurnAndLog`, `last_log_entry`, `show_main`, `show_lines`;
+- `counting_stand_in`, `fetch_count`, `enter_foundry_counting_git`, `store_foundry`;
+- the test constants and locals, the link error, and the help and docs prose.
+
+The behaviour of `_ls_tree` and `read_text` changes, and their docstrings and every caller were updated to match. None of the added prose uses a word the glossary says to avoid.
+
+### Design questions
+
+None.
+
+Summary:
+- Standards: 2 findings, 0 blocking. The worst is R10, a check named in `show_main`.
+- Spec: 1 finding, 1 blocking. R12: no end-to-end case for a `TURN` that is a dir.
+- Behaviour: 0 findings.
+- Smells: 5 findings, 1 blocking. R13: `is_link` copies `_require_entry`'s lookup.
+- Names: 0 findings.
+- No design question is open.
+
+Verdict: changes needed

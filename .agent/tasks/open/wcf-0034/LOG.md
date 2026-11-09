@@ -108,3 +108,9 @@ human-decided change waits for TASK.md. No merge conflicts.
   `test_the_readme_names_the_command_that_shows_the_question_a_task_waits_on`.
 - AC9: ruff, format, mypy, vulture, pylint, shellcheck and `pytest --cov` (97.29%) pass locally.
 Next: the reviewer's code round.
+
+## 12 · reviewer · changes-needed
+Done: code round 4 on ec3810a, in REVIEW.md, against TASK.md e475e61 (signed by the planner's identity, which the architect shares) and PLAN.md 77c965a (signed by the dev). No change to TASK.md that the human decided is pending, and no design question is open. All of AC1–AC9 are met in behaviour, and every CONTRIBUTING.md check passes. Blocking: R12 and R13. Follow-ups: R10, R11, R14, R15, R16, R17.
+Next: the dev fixes R12 (add a `turn-dir` case to `test_show_fails_…`) and R13 (one private `ls-tree` lookup of a path, shared by `is_link` and `_require_entry`), test-first. The dev answers each finding in LOG.md, then hands back with ready-for-review. R14 and R16 are cheap to take along.
+- Follow-up: src/foundry/project_tasks.py:257 `_read_turn`, :271 `_read_log` · read a link as its target's name on every path but `show` (FetchedBranch.read_text's contract) · `foundry run` and `handoff` silently take a linked TURN's target name as the turn.
+- Follow-up: tests/support/machine.py:76 `recording_stand_in` · returns `(command, record file)` while its sibling `counting_stand_in` returns only the record file · each caller has to check which shape it has.
