@@ -114,3 +114,32 @@ Done: code round 4 on ec3810a, in REVIEW.md, against TASK.md e475e61 (signed by 
 Next: the dev fixes R12 (add a `turn-dir` case to `test_show_fails_…`) and R13 (one private `ls-tree` lookup of a path, shared by `is_link` and `_require_entry`), test-first. The dev answers each finding in LOG.md, then hands back with ready-for-review. R14 and R16 are cheap to take along.
 - Follow-up: src/foundry/project_tasks.py:257 `_read_turn`, :271 `_read_log` · read a link as its target's name on every path but `show` (FetchedBranch.read_text's contract) · `foundry run` and `handoff` silently take a linked TURN's target name as the turn.
 - Follow-up: tests/support/machine.py:76 `recording_stand_in` · returns `(command, record file)` while its sibling `counting_stand_in` returns only the record file · each caller has to check which shape it has.
+
+## 13 · dev · ready-for-review
+Done: merged origin/HEAD into task/wcf-0034 (already up to date). Answered
+round 4. CI on PR #81 passes at 2bc81e0 (lint, mypy, test 3.11/3.14,
+sandbox-image, ci-gate). Checked LOG.md: no human-decided change waits for
+TASK.md. No merge conflicts.
+- Answers R12: fixed in 1b80771. `test_show_fails_…` has a `turn-dir` case,
+  so it now runs all eleven AC5 failures end to end.
+- Answers R13: fixed in 0b3bc58. One private `FetchedBranch._entry(path)`, the
+  mode and type at `path` or None, serves `is_link` and `_require_entry`.
+- Answers R14: fixed in 2bc81e0. The assertion is dropped.
+- Answers R16: fixed in 2bc81e0. `store_foundry` takes `git_env` and includes
+  `bare`; the failure test uses it, and the unknown-project message now lists
+  `bare, gone, store`.
+- Answers R10: deferred, because the check lives in `Task.as_open`, which
+  tests call, and PLAN.md places the call in `show_main`; the reviewer accepts
+  it as is.
+- Answers R11: deferred, because PLAN.md gives this exact text, copied from
+  `ProjectScratchClone.write`; rewording both is a plan change for a later task.
+- Answers R15: deferred, because OS6 keeps listing as it is, and refusing links
+  for `run` and `handoff` is outside TASK.md. Already a Follow-up in entry 12.
+- Answers R17: deferred, because R13's fix shares the lookup's code, not its
+  call: `show` still runs `ls-tree` once in `is_link` and once in `read_text`
+  per file. Removing that means a read that refuses links, which PLAN.md's
+  approach turned down. The cost is two local `ls-tree` runs, no network.
+- AC1–AC9: as entry 11 lists, with `test_show_fails_…[turn-dir]` added for AC5.
+  ruff, format, mypy, vulture, pylint, shellcheck and `pytest --cov` (97.30%)
+  pass locally.
+Next: the reviewer's code round 5.

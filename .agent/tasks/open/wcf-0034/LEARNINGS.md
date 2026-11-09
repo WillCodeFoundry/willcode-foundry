@@ -10,3 +10,6 @@
   nothing is checked out, and `git show` of a mode-120000 blob gives only the
   target's name. So AC7's risk is the name, which `is_link` stops before
   `read_text`.
+- 2026-11-09 [testing] — The unknown-project message lists every project in
+  the foundry, so adding a project to a shared test foundry (`store_foundry`)
+  changes that expected message.
