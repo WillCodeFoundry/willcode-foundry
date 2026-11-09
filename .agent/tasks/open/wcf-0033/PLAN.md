@@ -68,6 +68,10 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
   `["abc-0001", "wcf-0002", "xyz-0003", "xyz-0004", "wcf-0005"]`, refuses naming only `wcf, xyz`.
   `tests/test_project_tasks.py`: the seeded `tst-0000` and `cls-0000` kept beside `wcf-0001` and `wcf-0002` give
   `wcf-0003`.
+- Each id counted once (AC6): `tests/test_project_tasks.py`, open `wcf-0001` and `wcf-0002`, each with its task
+  branch and notes as `create_task` leaves them, beside branch-only `sbx-0050`, `sbx-0051` and `sbx-0052` (seeded
+  tasks removed): `create_next_task` returns `sbx-0053`. Counting a branch and its notes twice would give `wcf-0003`.
+  `_taken_task_ids` returns a set, and `next_task_id` also counts distinct ids, so a list with repeats is the same.
 - AC7: `tests/test_task_command.py`. A `git` stand-in on PATH (`scripted_stand_in`) runs the real git, but before
   its first `push` runs a competing `python -m foundry.cli task create store` in the same foundry, with real git
   on PATH. The test's `cli.main(["task", "create", "store"])` exits 1 with a line starting `error: ` on stderr.

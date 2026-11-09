@@ -28,3 +28,10 @@ Done: folded the human's answer to D1 into TASK.md in cf2da31: the Goal and AC6 
 ids use, numbering from that prefix's ids only, and refuse only on a tie. Both lines end `Amended: D1`.
 - Answers D1: TASK.md amended in cf2da31 (Goal, AC6); no other criterion changed.
 Next: the dev checks PLAN.md against the amended AC6 and ends with plan-ready for the plan round.
+
+## 5 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Checked PLAN.md against TASK.md as cf2da31
+amends it: step 2, Errors and Tests already follow D1 (most common prefix, its own highest number, refusal on a tie
+naming the tied prefixes sorted). Added a test for AC6's "counting each id once": open `wcf-0001`/`wcf-0002` with
+their branches beside branch-only `sbx-0050…0052` give `sbx-0053`. No code yet.
+Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
