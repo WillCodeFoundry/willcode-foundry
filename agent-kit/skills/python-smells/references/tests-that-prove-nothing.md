@@ -110,3 +110,63 @@ def test_bad_address_is_refused_and_nothing_ships(shop: Shop) -> None:
 - **Why:** the test pins the implementation's sequence and adds machinery to maintain, while the observable result says the same thing.
 - **Fine when:** the order is itself the requirement, such as a security check that must run before any outside call. The foundry's design rule 3 allows stand-ins on `PATH` for outside systems.
 - **Spot it:** a helper that writes an executable or patches a clock, used by one test.
+
+## 10.5 The same behaviour tested twice
+
+A new test, or a new case in a parametrized test, that fails only when an existing test fails too. It often appears when a function reaches a rule only through another function, and the rule's test is copied to the caller.
+
+Bad:
+
+```python
+def test_cancel_refuses_a_shipped_order(shop: Shop) -> None:
+    with pytest.raises(ShopError, match="shipped"):
+        shop.cancel(shipped_order().id)
+
+
+def test_refund_refuses_a_shipped_order(shop: Shop) -> None:  # refund cancels first, so cancel's test already fails
+    with pytest.raises(ShopError, match="shipped"):
+        shop.refund(shipped_order().id)
+```
+
+Better: keep the first test, and test only what `refund` adds.
+
+```python
+def test_refund_returns_the_payment(shop: Shop) -> None:
+    order = paid_order()
+    shop.refund(order.id)
+    assert shop.payments(order.id) == [order.total, -order.total]
+```
+
+- **Why:** a second test of one behaviour costs a run and an edit on every change to it, and protects nothing the first doesn't.
+- **Fine when:** the caller can reach the rule some other way than through the function already tested.
+- **Spot it:** for each new test, name the change to the code that would make it fail. If an existing test fails on the same change, one of them is redundant.
+
+## 10.6 A parametrized test that asks which case it is
+
+The shared body of a parametrized test branches or computes its expectation from one parameter's value, rather than taking the expectation as a parameter.
+
+Bad:
+
+```python
+@pytest.mark.parametrize("order_id", ["paid-1", "shipped-1", "cancelled-1"])
+def test_refund_refusals(shop: Shop, order_id: str) -> None:
+    with pytest.raises(ShopError) as raised:
+        shop.refund(order_id)
+    assert isinstance(raised.value, ShippedError) == (order_id == "shipped-1")
+```
+
+Better:
+
+```python
+@pytest.mark.parametrize(
+    ("order_id", "error"),
+    [("paid-1", ShopError), ("shipped-1", ShippedError), ("cancelled-1", ShopError)],
+)
+def test_refund_refusals(shop: Shop, order_id: str, error: type[ShopError]) -> None:
+    with pytest.raises(error):
+        shop.refund(order_id)
+```
+
+- **Why:** a case added under another id silently takes the wrong branch, and the test still passes.
+- **Spot it:** a parameter's literal value, or an `if` on a parameter, inside a parametrized test's body.
+

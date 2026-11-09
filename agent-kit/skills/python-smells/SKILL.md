@@ -30,9 +30,9 @@ Read a reference file only when a question points to it. Its examples are invent
 | 5 | Does each function do one job that its name and signature say, return one thing, and keep its I/O apart from its calculation? | [Functions that do two jobs](references/functions-that-do-two-jobs.md) |
 | 6 | Did I copy or rebuild something that exists, or go around a helper, a name, a parser or the standard library made for this? | [Copying instead of finding the seam](references/copying-instead-of-the-seam.md) |
 | 7 | Did I add one more branch, flag or case to code that every change already edits? | [Growing by accretion](references/growing-by-accretion.md) |
-| 8 | Does a comment or docstring repeat the code, describe callers or history, or promise what the code doesn't do? | [Narrating instead of naming](references/narrating-instead-of-naming.md) |
+| 8 | Does a comment or docstring repeat the code, describe callers or history, list what its module holds, or promise what the code doesn't do? | [Narrating instead of naming](references/narrating-instead-of-naming.md) |
 | 9 | Does anything rebuild a constant per call, or block an event loop? | [Hidden costs](references/hidden-costs.md) |
-| 10 | Would each new test fail if the behaviour it names broke? | [Tests that prove nothing](references/tests-that-prove-nothing.md) |
+| 10 | Would each new test fail if the behaviour it names broke, and only when no existing test fails too? | [Tests that prove nothing](references/tests-that-prove-nothing.md) |
 | 11 | Did I reshape clear code only to satisfy a checker, a budget or a reviewer's request? | [Obeying the letter of a rule](references/obeying-the-letter.md) |
 
 ## Opportunities nearby
