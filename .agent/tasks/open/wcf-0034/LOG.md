@@ -24,3 +24,25 @@ Next: the dev revises PLAN.md for R1, R2, R6, R7 (and R3–R5 if cheap), answers
 - Follow-up: src/foundry/project_scratch_clone.py:49 `FetchedBranch.read_text` · returns a link's target name as if it were the file's text · every caller must remember to check `is_link` first.
 - Follow-up: tests/support/machine.py:77 `recording_stand_in` · its record is named `log` · clashes with the glossary's Log in every test using it.
 - Follow-up: src/foundry/project_tasks.py:127 `fetch_task_turn` · returns a `str` beside the `TaskTurn` dataclass · a reader at the call site expects a `TaskTurn`.
+
+## 4 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0034 (already up to date). Revised
+PLAN.md for plan round 1, in 92170f5. Checked LOG.md: no human-decided change
+waits for TASK.md.
+- Answers R1: fixed in 92170f5. AC6 is now tested end to end through
+  `cli.main`, with the stand-in on `PATH` as AC4 sets it up: one fetch, no
+  commit or push, refs unchanged. That same test shows the setup records git,
+  so AC4's empty record means something.
+- Answers R2: fixed in 92170f5. A new test in `tests/test_docs.py` checks that
+  the README sentence about "the question at the end of its `LOG.md`" names
+  `foundry task show`.
+- Answers R3: fixed in 92170f5. `counting_stand_in(directory, name)` returns
+  only the calls file; the caller puts `directory` on `PATH`.
+- Answers R4: fixed in 92170f5. `_ls_tree`'s docstring added to Docs.
+- Answers R5: fixed in 92170f5. The module docstring of
+  `tests/support/project_repository.py`, which gains `fetch_count`, added to
+  Docs; the stand-in itself moves to `tests/support/machine.py`.
+- Answers R6: fixed in 92170f5. Renamed `counting_stand_in`, in
+  `tests/support/machine.py` beside its siblings, with one return shape.
+- Answers R7: fixed in 92170f5. `fetch_count(git_calls)`.
+Next: the reviewer's plan round 2; then step 1 of PLAN.md.
