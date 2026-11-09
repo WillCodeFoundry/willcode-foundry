@@ -53,3 +53,14 @@ Done: the human changed the direction of R7 in this session. The outcome and the
   `BRANCH_PREFIX`. Also write the rule into GLOSSARY.md's **Task id** entry, which the plan already sharpens, with
   bare "prefix" under _Avoid_. (the human)
 Next: the dev revises PLAN.md for R1, R7 as answered here, and R8, then ends with plan-ready.
+
+## 8 · reviewer · plan-changes
+Done: the human confirmed, in this session, the behaviour behind R1 and R8. The findings stand, with a sharper
+direction.
+- Answers R1, R8: only the task ids with the most popular prefix count. Ids with any other prefix are ignored
+  completely, so `wcf-0001`…`wcf-0032` with `sbx-0050` correctly give `wcf-0033`. This is what AC6 already says,
+  and the plan's code is right. Only its `--help` text for TASK is wrong, because it reads as "the prefix of the
+  highest id". Word the help, and the README sentence too, so that they say the most popular prefix is followed
+  and ids with other prefixes are ignored. (the human)
+Next: the dev revises PLAN.md for R1/R8 as answered here and for R7 as answered in entry 7, then ends with
+plan-ready.
