@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,18 +13,45 @@ from foundry import session
 from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
 from foundry.task import NOTES_BRANCH, Task
-from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git
+from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git, isolate_from_the_developer
 from tests.support.project_repository import ProjectRepository, make_git_env
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Stop a run started as root before anything is collected. Only the docker tier's containers use root,
-    inside them."""
+    """Before anything is collected: stop a run started as root, then set up the environment every test runs in.
+
+    Only the docker tier's containers use root, inside them. The environment is set once, for the whole run,
+    rather than patched per test:
+
+    - git acts on the repositories the tests name, never one the run inherited, as when it runs from a git hook.
+    - A run of the host tier alone runs as on a fresh machine, as isolate_from_the_developer says. The docker and
+      sbx tiers need the real machine, so a run that can select them keeps its environment."""
     if os.geteuid() == 0:
         raise pytest.UsageError(
             "the tests run as an ordinary user, never as root: "
             "root can write anything, so the write checks would mean nothing"
         )
+    for name in GIT_REPOSITORY_VARIABLES:
+        os.environ.pop(name, None)
+    markexpr = config.option.markexpr or ""
+    if not any(_selects(markexpr, tier) for tier in ("docker", "sbx")):
+        home = Path(tempfile.mkdtemp(prefix="pytest-home-"))
+        config.stash[_ISOLATED_HOME] = home
+        isolate_from_the_developer(os.environ, home)
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Remove the throwaway HOME the run was given, if it was given one."""
+    if _ISOLATED_HOME in config.stash:
+        shutil.rmtree(config.stash[_ISOLATED_HOME], ignore_errors=True)
+
+
+_ISOLATED_HOME = pytest.StashKey[Path]()
+
+
+def _selects(markexpr: str, marker: str) -> bool:
+    """Whether the marker expression selects a test marked only ``marker``. No expression selects every test."""
+    return not markexpr or Expression.compile(markexpr).evaluate(_MarkedOnly(marker))
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -104,57 +132,22 @@ GIT_REPOSITORY_VARIABLES = tuple(
 GIT_INDEX_FILE, GIT_CONFIG_PARAMETERS, GIT_CONFIG_COUNT and the rest. A git hook exports some of them."""
 
 
-UNREACHABLE_PROXY = "http://127.0.0.1:9"
-"""A proxy nothing listens on: a request that reaches for the network fails at once rather than going out."""
-
-
-@pytest.fixture(autouse=True)
-def isolated_from_the_developer(
-    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every host-tier test runs as on a fresh machine, so a test that passes here passes on any machine.
-
-    | Left out | How |
-    |---|---|
-    | The developer's home and git configuration | a throwaway HOME, with XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL in it |
-    | The system's git configuration | GIT_CONFIG_NOSYSTEM |
-    | SSH and GPG agents, which sign commits | their variables unset, and GNUPGHOME in the throwaway HOME |
-    | The network | git allowed only local repositories, and every proxy variable pointed at a closed port |
-
-    The docker and sbx tiers need the real machine, so they keep its environment."""
-    if any(request.node.get_closest_marker(tier) for tier in ("docker", "sbx")):
-        return
-    home = tmp_path_factory.mktemp("home")
-    for name, value in {
-        "HOME": str(home),
-        "XDG_CONFIG_HOME": str(home / ".config"),
-        "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"),
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GNUPGHOME": str(home / ".gnupg"),
-        "GIT_ALLOW_PROTOCOL": "file",
-        **dict.fromkeys(
-            ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"), UNREACHABLE_PROXY
-        ),
-    }.items():
-        monkeypatch.setenv(name, value)
-    for name in ("SSH_AUTH_SOCK", "GPG_AGENT_INFO", "NO_PROXY", "no_proxy"):
-        monkeypatch.delenv(name, raising=False)
-
-
-@pytest.fixture(autouse=True)
-def no_inherited_repository(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every test's git acts on the repository it names, never one this run inherited: as when the suite runs
-    from a git hook."""
-    for name in GIT_REPOSITORY_VARIABLES:
-        monkeypatch.delenv(name, raising=False)
-
-
 @pytest.fixture
-def git_identity(tmp_path: Path) -> Path:
-    """A global git identity, with signing off, in the throwaway HOME every host-tier test has. Returns the HOME."""
+def git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A throwaway HOME under tmp_path, with a global git identity and signing off: the developer's own git
+    configuration, global or system, stays out. Returns the HOME.
+
+    git finds global configuration through XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL as well as HOME, so both are
+    pointed into the throwaway HOME, or `git config --global` would write to the developer's own file."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     for key, value in {"user.name": "t", "user.email": "t@t", "commit.gpgsign": "false"}.items():
         git(tmp_path, "config", "--global", key, value)
-    return Path(os.environ["HOME"])
+    return home
 
 
 @pytest.fixture
