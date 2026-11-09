@@ -46,3 +46,9 @@ waits for TASK.md.
   `tests/support/machine.py` beside its siblings, with one return shape.
 - Answers R7: fixed in 92170f5. `fetch_count(git_calls)`.
 Next: the reviewer's plan round 2; then step 1 of PLAN.md.
+
+## 5 · dev · progress
+Done: at the human's question, whether an existing stand-in could serve,
+PLAN.md step 1 now says `counting_stand_in` is built on `scripted_stand_in`,
+and why `recording_stand_in` doesn't fit. No change of name, seam or approach.
+Next: the reviewer's plan round 2; then step 1 of PLAN.md.

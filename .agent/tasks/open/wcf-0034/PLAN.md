@@ -22,7 +22,9 @@ prints them as `error: <message>` and exits 1 (AC5). Because: DR6.
 1. Refactor, no behaviour change: move the counting stand-in for git out of
    `test_listing_costs_one_fetch_however_many_tasks` into `tests/support/machine.py`, beside its siblings, as
    `counting_stand_in(directory, name) -> Path`: a command in `directory` that records each run's arguments, one
-   line each, then runs the real `name`, found on `PATH` when it is made. It returns the file of recorded calls,
+   line each, then runs the real `name`, found on `PATH` when it is made. It is built on `scripted_stand_in`, which
+   holds the logic; `recording_stand_in` doesn't fit, since it never runs the real command, and a parameter for
+   that would make each caller find the real git itself. It returns the file of recorded calls,
    its one return shape; the caller puts `directory` first on `PATH`, as for `scripted_stand_in`. Add
    `fetch_count(git_calls) -> int` to `tests/support/project_repository.py`, the git fetches that file records.
    Move the `no_signing_key` fixture from `tests/test_project_tasks.py` to `tests/conftest.py`, so the end-to-end
