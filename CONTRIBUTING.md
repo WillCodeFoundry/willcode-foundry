@@ -6,7 +6,7 @@ How to develop and test the foundry. Read [ARCHITECTURE.md](ARCHITECTURE.md) fir
 
 ### Set up the development environment
 
-Install the dev dependencies (pytest, ruff, mypy) before running any check:
+Install the dev dependencies (pytest, pytest-cov, ruff, mypy) before running any check:
 
 ```console
 $ uv sync --group dev
@@ -18,6 +18,7 @@ They aren't installed by default, since `pyproject.toml` sets `default-groups = 
 
 ```console
 $ uv run pytest                  # the host tier; about 20 seconds
+$ uv run pytest --cov            # the host tier, failing if branch coverage drops; as CI runs it
 $ uv run pytest -m docker        # the docker tier; needs a Docker daemon
 $ uv run pytest -m sbx           # the sbx tier, by hand: see below
 $ uv run ruff check . && uv run ruff format --check .
@@ -38,6 +39,7 @@ The checks hold the smells a tool can see. Code review holds the rest.
 | `vulture` | functions, classes and attributes in `src/` that nothing uses |
 | `pylint src` | the same five or more lines in two places in `src/`; it runs only this check |
 | `shellcheck` | mistakes in the hook stubs, the only shell scripts |
+| `pytest --cov` | branches no host-tier test runs: CI fails when coverage of `src/` drops below `fail_under` in `pyproject.toml` |
 | `tests/test_defensive_reads.py` | `getattr` or `hasattr` with a literal attribute name in `src/` |
 
 `pyproject.toml` says why each rule is on, and why each exception is off. Silence a finding on one line with `# noqa: <code>` and the reason.

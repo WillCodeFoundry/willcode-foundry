@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["pyyaml>=6"]
 
 [dependency-groups]
-dev = ["pytest>=8", "mypy>=1.15", "ruff>=0.8", "types-PyYAML", "vulture>=2.14", "pylint>=3.3", "shellcheck-py>=0.10"]
+dev = ["pytest>=8", "pytest-cov>=6", "mypy>=1.15", "ruff>=0.8", "types-PyYAML", "vulture>=2.14", "pylint>=3.3", "shellcheck-py>=0.10"]
 
 [tool.uv]
 default-groups = []
@@ -32,6 +32,17 @@ markers = [
 ]
 xfail_strict = true
 filterwarnings = ["error"]
+
+# Used by CI's test job, which runs the host tier with --cov. Code no test reaches is code no test holds,
+# so CI fails when coverage drops below fail_under. Raise it as coverage rises; lower it only with a reason.
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 97
+show_missing = true
+skip_covered = true
 
 [tool.ruff]
 line-length = 120
