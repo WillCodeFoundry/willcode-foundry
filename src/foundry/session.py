@@ -13,7 +13,6 @@ asks agent_sandbox for. ``recreate_hint`` says how to start a sandbox over.
 
 import logging
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -61,15 +60,6 @@ def session_variables(
     )
 
 
-def is_same_sandbox(recorded: contract.SessionVariables, wanted: contract.SessionVariables) -> bool:
-    """Whether both are for the same role, task and repository: what a sandbox's name stands for."""
-    return (recorded.agent_role, recorded.agent_task_id, recorded.agent_repo_url) == (
-        wanted.agent_role,
-        wanted.agent_task_id,
-        wanted.agent_repo_url,
-    )
-
-
 @dataclass(frozen=True, kw_only=True)
 class Session:
     """One sandbox's session, opened for one role: its directory and the sandbox definition in it."""
@@ -98,8 +88,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
 
     Raises FoundryError if the sandbox name would be too long, if the session
     directory exists without its definition but holds more than an empty
-    workspace, or if the existing definition was written for another role,
-    task or repository, or mounts another foundry's agent kit.
+    workspace, or if the existing definition holds other session variables.
     """
     sandbox_name = _sandbox_name(role_name=role.name, project_name=project.name, task=task)
     session_dir = paths.session_dir(foundry_root, sandbox_name)
@@ -108,10 +97,7 @@ def open_or_create(foundry_root: Path, *, project: Project, role: Role, task: Ta
     if created:
         _create_session_dir(session_dir, _definition(foundry_root, sandbox_name, wanted))
     definition = SandboxDefinition.read(session_dir)
-    _require_this_foundrys_variables(definition)
-    recorded = contract.read_session_variables(definition.variables)
-    _require_same_sandbox(definition.name, recorded=recorded, wanted=wanted)
-    _require_own_kit(definition.name, recorded=recorded.agent_kit_dir, own=wanted.agent_kit_dir)
+    _require_same_variables(definition, wanted)
     if created:
         _LOGGER.info("session:   %s (new)", session_dir)
     return Session(dir=session_dir, definition=definition, role=role)
@@ -176,70 +162,26 @@ def _holds_only_an_empty_workspace(session_dir: Path, workspace_dir: Path) -> bo
     )
 
 
-def _require_this_foundrys_variables(definition: SandboxDefinition) -> None:
-    """Raise unless the existing sandbox was created with the session variables this foundry sets.
+def _require_same_variables(definition: SandboxDefinition, wanted: contract.SessionVariables) -> None:
+    """Raise unless the existing sandbox was created with exactly the session variables this launch sets.
 
-    It was when none is missing, and each holds what session_variables derives from the recorded role, task,
-    repository and paths. A sandbox created before a name changed keeps the old one, and its kit would use it.
+    sbx never rewrites a sandbox's definition, so a sandbox with other variables can't be reused. Sandbox names are
+    slugs, so two tasks can share one. The project's url may have changed, the sandbox may mount another foundry's
+    agent kit, or an older foundry may have set a variable differently.
     """
-    env = definition.variables
-    if missing := contract.missing_names(env, contract.NAMES):
-        reason = f"missing {', '.join(missing)}"
-    elif differing := _differing_from_derived(env):
-        reason = f"other values: {'; '.join(differing)}"
-    else:
+    recorded, wanted_env = definition.variables, wanted.to_env()
+    if recorded == wanted_env:
         return
+    differing = [
+        f"{name}={recorded.get(name)!r}, now {wanted_env.get(name)!r}"
+        for name in dict.fromkeys([*wanted_env, *recorded])
+        if recorded.get(name) != wanted_env.get(name)
+    ]
     raise FoundryError(
-        f"sandbox {definition.name} was created with session variables this foundry doesn't set ({reason}), "
-        f"so its agent kit would use them; {recreate_hint(definition.name)}"
-    )
-
-
-def _differing_from_derived(env: Mapping[str, str]) -> list[str]:
-    """Each variable in ``env`` that holds another value than session_variables derives from it, as ``NAME=old, now
-    new``. Every variable must be set."""
-    recorded = contract.read_session_variables(env)
-    derived = session_variables(
-        role_name=recorded.agent_role,
-        task=Task.as_open(recorded.agent_task_id),
-        repo_url=recorded.agent_repo_url,
-        agent_kit_dir=recorded.agent_kit_dir,
-        code_checkout_dir=recorded.agent_code_checkout_dir,
-    )
-    return [f"{name}={env[name]!r}, now {value!r}" for name, value in derived.to_env().items() if env[name] != value]
-
-
-def _require_same_sandbox(
-    sandbox_name: str, *, recorded: contract.SessionVariables, wanted: contract.SessionVariables
-) -> None:
-    """Raise unless the existing sandbox is for this role, task and repository.
-
-    Sandbox names are slugs, so different launches can share one: role dev on
-    project foundry, task test-1, and on project foundry-test, task 1, are both
-    dev-foundry-test-1. Re-attaching would then work on the other one's task.
-    """
-    if not is_same_sandbox(recorded, wanted):
-        raise FoundryError(
-            f"sandbox {sandbox_name} already exists for a different role, task or repository "
-            f"(role {recorded.agent_role!r}, task {recorded.agent_task_id!r}, repository {recorded.agent_repo_url!r}); "
-            "either its name collides with this one, so use a task id that gives a different name, "
-            f"or the project's url has changed since, so {recreate_hint(sandbox_name)}"
-        )
-
-
-def _require_own_kit(sandbox_name: str, *, recorded: Path, own: Path) -> None:
-    """Raise unless the sandbox mounts this foundry's agent kit. sbx fixed the mount when it created the sandbox:
-    a copied foundry would rebuild the original's runtime under the original's sandboxes, and a moved one's
-    recorded kit is gone."""
-    if recorded.resolve() == own.resolve():
-        return
-    if recorded.is_dir():
-        raise FoundryError(
-            f"{sandbox_name} mounts the agent kit at {recorded}, not this foundry's ({own}): "
-            f"launch it from the foundry there, or {recreate_hint(sandbox_name)}"
-        )
-    raise FoundryError(
-        f"{sandbox_name} mounts the agent kit at {recorded}, which is gone: {recreate_hint(sandbox_name)}"
+        f"sandbox {definition.name} was created with other session variables ({'; '.join(differing)}). "
+        "If its name collides with another task's, use a task id that gives a different name. "
+        "If it mounts another foundry's agent kit, launch it from that foundry. "
+        f"Otherwise, {recreate_hint(definition.name)}"
     )
 
 

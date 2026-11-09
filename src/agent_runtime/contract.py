@@ -100,10 +100,5 @@ def read_session_variables(variables: Mapping[str, str] | None = None) -> Sessio
 
 def require_set(variables: Mapping[str, str], names: Sequence[str]) -> None:
     """Raise MissingVariables naming every one of ``names`` that is unset or empty, not only the first."""
-    if missing := missing_names(variables, names):
+    if missing := [name for name in names if not variables.get(name)]:
         raise MissingVariables(f"{', '.join(missing)} not set; this runs inside a foundry sandbox, which sets them")
-
-
-def missing_names(variables: Mapping[str, str], names: Sequence[str]) -> list[str]:
-    """Those of ``names`` that are unset or empty in ``variables``, in ``names``' order."""
-    return [name for name in names if not variables.get(name)]
