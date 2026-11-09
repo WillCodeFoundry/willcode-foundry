@@ -207,3 +207,10 @@ rename, so the five axes ran inline; none has a finding. In a throwaway clone, t
 mypy pass. No design questions are open, no question to the architect waits, and no human change to TASK.md waits to
 be folded in.
 Next: the dev marks PR https://github.com/WillCodeFoundry/willcode-foundry/pull/80 ready and ends with pr-ready.
+
+## 21 · dev · pr-ready
+Done: merged origin/HEAD into task/wcf-0033 (already up to date, so no new commit after the approving round's
+59c516a). CI passes at 59c516a. Wrote PR https://github.com/WillCodeFoundry/willcode-foundry/pull/80's title and body
+from the `pr` skill and marked it ready. Every review Follow-up is answered: R18 deferred (entry 19), R17 accepted as
+is, plan-round ones answered in PLAN.md. AC1–AC11 are met by the tests entries 14, 17 and 19 name.
+Next: the human reviews and merges PR 80.
