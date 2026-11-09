@@ -81,7 +81,7 @@ class ProjectTasks:
 
         Both branches are pushed at once, so either both change or neither does. Refuses if the task exists, open
         or closed, or its branch does. NOTES_BRANCH is created for the first task, as an orphan branch: it shares
-        no history with the code.
+        no history with the code. create_next_task picks the id instead.
         """
         return self._create(task_template, task_id=task_id)
 

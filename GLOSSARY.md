@@ -43,7 +43,8 @@ Who an agent is (planner, dev, qa, reviewer or architect): its instructions, its
 A unit of work on one project: a task branch, plus a task notes dir on the notes branch holding the task's `TASK.md`.
 
 **Task id**:
-A task's name: lowercase ASCII letters, `-`, then four or more digits, such as `wcf-0042`. foundry never changes its case.
+A task's name, made of a task prefix of lowercase ASCII letters, `-`, then a number of four or more digits, such as `wcf-0042`. foundry never changes its case.
+_Avoid_: prefix (alone, for a task id's letters)
 
 **Task branch**:
 The branch a task's code is committed to, `task/<id>`.
