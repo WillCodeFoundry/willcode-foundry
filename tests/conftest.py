@@ -109,7 +109,7 @@ UNREACHABLE_PROXY = "http://127.0.0.1:9"
 
 
 @pytest.fixture(autouse=True)
-def _isolated_from_the_developer(
+def isolated_from_the_developer(
     request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every host-tier test runs as on a fresh machine, so a test that passes here passes on any machine.
@@ -142,7 +142,7 @@ def _isolated_from_the_developer(
 
 
 @pytest.fixture(autouse=True)
-def _no_inherited_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+def no_inherited_repository(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test's git acts on the repository it names, never one this run inherited: as when the suite runs
     from a git hook."""
     for name in GIT_REPOSITORY_VARIABLES:
