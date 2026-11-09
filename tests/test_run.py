@@ -15,7 +15,7 @@ from foundry.commands.run import choose_role, fetch_open_task, role_for_turn
 from foundry.config import Config
 from foundry.errors import FoundryError
 from foundry.project_tasks import MissingTurnError, ProjectTasks
-from foundry.session import Session, SessionVariables, open_or_create
+from foundry.session import Session, open_or_create
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
 
@@ -65,7 +65,7 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
 
     session_dir = foundry_root / "sessions" / "dev-tkt-store-wcf-0042"
     assert request.definition_dir == session_dir
-    assert SessionVariables.from_env(SandboxDefinition.read(session_dir).variables).task == Task.as_open("wcf-0042")
+    assert SandboxDefinition.read(session_dir).variables["AGENT_TASK_ID"] == "wcf-0042"
     assert request.init_command == (
         "/usr/bin/python3",
         "-IS",

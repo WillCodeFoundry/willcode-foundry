@@ -1,8 +1,8 @@
 """What the launcher and the runtime agree on: the session variables' names, and the sandbox's user.
 
 The session variables are the AGENT_* variables a sandbox is created with. Their names are spelled out
-here, once: foundry.session.SessionVariables keys its values with these constants, and the runtime reads
-them back with ``read_session_variables``.
+here, once, with the one class that holds their values: foundry.session builds a SessionVariables and writes
+it with ``to_env``, and the runtime reads it back with ``read_session_variables``.
 """
 
 import os
@@ -51,7 +51,10 @@ class MissingVariables(Exception):
 
 @dataclass(frozen=True, kw_only=True)
 class SessionVariables:
-    """The session variables, read from the environment."""
+    """The session variables, one field per variable: foundry writes them, and the runtime reads them back.
+
+    Each field is its variable's name, lowercased in full.
+    """
 
     agent_role: str
     agent_task_id: str
@@ -65,10 +68,16 @@ class SessionVariables:
     agent_task_notes_dir: str
     agent_task_file: str
 
+    def to_env(self) -> dict[str, str]:
+        """The variables by name, in NAMES' order, as the sandbox definition carries them.
+
+        ``read_session_variables(v.to_env()) == v``.
+        """
+        return {name: str(getattr(self, name.lower())) for name in NAMES}
+
 
 def read_session_variables(variables: Mapping[str, str] | None = None) -> SessionVariables:
-    """Every session variable, from ``variables`` (os.environ by default). Each field is its variable's name,
-    lowercased in full.
+    """Every session variable, from ``variables`` (os.environ by default).
 
     Raises MissingVariables naming every one that is unset or empty.
     """

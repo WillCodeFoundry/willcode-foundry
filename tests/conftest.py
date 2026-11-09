@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from _pytest.mark.expression import Expression
 
+from agent_runtime import contract
 from foundry import session
 from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
-from foundry.session import SessionVariables
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, git
 from tests.support.project_repository import ProjectRepository, make_git_env
@@ -64,20 +64,20 @@ def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter, config: p
 
 
 @pytest.fixture
-def session_variables(tmp_path: Path) -> Callable[[Task], SessionVariables]:
+def session_variables(tmp_path: Path) -> Callable[[Task], contract.SessionVariables]:
     """The session variables a new sandbox for a task gets, from a real session under tmp_path/foundry.
 
     For a stand-in project and role: tests that need the variables, not a particular project.
     """
 
-    def variables(task: Task) -> SessionVariables:
+    def variables(task: Task) -> contract.SessionVariables:
         opened = session.open_or_create(
             tmp_path / "foundry",
             project=Project(name="p", url="git@github.com:o/p.git"),
             role=Role(name="dev", ssh_key_path=tmp_path / "secrets" / "ssh" / "dev", github_token_path=None),
             task=task,
         )
-        return SessionVariables.from_env(opened.definition.variables)
+        return contract.read_session_variables(opened.definition.variables)
 
     return variables
 

@@ -1,7 +1,7 @@
 """Tasks on a project's repository: what a task's names are, and the task template.
 
 Task is the one place a task's names are spelled out. They reach the agent kit as session
-variables (SessionVariables in session.py), so the kit derives none itself, and
+variables (session.session_variables), so the kit derives none itself, and
 tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 

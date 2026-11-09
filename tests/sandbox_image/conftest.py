@@ -11,7 +11,6 @@ only the mount can stop the agent writing it. It has a Docker socket in a group 
 that group added by number, as sbx gives agent processes the docker group. Root runs only inside containers.
 """
 
-import dataclasses
 import shutil
 import stat
 import uuid
@@ -20,8 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry.session import SessionVariables
-from foundry.task import Task
+from foundry import session
 from tests.support import SANDBOX_IMAGE, TASK
 from tests.support.docker import (
     AGENT_HOME,
@@ -96,15 +94,18 @@ def start_container(image: str) -> Iterator[StartContainer]:
 
 
 @pytest.fixture
-def sandbox_env(session_variables: Callable[[Task], SessionVariables]) -> Callable[[Path, str], dict[str, str]]:
+def sandbox_env() -> Callable[[Path, str], dict[str, str]]:
     """The session variables a sandbox for TASK gets, as foundry sets them, pointed at the mounted kit, the
     agent's home and the copied origin."""
 
     def env(kit: Path, repo_url: str) -> dict[str, str]:
-        variables = dataclasses.replace(
-            session_variables(TASK), agent_kit_dir=kit, code_checkout_dir=f"{AGENT_HOME}/work/p", repo_url=repo_url
-        )
-        return variables.to_env()
+        return session.session_variables(
+            role_name="dev",
+            task=TASK,
+            repo_url=repo_url,
+            agent_kit_dir=kit,
+            code_checkout_dir=Path(AGENT_HOME, "work", "p"),
+        ).to_env()
 
     return env
 

@@ -1,4 +1,4 @@
-"""Sessions, through open_or_create against a foundry root under tmp_path; and SessionVariables."""
+"""Sessions, through open_or_create against a foundry root under tmp_path; and the session variables."""
 
 import dataclasses
 import shutil
@@ -11,7 +11,6 @@ from foundry import session
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.config import Project, Role
 from foundry.errors import FoundryError
-from foundry.session import SessionVariables
 from foundry.task import Task
 
 TKT_STORE = Project(name="tkt-store", url="git@github.com:o/tkt-store.git")
@@ -88,7 +87,7 @@ def test_a_sandbox_for_another_role_task_or_repository_is_refused(
     foundry = Project(name="foundry", url="git@github.com:o/foundry.git")
     session.open_or_create(tmp_path, project=foundry, role=DEV, task=Task.as_open("tst-0001"))
 
-    with pytest.raises(FoundryError, match="already exists for a different role, task or repository"):
+    with pytest.raises(FoundryError, match=r"AGENT_REPO_URL='git@github\.com:o/foundry\.git', now .*different name"):
         session.open_or_create(tmp_path, project=project, role=role, task=task)
 
 
@@ -109,11 +108,8 @@ def test_a_copied_foundry_cant_open_the_originals_sandbox(tmp_path: Path) -> Non
     with pytest.raises(FoundryError) as refused:
         session.open_or_create(copy, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
-    assert str(refused.value) == (
-        f"dev-tkt-store-tst-0001 mounts the agent kit at {original / 'agent-kit'}, not this foundry's "
-        f"({copy / 'agent-kit'}): launch it from the foundry there, "
-        f"or {session.recreate_hint('dev-tkt-store-tst-0001')}"
-    )
+    assert f"AGENT_KIT_DIR='{original / 'agent-kit'}', now '{copy / 'agent-kit'}'" in str(refused.value)
+    assert "launch it from that foundry" in str(refused.value)
 
 
 def test_the_sandbox_of_a_moved_foundry_needs_recreating(tmp_path: Path) -> None:
@@ -124,10 +120,8 @@ def test_the_sandbox_of_a_moved_foundry_needs_recreating(tmp_path: Path) -> None
     with pytest.raises(FoundryError) as refused:
         session.open_or_create(tmp_path / "after", project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
-    assert str(refused.value) == (
-        f"dev-tkt-store-tst-0001 mounts the agent kit at {tmp_path / 'before' / 'agent-kit'}, which is gone: "
-        f"{session.recreate_hint('dev-tkt-store-tst-0001')}"
-    )
+    assert f"AGENT_KIT_DIR='{tmp_path / 'before' / 'agent-kit'}'" in str(refused.value)
+    assert str(refused.value).endswith(session.recreate_hint("dev-tkt-store-tst-0001"))
 
 
 def test_the_recreate_hint_points_at_the_readme() -> None:
@@ -172,20 +166,19 @@ def test_a_file_where_the_session_directory_goes_is_refused(tmp_path: Path) -> N
 def test_the_definition_holds_the_session_variables_for_its_role_and_task(tmp_path: Path) -> None:
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("wcf-0042"))
 
-    assert SessionVariables.from_env(opened.definition.variables) == SessionVariables(
-        role_name="dev",
-        task=Task.as_open("wcf-0042"),
-        repo_url="git@github.com:o/tkt-store.git",
-        agent_kit_dir=tmp_path / "agent-kit",
-        code_checkout_dir="/home/agent/work/tkt-store",
-    )
-
-
-def test_variables_read_back_are_the_variables_written(tmp_path: Path) -> None:
-    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
-    variables = SessionVariables.from_env(opened.definition.variables)
-
-    assert SessionVariables.from_env(variables.to_env()) == variables
+    assert opened.definition.variables == {
+        "AGENT_ROLE": "dev",
+        "AGENT_TASK_ID": "wcf-0042",
+        "AGENT_KIT_DIR": str(tmp_path / "agent-kit"),
+        "AGENT_REPO_URL": "git@github.com:o/tkt-store.git",
+        "AGENT_CODE_CHECKOUT_DIR": "/home/agent/work/tkt-store",
+        "AGENT_NOTES_CHECKOUT_DIR": "/home/agent/work/tkt-store-notes",
+        "AGENT_TASK_BRANCH": "task/wcf-0042",
+        "AGENT_NOTES_BRANCH": "agent-notes",
+        "AGENT_NOTES_ROOT": ".agent",
+        "AGENT_TASK_NOTES_DIR": ".agent/tasks/open/wcf-0042",
+        "AGENT_TASK_FILE": ".agent/tasks/open/wcf-0042/TASK.md",
+    }
 
 
 def rewrite_variables(session_dir: Path, change: dict[str, str | None]) -> None:
@@ -200,7 +193,9 @@ def test_a_sandbox_created_without_a_variable_is_refused_naming_it(tmp_path: Pat
     opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
     rewrite_variables(opened.dir, {"AGENT_TASK_FILE": None, "AGENT_NOTES_ROOT": None})
 
-    with pytest.raises(FoundryError, match=r"missing AGENT_NOTES_ROOT, AGENT_TASK_FILE\).*sbx env rm --force"):
+    with pytest.raises(
+        FoundryError, match=r"AGENT_NOTES_ROOT=None, now '.agent'; AGENT_TASK_FILE=None, now .*sbx env rm --force"
+    ):
         session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
 
@@ -213,21 +208,9 @@ def test_a_sandbox_created_with_another_name_is_refused_naming_both(tmp_path: Pa
         session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
 
 
-def test_the_same_sandbox_is_the_same_role_task_and_repository_whatever_the_paths() -> None:
-    variables = SessionVariables(
-        role_name="dev",
-        task=Task.as_open("tst-0001"),
-        repo_url="u",
-        agent_kit_dir=Path("/kit"),
-        code_checkout_dir="/w/p",
-    )
+def test_a_sandbox_created_with_an_empty_variable_is_refused_naming_it(tmp_path: Path) -> None:
+    opened = session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
+    rewrite_variables(opened.dir, {"AGENT_REPO_URL": ""})
 
-    assert variables.is_same_sandbox(
-        dataclasses.replace(variables, agent_kit_dir=Path("/moved"), code_checkout_dir="/w/q")
-    )
-    for other in (
-        dataclasses.replace(variables, role_name="qa"),
-        dataclasses.replace(variables, task=Task.as_open("tst-0002")),
-        dataclasses.replace(variables, repo_url="v"),
-    ):
-        assert not variables.is_same_sandbox(other)
+    with pytest.raises(FoundryError, match=r"AGENT_REPO_URL='', now 'git@github\.com:o/tkt-store\.git'"):
+        session.open_or_create(tmp_path, project=TKT_STORE, role=DEV, task=Task.as_open("tst-0001"))
