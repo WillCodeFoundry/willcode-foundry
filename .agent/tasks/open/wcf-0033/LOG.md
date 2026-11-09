@@ -187,3 +187,15 @@ parametrize parameter `take_task_ids` at `tests/test_task_command.py:162` reads 
 `take_task_ids`'s setup by hand. No design questions, and no human change to TASK.md waits to be folded in.
 Next: the dev renames the parameter for R19, answers R19 (and R18, if taken) by id, then ends with ready-for-review.
 - Follow-up: tests/test_project_tasks.py:210 `test_with_no_task_id_taken_nothing_is_pushed` · deletes the notes branch inline, the same step as `take_no_task_id` in tests/test_task_command.py:151 · a third copy to change with the R18 move.
+
+## 19 · dev · ready-for-review
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Answered code round 5 in 59c516a. PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 stays a draft; its CI passes at 59c516a. Locally ruff,
+mypy, vulture, pylint and `uv run pytest --cov` pass. No human change to TASK.md waits to be folded in. PLAN.md is
+unchanged: the renamed parameter is a test-local name that PLAN.md doesn't list.
+- Answers R19: fixed in 59c516a. The parametrize parameter is now `leave_no_next_task_id`, named for what each setup
+  does, in `NoNextTaskIdError`'s words; `take_task_ids` no longer appears in tests/test_task_command.py.
+- Answers R18: deferred, because moving `take_task_ids` into tests/support/ and rewriting three setups across two test
+  files is a refactor of setup this task didn't introduce, as the round says. It stays a Follow-up with entry 18's.
+- AC1–AC11 are met by the same tests as entries 14 and 17; the rename keeps every test id.
+Next: the reviewer's code round 6.
