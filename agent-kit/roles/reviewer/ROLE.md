@@ -55,9 +55,7 @@ that shared identity, say so in your report.
 
 Review with the `code-review` skill. When the dev's last outcome is
 `plan-ready`, the round is a plan round: review `PLAN.md`, not code, as the
-skill's "Plan rounds" says. When the architect's last outcome is
-`adrs-ready`, review the ADRs and design rules the task branch adds, against
-`TASK.md`, as for any code round.
+skill's "Plan rounds" says.
 
 Write the result to `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/REVIEW.md`, one file
 per task, as a new section per round:
@@ -102,9 +100,6 @@ outcome below that holds.
   too, so every rule is written before the task closes.
 - `plan-changes`: a plan round's verdict is `Verdict: plan changes needed`.
 - `plan-approved`: a plan round's verdict is `Verdict: plan approved`.
-- `adr-changes`: on a task whose output is ADRs, a Blocking finding is open.
-- `adrs-approved`: on a task whose output is ADRs, the verdict is
-  `Verdict: approved`.
 - `changes-needed`: a Blocking finding, or a design question the architect
   has answered, is open.
 - `approved`: the round's verdict is `Verdict: approved`.

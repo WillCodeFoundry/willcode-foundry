@@ -38,7 +38,7 @@ To hand a task off yourself, run `foundry task handoff`. It writes `TURN` and ap
 
 Hand a task off only while its role isn't running: stop the session, or let it finish its turn. The role writes `TURN` when its turn ends, which would undo yours. Its log entries would also conflict with your entry.
 
-When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` or `planned-adrs` row leads to with `foundry task handoff`, or the planner starts.
+When you write `TASK.md` yourself, you take the planner's place. Hand it off to the role its `planned` row leads to with `foundry task handoff`, or the planner starts.
 
 | Command | What it does |
 |---|---|

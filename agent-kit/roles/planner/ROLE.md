@@ -57,9 +57,6 @@ line.
 5. End your turn, with the outcome the task needs now.
 
 ## Outcomes
-- `planned-adrs`: `TASK.md` is approved and pushed, and its acceptance
-  criteria are ADRs or design rules for later tasks to follow. The architect
-  writes them, up to a pull request.
 - `planned`: `TASK.md` is approved and pushed. The dev plans next, and its
   plan goes to the architect when it changes the code's structure.
 - `stuck`: you and the human can't settle it in this session.

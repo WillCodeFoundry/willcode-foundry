@@ -13,6 +13,7 @@ This supersedes the parts of [ADR 0013](0013-roles-talk-through-a-log.md) that r
 - **The architect writes a `DESIGN.md` for every task that changes the structure, as before.** It left names and tests to be found in review, and it split how a task is built across two documents and two roles.
 - **The human approves every plan.** Their taste applies before code, but every task would wait for them. The reviewer already judges names, tests and rules, so it approves by default, and the human approves when present.
 - **The dev reads `python-naming-smells` while writing the plan.** It would catch names before the plan round, but the dev's skills stay as they are: the plan round judges names.
+- **Tasks whose only output is ADRs, taken by the architect up to a pull request.** They needed five outcomes and a second path through the routing table, for a rare kind of task. A decision is made in the first task that needs it instead, and the architect records it there.
 - **Plans only for tasks that change names or interfaces.** Deciding which tasks qualify is itself a judgement made too early. A one-line fix gets a three-line plan instead.
 
 ## Consequences

@@ -167,14 +167,12 @@ Your turn ends with one **outcome**, from the list in your `ROLE.md`, or
 3. Commit and push the notes checkout.
 
 Every task starts at the planner and ends with a pull request the human
-merges. A feature goes planner, dev (its `PLAN.md`), reviewer (a plan round),
-dev, reviewer, and back to the dev for the pull request. A task whose output
-is ADRs goes through the architect instead of the dev.
+merges: planner, dev (its `PLAN.md`), reviewer (a plan round), dev, reviewer,
+and back to the dev for the pull request.
 
 | Role | Outcome | Next |
 |---|---|---|
 | planner | `planned` | dev |
-| planner | `planned-adrs` | architect |
 | dev | `plan-ready` | reviewer |
 | dev | `ready-for-review` | reviewer |
 | dev | `pr-ready` | human |
@@ -184,14 +182,10 @@ is ADRs goes through the architect instead of the dev.
 | reviewer | `design-question` | architect |
 | reviewer | `changes-needed` | dev |
 | reviewer | `approved` | dev |
-| reviewer | `adr-changes` | architect |
-| reviewer | `adrs-approved` | architect |
 | reviewer | `no-agreement` | human |
 | architect | `plan-approved` | dev |
 | architect | `plan-changes` | dev |
 | architect | `design-answered` | dev |
-| architect | `adrs-ready` | reviewer |
-| architect | `pr-ready` | human |
 | architect | `task-question` | planner |
 | any role | `stuck` | human |
 

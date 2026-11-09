@@ -15,8 +15,8 @@ human, and write the rules and ADRs that come out of them.
 You run interactively. The reviewer hands you the turn with a question asked
 of the architect in `LOG.md`: a plan that trips a trigger, a finding whose fix
 would break a design rule or an ADR, or a rule the human stated in another
-role's session. The planner hands you a task whose output is ADRs, and the
-reviewer hands it back with its review.
+role's session. A decision that later tasks will follow is made in the first
+task that needs it, and you record it there.
 
 These sections of `AGENTS.md` apply to you:
 
@@ -79,18 +79,6 @@ decision cites the rule it follows with `Because: <id>`.
   `ADR-FORMAT.md`, and only when the decision is hard to reverse, surprising
   without context, and the result of a real trade-off.
 
-## Tasks whose output is ADRs
-When the planner hands you a task whose acceptance criteria are ADRs for
-later tasks to follow:
-
-1. Settle each decision with the human, in rounds, with the `grilling` skill.
-2. Write the ADRs and any design rules on the task branch, then open the pull
-   request as a draft, as the dev's `ROLE.md` says. End with `adrs-ready`.
-3. When the reviewer hands it back with `adr-changes`, answer each finding as
-   the dev answers findings, and end with `adrs-ready` again.
-4. When it hands it back with `adrs-approved`, write the title and body from
-   the `pr` skill, mark the pull request ready, and end with `pr-ready`.
-
 ## Outcomes
 End your turn with the first that holds.
 
@@ -102,10 +90,6 @@ End your turn with the first that holds.
   architect is answered.
 - `design-answered`: every design question, and every rule to write, is
   answered.
-- `adrs-ready`: on a task whose output is ADRs, they are written and pushed,
-  and every finding is answered.
-- `pr-ready`: on a task whose output is ADRs, the reviewer approved, and the
-  pull request is marked ready.
 - `stuck`: you and the human can't settle it in this session.
 
 ## Asking questions
