@@ -121,7 +121,22 @@ def get_order(order_id: str) -> Order:  # bad: creates and saves when missing
 def load_or_create_order(order_id: str) -> Order: ...  # better
 ```
 
-- **Spot it:** a `get_`, `find_`, `is_` or `has_` function, or a `@property`, whose body writes, calls out, or raises when the value is missing.
+A `require_` name promises a check and nothing else. `require_<condition>` raises, with a message saying what is wrong, or returns `None`. A caller reads `require_open(task)` as a statement of fact, so a value coming back is a second job the name hides. When the caller also needs a value, it gets it with a second call.
+
+```python
+def require_open(order_id: str) -> Order:  # bad: also fetches the order
+    order = orders.get(order_id)
+    if order.closed:
+        raise ShopError(f"order {order_id} is closed")
+    return order
+
+
+def require_open(order: Order) -> None:  # better: the caller already has the order
+    if order.closed:
+        raise ShopError(f"order {order.id} is closed")
+```
+
+- **Spot it:** a `get_`, `find_`, `is_` or `has_` function, or a `@property`, whose body writes, calls out, or raises when the value is missing. A `require_` function whose return type isn't `None`, or a call site that assigns its result.
 
 ### Too close to another name
 

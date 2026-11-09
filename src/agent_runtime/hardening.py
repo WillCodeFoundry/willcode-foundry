@@ -210,7 +210,7 @@ def _check_hooks_runtime(agent_kit: AgentKit, machine: Machine) -> list[str]:
 # --- sudo and su ---------------------------------------------------------------------
 
 
-def _require_command(name: str, purpose: str) -> str:
+def _command_path(name: str, purpose: str) -> str:
     """Where ``name`` is. Hardening runs through sudo, so it is there to remove: not finding it is a refusal,
     not a step done."""
     command_path = shutil.which(name)
@@ -359,7 +359,7 @@ _SUDO_UNTOUCHED = "; sudo is untouched, so the next launch runs this again"
 def _preflight(machine: Machine) -> tuple[str, str]:
     """Everything the steps need, checked before any of them: (sudo, passwd). Changes nothing."""
     _refuse_template_docker_config(machine.docker_daemon_config)
-    return _require_command(machine.sudo, "to remove it"), _require_command(machine.passwd, "to lock root's password")
+    return _command_path(machine.sudo, "to remove it"), _command_path(machine.passwd, "to lock root's password")
 
 
 def _run_steps(agent_kit: AgentKit, machine: Machine, *, sudo: str, passwd: str) -> None:
