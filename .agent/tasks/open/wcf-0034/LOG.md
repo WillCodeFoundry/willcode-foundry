@@ -85,3 +85,26 @@ Done: merged origin/HEAD into task/wcf-0034 (already up to date). PLAN.md
 step 1 in d3e2b03 (`counting_stand_in`, `fetch_count`, `no_signing_key` shared,
 CONTRIBUTING.md's helper table) and step 2 in b4145bc (`FetchedBranch.is_link`).
 Next: step 3, `last_log_entry` and `ProjectTasks.fetch_task_turn_and_log`.
+
+## 11 · dev · ready-for-review
+Done: PLAN.md steps 3–5, in 69c69f5 (`last_log_entry`, `TaskTurnAndLog`,
+`ProjectTasks.fetch_task_turn_and_log`), 647fba9 (`foundry task show`,
+`show_main`, `show_lines`) and ec3810a (README,
+ARCHITECTURE.md, test_docs). Draft PR:
+https://github.com/WillCodeFoundry/willcode-foundry/pull/81, CI passes (lint,
+mypy, test 3.11/3.14, sandbox-image, ci-gate). Checked LOG.md: no
+human-decided change waits for TASK.md. No merge conflicts.
+- AC1: `test_the_last_log_entry_runs_from_the_last_heading_to_the_end_without_trailing_blanks`,
+  `test_a_task_s_turn_and_log_are_read_from_its_task_notes_dir`,
+  `test_show_lines_…[open]`, `test_show_prints_the_turn_and_the_last_log_entry_and_exits_0[open]`.
+- AC2: `test_show_lines_…[closed]`, `test_show_prints_…[closed]`.
+- AC3: `test_the_last_log_entry_…[template]`, `test_show_lines_…[no-entry]`, `test_show_prints_…[no-entry]`.
+- AC4: `test_show_refuses_an_unknown_project_or_an_invalid_id_before_running_git`.
+- AC5: `test_a_malformed_task_s_turn_and_log_are_refused_naming_the_task_and_the_file`,
+  `test_show_fails_with_one_error_on_stderr_nothing_on_stdout_and_exits_1` (all ten failures).
+- AC6: `test_show_only_reads_with_one_fetch` (no_signing_key, one fetch, no commit or push, refs unchanged).
+- AC7: `test_show_fails_…[turn-link]` and `[log-link]`; `test_is_link_is_true_for_a_link_only`.
+- AC8: `test_task_help_lists_show`, `test_the_readme_lists_exactly_the_commands_foundry_defines`,
+  `test_the_readme_names_the_command_that_shows_the_question_a_task_waits_on`.
+- AC9: ruff, format, mypy, vulture, pylint, shellcheck and `pytest --cov` (97.29%) pass locally.
+Next: the reviewer's code round.
