@@ -159,7 +159,7 @@ def tie_two_task_prefixes(project_repository) -> None:
 
 
 @pytest.mark.parametrize(
-    "take_task_ids, error",
+    "leave_no_next_task_id, error",
     [
         (take_no_task_id, "the project repository has no task id to follow"),
         (tie_two_task_prefixes, "the project repository's task ids tie for the most common task prefix: abc, wcf"),
@@ -167,9 +167,9 @@ def tie_two_task_prefixes(project_repository) -> None:
     ids=["no-task-id", "tie"],
 )
 def test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_nothing(
-    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str], take_task_ids, error: str
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str], leave_no_next_task_id, error: str
 ) -> None:
-    take_task_ids(project_repository)
+    leave_no_next_task_id(project_repository)
     refs_before = project_repository.git("for-each-ref")
 
     assert cli.main(["task", "create", "store"]) == 1
