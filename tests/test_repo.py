@@ -11,6 +11,8 @@ from foundry import cli
 from foundry.commands.repo import report
 from foundry.config import Project
 from foundry.repo_policy import Deviation, ProjectCheck, RulesetAction, RulesetChange
+from tests.support.foundry_root import write_foundry
+from tests.support.machine import scripted_stand_in
 
 STORE = Project(name="store", url="git@github.com:o/store.git")
 
@@ -87,12 +89,7 @@ def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
     (policy_dir / "rulesets.yaml").write_text("rulesets: []\n")
     (policy_dir / "CODEOWNERS").write_text(CODEOWNERS)
     (policy_dir / "ci-gate.yml").write_text(CI_GATE)
-    (foundry_root / "config" / "foundry.yaml").write_text(
-        "name: f\nprojects:\n"
-        "  store: {url: 'git@github.com:o/store.git'}\n"
-        "  elsewhere: {url: 'https://gitlab.com/o/p.git'}\n"
-        "roles: {}\n"
-    )
+    write_foundry(foundry_root, {"store": "git@github.com:o/store.git", "elsewhere": "https://gitlab.com/o/p.git"})
     responses = {
         "repos/o/store/rulesets?per_page=100&includes_parents=false": [],
         "repos/o/store/contents/.github/CODEOWNERS": {"type": "file", "content": base64.b64encode(CODEOWNERS.encode())},
@@ -105,12 +102,11 @@ def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
         f"  '{endpoint}') echo '{json.dumps(response, default=bytes.decode)}' ;;\n"
         for endpoint, response in responses.items()
     )
-    gh = tmp_path / "bin" / "gh"
-    gh.parent.mkdir()
-    gh.write_text(f'#!/bin/sh\ncase "$4" in\n{cases}  *) echo "unexpected: $*" >&2; exit 1 ;;\nesac\n')
-    gh.chmod(0o755)
+    stand_ins = tmp_path / "bin"
+    stand_ins.mkdir()
+    scripted_stand_in(stand_ins, "gh", f'case "$4" in\n{cases}  *) echo "unexpected: $*" >&2; exit 1 ;;\nesac')
     monkeypatch.chdir(foundry_root)
-    monkeypatch.setenv("PATH", f"{gh.parent}:{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{stand_ins}:{os.environ['PATH']}")
 
     assert cli.main(["repo", "check", "store"]) == 0
     assert capsys.readouterr() == ("store (o/store)\n  conforms\n", "")

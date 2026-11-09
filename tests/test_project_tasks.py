@@ -20,6 +20,7 @@ from foundry.project_tasks import (
     log_with_handoff_entry,
 )
 from foundry.task import Status, Task
+from tests.support.machine import scripted_stand_in
 from tests.support.project_repository import git_output, project_tasks_of
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
@@ -571,9 +572,7 @@ def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env,
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     real_git = subprocess.run(["which", "git"], env=git_env, capture_output=True, text=True, check=True).stdout.strip()
-    shim = shim_dir / "git"
-    shim.write_text(f'#!/bin/sh\necho "$*" >> {log}\nexec {real_git} "$@"\n')
-    shim.chmod(0o755)
+    scripted_stand_in(shim_dir, "git", f'echo "$*" >> {log}\nexec {real_git} "$@"')
     counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
 
     found = project_repository.project_tasks(env=counting_env).fetch_open_task_turns()

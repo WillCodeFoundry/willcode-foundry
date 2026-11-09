@@ -18,6 +18,7 @@ from foundry.project_tasks import MissingTurnError, ProjectTasks
 from foundry.session import Session, open_or_create
 from foundry.task import HUMAN, NOTES_BRANCH, Task
 from tests.support import git
+from tests.support.machine import scripted_stand_in, stand_in
 
 CONFIG = """\
 name: test
@@ -119,9 +120,8 @@ def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
     )
     stand_ins = foundry_root / "stand-ins"
     stand_ins.mkdir()
-    for name, script in {"sbx": "echo '{\"sandboxes\": []}'", "ps": "exit 0"}.items():
-        (stand_ins / name).write_text(f"#!/bin/sh\n{script}\n")
-        (stand_ins / name).chmod(0o755)
+    scripted_stand_in(stand_ins, "sbx", "echo '{\"sandboxes\": []}'")
+    stand_in(stand_ins, "ps", 0)
     monkeypatch.chdir(foundry_root)
     for name, value in git_env.items():
         monkeypatch.setenv(name, value)

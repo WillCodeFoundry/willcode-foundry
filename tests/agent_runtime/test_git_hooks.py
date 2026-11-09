@@ -12,7 +12,7 @@ import pytest
 from agent_runtime import contract, git_hooks
 from agent_runtime.git import Git
 from foundry.task import NOTES_BRANCH, NOTES_ROOT, Task
-from tests.support import TASK, git
+from tests.support import TASK, commit_unchecked, git
 
 VARIABLES = contract.SessionVariables(
     agent_role="dev",
@@ -87,11 +87,6 @@ def stage(cwd: Path, name: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{name}\n")
     git(cwd, "add", name)
-
-
-def commit_unchecked(cwd: Path, message: str) -> None:
-    """A commit the hooks don't see: another task's agent's, say, or setup for a case."""
-    git(cwd, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", message)
 
 
 def refusal_of(call: Callable[[], None]) -> str:
