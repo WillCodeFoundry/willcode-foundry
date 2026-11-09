@@ -30,7 +30,8 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         help=f"create task/TASK from the default branch, and {task.OPEN_DIR}/TASK/ on {task.NOTES_BRANCH} "
         "from config/task-template/",
         description="Uses git, with your own access to the project's repository. "
-        "Refuses a task that already exists, open or closed.",
+        "Refuses a task that already exists, open or closed. Without TASK, refuses when the project has no task id "
+        "yet, or when task prefixes tie for the most task ids.",
     )
     create.add_argument(
         "task_id",
