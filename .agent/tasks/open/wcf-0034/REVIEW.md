@@ -326,3 +326,86 @@ Summary:
 - No design question is open.
 
 Verdict: changes needed
+
+## Round 5 (reviewing 2bc81e0)
+
+This round reviews against `TASK.md` at e475e61, which is signed by the planner's identity. The architect shares that identity, so the commit could also be the architect's. `PLAN.md` was approved at 77c965a and has not changed since. It is signed by the dev. No other role changed either file. `LOG.md` holds no change to `TASK.md` that the human decided. This round reviews only the fix diff `ec3810a...2bc81e0` (commits 1b80771, 0b3bc58 and 2bc81e0).
+
+### Earlier findings
+
+- **R10:** accepted as is. Round 4 directed "accept as is", and the dev left it.
+- **R11:** accepted as is, for the same reason.
+- **R12:** closed in 1b80771. `test_show_fails_…` now has a `turn-dir` case (`tests/test_task_command.py:445-451`). It runs all eleven AC5 failures end to end, and all eleven pass.
+- **R13:** closed in 0b3bc58. `FetchedBranch._entry` (`src/foundry/project_scratch_clone.py:74-80`) is now the only `ls-tree` lookup of one path. `is_link` (`:62`) and `_require_entry` (`:70-72`) both use it. `is_link`'s interface is still as PLAN.md gives it.
+- **R14:** closed in 2bc81e0. `:523-524` still show AC7.
+- **R15:** deferred. Entry 12 of `LOG.md` has its Follow-up line.
+- **R16:** closed in 2bc81e0. `store_foundry` (`tests/test_task_command.py:375-383`) serves all four tests.
+- **R17:** deferred. It is the cost of two local `ls-tree` runs per file, and it shares its cause with R15's approach.
+
+### Standards
+
+No findings. The new and changed docstrings are all still true:
+- `_entry`, `is_link` and `_require_entry` in `project_scratch_clone.py`;
+- `store_foundry`, and the docstring of `test_show_fails_…` now that the assertion is gone.
+
+The module docstring and CONTRIBUTING.md's helper table are unaffected. Folding the bare repository into `store_foundry` removes a copy of setup code, which CONTRIBUTING.md asks for.
+
+### Spec
+
+No findings. AC1–AC9 still hold, and R12 is closed (see above). AC4's unknown-project message is now `known: bare, gone, store`, only because the shared foundry gained the `bare` project. This is the same message `foundry task create` gives for that foundry. The Spec reviewer ran every CONTRIBUTING.md check in a throwaway clone at 2bc81e0, and all pass:
+- `pytest --cov`: 824 passed, 97.30%;
+- ruff check and format, mypy, vulture, pylint 10.00 and shellcheck.
+
+### Behaviour
+
+No findings. `_entry` matches the exact name in `ls-tree -z` output, and a tree can't hold two entries with the same name. So it agrees with the old membership test on every path. The Behaviour reviewer called `FetchedBranch` directly, with nested dirs, a space, `é`, a link and a dir:
+- `read_text` and `subdir_names` work through spaces and non-ASCII names.
+- A dir read as a file, a file read as a dir, a missing path and a path through a link all raise PathNotOnBranchError.
+- `is_link` is true only for the link.
+- A trailing slash raises PathNotOnBranchError, as it did before the fix. No caller passes one.
+
+Every caller passes a fixed path, made from constants and an id that has already been checked.
+
+### Smells
+
+| Function | Verdict |
+|---|---|
+| `project_scratch_clone.py`: `FetchedBranch.is_link` | clean |
+| `project_scratch_clone.py`: `FetchedBranch._require_entry` | R18 |
+| `project_scratch_clone.py`: `FetchedBranch._entry` | new, R18 |
+| `test_task_command.py`: `store_foundry` | clean |
+| `test_task_command.py`: `test_show_prints_…` | clean |
+| `test_task_command.py`: `test_show_fails_…` | clean |
+| `test_task_command.py`: `test_show_refuses_…_before_running_git` | clean |
+| `test_task_command.py`: `test_show_only_reads_with_one_fetch` | clean |
+
+- **R18 · Follow-up · `src/foundry/project_scratch_clone.py:71`.** Possible Primitive Obsession.
+  - `_entry` returns a bare `tuple[str, str]`, so `_require_entry` reads the type as `entry[1]`. Nothing at that use says which field it is.
+  - The tuple is private and has two uses, and `is_link` compares the whole pair, which reads fine.
+  - Who hits it: the next dev who adds a third entry check. That will be rare.
+  - Fix: unpack the pair by name in `_require_entry`, or accept as is.
+
+### Names
+
+No findings. These names are all clean:
+- `_entry` and its locals `mode`, `entry_type` and `name`, which are the words `_ls_tree` and `subdir_names` already use;
+- `_require_entry`'s local `entry`;
+- `store_foundry`'s new `git_env` parameter, `bare_dir` and the `bare` project, which copy the names in `tests/test_project_tasks.py`;
+- the `turn-dir` id;
+- the new docstring prose.
+
+`is_link`'s name and interface still match PLAN.md.
+
+### Design questions
+
+None.
+
+Summary:
+- Standards: 0 findings.
+- Spec: 0 findings. R12 is closed.
+- Behaviour: 0 findings.
+- Smells: 1 finding, 0 blocking. R18 is the tuple returned by `_entry`, read by index. R13, R14 and R16 are closed.
+- Names: 0 findings.
+- No design question is open.
+
+Verdict: approved

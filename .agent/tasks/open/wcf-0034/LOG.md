@@ -143,3 +143,14 @@ TASK.md. No merge conflicts.
   ruff, format, mypy, vulture, pylint, shellcheck and `pytest --cov` (97.30%)
   pass locally.
 Next: the reviewer's code round 5.
+
+## 14 · reviewer · approved
+Done: code round 5 on 2bc81e0 is in REVIEW.md.
+- It reviews against TASK.md e475e61, signed by the planner's identity, which the architect shares, and against PLAN.md 77c965a, signed by the dev.
+- No change to TASK.md that the human decided is pending, and no design question is open.
+- R12, R13, R14 and R16 are closed. R10 and R11 are accepted as is. R15 and R17 are deferred.
+- One new finding, R18, a Follow-up: `_entry`'s pair is read as `entry[1]`.
+- Every CONTRIBUTING.md check passes at 2bc81e0, with coverage at 97.30%.
+Next: the dev marks PR #81 ready and hands it to the human with pr-ready. R18 is optional.
+- Follow-up: src/foundry/project_scratch_clone.py:48 `subdir_names` · runs `ls-tree` twice per call, once in `_require_entry` and once to list the dir · one extra local git run per listing.
+- Follow-up: src/foundry/project_scratch_clone.py:18 `_ENTRY_WORD_BY_TYPE` · "entry" here means a git tree entry, while GLOSSARY.md's Log uses "entry" for a LOG.md entry · a reader could mix them up if FetchedBranch ever reads log entries.
