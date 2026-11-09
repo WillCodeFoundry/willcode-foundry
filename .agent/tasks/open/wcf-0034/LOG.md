@@ -154,3 +154,15 @@ Done: code round 5 on 2bc81e0 is in REVIEW.md.
 Next: the dev marks PR #81 ready and hands it to the human with pr-ready. R18 is optional.
 - Follow-up: src/foundry/project_scratch_clone.py:48 `subdir_names` · runs `ls-tree` twice per call, once in `_require_entry` and once to list the dir · one extra local git run per listing.
 - Follow-up: src/foundry/project_scratch_clone.py:18 `_ENTRY_WORD_BY_TYPE` · "entry" here means a git tree entry, while GLOSSARY.md's Log uses "entry" for a LOG.md entry · a reader could mix them up if FetchedBranch ever reads log entries.
+
+## 15 · dev · pr-ready
+Done: merged origin/HEAD into task/wcf-0034 (already up to date, no conflicts).
+CI on PR #81 passes at 2bc81e0, the commit round 5 approved; no commit since.
+Wrote the PR body from the `pr` skill and marked
+https://github.com/WillCodeFoundry/willcode-foundry/pull/81 ready.
+- Answers R18: deferred, because it is optional and the round approved
+  2bc81e0; a fix now would be a commit after the approval and another round.
+- Answers R15: deferred, as entry 13 says. Its Follow-up line is in entry 12.
+- Answers R17: deferred, as entry 13 says.
+- AC1–AC9: as entries 11 and 13 list.
+Next: the human merges PR #81.
