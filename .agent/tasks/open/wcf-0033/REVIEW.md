@@ -376,3 +376,57 @@ R19. PLAN.md's Names section names none of these test helpers.
 - No design questions.
 
 Verdict: changes needed
+
+## Round 6 (reviewing 59c516a)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+cf2da31, signed by the planner's identity, which the architect shares, so a change by the architect can't be told
+apart from one by the planner. PLAN.md is unchanged since it was approved at 6694061, signed by the dev. This round
+reviews the fix `ac110e0...59c516a` (59c516a): a rename of one parametrize parameter in `tests/test_task_command.py`,
+3 lines. No human change to TASK.md waits to be folded in.
+
+The fix is three lines, test-only, so this round ran the five axes inline rather than in sub-agents. Their separation
+guards against one axis masking another across a large diff, which three renamed lines can't do.
+
+Earlier findings:
+- R17: accepted as is (round 4).
+- R18: deferred, as the dev's entry 19 says. It stays a Follow-up, with entry 18's.
+- R19: closed. The parameter is now `leave_no_next_task_id` (`tests/test_task_command.py:162`, used at :170 and
+  :172). `take_task_ids` no longer appears in that file, so a grep for the helper lands only on
+  `tests/test_project_tasks.py`.
+
+### Standards
+No findings. The fix touches no docstring or doc, and no doc names the parameter.
+
+### Spec
+No findings. Test ids `[no-task-id]` and `[tie]` are unchanged, and both pass, so AC5 and AC6 on the CLI are shown as
+in round 5. PLAN.md doesn't name the parameter. No scope creep.
+
+### Behaviour
+No findings. In a throwaway clone at 59c516a, `uv run pytest` (808 passed), ruff check, ruff format --check and mypy
+pass. Both cases of the renamed test pass, each running its own setup.
+
+### Smells
+Functions the fix changes:
+- `tests/test_task_command.py:test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_nothing`:
+  clean (only the parameter's name changed).
+
+No findings.
+
+### Names
+Names the fix adds:
+- `leave_no_next_task_id`: clean. Each setup it holds leaves the repository with no next task id to pick, in the
+  words of `NoNextTaskIdError` (`src/foundry/task.py:107`) and its docstring. No other name in the repository spells
+  it, so it shadows nothing.
+
+No findings.
+
+### Summary
+- Standards: 0 findings.
+- Spec: 0 findings.
+- Behaviour: 0 findings.
+- Smells: 0 findings.
+- Names: 0 findings.
+- No design questions. Follow-ups R18 (deferred) and entry 15's and 18's Follow-up lines stay open.
+
+Verdict: approved

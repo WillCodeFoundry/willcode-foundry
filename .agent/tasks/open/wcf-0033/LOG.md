@@ -199,3 +199,11 @@ unchanged: the renamed parameter is a test-local name that PLAN.md doesn't list.
   files is a refactor of setup this task didn't introduce, as the round says. It stays a Follow-up with entry 18's.
 - AC1–AC11 are met by the same tests as entries 14 and 17; the rename keeps every test id.
 Next: the reviewer's code round 6.
+
+## 20 · reviewer · approved
+Done: code round 6 on 59c516a, against TASK.md at cf2da31 and PLAN.md as approved at 6694061. The history of both files
+is clean. R19 is closed, R18 deferred as entry 19 says, R17 stays accepted as is. The fix is a three-line test-only
+rename, so the five axes ran inline; none has a finding. In a throwaway clone, the host tier (808 passed), ruff and
+mypy pass. No design questions are open, no question to the architect waits, and no human change to TASK.md waits to
+be folded in.
+Next: the dev marks PR https://github.com/WillCodeFoundry/willcode-foundry/pull/80 ready and ends with pr-ready.
