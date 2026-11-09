@@ -77,7 +77,7 @@ def session_variables(tmp_path: Path) -> Callable[[Task], SessionVariables]:
             role=Role(name="dev", ssh_key_path=tmp_path / "secrets" / "ssh" / "dev", github_token_path=None),
             task=task,
         )
-        return opened.variables
+        return SessionVariables.from_env(opened.definition.variables)
 
     return variables
 
