@@ -117,3 +117,12 @@ def test_the_architecture_lists_exactly_the_runtimes_commands() -> None:
     first_words = {command.split()[0] for command in runtime}
     architecture = (REPOSITORY / "ARCHITECTURE.md").read_text()
     assert {command for command in table_commands(architecture) if command.split()[0] in first_words} == runtime
+
+
+def test_the_readme_names_the_command_that_shows_the_question_a_task_waits_on() -> None:
+    readme = (REPOSITORY / "README.md").read_text()
+    sentences = [
+        sentence for sentence in re.split(r"(?<=\.) ", readme) if "the question at the end of its `LOG.md`" in sentence
+    ]
+    assert len(sentences) == 1, sentences
+    assert "`foundry task show`" in sentences[0]

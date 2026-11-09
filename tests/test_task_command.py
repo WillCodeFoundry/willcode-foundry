@@ -1,5 +1,7 @@
 """The `foundry task` commands: their reports, arguments and checks, and end to end through cli.main."""
 
+import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -18,13 +20,16 @@ from foundry.commands.task import (
     read_listings_and_errors,
     report,
     require_valid_handoff_args,
+    show_lines,
 )
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
-from foundry.project_tasks import TaskTurn
+from foundry.project_tasks import TaskTurn, TaskTurnAndLog
 from foundry.task import Task
+from tests.support import ProcessEnvironment
 from tests.support.foundry_root import write_foundry
-from tests.support.project_repository import git_output
+from tests.support.machine import counting_stand_in
+from tests.support.project_repository import ProjectRepository, fetch_count, git_output
 
 # --- the command ------------------------------------------------------------------
 
@@ -333,3 +338,256 @@ def test_handoff_prints_where_the_task_went_or_an_error_and_exits_accordingly(
     assert cli.main(["task", "handoff", "nope", "tst-0000", "dev"]) == 1
     assert capsys.readouterr() == ("", "error: unknown project 'nope'; known: gone, store\n")
     assert project_repository.notes_head() == notes_before
+
+
+# --- foundry task show ------------------------------------------------------------------
+
+LOG = "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\nDone: a.\n\n- Asks D1 → human: b?\n \n\n"
+LAST_ENTRY = "## 2 · dev · progress\nDone: a.\n\n- Asks D1 → human: b?"
+
+
+@pytest.mark.parametrize(
+    "turn_and_log, lines",
+    [
+        (TaskTurnAndLog(Task.as_open("tst-0000"), "human", LOG), ["turn: human", "", LAST_ENTRY]),
+        (TaskTurnAndLog(Task.as_closed("cls-0000"), "dev", LOG), ["status: closed", "turn: dev", "", LAST_ENTRY]),
+        (TaskTurnAndLog(Task.as_open("tst-0000"), "dev", "# Log\n"), ["turn: dev", "", "no log entry yet"]),
+    ],
+    ids=["open", "closed", "no-entry"],
+)
+def test_show_lines_are_the_status_if_closed_the_turn_a_blank_line_and_the_last_entry(
+    turn_and_log: TaskTurnAndLog, lines: list[str]
+) -> None:
+    assert show_lines(turn_and_log) == lines
+
+
+def test_show_takes_a_project_and_a_task() -> None:
+    args = cli.build_parser().parse_args(["task", "show", "store", "tst-0001"])
+    assert (args.project_name, args.task_id) == ("store", "tst-0001")
+
+
+def test_task_help_lists_show(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["task", "--help"])
+    assert "show" in capsys.readouterr().out.split("{", 1)[1].split("}", 1)[0].split(",")
+
+
+def store_foundry(tmp_path: Path, project_repository: ProjectRepository, git_env: dict[str, str]) -> Path:
+    """A foundry of its own, whose project store is ``project_repository``; gone, whose repository doesn't exist;
+    and bare, whose repository has no branches."""
+    bare_dir = tmp_path / "bare.git"
+    git_output(git_env, "init", "--quiet", "--bare", str(bare_dir))
+    return write_foundry(
+        tmp_path / "foundry",
+        {"store": project_repository.path, "gone": tmp_path / "gone.git", "bare": bare_dir},
+    )
+
+
+@pytest.mark.parametrize(
+    "task_id, log, printed",
+    [
+        ("tst-0000", LOG, f"turn: dev\n\n{LAST_ENTRY}\n"),
+        ("cls-0000", LOG, f"status: closed\nturn: dev\n\n{LAST_ENTRY}\n"),
+        ("tst-0000", "# Log\n", "turn: dev\n\nno log entry yet\n"),
+    ],
+    ids=["open", "closed", "no-entry"],
+)
+def test_show_prints_the_turn_and_the_last_log_entry_and_exits_0(
+    project_repository,
+    enter_foundry,
+    git_env,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    task_id,
+    log,
+    printed,
+) -> None:
+    found = project_repository.project_tasks().fetch_task(task_id)
+    project_repository.edit_notes(write={found.turn_file: " dev \n", found.log_file: log})
+    enter_foundry(store_foundry(tmp_path, project_repository, git_env))
+
+    assert cli.main(["task", "show", "store", task_id]) == 0
+    assert capsys.readouterr() == (printed, "")
+
+
+TST_0000 = ".agent/tasks/open/tst-0000"
+WELL_FORMED = {f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"}
+
+
+@pytest.mark.parametrize(
+    "project_name, task_id, write, symlink, error",
+    [
+        ("gone", "tst-0000", {}, {}, r"git -C \S+ ls-remote --heads origin failed: .*"),
+        ("bare", "tst-0000", {}, {}, "the project repository has no agent-notes branch"),
+        (
+            "store",
+            "tst-0009",
+            {},
+            {},
+            "task tst-0009 doesn't exist: agent-notes has neither "
+            r"\.agent/tasks/open/tst-0009/ nor \.agent/tasks/closed/tst-0009/",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {".agent/tasks/closed/tst-0000/TURN": "dev\n"},
+            {},
+            r"task tst-0000 is both open and closed: agent-notes has \.agent/tasks/open/tst-0000/ and "
+            r"\.agent/tasks/closed/tst-0000/",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/LOG.md": "# Log\n"},
+            {},
+            r"task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/TURN/x": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"},
+            {},
+            r"task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/TURN": " \n"},
+            {},
+            r"task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/TURN": "dev\n"},
+            {},
+            r"task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/LOG.md/x": "x\n"},
+            {},
+            r"task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/LOG.md": "# Log\n"},
+            {f"{TST_0000}/TURN": "/etc/hostname"},
+            r"task tst-0000's TURN is a link, and foundry reads only files: "
+            r"agent-notes has a link at \.agent/tasks/open/tst-0000/TURN",
+        ),
+        (
+            "store",
+            "tst-0000",
+            {f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/MARKER.md": "## 1 · dev · progress\nmarker-7f3a\n"},
+            {f"{TST_0000}/LOG.md": "MARKER.md"},
+            r"task tst-0000's LOG\.md is a link, and foundry reads only files: "
+            r"agent-notes has a link at \.agent/tasks/open/tst-0000/LOG\.md",
+        ),
+    ],
+    ids=[
+        "unreachable",
+        "no-agent-notes",
+        "neither-open-nor-closed",
+        "both-open-and-closed",
+        "turn-missing",
+        "turn-dir",
+        "turn-blank",
+        "log-missing",
+        "log-dir",
+        "turn-link",
+        "log-link",
+    ],
+)
+def test_show_fails_with_one_error_on_stderr_nothing_on_stdout_and_exits_1(
+    project_repository,
+    enter_foundry,
+    git_env,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    project_name,
+    task_id,
+    write,
+    symlink,
+    error,
+) -> None:
+    """A link is never followed: neither its target's name nor its target's text is printed."""
+    if write or symlink:
+        project_repository.edit_notes(write=write, symlink=symlink)
+    enter_foundry(store_foundry(tmp_path, project_repository, git_env))
+
+    assert cli.main(["task", "show", project_name, task_id]) == 1
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert re.fullmatch(f"error: {error}\n", printed.err, flags=re.DOTALL), printed.err
+
+
+@pytest.fixture
+def enter_foundry_counting_git(
+    enter_foundry, process_environment: ProcessEnvironment, tmp_path: Path
+) -> Callable[[Path], Path]:
+    """enter_foundry, with every git call counted: returns the file of recorded calls.
+
+    The stand-in's dir goes first on PATH after enter_foundry, which replaces PATH."""
+
+    def enter(foundry_root: Path) -> Path:
+        enter_foundry(foundry_root)
+        stand_in_dir = tmp_path / "counting"
+        stand_in_dir.mkdir()
+        git_calls = counting_stand_in(stand_in_dir, "git")
+        process_environment.prepend_to_path(stand_in_dir)
+        return git_calls
+
+    return enter
+
+
+@pytest.mark.parametrize(
+    "project_name, task_id, error",
+    [
+        ("nope", "tst-0000", "unknown project 'nope'; known: bare, gone, store"),
+        (
+            "store",
+            "x",
+            "task id 'x' is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)",
+        ),
+    ],
+    ids=["unknown-project", "invalid-id"],
+)
+def test_show_refuses_an_unknown_project_or_an_invalid_id_before_running_git(
+    project_repository,
+    enter_foundry_counting_git,
+    git_env,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    project_name,
+    task_id,
+    error,
+) -> None:
+    """test_show_only_reads_with_one_fetch shows the same setup records git when it runs."""
+    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository, git_env))
+
+    assert cli.main(["task", "show", project_name, task_id]) == 1
+    assert capsys.readouterr() == ("", f"error: {error}\n")
+    assert not git_calls.exists()
+
+
+def test_show_only_reads_with_one_fetch(
+    project_repository,
+    enter_foundry_counting_git,
+    no_signing_key,
+    git_env,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project_repository.edit_notes(write=WELL_FORMED)
+    refs_before = project_repository.git("for-each-ref")
+    git_calls = enter_foundry_counting_git(store_foundry(tmp_path, project_repository, git_env))
+
+    assert cli.main(["task", "show", "store", "tst-0000"]) == 0
+    assert capsys.readouterr() == ("turn: dev\n\nno log entry yet\n", "")
+    assert fetch_count(git_calls) == 1
+    calls = [line.split() for line in git_calls.read_text().splitlines()]
+    assert not [call for call in calls if "commit" in call or "push" in call]
+    assert project_repository.git("for-each-ref") == refs_before

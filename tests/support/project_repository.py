@@ -1,5 +1,6 @@
 """The GitHub repository behind a project, as a bare repository on disk, and the git config the tests run with:
-an identity, a signing key, and a stand-in for ssh-keygen that records which key signed."""
+an identity, a signing key, and a stand-in for ssh-keygen that records which key signed. It also counts the
+fetches git made, from the calls a counting stand-in recorded."""
 
 import os
 import subprocess
@@ -46,6 +47,13 @@ def make_git_env(parent_dir: Path) -> dict[str, str]:
 def git_output(env: dict[str, str], *args: str) -> str:
     """git's stripped output, run in ``env``."""
     return subprocess.run(["git", *args], env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def fetch_count(git_calls: Path) -> int:
+    """How many of the git calls that ``git_calls`` records were fetches; 0 when git never ran."""
+    if not git_calls.exists():
+        return 0
+    return sum("fetch" in line.split() for line in git_calls.read_text().splitlines())
 
 
 def clone_in(parent_dir: Path, git_env: dict[str, str], url: str) -> ProjectScratchClone:

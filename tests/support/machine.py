@@ -9,6 +9,7 @@ every path is root's, the test user's here, unless a test puts another owner in 
 import contextlib
 import dataclasses
 import os
+import shutil
 import socket
 import stat
 from collections.abc import Iterator
@@ -76,6 +77,17 @@ def recording_stand_in(directory: Path, name: str) -> tuple[str, Path]:
     """A command that records the arguments of each run, one line each, and exits 0."""
     log = directory / f"{name}.log"
     return scripted_stand_in(directory, name, f'printf \'%s\\n\' "$*" >> "{log}"'), log
+
+
+def counting_stand_in(directory: Path, name: str) -> Path:
+    """A command that records the arguments of each run, one line each, then runs the real ``name``: the one on PATH
+    when it is made. Returns the file of recorded calls, which exists once the command has run."""
+    real = shutil.which(name)
+    if real is None:
+        raise FileNotFoundError(f"no {name} on PATH to count the calls of")
+    calls = directory / f"{name}-calls"
+    scripted_stand_in(directory, name, f'printf \'%s\\n\' "$*" >> "{calls}"\nexec "{real}" "$@"')
+    return calls
 
 
 @dataclasses.dataclass(frozen=True)

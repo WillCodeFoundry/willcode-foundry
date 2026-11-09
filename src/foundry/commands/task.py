@@ -1,5 +1,5 @@
-"""foundry task: create a task on a project, ready for foundry run, close and reopen it, hand it off, and list
-whose turn each is."""
+"""foundry task: create a task on a project, ready for foundry run, close and reopen it, hand it off, show what one
+waits for, and list whose turn each is."""
 
 import argparse
 import os
@@ -11,11 +11,11 @@ from agent_runtime.git import GitError
 from foundry import config, paths, task
 from foundry.config import Config, Project
 from foundry.errors import FoundryError
-from foundry.project_tasks import ProjectTasks, TaskTurn
+from foundry.project_tasks import ProjectTasks, TaskTurn, TaskTurnAndLog, last_log_entry
 
 
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
-    parser = subparsers.add_parser("task", help="create, close, reopen, hand off and list tasks on projects")
+    parser = subparsers.add_parser("task", help="create, close, reopen, hand off, show and list tasks on projects")
     actions = parser.add_subparsers(dest="action", required=True)
     # The arguments every action takes.
     task_arguments = argparse.ArgumentParser(add_help=False)
@@ -60,6 +60,15 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     handoff.add_argument("turn", metavar="ROLE", help=f"role name, as listed in config/foundry.yaml, or {task.HUMAN}")
     handoff.add_argument("--note", metavar="TEXT", help=f"one line to add to the {task.LOG_FILE} entry")
     handoff.set_defaults(func=handoff_main)
+    show = actions.add_parser(
+        "show",
+        parents=[task_arguments],
+        help=f"show whose turn the task is, and the last entry of its {task.LOG_FILE} on {task.NOTES_BRANCH}",
+        description="Uses git, with your own access to the project's repository, and changes nothing. Shows an open "
+        f"or closed task. Refuses one whose {task.TURN_FILE} or {task.LOG_FILE} is missing, a link or not a file, "
+        f"or whose {task.TURN_FILE} is empty.",
+    )
+    show.set_defaults(func=show_main)
     list_parser = actions.add_parser(
         "list",
         help=f"list the open tasks and whose turn each is, from {task.TURN_FILE} on {task.NOTES_BRANCH}",
@@ -113,6 +122,16 @@ def handoff_main(args: argparse.Namespace) -> int:
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
         project_tasks.hand_off(args.task_id, args.turn, note=args.note)
     print("\n".join(handoff_lines(project.name, args.task_id, turn=args.turn)))
+    return 0
+
+
+def show_main(args: argparse.Namespace) -> int:
+    """Composition root: the real config and repository, in a scratch clone."""
+    project = config.load(paths.find_foundry_root()).project(args.project_name)
+    task.Task.as_open(args.task_id)  # refuses an invalid id as create does, before any git
+    with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
+        turn_and_log = project_tasks.fetch_task_turn_and_log(args.task_id)
+    print("\n".join(show_lines(turn_and_log)))
     return 0
 
 
@@ -171,6 +190,13 @@ def handoff_lines(project_name: str, task_id: str, *, turn: str) -> list[str]:
     if turn != task.HUMAN:
         lines.append(f"run it with: foundry run {project_name} {task_id}")
     return lines
+
+
+def show_lines(turn_and_log: TaskTurnAndLog) -> list[str]:
+    """What show prints: a status line if the task is closed, its turn, a blank line, then its log's last entry."""
+    status_lines = ["status: closed"] if turn_and_log.task.status is task.Status.CLOSED else []
+    entry = last_log_entry(turn_and_log.log) or "no log entry yet"
+    return [*status_lines, f"turn: {turn_and_log.turn}", "", entry]
 
 
 class ProjectListing(NamedTuple):

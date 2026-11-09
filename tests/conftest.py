@@ -14,7 +14,7 @@ from foundry.config import Project, Role
 from foundry.runtime_build import build_runtime
 from foundry.task import NOTES_BRANCH, Task
 from tests.support import AGENT_KIT_SOURCE, SANDBOX_IMAGE, TASK, ProcessEnvironment, git, isolate_from_the_developer
-from tests.support.project_repository import ProjectRepository, make_git_env
+from tests.support.project_repository import ProjectRepository, git_output, make_git_env
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -210,3 +210,9 @@ def git_env(tmp_path: Path) -> dict[str, str]:
 def project_repository(tmp_path: Path, git_env) -> ProjectRepository:
     """The GitHub repository behind the project store, seeded: see ProjectRepository."""
     return ProjectRepository.seed(tmp_path, git_env)
+
+
+@pytest.fixture
+def no_signing_key(git_env) -> None:
+    """Your git config, without a signing key."""
+    git_output(git_env, "config", "--global", "--unset", "user.signingkey")
