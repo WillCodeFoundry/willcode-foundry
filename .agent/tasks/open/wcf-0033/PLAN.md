@@ -73,8 +73,8 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
   `wcf-0002`'s TASK.md written under `CLOSED_DIR` with `edit_notes`, and `task/abc-0001` made with
   `project_repository.git("branch", …)`. Amended: R6. Because: the seeded `tst-0000` and `cls-0000` would join the
   tie.
-- The most common prefix wins (D1): `tests/test_task.py`, `["wcf-0001", "wcf-0002", "sbx-0050"]` → `wcf-0003`,
-  showing the other prefix's higher number is ignored; and a three-way tie with one loser,
+- The most common task prefix wins (D1): `tests/test_task.py`, `["wcf-0001", "wcf-0002", "sbx-0050"]` → `wcf-0003`,
+  showing the other task prefix's higher number is ignored (Amended: R12. Because: bare "prefix" is under _Avoid_); and a three-way tie with one loser,
   `["abc-0001", "wcf-0002", "xyz-0003", "xyz-0004", "wcf-0005"]`, refuses naming only `wcf, xyz`.
   `tests/test_project_tasks.py`: the seeded `tst-0000` and `cls-0000` kept beside `wcf-0001` and `wcf-0002` give
   `wcf-0003`.
@@ -88,7 +88,9 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
   The repository has one new task branch and one new `agent-notes` commit, and no second task notes dir. The
   stand-in writes the tips of `agent-notes` and of the new task branch to a file once the competitor finishes, and
   the test asserts both final tips equal them. Amended: R4. Because: the count alone can't tell whose commit
-  survived.
+  survived. Setup: the seeded tasks' dirs removed with `edit_notes(remove=…)` and `wcf-0030` open written with
+  `edit_notes`, so both creates pick `wcf-0031`. Amended: R10. Because: the seeded `tst-0000` and `cls-0000` tie,
+  and both creates would refuse before any push.
 - AC8: the existing create tests pass unchanged; the seeded repository already mixes the prefixes `tst` and `cls`,
   and `test_the_first_task_creates_agent_notes_as_an_orphan_holding_only_its_files` has no task at all.
 - AC9: `tests/test_docs.py` passes unchanged.
@@ -99,19 +101,22 @@ fetch of their own before `create_task`. It would fetch `agent-notes` twice and 
 ## Docs
 - `README.md`: the command table's row becomes `foundry task create PROJECT [TASK]`, adding "Without TASK, the next
   task id: the task prefix most of the project's task ids use, and one more than the highest number taken with it.
-  Ids with other prefixes are ignored." The task id line says "a prefix of lowercase ASCII letters, `-`, then a
-  number of four or more digits". Amended: R1, R8. Because: entry 8 asks both texts to say other prefixes are
-  ignored.
-- `GLOSSARY.md`: **Task id** as TASK.md's "Terms" sharpens it, calling its letters the **task prefix**, with
-  "prefix (alone, for a task id's letters)" under its _Avoid_. Amended: R7. Because: the human asked for the rule
-  there (entry 7).
+  Ids with other task prefixes are ignored." The task id line says "a task prefix of lowercase ASCII letters, `-`,
+  then a number of four or more digits". Amended: R1, R8, R9, R12. Because: entry 8 asks both texts to say other
+  task prefixes are ignored; bare "prefix" is under _Avoid_.
+- `GLOSSARY.md`: **Task id** as TASK.md's "Terms" sharpens it, but worded "made of a task prefix of lowercase ASCII
+  letters, `-`, then a number of four or more digits", so the definition itself never says bare "prefix", with
+  "prefix (alone, for a task id's letters)" under its _Avoid_. Amended: R7, R9. Because: the human asked for the rule
+  there (entry 7), and the definition must keep it.
 - `ARCHITECTURE.md`: `project_tasks.py`'s codemap row says "creating them, under an id given or the next one";
   `task.py`'s row (`ARCHITECTURE.md:29`) adds "and `next_task_id`, which picks the next task id from the taken
   ones". Amended: R2. Because: the codemap is where a reader looks for it.
 - Docstrings: `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
   dir under OPEN_DIR from one fetch" (`:5-6`) adds `create_next_task` as a second exception, which takes no id and
-  reads `OPEN_DIR` and `CLOSED_DIR` and the task branches from one fetch, Amended: R3. Because: the sentence becomes
-  untrue otherwise; `create_task`'s; `task.py`'s module docstring (`:1`), "what a task's names are, how the next
+  reads the dirs under `OPEN_DIR` and `CLOSED_DIR` from one fetch of `NOTES_BRANCH`, and the task branches from the
+  remote's branch list, Amended: R3, R11. Because: the sentence becomes untrue otherwise, and the branches come from
+  `git ls-remote --heads`, not the fetch; `create_task`'s; `task.py`'s module docstring (`:1`), "what a task's names are, how the next
   task id is picked, and the task template", Amended: R2; `task.py`'s `_TASK_ID` comment; the `create` parser's
   TASK help, "task id, e.g. wcf-0042 (default: the next id with the task prefix most of the project's task ids
-  use; ids with other prefixes are ignored)". Amended: R1, R8. Because: entry 8.
+  use; ids with other task prefixes are ignored)". Amended: R1, R8, R12. Because: entry 8; bare "prefix" is under
+  _Avoid_.

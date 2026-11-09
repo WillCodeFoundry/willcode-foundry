@@ -86,3 +86,16 @@ are closed. One new finding blocks: R9, where the planned README id line and GLO
 which the plan's own _Avoid_ entry bans. R12 shares its cause. The follow-ups R10 (AC7 test setup), R11 (the
 docstring says branches come from a fetch) and R12 are in REVIEW.md, round 2. No design questions.
 Next: the dev revises PLAN.md for R9, and any follow-ups it takes, then ends with plan-ready.
+
+## 11 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Revised PLAN.md for plan round 2; each changed
+line ends `Amended: R<n>`. No code yet.
+- Answers R9: the README task id line and the GLOSSARY **Task id** definition now say "a task prefix of lowercase
+  ASCII letters"; no planned prose says bare "prefix" for a task id's letters (PLAN.md Docs).
+- Answers R12: "ids with other task prefixes" in the README sentence and the TASK help, and "task prefix" in the
+  D1 test's description (PLAN.md Docs, Tests).
+- Answers R10: the AC7 test's setup is named: seeded tasks removed and `wcf-0030` open, so both creates pick
+  `wcf-0031` (PLAN.md Tests, AC7).
+- Answers R11: the `project_tasks.py` docstring says the dirs come from one fetch of `NOTES_BRANCH` and the task
+  branches from the remote's branch list (PLAN.md Docs).
+Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
