@@ -136,3 +136,42 @@ Blocking (R10, the AC7 setup isn't named). Names: 1 finding, Blocking (R9, bare 
 are closed. No design questions.
 
 Verdict: plan changes needed
+
+## Round 3, plan (reviewing PLAN.md at 6694061)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+cf2da31, signed by the planner's identity, which the architect shares, so a change by the architect can't be told
+apart from one by the planner. TASK.md has no commit since round 2. PLAN.md's only new commit is 6694061, signed by
+the dev. This round reviews the fix diff `97f5e0c..6694061`, judged against the answers in LOG.md entry 11.
+
+Earlier findings:
+- R9: closed. The README task id line, the GLOSSARY **Task id** definition, the README sentence and the TASK help
+  now say "task prefix" or "other task prefixes" (PLAN.md:103-110, :120-121). So the definition keeps the _Avoid_
+  rule it adds.
+- R10: closed. The AC7 setup is named (PLAN.md:91-93): the seeded dirs are removed and `wcf-0030` is opened with
+  `edit_notes`, so both creates pick `wcf-0031` and reach the push. `edit_notes` takes `write=` and `remove=`
+  (`tests/support/project_repository.py:87`).
+- R11: closed. The planned docstring says the dirs come from one fetch of `NOTES_BRANCH`, and the task branches from
+  the remote's branch list (PLAN.md:114-118). That is true of `src/foundry/project_tasks.py:86-87` and
+  `src/foundry/project_scratch_clone.py:102-107`.
+- R12: closed, as R9.
+
+### Standards
+No new findings. Each changed line gives its reason with `Amended: R<n>. Because: …`. No doc is made untrue and
+left out of the Docs list. Bare "prefix" is still used at PLAN.md:48 and :94, but only in the plan's own prose,
+which ships nowhere, so it isn't reported.
+
+### Spec
+No new findings. AC1–AC11 each still have a test at a named seam. The wording changes leave what each test checks
+unchanged. AC9's "names its prefix and number" and AC10's "says what is picked" are still met by the planned
+README line and help. No step does what OS1–OS6 rule out.
+
+### Names
+No new findings. These are clean: "most common task prefix" and "other task prefix's higher number" (the D1 test),
+"Ids with other task prefixes are ignored" (the README and the help), "a task prefix of lowercase ASCII letters"
+(the README and GLOSSARY), and the docstring's "one fetch of `NOTES_BRANCH`" and "the remote's branch list".
+
+### Summary
+Standards: 0 findings. Spec: 0 findings. Names: 0 findings. R9–R12 are closed and none blocks. No design questions.
+
+Verdict: plan approved at 6694061

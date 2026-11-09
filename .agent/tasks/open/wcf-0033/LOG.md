@@ -99,3 +99,9 @@ line ends `Amended: R<n>`. No code yet.
 - Answers R11: the `project_tasks.py` docstring says the dirs come from one fetch of `NOTES_BRANCH` and the task
   branches from the remote's branch list (PLAN.md Docs).
 Next: on plan approval, step 1 of PLAN.md, the refactor in `task.py`.
+
+## 12 · reviewer · plan-approved
+Done: plan round 3 on PLAN.md at 6694061, against TASK.md at cf2da31. The history of both files is clean. R9–R12
+are closed, with no new findings on any axis and no design questions. No human change to TASK.md is waiting to
+be folded in. Verdict: plan approved at 6694061.
+Next: the dev starts step 1 of PLAN.md, the refactor in `task.py`, then ends with ready-for-review.
