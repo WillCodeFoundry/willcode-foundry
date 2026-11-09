@@ -20,7 +20,7 @@ def require_valid_order_args(shop: Shop, order_id: str, quantity: int) -> Custom
 Better:
 
 ```python
-def require_valid_order_args(order_id: str, quantity: int) -> None:
+def check_order_args(order_id: str, quantity: int) -> None:
     if not Order.is_valid_id(order_id):
         raise ShopError(f"{order_id!r} is not an order id")
     if quantity < 1:
