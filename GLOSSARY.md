@@ -84,7 +84,7 @@ How a role's turn ended, from the list in its `ROLE.md`, such as `changes-needed
 A question about `TASK.md`, which the planner, who owns it, answers with the human.
 
 **Design question**:
-A question for the architect, who owns the project's design rules and ADRs, and answers it with the human. The reviewer raises one for a plan that changes how the code is structured, or for a finding whose fix would break a design rule or an ADR.
+A question for the architect, who owns the project's design rules and ADRs. It decides by them, and asks the human only for a new or changed rule or ADR, or a choice that's hard to reverse. The reviewer raises one for a plan that changes how the code is structured, or for a finding whose fix would break a design rule or an ADR.
 
 **Plan**:
 A task's `PLAN.md`, written by the dev before any code: how it will build what `TASK.md` asks, with its names, errors and a test for each acceptance criterion. The code is reviewed against the plan as last approved.

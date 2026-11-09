@@ -329,8 +329,9 @@ The reviewer asks the architect, with `Asks <id> → architect` and the outcome
 a design rule or an ADR, as the `code-review` skill says. Any role asks the
 architect the same way to write down a design rule the human stated in its
 session, and goes on; the reviewer hands the question over before the task
-closes. The architect settles each with the human, in its session, and
-answers it in `LOG.md`.
+closes. The architect decides each by the design rules and ADRs, asks the human
+only for a new or changed rule or ADR, or a choice that's hard to reverse,
+and answers it in `LOG.md`.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

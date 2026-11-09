@@ -211,4 +211,4 @@ Reading the diff finds the first two. The third shows only when the code is run 
 
 Fresh reviewers always find something. Without a bar, every finding holds the verdict, so a round approves only when it finds nothing, and it rarely will. Without a scope, each round sweeps the whole branch again, including the last round's fixes, and each fix is new surface to find fault with. The bar ends a review once nothing blocks. The scope stops each fix from opening a new round on code already settled.
 
-A design question is neither. The dev can't fix it alone, and a Follow-up would let it through. So it goes to the architect, who settles it with the human before the dev fixes anything that waits for it.
+A design question is neither. The dev can't fix it alone, and a Follow-up would let it through. So it goes to the architect, who settles it, with the human when it needs a new or changed rule, before the dev fixes anything that waits for it.
