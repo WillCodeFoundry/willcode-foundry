@@ -1,6 +1,6 @@
 # 8. Narrating instead of naming
 
-Comments and docstrings that repeat the code, describe who calls it, retell how it came to be, or promise what it doesn't do. The foundry's `AGENTS.md` asks the opposite: name the module or file instead of retelling what it does.
+Comments and docstrings that repeat the code, describe who calls it, retell how it came to be, list what sits beside them, or promise what it doesn't do. The foundry's `AGENTS.md` asks the opposite: name the module or file instead of retelling what it does.
 
 ## 8.1 Comments that restate the code
 
@@ -96,3 +96,31 @@ def issue(refund: Refund) -> None:
 - **Why:** readers trust the stated invariant and stop checking, so the doc hides the very case it rules out.
 - **Fine when:** never. Change the code or the sentence.
 - **Spot it:** docstrings that say "never", "always", "only", "can't" or "nothing". Check each against the body and the functions it calls.
+
+## 8.4 Docs that list what the module holds
+
+A module or class docstring that lists its functions, its operations or what every caller gets back. Each change to the module makes it a little less true, and the diff that does so doesn't touch it.
+
+Bad:
+
+```python
+"""Orders: placing, cancelling and refunding them.
+
+Callers pass order ids, and get Orders back."""
+
+
+def place(order_id: str) -> Order: ...
+def cancel(order_id: str) -> Order: ...
+def refund(order_id: str) -> Order: ...
+def export_csv(path: Path) -> None: ...  # added later: takes no id, returns nothing
+```
+
+Better:
+
+```python
+"""Orders, from placing one to refunding it, kept in the orders table."""
+```
+
+- **Why:** the list is a second copy of the module's contents, and nothing makes the two change together. A reader trusts the summary over the code below it.
+- **Fine when:** the list is generated, or a test checks it against the code.
+- **Spot it:** for each module or class the diff changes, read its docstring whole, even when the diff leaves it alone. Check every "and", every count and every "Callers …" against the code at `HEAD`.

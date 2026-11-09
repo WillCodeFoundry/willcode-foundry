@@ -131,7 +131,7 @@ From round 2 on, every brief also carries the fix diff command, the open finding
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3.
-- The brief: "Report, per file/hunk where relevant, every place the diff violates a documented standard: cite the standard (file + the rule). Code smells and names are another axis's job. Skip anything tooling enforces. Under 400 words."
+- The brief: "Report, per file/hunk where relevant, every place the diff violates a documented standard: cite the standard (file + the rule). Also read the module and class docstrings, and the docs, that describe each module the diff changes, even where the diff leaves them alone, and report each sentence the change made untrue. Code smells and names are another axis's job. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** should include:
 

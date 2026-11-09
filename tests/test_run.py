@@ -12,7 +12,7 @@ from agent_runtime.agent_kit import AgentKit
 from foundry import cli, config
 from foundry.agent_sandbox import LaunchRequest, SandboxDefinition
 from foundry.commands.run import choose_role, fetch_open_task, role_for_turn
-from foundry.config import Config
+from foundry.config import Config, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import MissingTurnError, ProjectTasks
 from foundry.session import Session, open_or_create
@@ -139,11 +139,16 @@ def test_run_shows_the_turn_and_the_new_session_then_calls_the_launcher(
 # --- whose turn -----------------------------------------------------------------------
 
 
-ROLES = ("dev", "reviewer")
+ROLES = {
+    name: Role(name=name, ssh_key_path=Path(f"/foundry/secrets/ssh/{name}"), github_token_path=None)
+    for name in ("dev", "reviewer")
+}
 
 
 def test_a_role_s_turn_launches_that_role() -> None:
-    assert role_for_turn("reviewer", ROLES, project_name="tkt-store", task=Task.as_open("tst-0001")) == "reviewer"
+    assert (
+        role_for_turn("reviewer", ROLES, project_name="tkt-store", task=Task.as_open("tst-0001")) == ROLES["reviewer"]
+    )
 
 
 def test_the_human_s_turn_is_refused_saying_how_to_start_a_role_anyway() -> None:
