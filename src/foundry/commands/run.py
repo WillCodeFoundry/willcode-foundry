@@ -3,7 +3,7 @@
 import argparse
 import logging
 import os
-from collections.abc import Collection
+from collections.abc import Mapping
 from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths
@@ -64,14 +64,15 @@ def choose_role(
     The turn's role is shown as progress. FoundryError, before any sandbox is made, when the role isn't in the
     config or the turn names none.
     """
-    if role_name is None:
-        turn = project_tasks.fetch_task_turn(task.id)
-        role_name = role_for_turn(turn, foundry_config.roles, project_name=project_name, task=task)
-        _LOGGER.info("turn:      %s", role_name)
-    return foundry_config.role(role_name)
+    if role_name is not None:
+        return foundry_config.role(role_name)
+    turn = project_tasks.fetch_task_turn(task.id)
+    role = role_for_turn(turn, foundry_config.roles, project_name=project_name, task=task)
+    _LOGGER.info("turn:      %s", role.name)
+    return role
 
 
-def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task: Task) -> str:
+def role_for_turn(turn: str, roles: Mapping[str, Role], *, project_name: str, task: Task) -> Role:
     """The role to launch for ``turn``; FoundryError when the turn is HUMAN, since the task waits for you, or
     names no role in ``roles``."""
     override_hint = f"To start a role anyway: foundry run {project_name} ROLE {task.id}"
@@ -83,4 +84,4 @@ def role_for_turn(turn: str, roles: Collection[str], *, project_name: str, task:
             f"task {task.id}'s {task.turn_file} on {NOTES_BRANCH} names {turn!r}, which is not a role; "
             f"known: {known}, or {HUMAN}. {override_hint}"
         )
-    return turn
+    return roles[turn]
