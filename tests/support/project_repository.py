@@ -35,7 +35,12 @@ def make_git_env(parent_dir: Path) -> dict[str, str]:
     home_dir = parent_dir / "home"
     home_dir.mkdir()
     write_gitconfig(home_dir)
-    return {"PATH": os.environ["PATH"], "HOME": str(home_dir), "GIT_CONFIG_NOSYSTEM": "1"}
+    return {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home_dir),
+        "GIT_CONFIG_GLOBAL": str(home_dir / ".gitconfig"),
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
 
 
 def git_output(env: dict[str, str], *args: str) -> str:
