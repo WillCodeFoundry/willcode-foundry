@@ -2,10 +2,11 @@
 
 ## Goal
 `foundry task create PROJECT` without TASK creates the project's next task, so you no longer look up the
-highest id by hand. The next id keeps the prefix the project's tasks already use, and takes one more than
-the highest number taken, with at least four digits. An id is taken if it is an open task, a closed task,
-or has a task branch, even with no notes. When no single prefix can be followed, create refuses and
-creates nothing. Giving TASK works exactly as it does today.
+highest id by hand. The next id keeps the prefix most of the project's taken ids use, and takes one more
+than the highest number taken with that prefix, with at least four digits. An id is taken if it is an open
+task, a closed task, or has a task branch, even with no notes. When two or more prefixes tie for the most
+ids, create refuses and creates nothing. Giving TASK works exactly as it does today. Amended: D1. Because:
+the human wants a stray id with another prefix not to block create.
 
 ## Acceptance criteria
 - [ ] AC1: On a project whose tasks are `wcf-0030` (open) and `wcf-0032` (closed), plus a branch
@@ -21,9 +22,13 @@ creates nothing. Giving TASK works exactly as it does today.
   `wcf-0005` and branches `task/spike` and `task/WCF-0099`, the created task is `wcf-0006`.
 - [ ] AC5: On a project with no task id taken (no task branches and no task notes), it exits 1. stderr
   says to give TASK, and the repository's branches are unchanged: no new task branch, no `agent-notes`.
-- [ ] AC6: On a project whose taken ids use more than one prefix (e.g. branch-only `abc-0001` and closed
-  `wcf-0002`), it exits 1. stderr names every prefix in alphabetical order and says to give TASK, and the
-  repository's branches are unchanged.
+- [ ] AC6: On a project whose taken ids use more than one prefix, create follows the prefix the most taken ids
+  use, counting each id once whether it is open, closed, branch-only, or both a branch and notes. The number is
+  one more than the highest among that prefix's ids only: `wcf-0001` to `wcf-0032` with `sbx-0050` give
+  `wcf-0033`. When two or more prefixes tie for the most ids (e.g. branch-only `abc-0001` and closed
+  `wcf-0002`), it exits 1: stderr names the tied prefixes in alphabetical order and says to give TASK, and the
+  repository's branches are unchanged. Amended: D1. Because: the human wants a stray id with another prefix
+  not to block create.
 - [ ] AC7: When two creates without TASK pick the same id, and the first pushes before the second, the
   second exits 1 with an `error:` line on stderr. The repository then holds only the first's task branch,
   notes dir and commit, with nothing from the second. It does not retry with another id.
