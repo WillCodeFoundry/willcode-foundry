@@ -49,8 +49,10 @@ the human wants a stray id with another prefix not to block create.
 - OS6: Leaving TASK out of `close`, `reopen`, `handoff` or `run`.
 
 ## Risks
-- A race's refusal shows git's push rejection, not "already exists". This matches two creates of the
-  same explicit id today (AC7, OS5).
+- A lost race's refusal shows either git's push rejection or "task … already exists", depending on when
+  the winner pushed. Either way create exits 1 with nothing of its own written (AC7, OS5). Amended: D4.
+  Because: create without TASK now reads the taken ids before create's own checks, so it can see the
+  winner's task.
 - An id whose branch was deleted and whose notes never existed counts as free again, and may be reused.
 - No existing follow-up touches this code.
 
