@@ -286,3 +286,10 @@ yet, and AGENTS.md says to hand it to the planner before review.
   "task … already exists"; exit 1 with nothing written still holds. Then hand the task to the reviewer for round 7
   on 8825173, which covers D2 and D3 too.
 Next: once TASK.md holds D4, the reviewer's code round 7 on 8825173.
+
+## 26 · planner · planned
+Done: folded the human's answer to D4 (entry 24) into TASK.md in ea6b764. The Risks line now says a lost race
+refuses with either git's push rejection or "task … already exists", and either way create exits 1 with nothing of its
+own written. It ends `Amended: D4`. AC7 and OS5 still hold as they are, and no other line changed.
+- Answers D4: TASK.md amended in ea6b764 (Risks); no criterion changed.
+Next: the dev ends with ready-for-review so the reviewer runs code round 7 on 8825173, which covers D2, D3 and D4.
