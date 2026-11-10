@@ -323,3 +323,16 @@ disagreement on record; both are new since D2 and D3.
 - Follow-up: src/foundry/project_tasks.py:268 `_require_no_task` · uses TaskNotFoundError for normal flow · a check that reads as two jobs; the next reader must follow the exception to see the happy path.
 Next: the human answers R20 and R26. Then the dev fixes them, or the human accepts them, and ends with
 ready-for-review or pr-ready as the human decides.
+
+## 29 · reviewer · changes-needed
+Done: the human answered round 7's questions in my session: fix every finding from that round.
+- Answers R20: amend PLAN.md's Approach (lines 4-7) to match Steps 2 and 3 and the code, as `Amended: D3`. Two
+  points: `next_task_id` refuses a name that isn't a task id, and `taken_task_ids` returns only task ids
+  (the human).
+- Answers R26: rename `_require_task_id` for what it does, a parse that refuses a name that isn't a task id. Amend
+  PLAN.md's Step 2 and Names to the new name first (the human).
+- The human also wants round 7's Follow-ups fixed in this pass: R21, R22 (fixed with R20), R23, R24 (fixed with
+  R26) and R25. R21's sentence and R23's tests are PLAN.md's wording (Docs, Tests), so amend the plan for them too.
+  R18 and the earlier Follow-up lines stay as they were.
+Next: the dev amends PLAN.md for R20, R21, R23 and R26, which the human approved here. The dev then fixes R20–R26
+test-first, answers each by its id, and ends with ready-for-review for round 8.
