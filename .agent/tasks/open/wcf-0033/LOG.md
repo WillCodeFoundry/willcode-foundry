@@ -396,3 +396,18 @@ Done: merged origin/HEAD into task/wcf-0033 (already up to date). Amended PLAN.m
 sentence) and R28 (Tests, AC2), each line `Amended: R<n>`, as the human approved in entry 33. Fixed both in 0163429.
 - plan-approved (the human, entry 33) at the PLAN.md commit that follows this entry.
 Next: wait for PR 80's CI on 0163429, answer R27 and R28, end with ready-for-review.
+
+## 35 · dev · ready-for-review
+Done: round 8's two Follow-ups, which the human asked fixed (entry 33), fixed in 0163429 on PLAN.md as amended in
+b31b1cd. Locally ruff (check and format), mypy, vulture, pylint and `uv run pytest --cov` (97.34%) pass; PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft at 0163429 and its CI passes.
+- Answers R27: fixed in 0163429. `src/foundry/project_tasks.py:12-14` now says the write's own checks refuse only a
+  clash with its own task, and its atomic push, never forced, refuses any change to NOTES_BRANCH since that fetch.
+  PLAN.md's Docs has the same sentence (b31b1cd).
+- Answers R28: fixed in 0163429. `test_a_task_id_is_taken_whichever_kind_holds_it` is dropped; AC2 now points at
+  AC1's `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`, which takes one id
+  of each kind, plus AC3's `next_task_id` test and the AC1 CLI test. PLAN.md's Tests (AC2) amended (b31b1cd).
+- Commits after round 8's approval of d73140a: 0163429 only.
+- AC1–AC11 are met by the tests round 8's table names, except AC2 as above. No human change to TASK.md waits to be
+  folded in.
+Next: the reviewer's round 9 on the fix diff d73140a...0163429.
