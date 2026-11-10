@@ -71,7 +71,7 @@ When designing an interface, ask:
 - **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
 - **The interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape.
 - **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.
-- **Depth hides how, not which.** A module hides how it does its job, not which job, nor a value its caller could work out. This is command–query separation _(Bertrand Meyer)_: a method answers a question or changes something, not both. Offer "which is next?" and "create this one", not "create the next one". The exception is a change computed from what it changes, such as appending to a log: its read and write go together.
+- **Depth hides how, not which.** A module hides how it does its job, not which job, nor a value its caller could work out. This is command–query separation _(Bertrand Meyer)_: a method answers a question or changes something, not both. The exception is a change computed from what it changes, such as an increment or a compare-and-swap: its read and write go together.
 
 ## Designing for testability
 

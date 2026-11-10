@@ -49,9 +49,9 @@ Errors, Tests and Docs.
   them rather than rebuilding them.
 - Check every public name against `GLOSSARY.md` and its _Avoid_ lists.
 - Cite each rule a decision follows: `Because: DR7`, `Because: ADR-0015`.
-- Cite the criterion, rule or ADR each turned-down alternative breaks. One
-  that breaks none is a judgement call (`AGENTS.md`): leave it open in
-  "Approach", with what each option costs.
+- Cite what each turned-down alternative breaks: a criterion, out-of-scope
+  line, rule or ADR. One that breaks none is a judgement call (`AGENTS.md`):
+  leave it open in "Approach", with what each option costs.
 - Push it, then end your turn with `plan-ready`, for the reviewer's plan
   round. When the human is in your session, you may ask them instead: their
   approval replaces the plan round. Log it as `plan-approved (the human) at

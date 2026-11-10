@@ -62,20 +62,20 @@ def gross_total(order: Order) -> Decimal:
 The optional kind, bad:
 
 ```python
-def issue_invoice(order: Order, number: str | None = None) -> Invoice:
-    if number is None:
-        number = next_invoice_number(read_issued_numbers())
-    return write_invoice(order, number)
+def send_report(report: Report, recipients: list[str] | None = None) -> None:
+    if recipients is None:
+        recipients = read_subscribers(report.topic)
+    deliver(report, recipients)
 ```
 
 Better: the function takes the value, and a caller with none works it out first.
 
 ```python
-def issue_invoice(order: Order, number: str) -> Invoice:
-    return write_invoice(order, number)
+def send_report(report: Report, recipients: list[str]) -> None:
+    deliver(report, recipients)
 
 
-invoice = issue_invoice(order, next_invoice_number(read_issued_numbers()))
+send_report(report, read_subscribers(report.topic))
 ```
 
 - **Why:** every call site reads as `total(order, True)`, and each new flag doubles the paths to test. The optional kind also hides a query inside a command.

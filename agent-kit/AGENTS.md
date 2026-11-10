@@ -149,10 +149,11 @@ states a rule in your session, ask its home's owner to write it down, as a
 question in `LOG.md`: the architect for a design rule or an ADR, the planner
 for `TASK.md`.
 
-Only acceptance criteria, design rules and ADRs require. `TASK.md`'s "Risks"
-and "Out of scope", and how the code behaves today, only describe. A choice
-between designs that each meet all three is a **judgement call**, of cost,
-shape or risk. The human makes it.
+A design is bound only by `TASK.md`'s criteria and out-of-scope lines, the
+design rules and the ADRs. An out-of-scope line rules out what it names, and
+requires nothing. Everything else, such as `TASK.md`'s "Risks" or how the
+code behaves today, describes. A choice between designs that both fit all of
+these is a **judgement call**, of cost, shape or risk. The human makes it.
 
 **TBD:** the fixed list of tags.
 

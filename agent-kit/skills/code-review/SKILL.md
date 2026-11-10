@@ -40,7 +40,7 @@ A plan that trips one of these triggers is a **Design question**, for the archit
 - It adds or breaks a design rule or an ADR.
 - It adds or moves a module, or changes an interface used outside the task.
 - It makes a choice that's hard to reverse.
-- It turns down, or leaves open, an alternative that meets every acceptance criterion, design rule and ADR: a judgement call, as `AGENTS.md` defines it.
+- It turns down, or leaves open, an alternative that is a judgement call, as `AGENTS.md` defines it.
 
 Write the round as step 6 says, with the three reports, and the verdict your `ROLE.md` gives a plan round.
 
