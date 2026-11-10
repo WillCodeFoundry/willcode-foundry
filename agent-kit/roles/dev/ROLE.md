@@ -42,8 +42,8 @@ code the task extends was replaced.
 Before any code, write how you will build the task in the task's `PLAN.md`,
 in `$AGENT_NOTES_CHECKOUT_DIR/$AGENT_TASK_NOTES_DIR/`. The task starts with it
 from the foundry's task template: fill in its sections, as its comment says.
-A task without one gets one with the sections Approach, Steps, Names,
-Errors, Tests and Docs.
+A task without one gets one with the sections Approach, Shape, Steps,
+Names, Errors, Tests and Docs.
 
 - Read the code first, and the project's test helpers, so the plan names
   them rather than rebuilding them.
@@ -54,8 +54,10 @@ Errors, Tests and Docs.
   leave it open in "Approach", with what each option costs.
 - Push it, then end your turn with `plan-ready`, for the reviewer's plan
   round. When the human is in your session, you may ask them instead: their
-  approval replaces the plan round. Log it as `plan-approved (the human) at
-  <PLAN.md commit>`, and go on.
+  approval replaces the plan round. First show them "Shape", "Names" and
+  any choice left open, so they approve the design and not only the
+  request. Log it as `plan-approved (the human) at <PLAN.md commit>`, and
+  go on.
 - Write no code before the plan is approved.
 - When a plan round says `Verdict: plan changes needed`, answer each finding
   as "Review" says, by amending `PLAN.md`, and end with `plan-ready` again.
