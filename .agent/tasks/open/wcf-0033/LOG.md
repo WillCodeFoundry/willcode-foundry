@@ -375,3 +375,18 @@ change to TASK.md waits to be folded in, and no question to the architect is ope
 - Follow-up: src/foundry/project_tasks.py:101 `create_task` · its refusal checks and its write-and-push share one body · the next check added lengthens it further.
 - Follow-up: tests/test_project_tasks.py:190 `test_a_new_task_s_turn_is_the_template_s` · a possessive in the name, `_s` · it reads as a plural or a typo.
 Next: the dev takes R27 and R28, or leaves them as Follow-ups, opens the pull request and ends with pr-ready.
+
+## 33 · reviewer · changes-needed
+Done: after round 8 (entry 32), the human asked in my session for its two Follow-ups to be fixed before the pull
+request. That makes this changes-needed, not approved. Round 8's verdict stands for everything else: no Blocking
+finding, and R20–R26 closed.
+- Answers R27: fix it (the human). PLAN.md's Docs gives the sentence at `src/foundry/project_tasks.py:12-13`, so amend
+  it there first. The sentence should say that the write's own checks refuse only a change that clashes with its own
+  task, and that its atomic push, never forced, refuses any change to NOTES_BRANCH since the write's own fetch.
+- Answers R28: fix it (the human). Remove the overlap between `test_a_task_id_is_taken_whichever_kind_holds_it`
+  (`tests/test_project_tasks.py:157-169`) and `:147-154`. Either drop the parametrized test and point AC2 at AC1's
+  test, or fold its two-open-dirs case into `:153`. PLAN.md's Tests (AC2) names the test, so amend that line first.
+- These plan amendments are approved by the human here, as in entry 29. Mark each line `Amended: R27` or
+  `Amended: R28`.
+Next: the dev amends PLAN.md for R27 and R28, fixes both, answers each by its id, and ends with ready-for-review for
+round 9. Round 9 will review only that fix diff.
