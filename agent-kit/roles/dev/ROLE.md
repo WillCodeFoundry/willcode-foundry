@@ -49,14 +49,9 @@ Errors, Tests and Docs.
   them rather than rebuilding them.
 - Check every public name against `GLOSSARY.md` and its _Avoid_ lists.
 - Cite each rule a decision follows: `Because: DR7`, `Because: ADR-0015`.
-- For each alternative you turn down, cite the acceptance criterion, design
-  rule or ADR it would break. One that breaks none is a judgement call, of
-  cost, shape, behaviour no criterion fixes, or risk. Don't settle it:
-  leave it open in "Approach", with both options and what each costs, for
-  the plan round to send to the architect. When the human is in your
-  session, ask them instead. Only criteria, rules and ADRs count:
-  `TASK.md`'s "Risks" and "Out of scope", and how the code behaves today,
-  describe; they don't require.
+- Cite the criterion, rule or ADR each turned-down alternative breaks. One
+  that breaks none is a judgement call (`AGENTS.md`): leave it open in
+  "Approach", with what each option costs.
 - Push it, then end your turn with `plan-ready`, for the reviewer's plan
   round. When the human is in your session, you may ask them instead: their
   approval replaces the plan round. Log it as `plan-approved (the human) at

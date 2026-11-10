@@ -13,7 +13,7 @@
 - OS1: <A behaviour or a user this task leaves alone, which a dev might assume is included. Never a function, file or module.>
 
 ## Risks
-- <What could go wrong, and each existing follow-up on the code the task touches that it leaves alone. Empty if none. A risk describes and requires nothing: a behaviour the task needs is an acceptance criterion.>
+- <What could go wrong, and each existing follow-up on the code the task touches that it leaves alone. Empty if none.>
 
 ## Terms
 - <New or sharpened terms for the project's GLOSSARY.md. Empty if none.>

@@ -71,10 +71,9 @@ honest local fix exists.
 
 ## When the human decides
 Only the human decides a new design rule or ADR, a change to one, a choice
-that's hard to reverse, or a judgement call no rule or ADR settles: two
-designs that both meet every criterion, rule and ADR. Everything else is
-yours. When the human's answer to a judgement call would settle later tasks
-too, ask whether to write it down as a rule.
+that's hard to reverse, or a judgement call (`AGENTS.md`). Everything else
+is yours. When a judgement call's answer would settle later tasks too, ask
+whether to write it down as a rule.
 
 - When the human is in your session, ask them in rounds, with the `grilling`
   skill.

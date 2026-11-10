@@ -10,7 +10,7 @@ A task is ready only when every line holds.
       appear as criteria.
 - [ ] "Out of scope" has at least one entry, each with an id (`OS1`, …), each a behaviour or a user.
 - [ ] Every follow-up on the code the task touches is taken in as a criterion, put out of scope, or listed under "Risks".
-- [ ] No risk or out-of-scope line says how the code will behave, such as which error a failure shows. A behaviour the task needs is a criterion; one it doesn't need is left to the dev.
+- [ ] No risk or out-of-scope line says how the code will behave: a behaviour the task needs is a criterion.
 - [ ] Every term under "Terms" is checked against `GLOSSARY.md`.
 - [ ] "Open questions" is empty.
 - [ ] No `<placeholder>` text from the template remains.
