@@ -343,3 +343,25 @@ Done: merged origin/HEAD into task/wcf-0033 in 6905030 (PR 83, kit docs only; no
 `_parse_task_id`), each line `Amended: R<n>`, as the human approved in entry 29.
 - plan-approved (the human, entry 29) at the PLAN.md commit that follows this entry.
 Next: fix R21, R23, R24/R26 and R25 in code, run the checks and CI, answer R20–R26, end with ready-for-review.
+
+## 31 · dev · ready-for-review
+Done: round 7's findings fixed in d73140a, on PLAN.md as amended in a53b8d4 (entry 30). Locally ruff (check and
+format), mypy, vulture, pylint and `uv run pytest --cov` (97.34%) pass; PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft at d73140a and its CI passes.
+- Answers R20: fixed in a53b8d4 (PLAN.md's Approach, `Amended: R20`).
+- Answers R21: fixed in d73140a; PLAN.md's Docs amended to the same sentence in a53b8d4.
+- Answers R22: fixed in a53b8d4, with R20.
+- Answers R23: fixed in d73140a. AC2's test is now `test_a_task_id_is_taken_whichever_kind_holds_it` and asserts
+  `taken_task_ids()` alone; `test_the_task_prefix_most_task_ids_use_is_followed` and
+  `test_a_task_s_branch_and_notes_count_as_one_task_id` are gone, as asserting `taken_task_ids()` alone would only
+  repeat AC1's and AC2's tests. `take_task_ids` lost its then-unused `keep_seeded`. PLAN.md's Tests amended (a53b8d4).
+- Answers R24: fixed in d73140a, with R26: as `_parse_task_id`, `Task.__post_init__` calls a parse that refuses.
+- Answers R25: fixed in d73140a ("for next_task_id" dropped).
+- Answers R26: fixed in d73140a, `_require_task_id` renamed `_parse_task_id`; PLAN.md's Step 2 and Names amended
+  first (a53b8d4). `git grep -n -w _require_task_id` finds nothing.
+- Commits after round 6's approval of 59c516a: 83a4dfc, a8a2f54, 8825173 (as entry 27), 6905030 (clean merge of
+  origin/HEAD, PR 83), d73140a.
+- AC1–AC11 are met by the tests PLAN.md names, as entries 23 and 25 list, except AC2, now
+  `test_a_task_id_is_taken_whichever_kind_holds_it` with `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits`,
+  and AC6, now without the two removed `ProjectTasks` tests. No human change to TASK.md waits to be folded in.
+Next: the reviewer's code round 8 on d73140a.
