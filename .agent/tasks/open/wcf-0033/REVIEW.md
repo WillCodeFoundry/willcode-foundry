@@ -687,3 +687,58 @@ No findings. R26 is closed, as above.
 - No design questions. R18, R27 and R28 stay open as Follow-ups.
 
 Verdict: approved
+
+## Round 9 (reviewing 0163429)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+ea6b764, signed by the planner's identity, which the architect shares, so a change by the architect can't be told
+apart from one by the planner. PLAN.md is at b31b1cd, signed by the dev, with the R27 and R28 amendments the human
+approved (LOG.md entry 33). This round reviews only the fix diff `d73140a...0163429`, one commit: a three-line
+docstring change and one removed test. No human change to TASK.md waits to be folded in.
+
+The diff is too small to split across five sub-agents, so I reviewed all five axes myself. Behaviour has no code
+path to run: the diff changes a docstring and removes a test.
+
+Earlier findings:
+- R17: accepted as is (round 4).
+- R18: deferred (round 6). It stays a Follow-up.
+- R27: closed. `src/foundry/project_tasks.py:12-14` now separates the two: the write's own checks refuse only a
+  clash with its own task, and its atomic push, never forced, refuses any change to NOTES_BRANCH since that fetch.
+  That holds: `create_task` fetches at `:112` and pushes at `:125`, and `push_atomic`
+  (`src/foundry/project_scratch_clone.py:181-195`) pushes `refs/heads/agent-notes` without `--force`, so a commit
+  made on the remote in between makes the push non-fast-forward. PLAN.md's Docs has the same sentence.
+- R28: closed. The parametrized test is gone. AC2 now rests on
+  `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`
+  (`tests/test_project_tasks.py:147-154`), which takes one id of each kind, plus AC3's `next_task_id` test and the
+  AC1 CLI test, as PLAN.md's Tests (AC2) now says. `git grep whichever_kind` finds nothing.
+
+### Standards
+No findings. The new sentence is true of the code, as R27 above says, and matches PLAN.md's Docs word for word. No
+other docstring or doc names the removed test.
+
+### Spec
+No finding and no scope creep. The code matches PLAN.md at b31b1cd. AC1–AC11 keep round 8's table, except AC2:
+
+| AC | Tests at 0163429 |
+|---|---|
+| AC2 | `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`; `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits`; `test_create_without_a_task_creates_the_next_one` |
+| AC11 | in a throwaway clone at 0163429: `uv run ruff check .`, `ruff format --check .`, `mypy` and `pytest --cov` (97.34%) pass |
+
+### Behaviour
+No findings. Skipped: the diff changes no code that runs. The host tier passes, above.
+
+### Smells
+- `src/foundry/project_tasks.py` (module docstring): clean.
+- `tests/test_project_tasks.py:test_a_task_id_is_taken_whichever_kind_holds_it`: removed.
+
+No findings.
+
+### Names
+The diff adds no name. Its prose uses "NOTES_BRANCH", "atomic push" and "never forced", as `push_atomic`'s docstring
+does. No findings.
+
+### Summary
+- Standards: 0 findings. Spec: 0. Behaviour: 0 (skipped, no code runs). Smells: 0. Names: 0.
+- No Blocking finding and no design question. R18 stays open as a Follow-up.
+
+Verdict: approved

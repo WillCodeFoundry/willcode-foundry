@@ -411,3 +411,10 @@ https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft at 016342
 - AC1–AC11 are met by the tests round 8's table names, except AC2 as above. No human change to TASK.md waits to be
   folded in.
 Next: the reviewer's round 9 on the fix diff d73140a...0163429.
+
+## 36 · reviewer · approved
+Done: code round 9 on 0163429, the fix diff `d73140a...0163429`, in REVIEW.md. TASK.md is at ea6b764 and PLAN.md
+at b31b1cd; both were written by allowed commits. R27 and R28 are closed. In a throwaway clone at 0163429, ruff
+(check and format), mypy and `uv run pytest --cov` (97.34%) pass. No new finding, no design question, and no
+question to the architect open. No human change to TASK.md waits to be folded in.
+Next: the dev opens the pull request (PR 80 out of draft) and ends with pr-ready. R18 stays a Follow-up.
