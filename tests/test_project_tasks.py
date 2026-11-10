@@ -2,7 +2,6 @@
 and reading and listing their turns."""
 
 import contextlib
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -17,19 +16,15 @@ from foundry.project_tasks import (
     ProjectTasks,
     TaskNotFoundError,
     TaskTurn,
+    TaskTurnAndLog,
+    last_log_entry,
     log_with_handoff_entry,
 )
 from foundry.task import Status, Task
-from tests.support.machine import scripted_stand_in
-from tests.support.project_repository import git_output, project_tasks_of
+from tests.support.machine import counting_stand_in
+from tests.support.project_repository import fetch_count, git_output, project_tasks_of
 
 TEMPLATE = {"TASK.md": "# Task <id>: <title>\n", "PROGRESS.md": "# Progress\n"}
-
-
-@pytest.fixture
-def no_signing_key(git_env) -> None:
-    """Your git config, without a signing key."""
-    git_output(git_env, "config", "--global", "--unset", "user.signingkey")
 
 
 def create(project_tasks: ProjectTasks, task_id: str = "tst-0001") -> Task:
@@ -239,6 +234,95 @@ def test_a_closed_task_s_turn_is_read_from_its_closed_task_notes_dir(project_rep
 def test_a_task_that_doesn_t_exist_has_no_turn_to_read(project_repository) -> None:
     with pytest.raises(TaskNotFoundError):
         project_repository.project_tasks().fetch_task_turn("tst-0009")
+
+
+# --- fetch_task_turn_and_log ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("task_id", ["tst-0000", "cls-0000"])
+def test_a_task_s_turn_and_log_are_read_from_its_task_notes_dir(project_repository, task_id: str) -> None:
+    found = project_repository.project_tasks().fetch_task(task_id)
+    project_repository.edit_notes(
+        write={found.turn_file: "  dev \n", found.log_file: "# Log\n\n## 1 · planner · planned\nDone.\n"}
+    )
+
+    assert project_repository.project_tasks().fetch_task_turn_and_log(task_id) == TaskTurnAndLog(
+        found, "dev", "# Log\n\n## 1 · planner · planned\nDone.\n"
+    )
+
+
+TST_0000 = ".agent/tasks/open/tst-0000"
+NO_TURN = r"^task tst-0000 has no turn: agent-notes has no \.agent/tasks/open/tst-0000/TURN, or it is empty\.$"
+NO_LOG = r"^task tst-0000 has no LOG\.md: agent-notes has no file \.agent/tasks/open/tst-0000/LOG\.md$"
+
+
+@pytest.mark.parametrize(
+    "write, symlink, message",
+    [
+        ({f"{TST_0000}/LOG.md": "# Log\n"}, {}, NO_TURN),
+        ({f"{TST_0000}/TURN/dev": "dev\n", f"{TST_0000}/LOG.md": "# Log\n"}, {}, NO_TURN),
+        ({f"{TST_0000}/TURN": " \n\t", f"{TST_0000}/LOG.md": "# Log\n"}, {}, NO_TURN),
+        (
+            {f"{TST_0000}/LOG.md": "# Log\n"},
+            {f"{TST_0000}/TURN": "/etc/hostname"},
+            r"^task tst-0000's TURN is a link, and foundry reads only files: "
+            r"agent-notes has a link at \.agent/tasks/open/tst-0000/TURN$",
+        ),
+        ({f"{TST_0000}/TURN": "dev\n"}, {}, NO_LOG),
+        ({f"{TST_0000}/TURN": "dev\n", f"{TST_0000}/LOG.md/x": "x\n"}, {}, NO_LOG),
+        (
+            {f"{TST_0000}/TURN": "dev\n"},
+            {f"{TST_0000}/LOG.md": "TASK.md"},
+            r"^task tst-0000's LOG\.md is a link, and foundry reads only files: "
+            r"agent-notes has a link at \.agent/tasks/open/tst-0000/LOG\.md$",
+        ),
+    ],
+    ids=["turn-missing", "turn-dir", "turn-blank", "turn-link", "log-missing", "log-dir", "log-link"],
+)
+def test_a_malformed_task_s_turn_and_log_are_refused_naming_the_task_and_the_file(
+    project_repository, write, symlink, message
+) -> None:
+    project_repository.edit_notes(write=write, symlink=symlink)
+
+    with pytest.raises(FoundryError, match=message):
+        project_repository.project_tasks().fetch_task_turn_and_log("tst-0000")
+
+
+def test_a_task_that_doesn_t_exist_has_no_turn_and_log_to_read(project_repository) -> None:
+    with pytest.raises(TaskNotFoundError):
+        project_repository.project_tasks().fetch_task_turn_and_log("tst-0009")
+
+
+# --- last_log_entry -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "log, entry",
+    [
+        ("# Log\n", None),
+        ("", None),
+        ("# Log\n\n## x · dev · progress\n  ## 3 · dev · indented\nx ## 4 · dev\n", None),
+        (
+            "# Log\n\n## 1 · planner · planned\nDone.\n\n## 2 · dev · progress\n\nDone: a.\n\n- Asks D1 → human: b?\n",
+            "## 2 · dev · progress\n\nDone: a.\n\n- Asks D1 → human: b?",
+        ),
+        ("# Log\n\n## 12 · dev · progress\nDone.  \n \n\n\t\n", "## 12 · dev · progress\nDone."),
+        (
+            "## 1 · dev · progress\n## 2 · dev · progress\n  ## 3 · dev · x\n## x · dev\nend",
+            "## 2 · dev · progress\n  ## 3 · dev · x\n## x · dev\nend",
+        ),
+    ],
+    ids=[
+        "template",
+        "empty",
+        "no-heading-at-line-start",
+        "blank-lines-inside",
+        "trailing-blanks-multi-digit",
+        "no-final-newline",
+    ],
+)
+def test_the_last_log_entry_runs_from_the_last_heading_to_the_end_without_trailing_blanks(log, entry) -> None:
+    assert last_log_entry(log) == entry
 
 
 # --- fetch_task ---------------------------------------------------------------------
@@ -636,17 +720,15 @@ def test_listing_an_unreachable_repository_fails_with_the_message_from_git(tmp_p
 
 def test_listing_costs_one_fetch_however_many_tasks(project_repository, git_env, tmp_path: Path) -> None:
     project_repository.edit_notes(write={f".agent/tasks/open/tst-{n:04}/TURN": "dev\n" for n in range(6)})
-    log = tmp_path / "git-calls.log"
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
-    real_git = subprocess.run(["which", "git"], env=git_env, capture_output=True, text=True, check=True).stdout.strip()
-    scripted_stand_in(shim_dir, "git", f'echo "$*" >> {log}\nexec {real_git} "$@"')
+    git_calls = counting_stand_in(shim_dir, "git")
     counting_env = {**git_env, "PATH": f"{shim_dir}:{git_env['PATH']}"}
 
     found = project_repository.project_tasks(env=counting_env).fetch_open_task_turns()
 
     assert len(found) == 6
-    assert sum(" fetch " in f" {line} " for line in log.read_text().splitlines()) == 1
+    assert fetch_count(git_calls) == 1
 
 
 # --- foundry task list: the lines and the arguments -----------------------------------------

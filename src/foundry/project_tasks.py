@@ -1,5 +1,5 @@
 """ProjectTasks: the tasks of one project repository: finding, creating, closing and reopening them, reading their
-turn and handing them off, and listing the open ones with their turns.
+turn, or their turn and log, handing them off, and listing the open ones with their turns.
 
 The project repository decides a task's status, by which dir under NOTES_ROOT holds its notes: fetch_task finds it,
 every operation on one task goes through it, and callers pass task ids. There are two exceptions:
@@ -20,7 +20,7 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_scratch_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectScratchClone
-from foundry.task import BRANCH_PREFIX, CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, Status, Task
+from foundry.task import BRANCH_PREFIX, CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, TURN_FILE, Status, Task
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
@@ -50,6 +50,15 @@ class TaskTurn:
 
     task: Task
     turn: str
+
+
+@dataclass(frozen=True)
+class TaskTurnAndLog:
+    """A task, whose turn it is, and its log: the whole text of its LOG_FILE."""
+
+    task: Task
+    turn: str
+    log: str
 
 
 class ProjectTasks:
@@ -147,6 +156,22 @@ class ProjectTasks:
         """
         notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
         return _read_turn(notes_branch, _read_task(notes_branch, task_id))
+
+    def fetch_task_turn_and_log(self, task_id: str) -> TaskTurnAndLog:
+        """The task, open or closed, with its turn and its log, both from one fetch of NOTES_BRANCH.
+
+        Changes no file. FoundryError, naming the task and the file, when its TURN_FILE or LOG_FILE is a link,
+        which is never read; MissingTurnError and _read_log's error otherwise, as for fetch_task_turn and hand_off.
+        """
+        notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
+        task = _read_task(notes_branch, task_id)
+        for file_name, path in ((TURN_FILE, task.turn_file), (LOG_FILE, task.log_file)):
+            if notes_branch.is_link(path):
+                raise FoundryError(
+                    f"task {task.id}'s {file_name} is a link, and foundry reads only files: "
+                    f"{NOTES_BRANCH} has a link at {path}"
+                )
+        return TaskTurnAndLog(task, _read_turn(notes_branch, task), _read_log(notes_branch, task))
 
     def hand_off(self, task_id: str, turn: str, *, note: str | None) -> None:
         """Hand the open task off to ``turn``, in one commit pushed to NOTES_BRANCH.
@@ -273,6 +298,16 @@ def _open_task_for_dir(dir_name: str) -> Task:
         return Task(dir_name, Status.OPEN)
     except FoundryError as error:
         raise FoundryError(f"{OPEN_DIR}/{dir_name}/ is not a valid task id ({error}). Rename or remove it.") from error
+
+
+def last_log_entry(log: str) -> str | None:
+    """The last entry of ``log``: from the last line that starts as a heading to the end, without the whitespace at
+    its end. None when no line starts as a heading."""
+    lines = log.split("\n")
+    starts = [index for index, line in enumerate(lines) if _LOG_HEADING.match(line)]
+    if not starts:
+        return None
+    return "\n".join(lines[starts[-1] :]).rstrip()
 
 
 def log_with_handoff_entry(log: str, *, turn: str, note: str | None) -> str:

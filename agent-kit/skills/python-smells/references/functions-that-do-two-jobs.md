@@ -36,7 +36,7 @@ customer = shop.customer_for(order_id)
 
 ## 5.2 Flags that pick a behaviour
 
-A boolean parameter that switches the function between two jobs.
+A parameter whose value switches the function between two jobs: a boolean, or an `X | None` where `None` means "work it out yourself".
 
 Bad:
 
@@ -59,9 +59,28 @@ def gross_total(order: Order) -> Decimal:
     return net_total(order) * (1 + order.tax_rate)
 ```
 
-- **Why:** every call site reads as `total(order, True)`, and each new flag doubles the paths to test.
-- **Fine when:** the flag tunes one behaviour rather than choosing between two, such as `reverse=True` on a sort.
-- **Spot it:** Ruff `FBT001`/`FBT002` flag boolean positional parameters, though not whether the flag splits the function.
+The optional kind, bad:
+
+```python
+def send_report(report: Report, recipients: list[str] | None = None) -> None:
+    if recipients is None:
+        recipients = read_subscribers(report.topic)
+    deliver(report, recipients)
+```
+
+Better: the function takes the value, and a caller with none works it out first.
+
+```python
+def send_report(report: Report, recipients: list[str]) -> None:
+    deliver(report, recipients)
+
+
+send_report(report, read_subscribers(report.topic))
+```
+
+- **Why:** every call site reads as `total(order, True)`, and each new flag doubles the paths to test. The optional kind also hides a query inside a command.
+- **Fine when:** the flag tunes one behaviour rather than choosing between two, such as `reverse=True` on a sort. Or `None` is a default the same job uses, such as `timeout: float | None`.
+- **Spot it:** Ruff `FBT001`/`FBT002` flag boolean positional parameters, though not whether the flag splits the function. For the optional kind, look for `if x is None:` that computes `x`.
 
 ## 5.3 Arguments the callee could derive
 
