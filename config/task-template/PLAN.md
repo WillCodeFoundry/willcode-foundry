@@ -3,7 +3,7 @@
 <!-- The dev's: how it will build what TASK.md asks, approved before any code. It holds decisions, not code, and its length follows them: a one-line fix needs a three-line plan. Leave out a section the task has nothing for. -->
 
 ## Approach
-<How the change works, in a few sentences, and the alternative you turned down.>
+<How the change works, in a few sentences, and the alternative you turned down, with the acceptance criterion, design rule or ADR it would break. An alternative that breaks none is a judgement call: leave it open here, with what each option costs.>
 
 ## Steps
 1. <A refactor the change needs comes first, in commits that change no behaviour. Then the behaviour change.>

@@ -333,8 +333,8 @@ a design rule or an ADR, as the `code-review` skill says. Any role asks the
 architect the same way to write down a design rule the human stated in its
 session, and goes on; the reviewer hands the question over before the task
 closes. The architect decides each by the design rules and ADRs, asks the human
-only for a new or changed rule or ADR, or a choice that's hard to reverse,
-and answers it in `LOG.md`.
+only for a new or changed rule or ADR, a choice that's hard to reverse, or a
+judgement call no rule or ADR settles, and answers it in `LOG.md`.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

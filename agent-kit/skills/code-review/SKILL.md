@@ -35,7 +35,12 @@ git -C "$AGENT_NOTES_CHECKOUT_DIR" diff <approved commit> -- "$AGENT_TASK_NOTES_
 - **Names:** every public name and error message the plan adds or changes, by the `python-naming-smells` skill, against `GLOSSARY.md` and its _Avoid_ lists and the code already there. Blocking: as the Names bar in step 5 says.
 - **Standards:** the plan against the project's `AGENTS.md`, the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`, and its "Docs" list against the docs and docstrings of each module it changes. Each decision that follows a rule cites it. Blocking: as the Standards bar in step 5 says, or a doc the change makes untrue that the list leaves out.
 
-A plan that trips one of these triggers is a **Design question**, for the architect to approve instead: it adds or breaks a design rule or an ADR, adds or moves a module, changes an interface used outside the task, or makes a choice that's hard to reverse.
+A plan that trips one of these triggers is a **Design question**, for the architect to approve instead:
+
+- It adds or breaks a design rule or an ADR.
+- It adds or moves a module, or changes an interface used outside the task.
+- It makes a choice that's hard to reverse.
+- It turns down, or leaves open, an alternative that would meet every acceptance criterion, design rule and ADR. The choice is then a judgement call, of cost, shape, behaviour no criterion fixes, or risk, not a fact. Only criteria, rules and ADRs count: `TASK.md`'s "Risks" and "Out of scope", and how the code behaves today, describe; they don't require.
 
 Write the round as step 6 says, with the three reports, and the verdict your `ROLE.md` gives a plan round.
 
