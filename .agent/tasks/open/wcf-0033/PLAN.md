@@ -78,9 +78,10 @@ create path, with the id picked at the entry point, at the cost of a second fetc
   `.agent/tasks/open/wcf-0034/`, and the `agent-notes` commit subject `Add task wcf-0034`; the rest of "the same as
   `create PROJECT wcf-0034`" is `create_task`'s own tests, since it is the same call. Amended: R5. Because: AC1 says
   "the same as … would leave". Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
-- AC2: `tests/test_project_tasks.py`, parametrized over `wcf-0007` open, closed, or branch-only beside an open
-  `wcf-0003`: `taken_task_ids()` is `{"wcf-0003", "wcf-0007"}`; that `next_task_id` follows the highest number is
-  AC3's test. Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path. Amended: R23. Because: `next_task_id`'s rules are proved in `tests/test_task.py`.
+- AC2: AC1's `taken_task_ids` test in `tests/test_project_tasks.py`, which takes one id of each kind, shows that
+  open, closed and branch-only ids are all taken; that `next_task_id` follows the highest number is AC3's test.
+  Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path. Amended: R23. Because: `next_task_id`'s rules are proved in `tests/test_task.py`. Amended: R28. Because: the parametrized test repeated
+  AC1's, so it is dropped.
 - AC3: `tests/test_task.py`, `next_task_id` parametrized: `wcf-0041` → `wcf-0042`, `wcf-9999` → `wcf-10000`,
   `wcf-00041` → `wcf-0042`; also `wcf-0001`, `wcf-0005` → `wcf-0006` (OS3).
 - AC4: `tests/test_project_tasks.py`, branches `task/spike` and `task/WCF-0099` and a notes dir `spike` beside
@@ -135,9 +136,10 @@ create path, with the id picked at the entry point, at the cost of a second fetc
   `task.py`'s row (`ARCHITECTURE.md:29`) adds "and `next_task_id`, which picks the next task id from the taken
   ones". Amended: R2. Because: the codemap is where a reader looks for it.
 - Docstrings: `project_tasks.py`'s module adds, after "so it writes on what it read": "A write may follow a
-  separate, earlier read, such as taken_task_ids before create_task. The write fetches again, and its own checks and
-  atomic push refuse only a change that clashes with its own task." Amended: D3. Because: the human's review of
-  83a4dfc. Amended: R21. Because: a task created in between under another id is not refused. `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
+  separate, earlier read, such as taken_task_ids before create_task. The write fetches again. Its own checks refuse
+  only a change that clashes with its own task, and its atomic push, never forced, refuses any change to NOTES_BRANCH
+  since that fetch." Amended: D3. Because: the human's review of
+  83a4dfc. Amended: R21. Because: a task created in between under another id is not refused. Amended: R27. Because: the push refuses any change since the write's own fetch, not only a clash. `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
   dir under OPEN_DIR from one fetch" (`:5-6`) adds `taken_task_ids` as a second exception, which takes no id and
   reads the dirs under `OPEN_DIR` and `CLOSED_DIR` from one fetch of `NOTES_BRANCH`, and the task branches from the
   remote's branch list, Amended: R3, R11. Because: the sentence becomes untrue otherwise, and the branches come from

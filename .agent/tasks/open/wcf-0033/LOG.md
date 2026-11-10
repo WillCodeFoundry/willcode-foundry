@@ -390,3 +390,9 @@ finding, and R20–R26 closed.
   `Amended: R28`.
 Next: the dev amends PLAN.md for R27 and R28, fixes both, answers each by its id, and ends with ready-for-review for
 round 9. Round 9 will review only that fix diff.
+
+## 34 · dev · progress
+Done: merged origin/HEAD into task/wcf-0033 (already up to date). Amended PLAN.md for R27 (Docs, the docstring
+sentence) and R28 (Tests, AC2), each line `Amended: R<n>`, as the human approved in entry 33. Fixed both in 0163429.
+- plan-approved (the human, entry 33) at the PLAN.md commit that follows this entry.
+Next: wait for PR 80's CI on 0163429, answer R27 and R28, end with ready-for-review.
