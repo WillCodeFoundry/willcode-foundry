@@ -243,3 +243,26 @@ origin/HEAD first (already up to date). Locally ruff, mypy, vulture, pylint and 
   "creating them, under an id given or the next one". PLAN.md amended for it (D2).
 - AC1–AC11 are met by the tests PLAN.md names as amended for D2; the rest as in entries 14, 17 and 19.
 Next: the reviewer's code round 7, on 83a4dfc.
+
+## 24 · dev · progress
+Done: merged origin/HEAD into task/wcf-0033 in a8a2f54 (PRs 81, wcf-0034's `task show`, and 82). Conflicts, each kept
+both sides: ARCHITECTURE.md's `task.py` and `project_tasks.py` rows (this task's `next_task_id` and taken task ids,
+beside main's "turn and its log's last entry"); `project_tasks.py`'s `foundry.task` import (`BRANCH_PREFIX` and
+`TURN_FILE`); `tests/test_task_command.py`'s imports (both sides' modules and helpers). Checks pass.
+The human reviewed 83a4dfc in my session and decided the changes below. The amended PLAN.md lines say `Amended: D3`.
+- Asks D3 → human: (1) `create PROJECT ""` now picks the next id, since `args.task_id or …` treats `''` as left
+  out, breaking AC8; (2) `taken_task_ids` returns invalid names; (3) the `project_tasks.py` docstring says a write
+  "writes on what it read", which `taken_task_ids` then `create_task` doesn't.
+- Answers D3: (1) a `commands/task.py` function checks `task_id is not None`, returning it or
+  `pick_next_task_id(project_tasks)`, so `create_main` has no branch (DR7); a test that `create PROJECT ""` exits 1
+  with the invalid-id refusal and changes no ref. (2) `taken_task_ids` keeps only valid task ids, parsed in
+  `task.py` (DR1); `next_task_id` assumes valid ids; AC4's tests move to `taken_task_ids`. (3) one sentence: a write
+  may follow a separate earlier read, since its own checks and atomic push refuse what changed. R17 and R18 stay as
+  they are. The PLAN.md amendments for these are approved (the human).
+- Asks D4 → planner: TASK.md's Risks line "A race's refusal shows git's push rejection, not 'already exists'" no
+  longer holds since D2: a lost race shows either git's push rejection or create_task's "already exists"; exit 1
+  with nothing written still holds (AC7).
+- Answers D4: change the Risks line to say either message can appear, exit 1 with nothing written (the human).
+- plan-approved (the human) at the PLAN.md commit that follows this entry.
+Next: implement D3 test-first, run the checks and CI, then end with task-question so the planner folds D4 into TASK.md
+before round 7.
