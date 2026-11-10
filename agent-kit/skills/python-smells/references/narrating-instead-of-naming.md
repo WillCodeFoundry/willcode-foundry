@@ -99,7 +99,7 @@ def issue(refund: Refund) -> None:
 
 ## 8.4 Docs that list what the module holds
 
-A module or class docstring that lists its functions, its operations or what every caller gets back. Each change to the module makes it a little less true, and the diff that does so doesn't touch it.
+A module or class docstring that lists its functions, its operations or what every caller gets back. Each change to the module makes it a little less true, and the diff that does so doesn't touch it. A diff that does touch it, adding the new item to keep the list true, is the same smell: the list only grows.
 
 Bad:
 
@@ -123,4 +123,4 @@ Better:
 
 - **Why:** the list is a second copy of the module's contents, and nothing makes the two change together. A reader trusts the summary over the code below it.
 - **Fine when:** the list is generated, or a test checks it against the code.
-- **Spot it:** for each module or class the diff changes, read its docstring whole, even when the diff leaves it alone. Check every "and", every count and every "Callers …" against the code at `HEAD`. A diff that adds to such a list to keep it true has the smell too: cut the list to the module's purpose instead.
+- **Spot it:** for each module or class the diff changes, read its docstring whole, even when the diff leaves it alone. Check every "and", every count and every "Callers …" against the code at `HEAD`. A docstring line the diff adds that names one function, such as an exception to "Callers pass …", is a cue too.
