@@ -64,7 +64,7 @@ class Task:
     status: Status
 
     def __post_init__(self) -> None:
-        _require_task_id(self.id)
+        _parse_task_id(self.id)
 
     @classmethod
     def as_open(cls, task_id: str) -> "Task":
@@ -105,7 +105,7 @@ def is_task_id(name: str) -> bool:
     return _TASK_ID.fullmatch(name) is not None
 
 
-def _require_task_id(task_id: str) -> re.Match[str]:
+def _parse_task_id(task_id: str) -> re.Match[str]:
     """``task_id`` parsed into its task prefix and number; FoundryError when it isn't a task id."""
     match = _TASK_ID.fullmatch(task_id)
     if match is None:
@@ -126,7 +126,7 @@ def next_task_id(taken_ids: Iterable[str]) -> str:
     NoNextTaskIdError when no task id is taken, or task prefixes tie for the most; FoundryError for a name in
     ``taken_ids`` that isn't a task id.
     """
-    matches = [_require_task_id(taken_id) for taken_id in set(taken_ids)]
+    matches = [_parse_task_id(taken_id) for taken_id in set(taken_ids)]
     task_prefixes = Counter(match["task_prefix"] for match in matches)
     if not task_prefixes:
         raise NoNextTaskIdError("the project repository has no task id to follow")
