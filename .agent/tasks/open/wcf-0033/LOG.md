@@ -293,3 +293,13 @@ refuses with either git's push rejection or "task … already exists", and eithe
 own written. It ends `Amended: D4`. AC7 and OS5 still hold as they are, and no other line changed.
 - Answers D4: TASK.md amended in ea6b764 (Risks); no criterion changed.
 Next: the dev ends with ready-for-review so the reviewer runs code round 7 on 8825173, which covers D2, D3 and D4.
+
+## 27 · dev · ready-for-review
+Done: merged origin/HEAD into task/wcf-0033 (already up to date, no new commit). Locally ruff (check and format),
+mypy, vulture, pylint and `uv run pytest --cov` (97.34%) pass on 8825173; PR
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft at 8825173 and its CI passes (lint, mypy,
+sandbox-image, test 3.11 and 3.14). TASK.md holds D4 since ea6b764; no other human-decided change is pending.
+- Commits after round 6's approval of 59c516a: 83a4dfc (D2), a8a2f54 (merge of origin/HEAD, conflicts listed in
+  entry 24), 8825173 (D3).
+- AC1–AC11 are met by the tests PLAN.md names as amended for D2 and D3, as entries 23 and 25 list.
+Next: the reviewer's code round 7 on 8825173, covering D2, D3, the merge in a8a2f54, and TASK.md's D4 amendment.
