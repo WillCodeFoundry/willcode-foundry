@@ -1,4 +1,4 @@
-"""Tasks on a project's repository: what a task's names are, and the task template.
+"""Tasks on a project's repository: what a task's names are, how the next task id is picked, and the task template.
 
 Task is the one place a task's names are spelled out. They reach the agent kit as session
 variables (session.session_variables), so the kit derives none itself, and
@@ -6,6 +6,8 @@ tests/test_task_contract.py holds the kit, AGENTS.md and the rulesets to them.
 """
 
 import re
+from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -31,9 +33,12 @@ HUMAN: Final = "human"
 # says. The runtime's git hooks spell it too, as their own LOG_FILE.
 LOG_FILE: Final = "LOG.md"
 
-# A task id: lowercase ASCII letters, '-', then four or more digits, such as wcf-0042. It is also a valid ref
-# component, so task/<id> is always a valid branch.
-_TASK_ID = re.compile(r"[a-z]+-[0-9]{4,}")
+# Each task's branch is this, then its id (Task.branch).
+BRANCH_PREFIX: Final = "task/"
+
+# A task id: a task prefix of lowercase ASCII letters, '-', then a number of four or more digits, such as wcf-0042.
+# It is also a valid ref component, so task/<id> is always a valid branch.
+_TASK_ID = re.compile(r"(?P<task_prefix>[a-z]+)-(?P<number>[0-9]{4,})")
 
 
 class Status(Enum):
@@ -59,11 +64,7 @@ class Task:
     status: Status
 
     def __post_init__(self) -> None:
-        if not _TASK_ID.fullmatch(self.id):
-            raise FoundryError(
-                f"task id {self.id!r} is not valid: "
-                "use lowercase letters, '-', then four or more digits (e.g. wcf-0042)"
-            )
+        _parse_task_id(self.id)
 
     @classmethod
     def as_open(cls, task_id: str) -> "Task":
@@ -76,7 +77,7 @@ class Task:
     @property
     def branch(self) -> str:
         """The task's branch, where the code is written."""
-        return f"task/{self.id}"
+        return f"{BRANCH_PREFIX}{self.id}"
 
     @property
     def task_notes_dir(self) -> str:
@@ -97,6 +98,47 @@ class Task:
     def log_file(self) -> str:
         """The task's LOG_FILE on NOTES_BRANCH, relative to the repository root."""
         return f"{self.task_notes_dir}/{LOG_FILE}"
+
+
+def is_task_id(name: str) -> bool:
+    """Whether ``name`` is a task id: a task prefix of lowercase ASCII letters, '-', then four or more digits."""
+    return _TASK_ID.fullmatch(name) is not None
+
+
+def _parse_task_id(task_id: str) -> re.Match[str]:
+    """``task_id`` parsed into its task prefix and number; FoundryError when it isn't a task id."""
+    match = _TASK_ID.fullmatch(task_id)
+    if match is None:
+        raise FoundryError(
+            f"task id {task_id!r} is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)"
+        )
+    return match
+
+
+class NoNextTaskIdError(FoundryError):
+    """No next task id can be picked: no task id is taken, or task prefixes tie for the most ids."""
+
+
+def next_task_id(taken_ids: Iterable[str]) -> str:
+    """The task id after ``taken_ids``: the task prefix most of them use, and one more than its highest number.
+
+    Each id is counted once, and ids with other task prefixes are ignored. The number has at least four digits.
+    NoNextTaskIdError when no task id is taken, or task prefixes tie for the most; FoundryError for a name in
+    ``taken_ids`` that isn't a task id.
+    """
+    matches = [_parse_task_id(taken_id) for taken_id in set(taken_ids)]
+    task_prefixes = Counter(match["task_prefix"] for match in matches)
+    if not task_prefixes:
+        raise NoNextTaskIdError("the project repository has no task id to follow")
+    most = max(task_prefixes.values())
+    tied = sorted(task_prefix for task_prefix, count in task_prefixes.items() if count == most)
+    if len(tied) > 1:
+        raise NoNextTaskIdError(
+            f"the project repository's task ids tie for the most common task prefix: {', '.join(tied)}"
+        )
+    task_prefix = tied[0]
+    number = max(int(match["number"]) for match in matches if match["task_prefix"] == task_prefix) + 1
+    return f"{task_prefix}-{number:04d}"
 
 
 def load_task_template(task_template_dir: Path) -> dict[str, str]:

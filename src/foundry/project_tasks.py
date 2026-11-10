@@ -2,11 +2,16 @@
 turn, or their turn and log, handing them off, and listing the open ones with their turns.
 
 The project repository decides a task's status, by which dir under NOTES_ROOT holds its notes: fetch_task finds it,
-every operation on one task goes through it, and callers pass task ids. Listing is the exception: it reads every dir
-under OPEN_DIR from one fetch, since fetch_task would fetch once per task.
+every operation on one task goes through it, and callers pass task ids. There are two exceptions:
+- Listing reads every dir under OPEN_DIR from one fetch, since fetch_task would fetch once per task.
+- taken_task_ids takes no id. It reads the dirs under OPEN_DIR and CLOSED_DIR from one fetch of NOTES_BRANCH, and
+  the task branches from the remote's branch list.
 
 Finding and reading only fetch NOTES_BRANCH and read what was fetched: they change no file. An operation that writes
 checks out the fetched NOTES_BRANCH itself, after every check that can refuse it, so it writes on what it read.
+A write may follow a separate, earlier read, such as taken_task_ids before create_task. The write fetches again. Its own
+checks refuse only a change that clashes with its own task, and its atomic push, never forced, refuses any change to
+NOTES_BRANCH since that fetch.
 """
 
 import re
@@ -18,7 +23,18 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_scratch_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectScratchClone
-from foundry.task import CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, TURN_FILE, Status, Task
+from foundry.task import (
+    BRANCH_PREFIX,
+    CLOSED_DIR,
+    HUMAN,
+    LOG_FILE,
+    NOTES_BRANCH,
+    OPEN_DIR,
+    TURN_FILE,
+    Status,
+    Task,
+    is_task_id,
+)
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
@@ -108,6 +124,19 @@ class ProjectTasks:
         clone.commit(f"Add task {new_task.id}")
         clone.push_atomic(from_remote={new_task.branch: default_branch}, from_local=[NOTES_BRANCH])
         return new_task
+
+    def taken_task_ids(self) -> frozenset[str]:
+        """The task ids taken in the project repository. Names that aren't task ids are left out.
+
+        They are the dirs under OPEN_DIR and CLOSED_DIR, from one fetch of NOTES_BRANCH (none before the first
+        task), and each task branch, with BRANCH_PREFIX cut off. Changes no file.
+        """
+        branches = self._clone.branches()
+        taken = {branch.removeprefix(BRANCH_PREFIX) for branch in branches if branch.startswith(BRANCH_PREFIX)}
+        if NOTES_BRANCH in branches:
+            notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
+            taken |= {*_read_task_ids(notes_branch, OPEN_DIR), *_read_task_ids(notes_branch, CLOSED_DIR)}
+        return frozenset(filter(is_task_id, taken))
 
     def close_task(self, task_id: str) -> Task:
         """Move the open task's notes dir to the closed ones, in one commit pushed to NOTES_BRANCH.

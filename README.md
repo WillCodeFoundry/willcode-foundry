@@ -30,7 +30,7 @@ $ uv run foundry task create tkt-store wcf-0042   # create the task: its branch,
 $ uv run foundry run tkt-store wcf-0042           # start the role whose turn it is
 ```
 
-A task id is lowercase ASCII letters, `-`, then four or more digits, such as `wcf-0042`. foundry refuses any other id, and never changes its case. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
+A task id is a task prefix of lowercase ASCII letters, `-`, then a number of four or more digits, such as `wcf-0042`. foundry refuses any other id, and never changes its case. Write the task in its `TASK.md` on the `agent-notes` branch, or start the planner, which drafts it with you and writes it once you approve. `uv tool install --editable .` puts `foundry` on your PATH.
 
 A task passes from role to role: planner, dev, reviewer, then back to the dev for the pull request. `TASK.md` says what the task does; before any code, the dev writes how it will build it in `PLAN.md`, which the reviewer approves in a plan round, or you do when you're in the dev's session. A plan that changes how the code is structured, or a finding whose fix would break a design rule or an ADR, goes to the architect, who decides it by the design rules and ADRs, and asks you only for a new or changed rule or ADR, or a choice that's hard to reverse. [ADR 0015](docs/adr/0015-the-dev-plans-before-code.md) says why. Each role ends its turn with an outcome, and the table in [`agent-kit/AGENTS.md`](agent-kit/AGENTS.md#taking-turns) says which role that leads to. Its `TURN` file on `agent-notes` names whose turn it is, or `human` when the task waits for you, with the question at the end of its `LOG.md`, which `foundry task show` prints. `foundry task list` shows every open task's turn at once.
 
@@ -43,7 +43,7 @@ When you write `TASK.md` yourself, you take the planner's place. Hand it off to 
 | Command | What it does |
 |---|---|
 | `foundry run PROJECT [ROLE] TASK` | Starts the sandbox for a role on a task, or re-attaches to it. Without ROLE, the role whose turn it is. |
-| `foundry task create PROJECT TASK` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. |
+| `foundry task create PROJECT [TASK]` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. Without TASK, the next task id: the task prefix most of the project's task ids use, and one more than the highest number taken with it. Ids with other task prefixes are ignored. |
 | `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
 | `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
 | `foundry task handoff PROJECT TASK ROLE` | Hands the open task off to ROLE, or `human`: writes `TURN` and appends a `human · handoff` entry to `LOG.md`. `--note TEXT` adds one line to it. |

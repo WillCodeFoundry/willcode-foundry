@@ -74,6 +74,56 @@ def test_task_ids_not_matching_the_pattern_are_refused_as_given(build, task_id: 
     )
 
 
+# --- next_task_id ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "taken_ids, next_id",
+    [
+        (["wcf-0041"], "wcf-0042"),
+        (["wcf-9999"], "wcf-10000"),
+        (["wcf-00041"], "wcf-0042"),
+        (["wcf-0001", "wcf-0005"], "wcf-0006"),  # gaps are never reused
+    ],
+)
+def test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits(taken_ids, next_id: str) -> None:
+    assert task.next_task_id(taken_ids) == next_id
+
+
+def test_a_taken_name_that_isn_t_a_task_id_is_refused() -> None:
+    with pytest.raises(FoundryError, match=r"^task id 'spike' is not valid: "):
+        task.next_task_id(["wcf-0005", "spike"])
+
+
+def test_the_most_common_task_prefix_wins_and_the_other_task_prefix_s_higher_number_is_ignored() -> None:
+    assert task.next_task_id(["wcf-0001", "wcf-0002", "sbx-0050"]) == "wcf-0003"
+
+
+def test_each_id_is_counted_once() -> None:
+    assert task.next_task_id(["wcf-0001", "wcf-0001", "wcf-0001", "sbx-0050", "sbx-0051"]) == "sbx-0052"
+
+
+@pytest.mark.parametrize(
+    "taken_ids, message",
+    [
+        ([], "the project repository has no task id to follow"),
+        (
+            ["abc-0001", "wcf-0002"],
+            "the project repository's task ids tie for the most common task prefix: abc, wcf",
+        ),
+        (
+            ["abc-0001", "wcf-0002", "xyz-0003", "xyz-0004", "wcf-0005"],
+            "the project repository's task ids tie for the most common task prefix: wcf, xyz",
+        ),
+    ],
+    ids=["none", "tie", "tie-of-two-of-three"],
+)
+def test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie(taken_ids, message: str) -> None:
+    with pytest.raises(task.NoNextTaskIdError) as error:
+        task.next_task_id(taken_ids)
+    assert str(error.value) == message
+
+
 # --- load_task_template ----------------------------------------------------------------
 
 

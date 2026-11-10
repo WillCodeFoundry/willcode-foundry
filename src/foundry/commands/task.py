@@ -17,19 +17,28 @@ from foundry.project_tasks import ProjectTasks, TaskTurn, TaskTurnAndLog, last_l
 def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     parser = subparsers.add_parser("task", help="create, close, reopen, hand off, show and list tasks on projects")
     actions = parser.add_subparsers(dest="action", required=True)
-    # The arguments every action takes.
-    task_arguments = argparse.ArgumentParser(add_help=False)
-    task_arguments.add_argument(
+    # The arguments every action on one task takes: its project, then the task, which create alone may leave out.
+    project_argument = argparse.ArgumentParser(add_help=False)
+    project_argument.add_argument(
         "project_name", metavar="PROJECT", help="project name, as listed in config/foundry.yaml"
     )
+    task_arguments = argparse.ArgumentParser(add_help=False, parents=[project_argument])
     task_arguments.add_argument("task_id", metavar="TASK", help="task id, e.g. wcf-0042")
     create = actions.add_parser(
         "create",
-        parents=[task_arguments],
+        parents=[project_argument],
         help=f"create task/TASK from the default branch, and {task.OPEN_DIR}/TASK/ on {task.NOTES_BRANCH} "
         "from config/task-template/",
         description="Uses git, with your own access to the project's repository. "
-        "Refuses a task that already exists, open or closed.",
+        "Refuses a task that already exists, open or closed. Without TASK, refuses when the project has no task id "
+        "yet, or when task prefixes tie for the most task ids.",
+    )
+    create.add_argument(
+        "task_id",
+        metavar="TASK",
+        nargs="?",
+        help="task id, e.g. wcf-0042 (default: the next id with the task prefix most of the project's task ids use; "
+        "ids with other task prefixes are ignored)",
     )
     create.set_defaults(func=create_main)
     close = actions.add_parser(
@@ -91,9 +100,25 @@ def create_main(args: argparse.Namespace) -> int:
     project = config.load(foundry_root).project(args.project_name)
     template = task.load_task_template(paths.task_template_dir(foundry_root))
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        created = project_tasks.create_task(args.task_id, template)
+        created = project_tasks.create_task(task_id_to_create(project_tasks, args.task_id), template)
     print("\n".join(report(CREATED, project.name, created)))
     return 0
+
+
+def task_id_to_create(project_tasks: ProjectTasks, task_id: str | None) -> str:
+    """The id of the task create makes: ``task_id`` as given, even when not valid, or, when it is None, the next."""
+    return task_id if task_id is not None else pick_next_task_id(project_tasks)
+
+
+def pick_next_task_id(project_tasks: ProjectTasks) -> str:
+    """The project's next task id, from the ids its tasks and task branches take.
+
+    When none can be picked, the FoundryError says to give TASK.
+    """
+    try:
+        return task.next_task_id(project_tasks.taken_task_ids())
+    except task.NoNextTaskIdError as error:
+        raise FoundryError(f"{error}. Give TASK to say which task to create.") from error
 
 
 def close_main(args: argparse.Namespace) -> int:

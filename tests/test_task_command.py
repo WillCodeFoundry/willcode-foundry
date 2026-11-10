@@ -1,6 +1,8 @@
 """The `foundry task` commands: their reports, arguments and checks, and end to end through cli.main."""
 
+import os
 import re
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -25,10 +27,10 @@ from foundry.commands.task import (
 from foundry.config import Config, Project, Role
 from foundry.errors import FoundryError
 from foundry.project_tasks import TaskTurn, TaskTurnAndLog
-from foundry.task import Task
+from foundry.task import CLOSED_DIR, OPEN_DIR, Task
 from tests.support import ProcessEnvironment
 from tests.support.foundry_root import write_foundry
-from tests.support.machine import counting_stand_in
+from tests.support.machine import counting_stand_in, scripted_stand_in
 from tests.support.project_repository import ProjectRepository, fetch_count, git_output
 
 # --- the command ------------------------------------------------------------------
@@ -61,6 +63,21 @@ def test_the_report_says_what_was_done_and_what_comes_next(outcome: Outcome, cha
 def test_create_takes_a_project_and_a_task() -> None:
     args = cli.build_parser().parse_args(["task", "create", "store", "tst-0001"])
     assert (args.project_name, args.task_id) == ("store", "tst-0001")
+
+
+def test_create_s_task_is_optional_and_its_help_says_what_is_picked_without_it(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.build_parser().parse_args(["task", "create", "store"]).task_id is None
+
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["task", "create", "--help"])
+    usage = " ".join(capsys.readouterr().out.split())
+    assert "PROJECT [TASK]" in usage
+    assert (
+        "task id, e.g. wcf-0042 (default: the next id with the task prefix most of the project's task ids use; "
+        "ids with other task prefixes are ignored)" in usage
+    )
 
 
 @pytest.mark.parametrize("action", ["close", "reopen"])
@@ -103,6 +120,124 @@ def test_create_close_and_reopen_print_what_they_did_or_an_error_and_exit_accord
     ]:
         assert cli.main(["task", action, "store", task_id]) == 1
         assert capsys.readouterr() == ("", f"error: {error}\n")
+
+
+# --- foundry task create without TASK ---------------------------------------------------------
+
+
+@pytest.fixture
+def foundry_of_store(project_repository, enter_foundry, tmp_path: Path) -> Path:
+    """A foundry of its own, entered, with project store and a task template holding one TASK.md."""
+    foundry_root = write_foundry(tmp_path / "foundry", {"store": project_repository.path})
+    (foundry_root / "config" / "task-template").mkdir()
+    (foundry_root / "config" / "task-template" / "TASK.md").write_text("# Task\n")
+    enter_foundry(foundry_root)
+    return foundry_root
+
+
+def test_create_without_a_task_creates_the_next_one(
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_repository.edit_notes(
+        write={f"{OPEN_DIR}/wcf-0030/TASK.md": "x\n", f"{CLOSED_DIR}/wcf-0032/TASK.md": "x\n"},
+        remove=project_repository.seeded_task_notes_dirs,
+    )
+    project_repository.git("branch", "task/wcf-0033", "main")
+
+    assert cli.main(["task", "create", "store"]) == 0
+
+    assert capsys.readouterr() == ("created task wcf-0034 in store\nrun it with: foundry run store wcf-0034\n", "")
+    assert project_repository.head("task/wcf-0034") == project_repository.head("main")
+    assert project_repository.notes_files()[f"{OPEN_DIR}/wcf-0034/TASK.md"] == "# Task\n"
+    assert project_repository.notes_commits()[0] == "Add task wcf-0034"
+
+
+def take_no_task_id(project_repository) -> None:
+    project_repository.git("branch", "--quiet", "-D", "agent-notes")
+
+
+def tie_two_task_prefixes(project_repository) -> None:
+    project_repository.edit_notes(
+        write={f"{CLOSED_DIR}/wcf-0002/TASK.md": "x\n"}, remove=project_repository.seeded_task_notes_dirs
+    )
+    project_repository.git("branch", "task/abc-0001", "main")
+
+
+@pytest.mark.parametrize(
+    "leave_no_next_task_id, error",
+    [
+        (take_no_task_id, "the project repository has no task id to follow"),
+        (tie_two_task_prefixes, "the project repository's task ids tie for the most common task prefix: abc, wcf"),
+    ],
+    ids=["no-task-id", "tie"],
+)
+def test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_nothing(
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str], leave_no_next_task_id, error: str
+) -> None:
+    leave_no_next_task_id(project_repository)
+    refs_before = project_repository.git("for-each-ref")
+
+    assert cli.main(["task", "create", "store"]) == 1
+
+    assert capsys.readouterr() == ("", f"error: {error}. Give TASK to say which task to create.\n")
+    assert project_repository.git("for-each-ref") == refs_before
+
+
+def test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing(
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str]
+) -> None:
+    refs_before = project_repository.git("for-each-ref")
+
+    assert cli.main(["task", "create", "store", ""]) == 1
+
+    assert capsys.readouterr() == (
+        "",
+        "error: task id '' is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)\n",
+    )
+    assert project_repository.git("for-each-ref") == refs_before
+
+
+def test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winner_s(
+    project_repository, foundry_of_store, process_environment, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both creates pick wcf-0031. A git stand-in runs the competing create just before this one's push.
+
+    The competitor commits at another date: two creates in the same second, by the same identity, make the same
+    commit, and the second push changes nothing."""
+    project_repository.edit_notes(
+        write={f"{OPEN_DIR}/wcf-0030/TASK.md": "x\n"}, remove=project_repository.seeded_task_notes_dirs
+    )
+    notes_before = project_repository.notes_head()
+    bin_dir, tips = tmp_path / "bin", tmp_path / "winner-tips"
+    bin_dir.mkdir()
+    real_path = os.environ["PATH"]  # git_env's, as enter_foundry set it
+    scripted_stand_in(
+        bin_dir,
+        "git",
+        f"""case " $* " in *" push "*)
+  if [ ! -e {tips} ]; then
+    PATH={real_path} GIT_COMMITTER_DATE=2001-01-01T00:00:00Z {sys.executable} -m foundry.cli task create store \
+      >/dev/null 2>&1
+    git --git-dir={project_repository.path} rev-parse agent-notes task/wcf-0031 > {tips}
+  fi ;;
+esac
+PATH={real_path} exec git "$@"
+""",
+    )
+    process_environment.set_env({"PATH": f"{bin_dir}:{real_path}"})
+
+    assert cli.main(["task", "create", "store"]) == 1
+
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert printed.err.startswith("error: ")
+    winner_notes, winner_branch = tips.read_text().split()
+    assert project_repository.git("rev-parse", f"{project_repository.notes_head()}^") == notes_before
+    assert (project_repository.notes_head(), project_repository.head("task/wcf-0031")) == (winner_notes, winner_branch)
+    assert project_repository.git("for-each-ref", "--format=%(refname)", "refs/heads/task/").splitlines() == [
+        "refs/heads/task/wcf-0031"
+    ]
+    assert [path for path in project_repository.notes_files() if "wcf-0031" in path] == [f"{OPEN_DIR}/wcf-0031/TASK.md"]
 
 
 # --- foundry task list: the lines and the arguments -----------------------------------------

@@ -26,8 +26,8 @@ A launch, end to end:
 | `cli.py` | The `foundry` command; it prints the errors foundry's code raises, and shows its progress on stderr. |
 | `commands/` | One module per subcommand: `run`, `task`, `repo`, `prune`, `skills`. Each builds its real dependencies in a composition root and passes them to the code that uses them, so the tests can pass fakes instead (design rule 7). |
 | `session.py` | Names the sandbox, creates its session once, reads it back, and refuses one that no longer matches. `session_variables` derives what a sandbox is told. |
-| `task.py` | `Task` and its `Status`: the one place a task's names are spelled, open and closed paths included. |
-| `project_tasks.py` | `ProjectTasks`: finding a project's tasks by id, with the status their notes dir gives them; creating, closing and reopening them; reading a task's turn, or its turn and its log's last entry, and handing it off; listing the open tasks with their turns. |
+| `task.py` | `Task` and its `Status`: the one place a task's names are spelled, open and closed paths included; and `next_task_id`, which picks the next task id from the taken ones. |
+| `project_tasks.py` | `ProjectTasks`: finding a project's tasks by id, with the status their notes dir gives them; creating, closing and reopening them; reading the task ids their notes and task branches take; reading a task's turn, or its turn and its log's last entry, and handing it off; listing the open tasks with their turns. |
 | `project_scratch_clone.py` | `ProjectScratchClone`: the scratch clone `foundry task` commits and pushes from, and lists and reads a fetched branch's files from. |
 | `runtime_build.py` | Builds the runtime into the kit, replacing it only when it changed. |
 | `repo_policy.py`, `github.py` | `foundry repo check`: compares each project's repository with the repo policy, through `gh`. |
