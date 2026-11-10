@@ -9,6 +9,8 @@ every operation on one task goes through it, and callers pass task ids. There ar
 
 Finding and reading only fetch NOTES_BRANCH and read what was fetched: they change no file. An operation that writes
 checks out the fetched NOTES_BRANCH itself, after every check that can refuse it, so it writes on what it read.
+A write may follow a separate, earlier read, such as taken_task_ids before create_task: the write's own checks and its
+atomic push refuse what changed in between.
 """
 
 import re
@@ -20,7 +22,18 @@ from pathlib import Path
 
 from foundry.errors import FoundryError
 from foundry.project_scratch_clone import BranchNotFoundError, FetchedBranch, PathNotOnBranchError, ProjectScratchClone
-from foundry.task import BRANCH_PREFIX, CLOSED_DIR, HUMAN, LOG_FILE, NOTES_BRANCH, OPEN_DIR, TURN_FILE, Status, Task
+from foundry.task import (
+    BRANCH_PREFIX,
+    CLOSED_DIR,
+    HUMAN,
+    LOG_FILE,
+    NOTES_BRANCH,
+    OPEN_DIR,
+    TURN_FILE,
+    Status,
+    Task,
+    is_task_id,
+)
 
 # A log entry's heading: "## <number> · <role> · <progress or outcome>", the number captured.
 _LOG_HEADING = re.compile(r"## ([0-9]+) · ")
@@ -112,7 +125,7 @@ class ProjectTasks:
         return new_task
 
     def taken_task_ids(self) -> frozenset[str]:
-        """The names that take a task id, valid or not; next_task_id ignores those that aren't task ids.
+        """The task ids taken in the project repository, for next_task_id. Names that aren't task ids are left out.
 
         They are the dirs under OPEN_DIR and CLOSED_DIR, from one fetch of NOTES_BRANCH (none before the first
         task), and each task branch, with BRANCH_PREFIX cut off. Changes no file.
@@ -122,7 +135,7 @@ class ProjectTasks:
         if NOTES_BRANCH in branches:
             notes_branch = self._clone.fetch_branch(NOTES_BRANCH)
             taken |= {*_read_task_ids(notes_branch, OPEN_DIR), *_read_task_ids(notes_branch, CLOSED_DIR)}
-        return frozenset(taken)
+        return frozenset(filter(is_task_id, taken))
 
     def close_task(self, task_id: str) -> Task:
         """Move the open task's notes dir to the closed ones, in one commit pushed to NOTES_BRANCH.

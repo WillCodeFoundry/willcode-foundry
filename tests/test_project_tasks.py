@@ -171,12 +171,13 @@ def test_the_highest_taken_number_counts_whichever_kind_holds_it(
     assert task.next_task_id(project_repository.project_tasks().taken_task_ids()) == "wcf-0008"
 
 
-def test_task_branches_that_aren_t_task_ids_are_ignored(project_repository) -> None:
+def test_names_that_aren_t_task_ids_are_not_taken_task_ids(project_repository) -> None:
     take_task_ids(project_repository, open_ids=["wcf-0005"])
+    project_repository.edit_notes(write={f"{task.OPEN_DIR}/spike/TASK.md": "spike\n"})
     project_repository.git("branch", "task/spike", "main")
     project_repository.git("branch", "task/WCF-0099", "main")
 
-    assert task.next_task_id(project_repository.project_tasks().taken_task_ids()) == "wcf-0006"
+    assert project_repository.project_tasks().taken_task_ids() == {"wcf-0005"}
 
 
 def test_the_task_prefix_most_task_ids_use_is_followed(project_repository) -> None:

@@ -183,6 +183,20 @@ def test_create_without_a_task_that_can_t_pick_one_says_to_give_it_and_changes_n
     assert project_repository.git("for-each-ref") == refs_before
 
 
+def test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing(
+    project_repository, foundry_of_store, capsys: pytest.CaptureFixture[str]
+) -> None:
+    refs_before = project_repository.git("for-each-ref")
+
+    assert cli.main(["task", "create", "store", ""]) == 1
+
+    assert capsys.readouterr() == (
+        "",
+        "error: task id '' is not valid: use lowercase letters, '-', then four or more digits (e.g. wcf-0042)\n",
+    )
+    assert project_repository.git("for-each-ref") == refs_before
+
+
 def test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winner_s(
     project_repository, foundry_of_store, process_environment, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

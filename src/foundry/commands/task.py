@@ -100,10 +100,14 @@ def create_main(args: argparse.Namespace) -> int:
     project = config.load(foundry_root).project(args.project_name)
     template = task.load_task_template(paths.task_template_dir(foundry_root))
     with ProjectTasks.in_scratch_clone(project.url, os.environ) as project_tasks:
-        task_id = args.task_id or pick_next_task_id(project_tasks)
-        created = project_tasks.create_task(task_id, template)
+        created = project_tasks.create_task(task_id_to_create(project_tasks, args.task_id), template)
     print("\n".join(report(CREATED, project.name, created)))
     return 0
+
+
+def task_id_to_create(project_tasks: ProjectTasks, task_id: str | None) -> str:
+    """The id of the task create makes: ``task_id`` as given, even when not valid, or, when it is None, the next."""
+    return task_id if task_id is not None else pick_next_task_id(project_tasks)
 
 
 def pick_next_task_id(project_tasks: ProjectTasks) -> str:

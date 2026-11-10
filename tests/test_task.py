@@ -90,8 +90,9 @@ def test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits(tak
     assert task.next_task_id(taken_ids) == next_id
 
 
-def test_names_that_aren_t_task_ids_are_ignored() -> None:
-    assert task.next_task_id(["wcf-0005", "spike", "WCF-0099"]) == "wcf-0006"
+def test_a_taken_name_that_isn_t_a_task_id_is_refused() -> None:
+    with pytest.raises(FoundryError, match=r"^task id 'spike' is not valid: "):
+        task.next_task_id(["wcf-0005", "spike"])
 
 
 def test_the_most_common_task_prefix_wins_and_the_other_task_prefix_s_higher_number_is_ignored() -> None:
@@ -106,7 +107,6 @@ def test_each_id_is_counted_once() -> None:
     "taken_ids, message",
     [
         ([], "the project repository has no task id to follow"),
-        (["spike"], "the project repository has no task id to follow"),
         (
             ["abc-0001", "wcf-0002"],
             "the project repository's task ids tie for the most common task prefix: abc, wcf",
@@ -116,7 +116,7 @@ def test_each_id_is_counted_once() -> None:
             "the project repository's task ids tie for the most common task prefix: wcf, xyz",
         ),
     ],
-    ids=["none", "none-valid", "tie", "tie-of-two-of-three"],
+    ids=["none", "tie", "tie-of-two-of-three"],
 )
 def test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie(taken_ids, message: str) -> None:
     with pytest.raises(task.NoNextTaskIdError) as error:
