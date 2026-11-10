@@ -154,21 +154,6 @@ def test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_cha
     assert project_repository.git("for-each-ref") == refs_before
 
 
-@pytest.mark.parametrize(
-    "taken",
-    [
-        {"open_ids": ["wcf-0003", "wcf-0007"]},
-        {"open_ids": ["wcf-0003"], "closed_ids": ["wcf-0007"]},
-        {"open_ids": ["wcf-0003"], "branch_ids": ["wcf-0007"]},
-    ],
-    ids=["open", "closed", "branch"],
-)
-def test_a_task_id_is_taken_whichever_kind_holds_it(project_repository, taken: dict[str, list[str]]) -> None:
-    take_task_ids(project_repository, **taken)
-
-    assert project_repository.project_tasks().taken_task_ids() == {"wcf-0003", "wcf-0007"}
-
-
 def test_names_that_aren_t_task_ids_are_not_taken_task_ids(project_repository) -> None:
     take_task_ids(project_repository, open_ids=["wcf-0005"])
     project_repository.edit_notes(write={f"{task.OPEN_DIR}/spike/TASK.md": "spike\n"})

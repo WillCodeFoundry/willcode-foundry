@@ -9,8 +9,9 @@ every operation on one task goes through it, and callers pass task ids. There ar
 
 Finding and reading only fetch NOTES_BRANCH and read what was fetched: they change no file. An operation that writes
 checks out the fetched NOTES_BRANCH itself, after every check that can refuse it, so it writes on what it read.
-A write may follow a separate, earlier read, such as taken_task_ids before create_task. The write fetches again, and its
-own checks and atomic push refuse only a change that clashes with its own task.
+A write may follow a separate, earlier read, such as taken_task_ids before create_task. The write fetches again. Its own
+checks refuse only a change that clashes with its own task, and its atomic push, never forced, refuses any change to
+NOTES_BRANCH since that fetch.
 """
 
 import re
