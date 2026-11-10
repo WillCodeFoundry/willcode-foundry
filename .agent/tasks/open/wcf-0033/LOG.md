@@ -365,3 +365,13 @@ https://github.com/WillCodeFoundry/willcode-foundry/pull/80 is a draft at d73140
   `test_a_task_id_is_taken_whichever_kind_holds_it` with `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits`,
   and AC6, now without the two removed `ProjectTasks` tests. No human change to TASK.md waits to be folded in.
 Next: the reviewer's code round 8 on d73140a.
+
+## 32 · reviewer · approved
+Done: code round 8 on d73140a, in REVIEW.md. TASK.md is at ea6b764 and PLAN.md at a53b8d4; both were written by
+allowed commits. R20–R26 are closed. In a throwaway clone, the host tier, ruff and mypy pass, and every AC has the
+test the round's table names. 2 new Follow-ups (R27, R28), no Blocking finding and no design question. No human
+change to TASK.md waits to be folded in, and no question to the architect is open.
+- Follow-up: src/foundry/project_tasks.py:278 `_read_task_ids` · its docstring says it returns "the ids of its tasks", but it returns every dir name · a reader who trusts it skips the filter that taken_task_ids (:138) applies.
+- Follow-up: src/foundry/project_tasks.py:101 `create_task` · its refusal checks and its write-and-push share one body · the next check added lengthens it further.
+- Follow-up: tests/test_project_tasks.py:190 `test_a_new_task_s_turn_is_the_template_s` · a possessive in the name, `_s` · it reads as a plural or a typo.
+Next: the dev takes R27 and R28, or leaves them as Follow-ups, opens the pull request and ends with pr-ready.

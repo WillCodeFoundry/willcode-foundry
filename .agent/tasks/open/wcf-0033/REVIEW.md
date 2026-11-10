@@ -579,3 +579,111 @@ Findings:
 - No design questions. R18 (deferred) and the earlier Follow-up lines stay open.
 
 Verdict: changes needed
+
+## Round 8 (reviewing d73140a)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+ea6b764. It is signed by the planner's identity, which the architect shares, so a change by the architect can't be
+told apart from one by the planner. PLAN.md is at a53b8d4, signed by the dev, with the R20, R21, R23 and R26
+amendments the human approved (LOG.md entry 29). This round reviews the fix diff `8825173...d73140a`. Its only task
+commit is d73140a; 6905030 is a clean merge of origin/HEAD that brings kit and template docs only. No human change to
+TASK.md waits to be folded in.
+
+Earlier findings:
+- R17: accepted as is (round 4).
+- R18: deferred (round 6). It stays a Follow-up.
+- R20: closed. PLAN.md's Approach (a53b8d4) now says `next_task_id` refuses a name that isn't a task id, and
+  `taken_task_ids` returns only task ids. This matches Steps 2 and 3 and the code.
+- R21: closed. `src/foundry/project_tasks.py:12-13` now puts the point in a sentence of its own, word for word as
+  PLAN.md's Docs. R27 below is a smaller point in the new sentence.
+- R22: closed, with R20.
+- R23: closed. AC2's test asserts on `taken_task_ids()` alone, and the two tests that re-proved `next_task_id` are
+  gone, as the amended plan says. R28 below is about what is left.
+- R24: closed, with R26. `Task.__post_init__` calls a parse for its refusal, which is ordinary parse-to-validate.
+- R25: closed. "for next_task_id" is gone from `src/foundry/project_tasks.py:128`.
+- R26: closed. `_parse_task_id` (`src/foundry/task.py:108`) is named for what it returns. It matches the other
+  parse functions in `src/` (`config.parse`, `parse_fingerprint`) and PLAN.md's Step 2 and Names.
+  `git grep -w _require_task_id` finds nothing.
+
+### Standards
+R20, R21 and R22 are closed, as above. PLAN.md at a53b8d4 no longer contradicts itself or the code. The docstrings of
+`task.py`, `project_tasks.py` and `take_task_ids` are true after the fix.
+- R27 (Follow-up): `src/foundry/project_tasks.py:12-13`, "its own checks and atomic push refuse only a change that
+  clashes with its own task".
+  - What: the checks refuse only a clash, but the push doesn't. `push_atomic` is never forced
+    (`src/foundry/project_scratch_clone.py:182`). So any commit to `NOTES_BRANCH` between `create_task`'s own fetch
+    (`:111`) and its push (`:124`) gets the push rejected, even one for another task. The sentence holds for the gap
+    it is about, between `taken_task_ids` and `create_task`'s fetch, but "only" overstates the push.
+  - Who hits it: rarely, a dev adding another read-then-write operation who reasons about concurrent writes from this
+    sentence.
+  - Direction: say that the checks refuse only a clash with its own task, and the push refuses any change since the
+    write's own fetch. PLAN.md's Docs has the same wording, so amend it there too. Or accept as is.
+
+### Spec
+No finding and no scope creep. R22 and R23 are closed. In a throwaway clone at d73140a, `uv run pytest`, ruff check,
+ruff format --check and mypy pass. The code matches PLAN.md at a53b8d4: its names, its errors, its docstring sentence
+and its tests.
+
+| AC | Tests at d73140a |
+|---|---|
+| AC1 | `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`; `test_create_without_a_task_creates_the_next_one` |
+| AC2 | `test_a_task_id_is_taken_whichever_kind_holds_it[open,closed,branch]`; `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits`; `test_create_without_a_task_creates_the_next_one` |
+| AC3 | `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits` (OS3 too) |
+| AC4 | `test_names_that_aren_t_task_ids_are_not_taken_task_ids`; `test_a_taken_name_that_isn_t_a_task_id_is_refused` |
+| AC5 | `test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie[none]`; `test_without_task_branches_or_notes_no_task_id_is_taken`; the CLI refusal test's `[no-task-id]` |
+| AC6 | `test_the_most_common_task_prefix_wins_and_the_other_task_prefix_s_higher_number_is_ignored`; `test_each_id_is_counted_once`; the unit tie cases; the CLI `[tie]`. That a branch and its notes count once also rests on `taken_task_ids` returning a frozenset, and on the AC1 test |
+| AC7 | `test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winner_s` |
+| AC8 | `test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing`, plus the existing create tests, unchanged |
+| AC9 | README's table row and task id line; `tests/test_docs.py` |
+| AC10 | `test_create_s_task_is_optional_and_its_help_says_what_is_picked_without_it` |
+| AC11 | ruff and the host tier, above |
+
+AC2 is shown in three parts, as the amended plan splits it: each kind of id is taken, `next_task_id` follows the
+highest number, and the CLI test composes the two.
+
+### Behaviour
+No findings. The fix is a rename, two docstring edits and removed tests, so it changes no path. In a throwaway clone
+at d73140a:
+- The host tier, ruff and mypy pass.
+- `foundry task create --help` still shows `PROJECT [TASK]`.
+- `_require_task_id` appears nowhere, in code, tests or docs.
+- `Task` and `next_task_id` still refuse a name that isn't a task id.
+
+### Smells
+Functions the fix changes:
+- `src/foundry/task.py:Task.__post_init__`: clean.
+- `src/foundry/task.py:_parse_task_id`: clean. It was only renamed.
+- `src/foundry/task.py:next_task_id`: clean.
+- `src/foundry/project_tasks.py` (module docstring): clean, apart from R27 on the Standards axis.
+- `src/foundry/project_tasks.py:ProjectTasks.taken_task_ids` (docstring): clean.
+- `tests/test_project_tasks.py:take_task_ids`: clean. It is simpler without `keep_seeded`.
+- `tests/test_project_tasks.py:test_a_task_id_is_taken_whichever_kind_holds_it`: R28.
+- `tests/test_project_tasks.py:test_the_task_prefix_most_task_ids_use_is_followed`: removed.
+- `tests/test_project_tasks.py:test_a_task_s_branch_and_notes_count_as_one_task_id`: removed.
+
+Findings:
+- R28 (Follow-up), possible python-smells 10, a test that proves little new: `tests/test_project_tasks.py:157-169`.
+  - What: now that it asserts on `taken_task_ids()` alone, it largely repeats `:150-153`, which already shows that
+    open, closed and branch ids are taken. Only its `open` case, with two open dirs, adds anything.
+  - Who hits it: the next dev who breaks reading one kind of id gets two failures for one fault. Rarely.
+  - Direction: accept as is. The human-approved PLAN.md (Tests, AC2) names this test, so folding it into `:153`
+    would be a plan change.
+
+### Names
+Names the fix adds or changes:
+- `_parse_task_id`: clean. It is named as PLAN.md gives it, and it reads right at `src/foundry/task.py:129`.
+- `test_a_task_id_is_taken_whichever_kind_holds_it`: clean. It now names what it asserts.
+- `take_task_ids`, with `keep_seeded` removed: clean.
+- The added prose in `project_tasks.py:12-13` and `:128`: clean. It uses no _Avoid_ word and no bare "prefix".
+
+No findings. R26 is closed, as above.
+
+### Summary
+- Standards: 1 finding, 0 Blocking. Worst: R27, the new docstring sentence overstates what the push refuses.
+- Spec: 0 findings.
+- Behaviour: 0 findings.
+- Smells: 1 finding, 0 Blocking. Worst: R28, AC2's test largely repeats AC1's.
+- Names: 0 findings.
+- No design questions. R18, R27 and R28 stay open as Follow-ups.
+
+Verdict: approved
