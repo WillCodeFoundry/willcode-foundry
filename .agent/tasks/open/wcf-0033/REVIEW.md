@@ -430,3 +430,152 @@ No findings.
 - No design questions. Follow-ups R18 (deferred) and entry 15's and 18's Follow-up lines stay open.
 
 Verdict: approved
+
+## Round 7 (reviewing 8825173)
+
+No "TASK.md changed by another role" or "PLAN.md changed by another role" finding. Reviewed against TASK.md at
+ea6b764 (D4 folded in). It is signed by the planner's identity, which the architect shares, so a change by the
+architect can't be told apart from one by the planner. PLAN.md is at 543b724, signed by the dev; the human approved
+its D2 and D3 amendments (LOG.md entries 22 and 24). This round reviews what changed since round 6 approved 59c516a:
+83a4dfc (D2), the conflict resolutions of the merge a8a2f54, and 8825173 (D3). No human change to TASK.md waits to be
+folded in.
+
+Earlier findings:
+- R17: accepted as is (round 4).
+- R18: deferred (round 6). It stays a Follow-up.
+- No other finding was open.
+
+### Standards
+- R20 (Blocking): PLAN.md at 543b724, Approach, lines 4-7.
+  - What: the Approach still says `next_task_id` "parses each id with the task id pattern, ignores what doesn't match
+    it". It also says `taken_task_ids()` "returns the names taken by task branches and by the dirs".
+  - Why it matters: since D3, the plan's own Steps 2 and 3 and the code say otherwise. `src/foundry/task.py:129`
+    refuses a name that isn't a task id, and `src/foundry/project_tasks.py:138` keeps only task ids. The plan
+    contradicts itself and the code.
+  - Who hits it: a dev or reviewer who reads the Approach first, in a later round or a later task. They would expect
+    an invalid name to be skipped silently.
+  - Direction: amend those two clauses to match Steps 2 and 3, as `Amended: D3`.
+  - Shares its cause with R22.
+- R21 (Follow-up): `src/foundry/project_tasks.py:12-13`, "the write's own checks and its atomic push refuse what
+  changed in between".
+  - What: `create_task` fetches `NOTES_BRANCH` again and writes on that fetch (`:111`, `:121`). It refuses only a
+    change that takes its own task id (`:113-115`, or the push at `:124`). Another task created in between under a
+    different id is accepted, and the task prefix count isn't checked again. The sentence also chains its reason
+    behind a colon, which AGENTS.md's "Writing" advises against.
+  - Who hits it: rarely, a dev adding another read-then-write operation who trusts the module's guarantee.
+  - Direction: say, in a sentence of its own, that the write refuses only a change that clashes with its own task.
+    The wording is PLAN.md's (Docs), so amend it there too.
+
+### Spec
+No Blocking finding and no scope creep. In a throwaway clone at 8825173, `uv run pytest`, ruff check, ruff format
+--check and mypy pass. Every test the amended PLAN.md names exists and asserts what it says:
+
+| AC | Tests at 8825173 |
+|---|---|
+| AC1 | `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`; `test_create_without_a_task_creates_the_next_one` |
+| AC2 | `test_the_highest_taken_number_counts_whichever_kind_holds_it` (open, closed, branch) |
+| AC3 | `test_the_next_task_id_is_one_more_than_the_highest_padded_to_four_digits` (OS3 too) |
+| AC4 | `test_names_that_aren_t_task_ids_are_not_taken_task_ids`; `test_a_taken_name_that_isn_t_a_task_id_is_refused` |
+| AC5 | `test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie[none]`; the CLI refusal test's `[no-task-id]` |
+| AC6 | `test_the_most_common_task_prefix_wins_and_the_other_task_prefix_s_higher_number_is_ignored`; `test_each_id_is_counted_once`; the unit tie cases; `test_the_task_prefix_most_task_ids_use_is_followed`; `test_a_task_s_branch_and_notes_count_as_one_task_id`; the CLI `[tie]` |
+| AC7 | `test_a_create_that_loses_the_race_for_its_id_fails_and_leaves_only_the_winner_s`. It asserts only `error: `, so it holds for either message in TASK.md's D4 Risks line |
+| AC8 | `test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing`, plus the existing create tests, unchanged |
+| AC9 | README's table row and task id line; `tests/test_docs.py` |
+| AC10 | `test_create_s_task_is_optional_and_its_help_says_what_is_picked_without_it` |
+| AC11 | ruff and the host tier, above |
+
+AC4's `wcf-0006` is shown in two parts, `taken_task_ids` then `next_task_id`, exactly as the amended plan splits it.
+
+- R22 (Follow-up): the approved PLAN.md contradicts itself. Its Approach says `next_task_id` ignores what doesn't
+  match, but Step 2 (D3) says such a name is refused. The code follows Step 2 (`src/foundry/task.py:129`), and
+  `test_a_taken_name_that_isn_t_a_task_id_is_refused` shows it, so the behaviour is right. Shares its cause with R20.
+
+### Behaviour
+No findings. In a throwaway clone at 8825173, the host tier, ruff and mypy pass. The changed code was driven through
+`ProjectTasks.in_scratch_clone` on bare repositories in odd states:
+- Branch names that aren't task ids (`task/wcf-0009/x`, `task/WCF-0099`, `task/wcf-0042x`, `tasks/wcf-0050`) are not
+  taken.
+- Notes dirs that aren't task ids (trailing space, `-0005`, `wcf-0005.bak`, `Wcf-0010`, a file named like a task) are
+  left out, and `next_task_id`'s strict check never sees them.
+- With no `agent-notes`, branch-only ids pick the majority task prefix and create `agent-notes` as an orphan.
+- An id with 21 digits works.
+- With nothing taken, create refuses with the "Give TASK" hint and leaves only `main`.
+- `create PROJECT ""` is refused as an invalid id and writes nothing.
+- A given TASK never reads the taken ids.
+
+The second read of the branches (once in `taken_task_ids`, once in `create_task`) is the race TASK.md's D4 Risks line
+records, and `create_task`'s checks and atomic push still refuse it.
+
+### Smells
+Functions the fix changes:
+- `src/foundry/commands/task.py:create_main`: clean. It is simpler than at 59c516a and has no branch (DR7).
+- `src/foundry/commands/task.py:task_id_to_create`: new, clean.
+- `src/foundry/commands/task.py:pick_next_task_id`: clean.
+- `src/foundry/project_tasks.py:ProjectTasks.create_task`: clean. It is byte for byte as at 492f4b5.
+- `src/foundry/project_tasks.py:ProjectTasks.taken_task_ids`: new, R25.
+- `src/foundry/project_tasks.py` (module docstring): clean, apart from R21 on the Standards axis.
+- `src/foundry/task.py:Task.__post_init__`: R24.
+- `src/foundry/task.py:is_task_id`: new, clean.
+- `src/foundry/task.py:_require_task_id`: new, R24.
+- `src/foundry/task.py:next_task_id`: clean. Refusing a name that isn't a task id is better than skipping it silently.
+- `tests/test_task.py`: `test_a_taken_name_that_isn_t_a_task_id_is_refused` (new) and
+  `test_no_next_task_id_when_none_is_taken_or_task_prefixes_tie`: clean.
+- `tests/test_task_command.py`: `test_create_without_a_task_creates_the_next_one` and
+  `test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing` (new): clean.
+- `tests/test_project_tasks.py`: `test_taken_task_ids_are_the_open_closed_and_branch_ones_and_reading_them_changes_nothing`,
+  `test_names_that_aren_t_task_ids_are_not_taken_task_ids` and `test_without_task_branches_or_notes_no_task_id_is_taken`
+  are clean. `test_the_highest_taken_number_counts_whichever_kind_holds_it`,
+  `test_the_task_prefix_most_task_ids_use_is_followed` and `test_a_task_s_branch_and_notes_count_as_one_task_id` are
+  R23.
+- The merge's conflict resolutions in a8a2f54 only join imports and codemap rows: clean.
+
+Findings:
+- R23 (Follow-up), possible python-smells 10, tests that prove nothing new: `tests/test_project_tasks.py:166`,
+  `:183` and `:189`.
+  - What: since D2 these check `next_task_id(taken_task_ids())`, so they repeat rules that `tests/test_task.py`
+    already proves. `:153` already shows each kind of id is taken. `:189` can't fail for the reason its name gives,
+    since `taken_task_ids` returns a frozenset.
+  - Who hits it: the next dev who changes how `next_task_id` picks gets failures in the `ProjectTasks` tests too.
+  - Direction: assert on `taken_task_ids()` alone. PLAN.md's Tests name these, so that is a plan change.
+- R24 (Follow-up), possible python-smells 5.1, validate-and-fetch: `src/foundry/task.py:108`. `_require_task_id` is
+  named as a check but returns the parsed match. `Task.__post_init__` (`:67`) calls it only for its error. Shares its
+  cause with R26.
+- R25 (Follow-up), python-smells 8, narrating: `src/foundry/project_tasks.py:128`, "for next_task_id", names a
+  caller and goes stale when another appears. Direction: drop the phrase.
+
+### Names
+Names the fix adds or changes:
+- `ProjectTasks.taken_task_ids`: clean. Since D3 it returns only task ids, as its name says, and it matches PLAN.md.
+- `pick_next_task_id`, `task_id_to_create`: clean, as PLAN.md names them.
+- `is_task_id`: clean. Its docstring says "task prefix", the glossary's word.
+- `_require_task_id`: R26.
+- `next_task_id`, which now refuses a name that isn't a task id: clean. A computation may refuse bad input.
+- `create_task`: clean, back to main's.
+- Locals `taken`, `branches`, `notes_branch`, `matches`: clean. `notes_branch` is the existing name for a
+  `FetchedBranch`.
+- The three new test names: clean.
+- The added prose (module docstring, docstrings, the ARCHITECTURE.md row and the merge's resolution): clean. It uses
+  no _Avoid_ word and no bare "prefix".
+
+Findings:
+- R26 (Blocking): `src/foundry/task.py:108`, `_require_task_id(task_id) -> re.Match[str]`, used at `:129` as
+  `matches = [_require_task_id(taken_id) …]`.
+  - What: python-naming-smells, "promises less than it does". `require` is a word the project agrees on: each of the
+    other 13 `require_`/`_require_` functions in `src/` returns None and only checks, for example
+    `_require_no_task` (`src/foundry/project_tasks.py:268`) and `require_valid_handoff_args`
+    (`src/foundry/commands/task.py:196`). This one also parses.
+  - Who hits it: the next reader of `next_task_id`, at `:129`, who has to open the definition to learn that a check
+    returns the parse.
+  - Direction: name it for what it returns, a parse that refuses, or split the check from the parse.
+  - This is a plan change. PLAN.md (Step 2, Names) gives the name and signature, so the dev amends the plan first.
+  - Shares its cause with R24.
+
+### Summary
+- Standards: 2 findings, 1 Blocking. Worst: R20, PLAN.md's Approach contradicts its own Steps and the code.
+- Spec: 1 finding, 0 Blocking. Worst: R22, the same contradiction, judged by the Spec bar.
+- Behaviour: 0 findings.
+- Smells: 3 findings, 0 Blocking. Worst: R23, the `ProjectTasks` tests re-prove `next_task_id`.
+- Names: 1 finding, 1 Blocking. Worst: R26, `_require_task_id` returns a value, unlike every other `require_`.
+- No design questions. R18 (deferred) and the earlier Follow-up lines stay open.
+
+Verdict: changes needed

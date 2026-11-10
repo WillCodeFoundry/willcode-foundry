@@ -11,3 +11,8 @@
 - 2026-11-09 [proposal] — code-review skill: it always spawns five sub-agents, even for a round whose fix diff is a
   three-line test-only rename. Round 6 of wcf-0033 ran the axes inline instead. Proposal: let a later round run the
   axes inline when the fix diff is a few lines, and say so in the round.
+- 2026-11-10 [proposal] — reviewer ROLE.md, `no-agreement`: it holds whenever a Blocking finding is open after the
+  third code round, even when the finding is new and the dev has not disagreed. In wcf-0033 round 7, the human
+  reopened the code (D2, D3) after an approval. That made a fourth round, and its first Blocking findings went to the
+  human instead of the dev. Proposal: count rounds from the latest human-approved change, or apply the rule only to a
+  finding the dev has answered and the reviewer still holds open.

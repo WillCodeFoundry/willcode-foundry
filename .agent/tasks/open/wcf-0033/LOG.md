@@ -303,3 +303,23 @@ sandbox-image, test 3.11 and 3.14). TASK.md holds D4 since ea6b764; no other hum
   entry 24), 8825173 (D3).
 - AC1–AC11 are met by the tests PLAN.md names as amended for D2 and D3, as entries 23 and 25 list.
 Next: the reviewer's code round 7 on 8825173, covering D2, D3, the merge in a8a2f54, and TASK.md's D4 amendment.
+
+## 28 · reviewer · no-agreement
+Done: code round 7 on 8825173, in REVIEW.md. It covers D2 (83a4dfc), the merge a8a2f54's conflict resolutions, D3
+(8825173) and TASK.md's D4 amendment (ea6b764). The host tier, ruff and mypy pass in a throwaway clone, and every
+AC has the test REVIEW.md's table names. Behaviour found nothing. 2 Blocking findings (R20, R26) and 5 Follow-ups
+(R21–R25). No design question.
+This is the fourth code round (4, 5, 6, 7), and Blocking findings are open after it. ROLE.md says to end with
+no-agreement rather than send it back for another round, even though the dev hasn't answered these yet. There is no
+disagreement on record; both are new since D2 and D3.
+- Asks R20 → human: PLAN.md's Approach (543b724, lines 4-7) still says `next_task_id` ignores names that aren't task
+  ids, and that `taken_task_ids` returns names. Since D3, Steps 2 and 3 and the code say the opposite. Should the dev
+  amend those two clauses as `Amended: D3` (my direction), or do you accept the plan as is?
+- Asks R26 → human: `_require_task_id` (`src/foundry/task.py:108`) returns the parsed match. Every other `require_`
+  function in `src/` (13 of them) returns None and only checks. You approved the name in D3. Should the dev rename it
+  as a parser, which is a PLAN.md change, or do you accept it as is?
+- If you send it back for the fixes, the dev could take the cheap Follow-ups in the same pass: R21 (a docstring
+  overstates what create_task refuses), R22 (shares R20's cause) and R25.
+- Follow-up: src/foundry/project_tasks.py:268 `_require_no_task` · uses TaskNotFoundError for normal flow · a check that reads as two jobs; the next reader must follow the exception to see the happy path.
+Next: the human answers R20 and R26. Then the dev fixes them, or the human accepts them, and ends with
+ready-for-review or pr-ready as the human decides.
