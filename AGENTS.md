@@ -14,6 +14,18 @@ The only shell scripts are the git hook stubs in `agent-kit/hooks/`. Everything 
 
 ## Docs
 
+Write each fact once, in the place closest to the code that keeps it true:
+
+| Fact | Where |
+|---|---|
+| What a function or class does, takes or refuses | Its docstring |
+| What holds across a module, and why | The module docstring, after a one-line purpose |
+| What each module is for | Its row in [ARCHITECTURE.md's codemap](ARCHITECTURE.md#codemap) |
+| A rule for all the code | A [design rule](ARCHITECTURE.md#design-rules), cited by number rather than restated |
+| A decision that is hard to reverse | An ADR, as below |
+
+A module docstring doesn't list what its module holds, as [python-smells 8.4](agent-kit/skills/python-smells/references/narrating-instead-of-naming.md) says.
+
 - **Record a decision as an ADR** when it is hard to reverse, surprising without context, and the result of a real trade-off. Use the next number in `docs/adr/`.
 - **Add a term to the glossary** when you introduce one, or when you find one word used for two things.
 - **Keep the README's "Recreating a sandbox" heading.** Error messages send users there. `tests/test_docs.py` checks this. It also checks that every link resolves, that every repository path the docs name exists, and that the command tables match the commands the code defines.
