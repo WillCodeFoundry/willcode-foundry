@@ -266,3 +266,23 @@ The human reviewed 83a4dfc in my session and decided the changes below. The amen
 - plan-approved (the human) at the PLAN.md commit that follows this entry.
 Next: implement D3 test-first, run the checks and CI, then end with task-question so the planner folds D4 into TASK.md
 before round 7.
+
+## 25 · dev · task-question
+Done: D3 implemented in 8825173; CI passes on it, and locally ruff, mypy, vulture, pylint and `uv run pytest --cov`
+pass. PR https://github.com/WillCodeFoundry/willcode-foundry/pull/80 stays a draft; its body now reflects D2 and D3.
+- (1) `commands/task.py`'s `task_id_to_create(project_tasks, task_id)` returns `task_id` unless it is None, else
+  `pick_next_task_id`'s; `create_main` has no branch. Test:
+  `test_create_with_an_empty_task_refuses_it_as_invalid_and_changes_nothing` (AC8).
+- (2) `task.py`: `is_task_id` and `_require_task_id` (which `Task.__post_init__` now calls, same message);
+  `next_task_id` refuses a name that isn't a task id. `taken_task_ids` filters with `is_task_id`. AC4 tests:
+  `test_names_that_aren_t_task_ids_are_not_taken_task_ids` (tests/test_project_tasks.py, branches and a notes dir),
+  `test_a_taken_name_that_isn_t_a_task_id_is_refused` (tests/test_task.py); the "none-valid" case is gone.
+- (3) `project_tasks.py`'s module docstring has the sentence, word for word as PLAN.md says.
+- R17, R18: unchanged, as the human said.
+- Commits after round 6's approval of 59c516a: 83a4dfc (D2), a8a2f54 (merge of origin/HEAD), 8825173 (D3).
+Ending with task-question, not ready-for-review: D4 is a TASK.md change the human decided that TASK.md doesn't hold
+yet, and AGENTS.md says to hand it to the planner before review.
+- Asks D4 → planner: fold D4 (entry 24) into TASK.md's Risks: a lost race shows git's push rejection or
+  "task … already exists"; exit 1 with nothing written still holds. Then hand the task to the reviewer for round 7
+  on 8825173, which covers D2 and D3 too.
+Next: once TASK.md holds D4, the reviewer's code round 7 on 8825173.
