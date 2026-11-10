@@ -29,4 +29,4 @@
 - <A test no AC needs, with the bug it catches.>
 
 ## Docs
-- <Each doc and docstring, modules' and classes' included, the change makes untrue.>
+- <Each doc and docstring, modules' and classes' included, the change makes untrue. A docstring listing what its module holds is cut, not extended, as `python-smells` 8.4 says.>
