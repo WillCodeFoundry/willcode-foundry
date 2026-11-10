@@ -418,3 +418,15 @@ at b31b1cd; both were written by allowed commits. R27 and R28 are closed. In a t
 (check and format), mypy and `uv run pytest --cov` (97.34%) pass. No new finding, no design question, and no
 question to the architect open. No human change to TASK.md waits to be folded in.
 Next: the dev opens the pull request (PR 80 out of draft) and ends with pr-ready. R18 stays a Follow-up.
+
+## 37 · dev · pr-ready
+Done: merged origin/HEAD into task/wcf-0033 in 4214e71 (PR 84, docs rules and kit only), cleanly, so no change of my
+own after round 9's approval of 0163429. Its new rule, that a module docstring doesn't list what its module holds,
+needs nothing here: this task's lines in `project_tasks.py`'s docstring say what holds across the module. Locally
+ruff (check and format), mypy, vulture, pylint, shellcheck and `uv run pytest --cov` (97.34%) pass; PR 80's CI passes
+at 4214e71. Wrote the PR's body from the `pr` skill and marked
+https://github.com/WillCodeFoundry/willcode-foundry/pull/80 ready.
+- R18 was answered deferred in entry 19; no other Follow-up finding is open.
+- AC1–AC11 are met by the tests round 8's table names, with AC2 as entry 35 says.
+- Follow-up: src/foundry/project_tasks.py:1-2 module docstring · its first line lists what the module holds, which AGENTS.md's Docs (PR 84) now says not to do · the list grows with each operation added.
+Next: the human reviews and merges PR 80.
