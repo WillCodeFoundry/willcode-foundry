@@ -5,11 +5,21 @@
 ## Approach
 <How the change works, in a few sentences, and the alternative you turned down, with the criterion, out-of-scope line, rule or ADR it breaks. Leave a judgement call open, with what each option costs.>
 
+## Shape
+<The calls the change adds or changes, as a plain-text tree from the entry point, each marked new, changed or unchanged:>
+
+```
+<entry point>
+└─ <call>   <new, changed or unchanged>
+```
+
 ## Steps
 1. <A refactor the change needs comes first, in commits that change no behaviour. Then the behaviour change.>
 
 ## Names
-- <Each public name the plan adds or renames, and where its word comes from.>
+| Change | Name | Signature | Its word comes from |
+|---|---|---|---|
+| <added, changed, renamed or removed> | <each public name> | <its parameters and return type> | <the glossary, the code, or why a new word> |
 
 ## Errors
 - <Each message a user or caller can see, word for word.>

@@ -31,7 +31,7 @@ A plan round reviews the task's `PLAN.md` before any code is written for it, or 
 git -C "$AGENT_NOTES_CHECKOUT_DIR" diff <approved commit> -- "$AGENT_TASK_NOTES_DIR/PLAN.md"
 ```
 
-- **Spec:** every acceptance criterion in `TASK.md` has a test at a named seam, or a reason no test can show it. Every other test names the bug it catches. The steps cover every criterion, and nothing `TASK.md` rules out. Blocking: a criterion with no test and no reason, or a step that does what `TASK.md` rules out.
+- **Spec:** every acceptance criterion in `TASK.md` has a test at a named seam, or a reason no test can show it. Every other test names the bug it catches. The steps cover every criterion, and nothing `TASK.md` rules out. "Shape" and "Names" agree with the steps. Blocking: a criterion with no test and no reason, or a step that does what `TASK.md` rules out.
 - **Names:** every public name and error message the plan adds or changes, by the `python-naming-smells` skill, against `GLOSSARY.md` and its _Avoid_ lists and the code already there. Blocking: as the Names bar in step 5 says.
 - **Standards:** the plan against the project's `AGENTS.md`, the design rules in `ARCHITECTURE.md` and the decisions in `docs/adr/`, and its "Docs" list against the docs and docstrings of each module it changes. Each decision that follows a rule cites it. Blocking: as the Standards bar in step 5 says, or a doc the change makes untrue that the list leaves out.
 
