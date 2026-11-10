@@ -123,4 +123,4 @@ Better:
 
 - **Why:** the list is a second copy of the module's contents, and nothing makes the two change together. A reader trusts the summary over the code below it.
 - **Fine when:** the list is generated, or a test checks it against the code.
-- **Spot it:** for each module or class the diff changes, read its docstring whole, even when the diff leaves it alone. Check every "and", every count and every "Callers …" against the code at `HEAD`.
+- **Spot it:** for each module or class the diff changes, read its docstring whole, even when the diff leaves it alone. Check every "and", every count and every "Callers …" against the code at `HEAD`. A diff that adds to such a list to keep it true has the smell too: cut the list to the module's purpose instead.
