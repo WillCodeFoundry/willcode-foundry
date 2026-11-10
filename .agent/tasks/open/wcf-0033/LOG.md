@@ -336,3 +336,10 @@ Done: the human answered round 7's questions in my session: fix every finding fr
   R18 and the earlier Follow-up lines stay as they were.
 Next: the dev amends PLAN.md for R20, R21, R23 and R26, which the human approved here. The dev then fixes R20–R26
 test-first, answers each by its id, and ends with ready-for-review for round 8.
+
+## 30 · dev · progress
+Done: merged origin/HEAD into task/wcf-0033 in 6905030 (PR 83, kit docs only; no conflicts). Amended PLAN.md for R20
+(Approach), R21 (Docs), R23 (Tests: AC2, the most common task prefix, each id counted once) and R26 (Step 2, Names:
+`_parse_task_id`), each line `Amended: R<n>`, as the human approved in entry 29.
+- plan-approved (the human, entry 29) at the PLAN.md commit that follows this entry.
+Next: fix R21, R23, R24/R26 and R25 in code, run the checks and CI, answer R20–R26, end with ready-for-review.

@@ -1,10 +1,11 @@
 # Plan: wcf-0033
 
 ## Approach
-`task.py` gains a pure function, `next_task_id(taken_ids)`, that parses each id with the task id pattern, ignores
-what doesn't match it, and returns the next id or raises `NoNextTaskIdError`. Because: DR1, a task's names are
-spelled only in `task.py`. A read-only `ProjectTasks.taken_task_ids()` returns the names taken by task branches and
-by the dirs under `OPEN_DIR` and `CLOSED_DIR` (one fetch of `agent-notes`). In the `foundry task create` command,
+`task.py` gains a pure function, `next_task_id(taken_ids)`, that parses each id with the task id pattern, refuses
+a name that isn't a task id, and returns the next id or raises `NoNextTaskIdError`. Because: DR1, a task's names are
+spelled only in `task.py`. A read-only `ProjectTasks.taken_task_ids()` returns only the task ids taken by task
+branches and by the dirs under `OPEN_DIR` and `CLOSED_DIR` (one fetch of `agent-notes`). Amended: R20. Because: D3
+made `next_task_id` refuse such a name and `taken_task_ids` keep only task ids, as Steps 2 and 3 say. In the `foundry task create` command,
 TASK becomes optional. A function `task_id_to_create(project_tasks, task_id)` there returns the given id when it
 is not None, even `''`, and otherwise `pick_next_task_id(project_tasks)`, which returns
 `next_task_id(project_tasks.taken_task_ids())`, adding "Give TASK…" to the refusal. `create_main` calls
@@ -24,8 +25,9 @@ create path, with the id picked at the entry point, at the cost of a second fetc
 2. `task.py`: `NoNextTaskIdError(FoundryError)` and `next_task_id(taken_ids: Iterable[str]) -> str`. The task
    prefix is the one the most taken ids use, each id counted once (D1). The number is one more than the highest
    among that task prefix's ids only, formatted `{task_prefix}-{number:04d}`. `taken_ids` are task ids: one that
-   isn't is refused with `Task`'s invalid-id error, from `_require_task_id(task_id) -> re.Match[str]`, which
-   `Task.__post_init__` also calls. A public `is_task_id(name) -> bool` keeps the parsing in `task.py`. Because:
+   isn't is refused with `Task`'s invalid-id error, from `_parse_task_id(task_id) -> re.Match[str]`, which
+   `Task.__post_init__` also calls. Amended: R26. Because: it parses as well as refuses, and every `require_` in
+   `src/` only checks. A public `is_task_id(name) -> bool` keeps the parsing in `task.py`. Because:
    DR1. Amended: D3. Because: the human's review of 83a4dfc: `taken_task_ids` returns only task ids.
    Its locals are `task_prefix` and
    `task_prefixes`, never `prefix`. Unit tests first. Amended: R7. Because: entry 7.
@@ -43,8 +45,10 @@ create path, with the id picked at the entry point, at the cost of a second fetc
 
 ## Names
 - `next_task_id`, `NoNextTaskIdError`: "task id" from GLOSSARY.md; "next" from TASK.md's goal.
-- `task_id_to_create`: the id `create_task` is given, named for that role. `is_task_id`, `_require_task_id`:
-  GLOSSARY.md's **Task id**. Amended: D3. Because: the human's review of 83a4dfc.
+- `task_id_to_create`: the id `create_task` is given, named for that role. `is_task_id`, `_parse_task_id`:
+  GLOSSARY.md's **Task id**; `_parse_task_id` is named for what it returns, the parse, refusing a name that isn't a
+  task id. Amended: D3. Because: the human's review of 83a4dfc. Amended: R26. Because: `require` in `src/` names a
+  check that returns None.
 - `ProjectTasks.taken_task_ids`: TASK.md's "an id is taken". Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
 - `BRANCH_PREFIX`: `task.py`'s constants are bare (`NOTES_BRANCH`, `OPEN_DIR`); "branch" is GLOSSARY.md's
   **Task branch**, `task/<id>`. The human kept it (entry 7), as long as the task id's part is always a task prefix.
@@ -75,7 +79,8 @@ create path, with the id picked at the entry point, at the cost of a second fetc
   `create PROJECT wcf-0034`" is `create_task`'s own tests, since it is the same call. Amended: R5. Because: AC1 says
   "the same as … would leave". Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
 - AC2: `tests/test_project_tasks.py`, parametrized over `wcf-0007` open, closed, or branch-only beside an open
-  `wcf-0003`: `next_task_id(taken_task_ids())` is `wcf-0008`. Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
+  `wcf-0003`: `taken_task_ids()` is `{"wcf-0003", "wcf-0007"}`; that `next_task_id` follows the highest number is
+  AC3's test. Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path. Amended: R23. Because: `next_task_id`'s rules are proved in `tests/test_task.py`.
 - AC3: `tests/test_task.py`, `next_task_id` parametrized: `wcf-0041` → `wcf-0042`, `wcf-9999` → `wcf-10000`,
   `wcf-00041` → `wcf-0042`; also `wcf-0001`, `wcf-0005` → `wcf-0006` (OS3).
 - AC4: `tests/test_project_tasks.py`, branches `task/spike` and `task/WCF-0099` and a notes dir `spike` beside
@@ -92,13 +97,12 @@ create path, with the id picked at the entry point, at the cost of a second fetc
 - The most common task prefix wins (D1): `tests/test_task.py`, `["wcf-0001", "wcf-0002", "sbx-0050"]` → `wcf-0003`,
   showing the other task prefix's higher number is ignored (Amended: R12. Because: bare "prefix" is under _Avoid_); and a three-way tie with one loser,
   `["abc-0001", "wcf-0002", "xyz-0003", "xyz-0004", "wcf-0005"]`, refuses naming only `wcf, xyz`.
-  `tests/test_project_tasks.py`: the seeded `tst-0000` and `cls-0000` kept beside `wcf-0001` and `wcf-0002` give
-  `wcf-0003`, through `taken_task_ids`. Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
-- Each id counted once (AC6): `tests/test_project_tasks.py`, open `wcf-0001` and `wcf-0002`, each with its task
-  branch and notes as `create_task` leaves them, beside branch-only `sbx-0050`, `sbx-0051` and `sbx-0052` (seeded
-  tasks removed): `next_task_id(taken_task_ids())` is `sbx-0053`. Counting a branch and its notes twice would give
-  `wcf-0003`. `taken_task_ids` returns a set, and `next_task_id` also counts distinct ids, so a list with repeats is the same.
-  Amended: D2. Because: the human wants the entry point to pick the id and then take create_task's own path.
+  No `tests/test_project_tasks.py` test of it: `taken_task_ids` only reads ids, which AC1's and AC2's tests show.
+  Amended: R23. Because: through `taken_task_ids` it re-proved `next_task_id`.
+- Each id counted once (AC6): `taken_task_ids` returns a set, so a branch and its notes are one id; `tests/test_task.py`
+  shows `next_task_id` counts a repeated id once. No `tests/test_project_tasks.py` test of it. Amended: D2. Because:
+  the human wants the entry point to pick the id and then take create_task's own path. Amended: R23. Because: a
+  frozenset can't hold an id twice, so that test could not fail for the reason it named.
 - AC7: `tests/test_task_command.py`. A `git` stand-in on PATH (`scripted_stand_in`) runs the real git, but before
   its first `push` runs a competing `python -m foundry.cli task create store` in the same foundry, with real git
   on PATH. The test's `cli.main(["task", "create", "store"])` exits 1 with a line starting `error: ` on stderr.
@@ -131,8 +135,9 @@ create path, with the id picked at the entry point, at the cost of a second fetc
   `task.py`'s row (`ARCHITECTURE.md:29`) adds "and `next_task_id`, which picks the next task id from the taken
   ones". Amended: R2. Because: the codemap is where a reader looks for it.
 - Docstrings: `project_tasks.py`'s module adds, after "so it writes on what it read": "A write may follow a
-  separate, earlier read, such as taken_task_ids before create_task: the write's own checks and its atomic push
-  refuse what changed in between." Amended: D3. Because: the human's review of 83a4dfc. `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
+  separate, earlier read, such as taken_task_ids before create_task. The write fetches again, and its own checks and
+  atomic push refuse only a change that clashes with its own task." Amended: D3. Because: the human's review of
+  83a4dfc. Amended: R21. Because: a task created in between under another id is not refused. `project_tasks.py`'s module, where "callers pass task ids. Listing is the exception: it reads every
   dir under OPEN_DIR from one fetch" (`:5-6`) adds `taken_task_ids` as a second exception, which takes no id and
   reads the dirs under `OPEN_DIR` and `CLOSED_DIR` from one fetch of `NOTES_BRANCH`, and the task branches from the
   remote's branch list, Amended: R3, R11. Because: the sentence becomes untrue otherwise, and the branches come from
