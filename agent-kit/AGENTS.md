@@ -149,6 +149,12 @@ states a rule in your session, ask its home's owner to write it down, as a
 question in `LOG.md`: the architect for a design rule or an ADR, the planner
 for `TASK.md`.
 
+A design is bound only by `TASK.md`'s criteria and out-of-scope lines, the
+design rules and the ADRs. An out-of-scope line rules out what it names, and
+requires nothing. Everything else, such as `TASK.md`'s "Risks" or how the
+code behaves today, describes. A choice between designs that both fit all of
+these is a **judgement call**, of cost, shape or risk. The human makes it.
+
 **TBD:** the fixed list of tags.
 
 ## 3. Workflow
@@ -332,9 +338,8 @@ The reviewer asks the architect, with `Asks <id> → architect` and the outcome
 a design rule or an ADR, as the `code-review` skill says. Any role asks the
 architect the same way to write down a design rule the human stated in its
 session, and goes on; the reviewer hands the question over before the task
-closes. The architect decides each by the design rules and ADRs, asks the human
-only for a new or changed rule or ADR, or a choice that's hard to reverse,
-and answers it in `LOG.md`.
+closes. The architect decides each, asks the human what its `ROLE.md` leaves to
+them, and answers it in `LOG.md`.
 
 Ask the human, with `Asks <id> → human` and the outcome `stuck`, when:
 

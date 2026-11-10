@@ -70,8 +70,10 @@ honest local fix exists.
    changes the plan, say what the dev's `PLAN.md` must change.
 
 ## When the human decides
-Only the human decides a new design rule or ADR, a change to one, or a choice
-that's hard to reverse. Everything else is yours.
+Only the human decides a new design rule or ADR, a change to one, a choice
+that's hard to reverse, or a judgement call (`AGENTS.md`). Everything else
+is yours. When a judgement call's answer would settle later tasks too, ask
+whether to write it down as a rule.
 
 - When the human is in your session, ask them in rounds, with the `grilling`
   skill.
