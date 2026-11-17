@@ -1,16 +1,16 @@
 # The repo policy
 
-Every project's GitHub repository must match the files in this dir: its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` part of its `.github/workflows/ci.yml`. Why one policy, checked by comparison, is in [ADR 0002](../../docs/adr/0002-repo-policy-by-comparison.md).
+Every project's GitHub repository must match the files in this dir: its settings, its rulesets, its `.github/CODEOWNERS`, and the `ci-gate` part of its `.github/workflows/ci.yml`. Why one policy, checked by comparison, is in [ADR 0002](../../docs/adr/0002-repo-policy-by-comparison.md).
 
 ## Checking
 
 ```console
 $ uv run foundry repo check               # every project: 'conforms', or each deviation's diff; exit 1 if any
 $ uv run foundry repo check tkt-store     # one project
-$ uv run foundry repo check --fix         # first create or update the rulesets to match, then check
+$ uv run foundry repo check --fix         # first update the settings and rulesets to match, then check
 ```
 
-Anything different from the policy is a deviation, shown as a diff, even when harmless. When a project really needs to differ, change the policy. A project GitHub refuses, or whose URL isn't GitHub's, prints its error, and the rest are still checked. With `--fix`, the rulesets changed before an error are listed above it.
+Anything different from the policy is a deviation, shown as a diff, even when harmless. When a project really needs to differ, change the policy. A project GitHub refuses, or whose URL isn't GitHub's, prints its error, and the rest are still checked. With `--fix`, the settings and rulesets changed before an error are listed above it.
 
 `check` uses `gh` signed in as you, with admin rights on the repositories, never the agents' credentials. Rulesets on private repositories need GitHub Pro or Team.
 
@@ -18,6 +18,7 @@ Anything different from the policy is a deviation, shown as a diff, even when ha
 
 | File | Holds | `--fix` writes it |
 |---|---|---|
+| `settings.yaml` | The repository settings, such as merge methods, branch deletion and the wiki, in the shape of GitHub's REST API. | yes |
 | `rulesets.yaml` | The rulesets, in the shape of GitHub's REST API. | yes |
 | `CODEOWNERS` | Every project's `.github/CODEOWNERS`, word for word: you own every file. | no, the diff shows what to change |
 | `ci-gate.yml` | The `on:` block and the `ci-gate` job every project's `ci.yml` must have. Copy it to start a project's CI. | no, the diff shows what to change |
@@ -39,6 +40,6 @@ Code-owner review makes every change yours to approve. The agents' users, the re
 
 ## What `check` ignores
 
-Rulesets are matched by name, and fields GitHub adds are ignored. Extra items in a list, such as another bypass actor, still show. Rulesets the policy doesn't name are left alone: rulesets add up, so an extra one can't weaken these.
+Settings GitHub returns that `settings.yaml` doesn't name are ignored. Rulesets are matched by name, and fields GitHub adds are ignored. Extra items in a list, such as another bypass actor, still show. Rulesets the policy doesn't name are left alone: rulesets add up, so an extra one can't weaken these.
 
 This repository is one of its own projects, and a test checks its own `CODEOWNERS` and `ci.yml` match this policy.

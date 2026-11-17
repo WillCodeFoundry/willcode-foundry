@@ -22,10 +22,36 @@ RULESET: dict[str, Any] = {
 }
 
 
+GITHUB_DEFAULT_SETTINGS: dict[str, Any] = {
+    "id": 7,
+    "full_name": "o/r",
+    "allow_squash_merge": True,
+    "allow_merge_commit": True,
+    "allow_rebase_merge": True,
+    "delete_branch_on_merge": False,
+    "has_wiki": True,
+    "security_and_analysis": {"secret_scanning": {"status": "disabled"}},
+}
+"""Some of what GitHub returns for a new repository: fields the policy names, and fields it doesn't."""
+
+
+def _merged(actual: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+    """``actual`` with ``update`` applied as "Update a repository" applies it, nested objects merged."""
+    merged = dict(actual)
+    for key, value in update.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merged(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 class FakeGitHub:
     """GitHub in memory, as foundry.github.GitHub describes it."""
 
     def __init__(self) -> None:
+        self.settings: dict[str, dict[str, Any]] = {}
+        """Repository settings by repo slug, as "Get a repository" returns them; GitHub's defaults when unset."""
         self.stored_rulesets: dict[str, dict[str, dict[str, Any]]] = {}
         """Rulesets by repo slug, then by name; each stored with the id GitHub would give it."""
         self.files: dict[str, dict[str, str]] = {}
@@ -33,6 +59,14 @@ class FakeGitHub:
         self.unavailable: dict[str, str] = {}
         """Repo slug -> the message GitHub refuses it with, e.g. for a plan without rulesets."""
         self._next_id = 1
+
+    def repo_settings(self, repo_slug: str) -> dict[str, Any]:
+        if repo_slug in self.unavailable:
+            raise GitHubError(self.unavailable[repo_slug])
+        return copy.deepcopy(self.settings.get(repo_slug, GITHUB_DEFAULT_SETTINGS))
+
+    def update_repo_settings(self, repo_slug: str, settings: dict[str, Any]) -> None:
+        self.settings[repo_slug] = _merged(self.repo_settings(repo_slug), settings)
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
         if repo_slug in self.unavailable:
@@ -72,8 +106,10 @@ CONFORMING_FILES = {
 
 
 def conforming_to(policy: repo_policy.RepoPolicy = POLICY, repo_slug: str = "o/r") -> FakeGitHub:
-    """A repository with exactly what the policy asks for: this repository's files, and the policy's rulesets."""
+    """A repository with exactly what the policy asks for: its settings, this repository's files, and the
+    policy's rulesets."""
     fake = FakeGitHub()
+    fake.update_repo_settings(repo_slug, policy.settings)
     fake.files[repo_slug] = dict(CONFORMING_FILES)
     for ruleset in policy.rulesets:
         fake.create_ruleset(repo_slug, ruleset)
@@ -227,11 +263,45 @@ def test_a_projects_missing_or_broken_ci_yml_is_a_deviation_not_an_error(ci_text
     assert deviation.diff.startswith(f"--- {repo_policy.CI_WORKFLOW_PATH} (missing)")
 
 
+# --- how the repository settings compare -------------------------------------------
+
+
+def test_settings_github_returns_beyond_the_policy_are_ignored() -> None:
+    fake = conforming_to()
+    fake.update_repo_settings("o/r", {"has_pages": True, "security_and_analysis": {"dependabot": {"status": "on"}}})
+
+    assert deviations(fake) == []
+
+
+def test_a_setting_that_differs_reads_as_a_diff_to_the_repo_policy() -> None:
+    fake = conforming_to()
+    fake.update_repo_settings("o/r", {"has_wiki": True})
+
+    (deviation,) = deviations(fake)
+
+    assert deviation.subject == "repository settings"
+    assert '-  "has_wiki": true,\n+  "has_wiki": false,' in deviation.diff
+
+
+def test_fix_project_updates_settings_that_differ_with_the_policy_s_settings_only() -> None:
+    fake = conforming_to()
+    fake.settings["o/r"] = copy.deepcopy(GITHUB_DEFAULT_SETTINGS)
+
+    result = repo_policy.fix_project(fake, URL, POLICY)
+
+    assert result == repo_policy.ProjectCheck(
+        [repo_policy.PolicyChange("repository settings", repo_policy.ChangeAction.UPDATED)], []
+    )
+    assert fake.repo_settings("o/r")["full_name"] == "o/r"  # what the policy doesn't name is left alone
+
+
 # --- check_project and fix_project ------------------------------------------------
 
 
 def policy_with_rulesets(*rulesets: dict[str, Any]) -> repo_policy.RepoPolicy:
-    return repo_policy.RepoPolicy(list(rulesets), codeowners="* @will\n", ci_gate_section={})
+    return repo_policy.RepoPolicy(
+        settings=POLICY.settings, rulesets=list(rulesets), codeowners="* @will\n", ci_gate_section={}
+    )
 
 
 def test_fix_project_creates_the_missing_and_updates_the_deviating_in_policy_order() -> None:
@@ -246,8 +316,8 @@ def test_fix_project_creates_the_missing_and_updates_the_deviating_in_policy_ord
     result = repo_policy.fix_project(fake, URL, policy)
 
     assert result.changes == [
-        repo_policy.RulesetChange("first", repo_policy.RulesetAction.CREATED),
-        repo_policy.RulesetChange("second", repo_policy.RulesetAction.UPDATED),
+        repo_policy.PolicyChange("ruleset first", repo_policy.ChangeAction.CREATED),
+        repo_policy.PolicyChange("ruleset second", repo_policy.ChangeAction.UPDATED),
     ]
     assert fake.ruleset_id("o/r", "second") == second_id  # updated in place, not recreated
     assert result.deviations == [] and result.conforms
@@ -283,11 +353,13 @@ def test_check_project_lists_deviations_and_changes_nothing() -> None:
 
     assert result.changes == [] and result.error is None and not result.conforms
     assert [d.subject for d in result.deviations] == [
+        "repository settings",
         "ruleset agent-branches",
         ".github/CODEOWNERS",
         ".github/workflows/ci.yml",
     ]
     assert fake.rulesets("o/r") == {}
+    assert fake.repo_settings("o/r") == GITHUB_DEFAULT_SETTINGS
 
 
 def test_a_github_error_is_the_result_not_raised() -> None:
@@ -315,7 +387,8 @@ def test_fix_project_creates_the_missing_rulesets_then_conforms() -> None:
     result = repo_policy.fix_project(fake, URL, POLICY)
 
     assert result.changes == [
-        repo_policy.RulesetChange(ruleset["name"], repo_policy.RulesetAction.CREATED) for ruleset in POLICY.rulesets
+        repo_policy.PolicyChange(f"ruleset {ruleset['name']}", repo_policy.ChangeAction.CREATED)
+        for ruleset in POLICY.rulesets
     ]
     assert result.deviations == [] and result.conforms
 
@@ -326,7 +399,10 @@ def test_fix_project_keeps_the_changes_made_before_github_failed() -> None:
     result = repo_policy.fix_project(fake, URL, policy_with_rulesets(RULESET))
 
     assert result == repo_policy.ProjectCheck(
-        [repo_policy.RulesetChange("agent-branches", repo_policy.RulesetAction.CREATED)],
+        [
+            repo_policy.PolicyChange("repository settings", repo_policy.ChangeAction.UPDATED),
+            repo_policy.PolicyChange("ruleset agent-branches", repo_policy.ChangeAction.CREATED),
+        ],
         [],
         error="Server Error (HTTP 502)",
     )
@@ -339,6 +415,7 @@ def test_fix_project_keeps_the_changes_made_before_github_failed() -> None:
 @pytest.fixture
 def policy_dir(tmp_path: Path) -> Path:
     """A readable repo policy, for each test to break one file of."""
+    (tmp_path / "settings.yaml").write_text("settings: {}\n")
     (tmp_path / "rulesets.yaml").write_text("rulesets: []\n")
     (tmp_path / "ci-gate.yml").write_text("on: pull_request\njobs: {}\n")
     (tmp_path / "CODEOWNERS").write_text("* @will\n")
@@ -350,6 +427,13 @@ def policy_dir(tmp_path: Path) -> Path:
 def test_a_rulesets_yaml_without_a_rulesets_list_is_named(policy_dir: Path, content: str) -> None:
     (policy_dir / "rulesets.yaml").write_text(content)
     with pytest.raises(FoundryError, match=rf"^{policy_dir / 'rulesets.yaml'}: needs a 'rulesets' list$"):
+        repo_policy.load(policy_dir)
+
+
+@pytest.mark.parametrize("content", ["- a list\n", "settings: []\n", "other: {}\n"])
+def test_a_settings_yaml_without_a_settings_mapping_is_named(policy_dir: Path, content: str) -> None:
+    (policy_dir / "settings.yaml").write_text(content)
+    with pytest.raises(FoundryError, match=rf"^{policy_dir / 'settings.yaml'}: needs a 'settings' mapping$"):
         repo_policy.load(policy_dir)
 
 

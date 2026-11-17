@@ -9,7 +9,7 @@ import pytest
 from foundry import cli
 from foundry.commands.repo import report
 from foundry.config import Project
-from foundry.repo_policy import Deviation, ProjectCheck, RulesetAction, RulesetChange
+from foundry.repo_policy import ChangeAction, Deviation, PolicyChange, ProjectCheck
 from tests.support import ProcessEnvironment
 from tests.support.foundry_root import write_foundry
 from tests.support.machine import scripted_stand_in
@@ -26,11 +26,13 @@ def test_a_conforming_repository() -> None:
 
 def test_what_fix_changed_comes_before_the_result() -> None:
     changes = [
-        RulesetChange("agent-branches", RulesetAction.CREATED),
-        RulesetChange("tags", RulesetAction.UPDATED),
+        PolicyChange("repository settings", ChangeAction.UPDATED),
+        PolicyChange("ruleset agent-branches", ChangeAction.CREATED),
+        PolicyChange("ruleset tags", ChangeAction.UPDATED),
     ]
     assert report(STORE, ProjectCheck(changes, [])) == [
         "store (o/store)",
+        "  updated  repository settings",
         "  created  ruleset agent-branches",
         "  updated  ruleset tags",
         "  conforms",
@@ -50,7 +52,7 @@ def test_each_deviation_with_its_diff_indented() -> None:
 
 
 def test_an_error_follows_the_changes_made_before_it() -> None:
-    changes = [RulesetChange("agent-branches", RulesetAction.CREATED)]
+    changes = [PolicyChange("ruleset agent-branches", ChangeAction.CREATED)]
     assert report(STORE, ProjectCheck(changes, [], error="boom (HTTP 502)")) == [
         "store (o/store)",
         "  created  ruleset agent-branches",
@@ -86,11 +88,13 @@ def test_check_prints_each_project_s_result_and_exits_1_unless_all_conform(
     foundry_root = tmp_path / "foundry"
     policy_dir = foundry_root / "config" / "repo-policy"
     policy_dir.mkdir(parents=True)
+    (policy_dir / "settings.yaml").write_text("settings: {has_wiki: false}\n")
     (policy_dir / "rulesets.yaml").write_text("rulesets: []\n")
     (policy_dir / "CODEOWNERS").write_text(CODEOWNERS)
     (policy_dir / "ci-gate.yml").write_text(CI_GATE)
     write_foundry(foundry_root, {"store": "git@github.com:o/store.git", "elsewhere": "https://gitlab.com/o/p.git"})
     responses = {
+        "repos/o/store": {"full_name": "o/store", "has_wiki": False},
         "repos/o/store/rulesets?per_page=100&includes_parents=false": [],
         "repos/o/store/contents/.github/CODEOWNERS": {"type": "file", "content": base64.b64encode(CODEOWNERS.encode())},
         "repos/o/store/contents/.github/workflows/ci.yml": {
