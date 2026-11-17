@@ -49,3 +49,12 @@ Next: round 5 with the human:
 - Q21: an interrupt stops the agent in the sandbox.
 - Q22: refuse a launch when an agent is already running there.
 Then redraft wcf-0035 as slice 1.
+
+## 4 · planner · progress
+Done: the human ran probe round 4 (`sbx-probe-4.py`, sbx v0.46.0, throwaway sandbox):
+- L3: `sbx run -- -p --verbose` in text mode shows nothing until the final message (20s of silence). There is no live view without parsing.
+- L4: `sbx env exec DIR -- sh -c 'cd <workspace> && claude --dangerously-skip-permissions -p --output-format stream-json --verbose "<prompt>"'`, piped, streams live: one JSON event per line as the agent works (system/init, assistant tool_use, user tool_result, …, result). stdout is pure JSON, stderr is empty, and credentials work (is_error false). This is the simplest live view: foundry reads the lines and prints its own.
+- L5: SIGINT to that `sbx env exec` is ignored, even after 30s. After SIGKILL to it, no claude was left 3s later, but the agent's 40s sleep was due to end then too, so whether killing `env exec` takes the agent with it is unproven. A second `sbx env exec` (ps) ran fine while the first was running claude.
+Next: round 5 with the human:
+- Split: slice 1 is the exit report for today's interactive runs, plus refusing a launch while an agent runs. Slice 2 is headless mode with the live view and stopping on interrupt.
+- Then approval of slice 1's TASK.md draft.
