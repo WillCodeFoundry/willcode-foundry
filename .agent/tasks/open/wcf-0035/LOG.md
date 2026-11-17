@@ -149,3 +149,16 @@ Next: the dev implements PLAN.md from step 1. The human approved the plan at 8e4
 ## 18 · dev · progress
 Done: merged origin/HEAD (already up to date). PLAN.md step 1 in d3c32ef: `agent_runtime/unsaved_work.py` with `describe_unsaved_work`, the new wording, "can't tell" when origin can't be reached (AC8), and the runtime command `check-unsaved-work`. Stop-check tests moved to `tests/agent_runtime/test_unsaved_work.py`; `tests/agent_kit/test_stop_hook.py` runs the built command.
 Next: PLAN.md step 2: `Host.run_in_terminal`, `Sandbox.is_running`, `is_agent_running`, `stop_hint`; `attach` waits.
+
+## 19 · dev · ready-for-review
+Done: PLAN.md steps 1–6, in d3c32ef, 9fb2b2c, 2a29fa9 (sbx test) and c21111b on task/wcf-0035. Draft PR: https://github.com/WillCodeFoundry/willcode-foundry/pull/87, CI passes. No plan amendments. The criteria, each with its test:
+- AC1: `test_both_saved_is_one_line_and_exit_0` (tests/agent_runtime/test_unsaved_work.py); `test_both_saved_is_the_command_s_output_and_exit_0` (tests/agent_sandbox/test_launcher.py); `test_check_unsaved_work_says_both_are_saved_then_names_unsaved_work` (tests/agent_kit/test_stop_hook.py).
+- AC2: test_unsaved_work.py's uncommitted, not pushed, and both-in-both-checkouts cases; `test_any_other_exit_is_exit_1_with_the_command_s_stdout_then_stderr` (test_launcher.py).
+- AC3: test_launcher.py's stopped sandbox (nothing run in it), agent still running, failing check; test_unsaved_work.py's origin out of reach, removed checkout, git missing.
+- AC4: test_host.py's `run_in_terminal` interrupt and SIGKILL cases, and the handler put back. By hand against real sbx: NOT done (no sbx here).
+- AC5: `test_a_running_agent_refuses_the_launch_before_anything_is_given_to_the_sandbox` (test_launcher.py); test_sandbox.py's `is_agent_running` and `stop_hint` cases. By hand: NOT done.
+- AC6: `test_run_in_terminal_starts_the_child_with_the_default_interrupt_handler` (test_host.py); test_sandbox.py's attach cases. By hand (Ctrl-C, resize): NOT done.
+- AC7: README.md "Use", ARCHITECTURE.md launch steps 2, 4 and 5; tests/test_docs.py passes.
+- AC8: `test_a_stop_is_blocked_when_origin_can_t_be_reached` and `test_a_stop_caused_by_this_hook_blocking_goes_through` (test_unsaved_work.py).
+- The sbx tier's new `test_after_a_launch_with_no_agent_run_both_checkouts_are_saved` (tests/sbx/test_smoke.py) was not run: no sbx in this sandbox.
+Next: the reviewer's code round. The human should run `uv run pytest -m sbx` and the by-hand checks for AC4–AC6 that PLAN.md's "Tests" lists.
