@@ -134,3 +134,10 @@ Next: the human's approval of PLAN.md.
 Done: plan-approved (the human) at 8e44876. The human reviewed PLAN.md in this session, its Shape and Names included, so it replaces the plan round. No code yet.
 - D1 and D2 (entries 10 and 13) are decided by the human but not yet in TASK.md: OS1 changes so the stop check also blocks when origin can't be reached, and the term "Exit report" becomes "Checkout status".
 Next: the planner folds D1 and D2 into TASK.md. Then the dev implements PLAN.md from step 1, with no further plan round.
+
+## 16 · planner · progress
+Done: folded the human's decisions into TASK.md:
+- Answers D1: OS1 can only rule things out, so the new behaviour is a criterion, AC8: when origin can't be reached, the stop check blocks with "can't tell", and the agent's next stop goes through. OS1 now leaves every other change to when the stop check blocks out of scope. Both lines end `Amended: D1`.
+- Answers D2: the term "Exit report" is now "Checkout status", in "Terms" and the Goal, marked `Amended: D2`.
+- Also: entry 12's follow-up (a check-only command) is OS7, and "Risks" no longer says no follow-up touches this code.
+Next: end the turn, planned.
