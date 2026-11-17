@@ -1,8 +1,8 @@
-"""Launch one sandbox from its definition, with its own ssh-agent: prune remnants, provision the sandbox, then
-attach the agent.
+"""Launch one sandbox from its definition, with its own ssh-agent: prune remnants, provision the sandbox, attach the
+agent, then check the checkout status once the agent run ends.
 
 Imports nothing from the rest of foundry. It is given a dir holding the sandbox definition, a private key, and
-what to run before attaching the agent. The sandbox's name and agent kit come from the definition.
+what to run before attaching the agent and after its run. The sandbox's name and agent kit come from the definition.
 """
 
 import logging
@@ -10,7 +10,6 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
@@ -29,6 +28,9 @@ class LaunchRequest:
     definition_dir: Path
     """Directory holding the sandbox definition; also where sbx env commands are pointed."""
     ssh_key_path: Path
+    checkout_status_command: tuple[str, ...]
+    """Run inside the sandbox after the agent run: it prints the checkout status, and exits 0 when both checkouts are
+    saved."""
     init_command: tuple[str, ...] = ()
     """Run inside the sandbox before the agent starts; the launch aborts if it fails."""
     github_token_path: Path | None = None
@@ -37,12 +39,23 @@ class LaunchRequest:
     """The model the agent runs on, given to it at each attach; None for its default. Not part of the sandbox."""
 
 
-def launch(request: LaunchRequest) -> NoReturn:
-    """Prune remnants, provision this sandbox, and replace this process with an agent run in it.
+@dataclass(frozen=True)
+class CheckoutStatus:
+    """Both checkouts' unsaved work after an agent run, that both are saved, or why it can't tell."""
+
+    text: str
+    """What to show the human, one or more lines."""
+    exit_code: int
+    """0 when both checkouts are saved, 1 otherwise."""
+
+
+def launch(request: LaunchRequest) -> CheckoutStatus:
+    """Prune remnants, provision this sandbox, attach an agent run in it on this terminal, and return the checkout
+    status once the run ends, however it ended.
 
     Composition root: it builds the real host, ssh-agent and sbx client, and passes them to provision_sandbox.
     Shows each remnant pruned and the launch summary as progress, and the init command's output as detail.
-    Raises SandboxError if anything before attaching fails.
+    Raises SandboxError if anything before attaching fails, and then reports no checkout status.
     """
     for remnant in prune():
         _LOGGER.info("pruned the %s of %s", remnant.kind, remnant.sandbox_name)
@@ -60,6 +73,31 @@ def launch(request: LaunchRequest) -> NoReturn:
     for line in launch_summary(request, definition, ssh_agent.socket_path):
         _LOGGER.info("%s", line)
     sandbox.attach(request.model)
+    return check_checkout_status(request, sandbox)
+
+
+def check_checkout_status(request: LaunchRequest, sandbox: Sandbox) -> CheckoutStatus:
+    """The checkout status, from the request's checkout status command, run in the sandbox.
+
+    "can't tell", without running it, when the sandbox isn't running, since running anything would start it, or when
+    an agent still runs in it. A SandboxError from any of it is "can't tell" too, with its message.
+    """
+    try:
+        sandbox_name = SandboxDefinition.read(request.definition_dir).name
+        if not sandbox.is_running():
+            return _cant_tell(f"sandbox {sandbox_name} is not running")
+        if sandbox.is_agent_running():
+            return _cant_tell(f"an agent is still running in sandbox {sandbox_name}; {sandbox.stop_hint()}")
+        result = sandbox.run(request.checkout_status_command)
+    except SandboxError as error:
+        return _cant_tell(str(error))
+    return CheckoutStatus(
+        text=f"{result.stdout}{result.stderr}".rstrip("\n"), exit_code=0 if result.returncode == 0 else 1
+    )
+
+
+def _cant_tell(reason: str) -> CheckoutStatus:
+    return CheckoutStatus(text=f"can't tell: {reason}", exit_code=1)
 
 
 def provision_sandbox(
@@ -67,11 +105,17 @@ def provision_sandbox(
 ) -> str:
     """Bring the sandbox to the state the agent starts in, creating it if missing: its ssh-agent holding only the
     role's key, GitHub reachable over SSH, the token set, the forwarded keys checked, then the init command run.
-    Returns what the init command printed. Raises SandboxError if any of it fails."""
+    Returns what the init command printed. Raises SandboxError if any of it fails, or if an agent already runs in the
+    sandbox, which a second one would work beside."""
     _require_safe_layout(request, definition)
     ssh_agent.ensure_running()
     ssh_agent.replace_keys([request.ssh_key_path])
     sandbox.ensure_running()
+    if sandbox.is_agent_running():
+        raise SandboxError(
+            f"an agent is already running in sandbox {definition.name}, so no second one is started; "
+            f"{sandbox.stop_hint()}"
+        )
     sandbox.give_github_ssh_access()
     sandbox.set_github_token_file(request.github_token_path)
     _require_forwarded_keys(ssh_agent, sandbox)

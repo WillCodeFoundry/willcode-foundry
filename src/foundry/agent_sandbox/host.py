@@ -4,7 +4,8 @@ import os
 import signal
 import subprocess
 from collections.abc import Mapping, Sequence
-from typing import NoReturn, Protocol
+from types import FrameType
+from typing import Protocol
 
 from foundry.agent_sandbox.errors import SandboxError
 
@@ -14,8 +15,9 @@ class Host(Protocol):
         """Run a command to completion, capturing its output (like subprocess.run)."""
         ...
 
-    def exec(self, command: Sequence[str], env: Mapping[str, str]) -> NoReturn:
-        """Replace the current process with command (like os.execvpe)."""
+    def run_in_terminal(self, command: Sequence[str], env: Mapping[str, str]) -> int:
+        """Run a command on this process's terminal, and wait for it: its exit code, or minus the signal that killed
+        it. An interrupt meanwhile does nothing to this process; the command gets it as it would without us."""
         ...
 
     def environ(self) -> Mapping[str, str]:
@@ -44,8 +46,16 @@ class SystemHost:
         except FileNotFoundError:
             raise SandboxError(f"{command[0]} not found in PATH") from None
 
-    def exec(self, command: Sequence[str], env: Mapping[str, str]) -> NoReturn:
-        os.execvpe(command[0], list(command), dict(env))
+    def run_in_terminal(self, command: Sequence[str], env: Mapping[str, str]) -> int:
+        """SIGINT gets a handler that does nothing, not SIG_IGN: exec resets a caught signal to its default in the
+        child, but keeps an ignored one ignored."""
+        previous_handler = signal.signal(signal.SIGINT, _do_nothing)
+        try:
+            return subprocess.run(list(command), env=dict(env), check=False).returncode
+        except FileNotFoundError:
+            raise SandboxError(f"{command[0]} not found in PATH") from None
+        finally:
+            signal.signal(signal.SIGINT, previous_handler)
 
     def environ(self) -> Mapping[str, str]:
         return os.environ
@@ -62,3 +72,7 @@ class SystemHost:
 
     def kill_process(self, pid: int) -> None:
         os.kill(pid, signal.SIGTERM)
+
+
+def _do_nothing(_signal_number: int, _frame: FrameType | None) -> None:
+    """A signal handler for a signal this process outlives."""

@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Commands either return an exit code or replace this process; errors are reported here only."""
+    """Run one command, and return its exit code; errors are reported here only."""
     args = build_parser().parse_args(argv)
     handler: Callable[[argparse.Namespace], int] = args.func
     with progress_on_stderr(verbose=args.verbose):

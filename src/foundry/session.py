@@ -74,10 +74,12 @@ class Session:
 
         The agent kit is the definition's, which open_or_create checked is this foundry's.
         """
+        agent_kit = AgentKit(self.definition.agent_kit_dir)
         return LaunchRequest(
             definition_dir=self.dir,
             ssh_key_path=self.role.ssh_key_path,
-            init_command=AgentKit(self.definition.agent_kit_dir).runtime_command("session-init"),
+            checkout_status_command=agent_kit.runtime_command("check-unsaved-work"),
+            init_command=agent_kit.runtime_command("session-init"),
             github_token_path=self.role.github_token_path,
             model=self.role.model,
         )

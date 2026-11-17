@@ -73,6 +73,12 @@ def test_the_first_launch_asks_for_the_new_session_with_the_role_s_key(foundry_r
         str(AgentKit(foundry_root / "agent-kit").runtime),
         "session-init",
     )
+    assert request.checkout_status_command == (
+        "/usr/bin/python3",
+        "-IS",
+        str(AgentKit(foundry_root / "agent-kit").runtime),
+        "check-unsaved-work",
+    )
     assert request.ssh_key_path == foundry_root / "secrets" / "ssh" / "dev"
     assert request.github_token_path is None
     assert request.model is None
