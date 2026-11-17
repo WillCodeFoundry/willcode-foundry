@@ -79,3 +79,12 @@ Next: write the turn's outcome.
 ## 6 · planner · planned
 Done: TASK.md approved by the human and written. It has 7 criteria and 6 out-of-scope lines, and Open questions is empty. Slice 2's scope is in entry 5. The sbx facts behind the design are in entries 2–4. The probe scripts and their results sit in the planner session's workspace dir, on the host, not in the notes.
 Next: the dev writes PLAN.md. The plan changes how foundry launches, from replacing itself to waiting for the agent, so it should go to the architect.
+
+## 7 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0035 (already up to date; no code yet). Wrote PLAN.md. In short:
+- foundry runs `sbx run` as a child and waits, instead of replacing itself.
+- Then it checks, in order: the sandbox is running (`sbx ls`), no agent is running (`pgrep -x claude` in the sandbox), then runs a new runtime command, `unsaved-work`. That command prints each checkout's unsaved work as JSON, its format in `contract.py`.
+- The stop check and `unsaved-work` share one definition, in a new `agent_runtime/unsaved_work.py`. They differ only on a failed fetch, which the stop check keeps tolerating (OS1).
+- The same `pgrep` refuses a launch beside a running agent (AC5).
+- AC4 (kill of `sbx run`) and AC6 (Ctrl-C, resize) need a check by hand against real sbx, as TASK.md's "Risks" says. PLAN.md's "Tests" names those steps.
+Next: the reviewer's plan round. TASK.md's "Risks" asks that the plan go to the architect, since the launch changes from replacing itself to waiting for the agent.
