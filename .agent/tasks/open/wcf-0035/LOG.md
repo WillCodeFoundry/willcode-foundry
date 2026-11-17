@@ -16,3 +16,23 @@ Next: the human runs `sbx-exit-probe.sh` (in the planner session's workspace dir
 - U6: does `-p` through `sbx run` stream its output and return by itself?
 - U7: does a blocking Stop hook make `-p` continue?
 Then redraft wcf-0035 as slice 1: headless mode plus the exit report. The plan goes to the architect, because it changes how an agent run is driven.
+
+## 2 · planner · progress
+Done: the human ran the sbx probe twice on sbx v0.46.0, each time in a throwaway sandbox without foundry's kit:
+- U1: after the agent run ends, the sandbox stays running.
+- U2: local sbx has no detach; `--detach-keys` and `sbx attach` are cloud-only.
+- U3: `sbx run` exits 0 whether the human `/exit`s or Ctrl-C's out, so its exit code can't say how the run ended.
+- U4: `sbx run` as a child process behaves as today. The first Ctrl-C only clears Claude Code's input, the parent never sees it, and the parent regains control after the run.
+- U5: SIGHUP to `sbx run` kills it but leaves `claude` running in the sandbox, orphaned.
+- U6: `sbx run --name X -- -p "<prompt>"` runs headless, prints the final message and returns by itself (exit 0, no claude left).
+- U7: in `-p` mode, a Stop hook that blocks makes the agent continue, and the run returns once the hook allows the stop.
+- Plain `-p` prints only the agent's last message, nothing while it works.
+- The kit's managed settings already set `bypassPermissions`, so headless runs won't stall on prompts.
+Next: the human answers round 4 (Q14–Q19):
+- Q14: a live view of a headless run.
+- Q15: each role's default mode.
+- Q16: `--interactive`/`--headless` overrides.
+- Q17: Ctrl-C stops the agent in the sandbox before the report.
+- Q18: foundry killed goes under Risks.
+- Q19: no time limit.
+Then redraft wcf-0035 as slice 1.
