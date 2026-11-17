@@ -58,3 +58,24 @@ Done: the human ran probe round 4 (`sbx-probe-4.py`, sbx v0.46.0, throwaway sand
 Next: round 5 with the human:
 - Split: slice 1 is the exit report for today's interactive runs, plus refusing a launch while an agent runs. Slice 2 is headless mode with the live view and stopping on interrupt.
 - Then approval of slice 1's TASK.md draft.
+
+## 5 · planner · progress
+Done: the human approved splitting the feature, "agent runs that end by themselves and report their unsaved work", into two slices. Slice 1 is this task. Slice 2 is a separate task the human will create with `foundry task create`, `After: wcf-0035`. Its planner starts from this scope, agreed with the human in this session:
+- A role can run headless: its agent run ends by itself when the agent stops, and the Stop hook still makes it save first (probe U7, entry 2).
+- Each role has a default mode in `config/foundry.yaml`, beside `model` (ADR-0014): planner and architect interactive, dev, reviewer and qa headless.
+- `foundry run --interactive` or `--headless` overrides the mode for one launch.
+- Headless runs use `sbx env exec <definition dir> -- claude -p --output-format stream-json --verbose "<opening prompt>"`, in the workspace. Probe L4 (entry 4) showed clean, live JSON on stdout.
+- Text-mode `-p` shows nothing until the end (L3), and `sbx run` piped shows nothing at all (L1, entry 3).
+- Live view: foundry prints one line per tool call and per agent message as they arrive, then the final message. No raw JSON.
+- Ctrl-C during a headless run: `sbx env exec` ignores SIGINT (L5), so foundry stops the agent itself, as `pkill -TERM -x claude` in the sandbox did in probe O3 (entry 3), and then prints the exit report.
+- No resuming a headless conversation. An agent records what it needs in the task notes. A human answers through LOG.md and `foundry task handoff`, or by launching the role interactively, which starts fresh from the notes.
+- It reuses this task's exit report and its refusal to launch beside a running agent.
+- Still open for that planner:
+  - exactly what each live-view line shows;
+  - the error for an unknown mode;
+  - whether giving both flags is refused.
+Next: write the turn's outcome.
+
+## 6 · planner · planned
+Done: TASK.md approved by the human and written. It has 7 criteria and 6 out-of-scope lines, and Open questions is empty. Slice 2's scope is in entry 5. The sbx facts behind the design are in entries 2–4. The probe scripts and their results sit in the planner session's workspace dir, on the host, not in the notes.
+Next: the dev writes PLAN.md. The plan changes how foundry launches, from replacing itself to waiting for the agent, so it should go to the architect.
