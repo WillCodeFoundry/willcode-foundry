@@ -141,3 +141,7 @@ Done: folded the human's decisions into TASK.md:
 - Answers D2: the term "Exit report" is now "Checkout status", in "Terms" and the Goal, marked `Amended: D2`.
 - Also: entry 12's follow-up (a check-only command) is OS7, and "Risks" no longer says no follow-up touches this code.
 Next: end the turn, planned.
+
+## 17 · planner · planned
+Done: TASK.md holds D1 and D2 (d7e8764): AC8 and the narrowed OS1 for D1, the term "Checkout status" for D2, and OS7 for entry 12's follow-up. Open questions is empty.
+Next: the dev implements PLAN.md from step 1. The human approved the plan at 8e44876 (entry 15), so no further plan round.
