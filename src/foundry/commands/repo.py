@@ -1,4 +1,4 @@
-"""foundry repo check: how each project's repository deviates from the repo policy, and --fix for its rulesets."""
+"""foundry repo check: how each project's repository deviates from the repo policy, and --fix for what GitHub holds."""
 
 import argparse
 
@@ -14,7 +14,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
         "repo",
         help="check projects' GitHub repositories against the repo policy",
         description=(
-            "Compare each project's GitHub rulesets, CODEOWNERS and ci.yml with config/repo-policy/. "
+            "Compare each project's GitHub settings, rulesets, CODEOWNERS and ci.yml with config/repo-policy/. "
             "Uses the GitHub CLI (gh), signed in as you."
         ),
     )
@@ -26,7 +26,7 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     check.add_argument(
         "--fix",
         action="store_true",
-        help="first create or update the rulesets to match; project files are reported, never written",
+        help="first update the settings and rulesets to match; project files are reported, never written",
     )
     check.set_defaults(func=check_main)
 
@@ -57,7 +57,7 @@ def report(project: Project, result: ProjectCheck) -> list[str]:
         lines = [f"{project.name} ({repo_slug_from_url(project.url)})"]
     except FoundryError:
         lines = [project.name]  # the result's error says why
-    lines += [f"  {change.action:<8} ruleset {change.ruleset_name}" for change in result.changes]
+    lines += [f"  {change.action:<8} {change.subject}" for change in result.changes]
     if result.error is not None:
         return [*lines, f"  error    {result.error}"]
     if not result.deviations:

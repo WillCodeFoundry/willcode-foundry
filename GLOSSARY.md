@@ -26,7 +26,7 @@ _Avoid_: repository, repo (for a clone); repository root (say working tree)
 A branch of the project repository as one fetch found it: its name, and the commit it pointed at. What is read from it, and a checkout of it, use that commit.
 
 **Repo policy**:
-What every project's GitHub repository must match: its rulesets, its CODEOWNERS and the `ci-gate` job of its CI.
+What every project's GitHub repository must match: its settings, its rulesets, its CODEOWNERS and the `ci-gate` job of its CI.
 
 **Deviation**:
 One way a project's repository differs from the repo policy, shown as a diff. A repository with none **conforms**.

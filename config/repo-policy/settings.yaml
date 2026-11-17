@@ -1,0 +1,27 @@
+# The repository settings every project's GitHub repository must have: part
+# of the repo policy, with the rulesets, CODEOWNERS and ci-gate.yml beside it.
+# Checked by `foundry repo check`, and applied by its --fix.
+#
+# The settings are in the shape of GitHub's REST API ("Update a repository"),
+# sent as-is by `check --fix`. `check` compares only the fields written here;
+# every other field GitHub returns is ignored. GitHub shows the merge settings
+# only to an admin, so `check` needs gh signed in as one.
+settings:
+  # Pull requests: how they may be merged, and what's left behind.
+  allow_merge_commit: true
+  allow_squash_merge: true
+  allow_rebase_merge: true
+  merge_commit_title: MERGE_MESSAGE
+  merge_commit_message: PR_TITLE
+  squash_merge_commit_title: COMMIT_OR_PR_TITLE
+  squash_merge_commit_message: COMMIT_MESSAGES
+  allow_auto_merge: false
+  allow_update_branch: true
+  delete_branch_on_merge: true
+  web_commit_signoff_required: false
+
+  # Features: issues and projects, no wiki or discussions.
+  has_issues: true
+  has_projects: true
+  has_wiki: false
+  has_discussions: false

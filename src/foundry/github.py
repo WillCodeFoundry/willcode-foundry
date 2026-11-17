@@ -51,7 +51,16 @@ def _run_gh(command: Sequence[str], stdin: str | None) -> subprocess.CompletedPr
 
 
 class GitHub(Protocol):
-    """The interface foundry needs from GitHub: read rulesets and files, create and update rulesets."""
+    """The interface foundry needs from GitHub: read and update repository settings, read rulesets and files,
+    create and update rulesets."""
+
+    def repo_settings(self, repo_slug: str) -> dict[str, Any]:
+        """The repository as GitHub's "Get a repository" returns it; merge settings show only to an admin."""
+        ...
+
+    def update_repo_settings(self, repo_slug: str, settings: dict[str, Any]) -> None:
+        """Change only the settings given, as GitHub's "Update a repository" does."""
+        ...
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
         """The repository's own rulesets in full, by name; inherited ones are left out."""
@@ -94,6 +103,15 @@ class GhCli:
         if not isinstance(content, dict) or content.get("type") != "file":
             return None
         return base64.b64decode(content["content"]).decode()
+
+    def repo_settings(self, repo_slug: str) -> dict[str, Any]:
+        settings = self._api("GET", f"repos/{repo_slug}")
+        if not isinstance(settings, dict):
+            raise GitHubError(f"gh api repos/{repo_slug} did not return a repository")
+        return settings
+
+    def update_repo_settings(self, repo_slug: str, settings: dict[str, Any]) -> None:
+        self._api("PATCH", f"repos/{repo_slug}", settings)
 
     def rulesets(self, repo_slug: str) -> dict[str, dict[str, Any]]:
         summaries = self._api("GET", f"repos/{repo_slug}/rulesets?per_page=100&includes_parents=false")

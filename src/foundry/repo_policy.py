@@ -1,8 +1,8 @@
 """The repo policy: what every project's GitHub repository must match.
 
-config/repo-policy/ holds the rulesets, the CODEOWNERS file and the ci-gate
-section of ci.yml (when it runs, and its ci-gate job) that the rulesets
-depend on. A repository is checked by comparing it with these, not by
+config/repo-policy/ holds the repository settings, the rulesets, the
+CODEOWNERS file and the ci-gate section of ci.yml (when it runs, and its
+ci-gate job) that the rulesets depend on. A repository is checked by comparing it with these, not by
 analysing what it has: anything different is a deviation, even when
 harmless. When a project really needs to differ, change the policy.
 """
@@ -25,10 +25,12 @@ CODEOWNERS_PATH = ".github/CODEOWNERS"
 CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
 _CI_GATE_JOB = "ci-gate"
 _ALL_OTHER_JOBS = "<all other jobs>"
+SETTINGS_SUBJECT = "repository settings"
 
 
 @dataclass(frozen=True)
 class RepoPolicy:
+    settings: dict[str, Any]
     rulesets: list[dict[str, Any]]
     codeowners: str
     ci_gate_section: dict[str, Any]
@@ -42,21 +44,26 @@ class Deviation:
     diff: str
 
 
-class RulesetAction(StrEnum):
+class ChangeAction(StrEnum):
     CREATED = "created"
     UPDATED = "updated"
 
 
 @dataclass(frozen=True)
-class RulesetChange:
-    """One ruleset fix_project created or updated."""
+class PolicyChange:
+    """One thing fix_project created or updated on GitHub: a ruleset, or the repository settings."""
 
-    ruleset_name: str
-    action: RulesetAction
+    subject: str
+    action: ChangeAction
 
 
 def load(policy_dir: Path) -> RepoPolicy:
     """Read config/repo-policy/; a file that's missing or not what foundry expects fails with its path."""
+    settings_path = policy_dir / "settings.yaml"
+    settings_document = yaml_io.load(settings_path)
+    if not isinstance(settings_document, dict) or not isinstance(settings_document.get("settings"), dict):
+        raise FoundryError(f"{settings_path}: needs a 'settings' mapping")
+
     rulesets_path = policy_dir / "rulesets.yaml"
     rulesets_document = yaml_io.load(rulesets_path)
     if not isinstance(rulesets_document, dict) or not isinstance(rulesets_document.get("rulesets"), list):
@@ -68,7 +75,12 @@ def load(policy_dir: Path) -> RepoPolicy:
     except (KeyError, TypeError, AttributeError) as error:
         raise FoundryError(f"{ci_gate_path}: not a workflow fragment foundry can read ({error!r})") from None
 
-    return RepoPolicy(rulesets_document["rulesets"], _read_text(policy_dir / "CODEOWNERS"), ci_gate_section)
+    return RepoPolicy(
+        settings_document["settings"],
+        rulesets_document["rulesets"],
+        _read_text(policy_dir / "CODEOWNERS"),
+        ci_gate_section,
+    )
 
 
 def _read_text(file_path: Path) -> str:
@@ -80,8 +92,9 @@ def _read_text(file_path: Path) -> str:
 
 def _deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Deviation]:
     """How the repository differs from the policy; empty when it conforms."""
+    comparisons = [_settings_deviation(policy.settings, github.repo_settings(repo_slug))]
     actual_rulesets = github.rulesets(repo_slug)
-    comparisons = [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
+    comparisons += [_ruleset_deviation(ruleset, actual_rulesets.get(ruleset["name"])) for ruleset in policy.rulesets]
     comparisons.append(
         _compare(
             CODEOWNERS_PATH,
@@ -99,29 +112,33 @@ def _deviations(github: GitHub, repo_slug: str, policy: RepoPolicy) -> list[Devi
     return [deviation for deviation in comparisons if deviation is not None]
 
 
-def _apply_rulesets(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[RulesetChange]:
-    """Create the policy's rulesets the repository lacks and update those that deviate, in policy order.
+def _apply(github: GitHub, repo_slug: str, policy: RepoPolicy) -> Iterator[PolicyChange]:
+    """Update the repository settings if they deviate, then create the policy's rulesets the repository
+    lacks and update those that deviate, in policy order.
 
     Yields each change once GitHub has made it, so a caller keeps the changes made before a
     failure. Project files are never written: they're the project's to change.
     """
+    if _settings_deviation(policy.settings, github.repo_settings(repo_slug)) is not None:
+        github.update_repo_settings(repo_slug, policy.settings)
+        yield PolicyChange(SETTINGS_SUBJECT, ChangeAction.UPDATED)
     actual_rulesets = github.rulesets(repo_slug)
     for ruleset in policy.rulesets:
         actual = actual_rulesets.get(ruleset["name"])
         if actual is None:
             github.create_ruleset(repo_slug, ruleset)
-            yield RulesetChange(ruleset["name"], RulesetAction.CREATED)
+            yield PolicyChange(_ruleset_subject(ruleset), ChangeAction.CREATED)
         elif _ruleset_deviation(ruleset, actual) is not None:
             github.update_ruleset(repo_slug, actual["id"], ruleset)
-            yield RulesetChange(ruleset["name"], RulesetAction.UPDATED)
+            yield PolicyChange(_ruleset_subject(ruleset), ChangeAction.UPDATED)
 
 
 @dataclass(frozen=True)
 class ProjectCheck:
-    """What checking or fixing one repository found: the ruleset changes a fix made, then its deviations, or
+    """What checking or fixing one repository found: the changes a fix made, then its deviations, or
     why it couldn't be checked. Changes made before an error are kept."""
 
-    changes: list[RulesetChange]
+    changes: list[PolicyChange]
     deviations: list[Deviation]
     error: str | None = None
 
@@ -142,23 +159,29 @@ def check_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectC
 
 
 def fix_project(github: GitHub, repo_url: str, policy: RepoPolicy) -> ProjectCheck:
-    """Create or update the repository's rulesets to match the policy, then list the deviations left.
+    """Update the repository's settings and rulesets to match the policy, then list the deviations left.
 
     Changes made before an error are kept in the result, with the error, as in check_project.
     """
-    changes: list[RulesetChange] = []
+    changes: list[PolicyChange] = []
     try:
         repo_slug = repo_slug_from_url(repo_url)
-        changes.extend(_apply_rulesets(github, repo_slug, policy))  # takes each change as it's made
+        changes.extend(_apply(github, repo_slug, policy))  # takes each change as it's made
         return ProjectCheck(changes, _deviations(github, repo_slug, policy))
     except FoundryError as error:
         return ProjectCheck(changes, [], error=str(error))
 
 
+def _settings_deviation(settings: dict[str, Any], actual: dict[str, Any]) -> Deviation | None:
+    return _compare(SETTINGS_SUBJECT, actual=_common_fields(actual=actual, expected=settings), expected=settings)
+
+
+def _ruleset_subject(ruleset: dict[str, Any]) -> str:
+    return f"ruleset {ruleset['name']}"
+
+
 def _ruleset_deviation(ruleset: dict[str, Any], actual: dict[str, Any] | None) -> Deviation | None:
-    return _compare(
-        f"ruleset {ruleset['name']}", actual=_common_fields(actual=actual, expected=ruleset), expected=ruleset
-    )
+    return _compare(_ruleset_subject(ruleset), actual=_common_fields(actual=actual, expected=ruleset), expected=ruleset)
 
 
 def _project_ci_gate_section(workflow_text: str | None) -> dict[str, Any] | None:
