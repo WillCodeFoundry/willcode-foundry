@@ -88,3 +88,7 @@ Done: merged origin/HEAD into task/wcf-0035 (already up to date; no code yet). W
 - The same `pgrep` refuses a launch beside a running agent (AC5).
 - AC4 (kill of `sbx run`) and AC6 (Ctrl-C, resize) need a check by hand against real sbx, as TASK.md's "Risks" says. PLAN.md's "Tests" names those steps.
 Next: the reviewer's plan round. TASK.md's "Risks" asks that the plan go to the architect, since the launch changes from replacing itself to waiting for the agent.
+
+## 8 · dev · progress
+Done: in the dev's session, the human chose `sbx stop <name>` as the command the refusal (AC5) and the "agent still running" report give, over `pkill -TERM -x claude` through `sbx env exec`. Its reasons: it takes only the name, needs no socket, and matches no process by name. PLAN.md amended to match: `Sandbox.stop_command`. Also added to "Approach" why the report doesn't reuse `claude-hook session-check`.
+Next: the human is reviewing PLAN.md in this session; plan-ready stands until they approve or ask for changes.
