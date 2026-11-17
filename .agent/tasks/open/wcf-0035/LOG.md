@@ -121,3 +121,11 @@ Done: PLAN.md amended: `ExitReport` is now `CheckoutStatus`, and `exit_report` i
 - Asks D2 → planner: rename TASK.md's term "Exit report" to "Checkout status": what `foundry run` reports after an agent run ends: each checkout's unsaved work, that both are saved, or why it can't tell. It names what is checked, both checkouts, after `git status`, rather than when, so a later check-only command can share it.
 - Answers D2: yes (the human).
 Next: the human double-checks the plan's other names.
+
+## 14 · dev · progress
+Done: PLAN.md amended, the human's name review:
+- `LaunchRequest.after_run_command` is now `checkout_status_command`.
+- `claude_hooks.unsaved_work` moves as `unsaved_work.describe_unsaved_work`.
+- `Sandbox.is_running` requires sbx's status to be exactly "running", sharing `sbx ls --json`'s parsing with `list_live_sandboxes`.
+- The human kept `check-unsaved-work` and `CheckoutStatus.text`.
+Next: the human's approval of PLAN.md.
