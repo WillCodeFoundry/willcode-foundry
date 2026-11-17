@@ -92,3 +92,11 @@ Next: the reviewer's plan round. TASK.md's "Risks" asks that the plan go to the 
 ## 8 · dev · progress
 Done: in the dev's session, the human chose `sbx stop <name>` as the command the refusal (AC5) and the "agent still running" report give, over `pkill -TERM -x claude` through `sbx env exec`. Its reasons: it takes only the name, needs no socket, and matches no process by name. PLAN.md amended to match: `Sandbox.stop_command`. Also added to "Approach" why the report doesn't reuse `claude-hook session-check`.
 Next: the human is reviewing PLAN.md in this session; plan-ready stands until they approve or ask for changes.
+
+## 9 · dev · progress
+Done: decisions by the human in this session, folded into PLAN.md:
+- The runtime prints the exit report's lines itself, as plain text, and its exit code says saved (0) or not (1). No JSON, no record in `contract.py`, no report module in foundry.
+- The runtime command is named `check-unsaved-work`.
+- The stop check uses the report's wording, with each checkout's dir and branch. It blocks exactly when it did; the human ruled the new wording within OS1.
+- Also cut: `attach_and_check`, new `sbx ls` parsing (`list_live_sandboxes` is reused), `Host.exec`, and the unused test fake `Attached`.
+Next: the human reviews PLAN.md, its names first.
