@@ -110,3 +110,8 @@ Next: the human goes on reviewing PLAN.md in this session. TASK.md doesn't hold 
 ## 11 · dev · progress
 Done: PLAN.md amended, as the human decided: `unsaved_work` moves from `claude_hooks.py` to its own runtime module, `agent_runtime/unsaved_work.py`. `ExitReport` keeps its name in `agent_sandbox` (the human).
 Next: the human's answer on a follow-up for a check-only command, then the rest of their review.
+
+## 12 · dev · progress
+Done: the human agreed to a follow-up for a check-only command, and said the planner will fold D1 into TASK.md.
+- Follow-up: foundry run (src/foundry/commands/run.py) · the exit report exists only at the end of a `foundry run`; there is no command to see it without starting an agent · after `sbx stop`, or while an orphaned agent runs, the human can't learn whether work is unsaved until the next agent run ends.
+Next: the human's review of PLAN.md's names, starting with `launcher.exit_report`.
