@@ -1,7 +1,7 @@
 """`claude-hook`: Claude Code's hooks, as managed settings run them, the tool call or event as JSON on stdin.
 
-The rules are agent_runtime.claude_hooks'. This module speaks Claude Code's hook protocol: what it reads, and how a
-reply blocks.
+The rules are agent_runtime.claude_hooks' and agent_runtime.unsaved_work's. This module speaks Claude Code's hook
+protocol: what it reads, and how a reply blocks.
 """
 
 import json
@@ -9,6 +9,7 @@ import sys
 from typing import TextIO
 
 from agent_runtime import claude_hooks, contract
+from agent_runtime.unsaved_work import describe_unsaved_work
 
 _BLOCK_EXIT_CODE = 2
 """Claude Code: a PreToolUse hook exiting 2 blocks the tool call and shows its stderr to the agent."""
@@ -38,12 +39,12 @@ def session_check(
 ) -> int:
     """Block the stop, with the reason as the agent's next instruction, while work is unsaved.
 
-    The rule: an agent run cannot end with uncommitted or unpushed changes.
+    The rule: an agent run cannot end with unsaved work, or work it can't check.
     """
     variables = variables or contract.read_session_variables()
     if _stop_hook_active(stdin or sys.stdin):
         return 0  # already looping on this hook: let the stop through rather than spin
-    problems = claude_hooks.unsaved_work(variables)
+    problems = describe_unsaved_work(variables)
     if not problems:
         return 0
     reason = (

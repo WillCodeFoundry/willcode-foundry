@@ -45,6 +45,7 @@ A launch, end to end:
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
 | `claude_hooks.py`, `git_hooks.py` | The rules of the Claude hooks and the git hooks. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
+| `unsaved_work.py` | Unsaved work in both checkouts, in the words the Stop hook and `check-unsaved-work` share. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 
 The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <command>`:
@@ -55,6 +56,7 @@ The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <com
 | `session-setup` | `session-init` runs it in-process; the command is for running setup alone, by hand or in tests |
 | `harden` | `session-init`, as root through sudo, on the first launch |
 | `check-hardening` | `session-init` runs agent mode in-process on every launch; the command runs it alone |
+| `check-unsaved-work` | foundry, as the agent, after each agent run, for the checkout status |
 | `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from the managed settings |
 | `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
 
