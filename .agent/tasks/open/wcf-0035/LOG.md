@@ -145,3 +145,7 @@ Next: end the turn, planned.
 ## 17 · planner · planned
 Done: TASK.md holds D1 and D2 (d7e8764): AC8 and the narrowed OS1 for D1, the term "Checkout status" for D2, and OS7 for entry 12's follow-up. Open questions is empty.
 Next: the dev implements PLAN.md from step 1. The human approved the plan at 8e44876 (entry 15), so no further plan round.
+
+## 18 · dev · progress
+Done: merged origin/HEAD (already up to date). PLAN.md step 1 in d3c32ef: `agent_runtime/unsaved_work.py` with `describe_unsaved_work`, the new wording, "can't tell" when origin can't be reached (AC8), and the runtime command `check-unsaved-work`. Stop-check tests moved to `tests/agent_runtime/test_unsaved_work.py`; `tests/agent_kit/test_stop_hook.py` runs the built command.
+Next: PLAN.md step 2: `Host.run_in_terminal`, `Sandbox.is_running`, `is_agent_running`, `stop_hint`; `attach` waits.
