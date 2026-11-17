@@ -100,3 +100,9 @@ Done: decisions by the human in this session, folded into PLAN.md:
 - The stop check uses the report's wording, with each checkout's dir and branch. It blocks exactly when it did; the human ruled the new wording within OS1.
 - Also cut: `attach_and_check`, new `sbx ls` parsing (`list_live_sandboxes` is reused), `Host.exec`, and the unused test fake `Attached`.
 Next: the human reviews PLAN.md, its names first.
+
+## 10 · dev · progress
+Done: PLAN.md amended: the stop check and the report share `claude_hooks.unsaved_work` with no mode; a failed fetch is "can't tell" for both.
+- Asks D1 → planner: change OS1 so the stop check also blocks when origin can't be reached, instead of comparing with the last fetched state. Its reason says "can't tell: origin can't be reached". The agent's next stop still goes through, as after any block. Why: one definition with no mode parameter; the stop check already blocks when it can't read a checkout; DR6 says a hook that enforces a rule blocks when it can't check it. Cost: one extra stop for an agent whose work was saved, when GitHub is unreachable.
+- Answers D1: yes, change OS1 that way (the human).
+Next: the human goes on reviewing PLAN.md in this session. TASK.md doesn't hold D1 yet, so the turn ends with task-question for the planner to fold it in, unless the human says otherwise.

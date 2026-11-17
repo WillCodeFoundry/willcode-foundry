@@ -11,13 +11,14 @@ foundry prints what the command printed, stdout then stderr, and exits 0 when it
 
 Step 2's check also runs before attaching, right after the sandbox is started, and refuses the launch when an agent is running (AC5). Its message gives `sbx stop <name>`, which stops the whole sandbox; the next launch starts it again. The human chose it over killing the agent's process (LOG entry 8).
 
-The stop check and `check-unsaved-work` share one function, `claude_hooks.unsaved_work`, and so one definition and one wording (TASK.md "Terms"). They differ in one way, named by an enum: when `git fetch` fails, the stop check compares with the last fetched state, as today (OS1). The report says "can't tell" (AC3). The stop check's reason gains the checkout's dir and branch; when it blocks doesn't change. The human ruled that within OS1 (LOG entry 9).
+The stop check and `check-unsaved-work` share one function, `claude_hooks.unsaved_work`, and so one definition and one wording (TASK.md "Terms"). When `git fetch` fails, both say "can't tell: origin can't be reached" (AC3), so the stop check now blocks there too, where it compared with the last fetched state. Because: DR6, a hook that enforces a rule blocks when it can't check it, as the stop check already does when it can't read a checkout. An agent isn't stuck: its next stop goes through, as after any block. The human chose this, which changes OS1 (LOG entry 10, D1). The stop check's reason also gains each checkout's dir and branch, which the human ruled within OS1 (LOG entry 9).
 
 While it waits, foundry swaps SIGINT's handler for one that does nothing, and puts the old one back after. A Ctrl-C that reaches foundry's process group, outside sbx's raw mode, then can't kill foundry before the report (AC4). The child starts with the default handler, since exec resets caught signals, so sbx and Claude Code see Ctrl-C as today (AC6). The child shares the terminal and process group, so it gets SIGWINCH as today (AC6).
 
 Turned down:
 - **foundry running the git commands itself through `sbx env exec`**, one call each. It gives the report a second definition of unsaved work, which TASK.md's "Terms" says the stop check and the report share.
-- **Reusing `claude-hook session-check` after the run.** It speaks Claude Code's hook protocol: it reads a Stop event on stdin and prints a block decision. Offline, it compares with the last fetch, which OS1 keeps and AC3 forbids for the report.
+- **Reusing `claude-hook session-check` after the run.** It speaks Claude Code's hook protocol: it reads a Stop event on stdin and prints a block decision. It doesn't give each checkout's dir and branch (AC2).
+- **Keeping the stop check's offline behaviour (OS1 as first written)**, by a mode parameter or by two functions, one comparing with the last fetch. Either is more code for a case that costs an agent one more stop. The human chose to drop it (D1).
 - **JSON from the runtime, read by foundry.** A record in `contract.py`, its JSON, and a module in foundry to word it: more code for the same lines. The human chose plain text (LOG entry 9).
 - **`pkill -TERM -x claude` as the stop hint.** It needs the sandbox's socket in front of it, and it matches the agent by process name. The human chose `sbx stop` (LOG entry 8).
 - **Reporting a failed `sbx ls` or `pgrep` after the run as an error.** AC3 asks for "can't tell" with the reason, so `exit_report` turns `SandboxError` into one.
@@ -45,16 +46,16 @@ foundry.cli.main                                changed: docstring; no command r
 
 agent_runtime: check-unsaved-work               new command
 └─ commands.check_unsaved_work.main -> int      new: prints the lines, or that both are saved
-   └─ claude_hooks.unsaved_work(variables, WhenOriginUnreachable.CANT_TELL)   changed: gains the enum; new wording
+   └─ claude_hooks.unsaved_work(variables)    changed: a failed fetch is "can't tell"; new wording
 
-agent_runtime: claude-hook session-check        unchanged: blocks exactly when it did (OS1)
-└─ claude_hooks.unsaved_work(variables, WhenOriginUnreachable.COMPARE_WITH_LAST_FETCHED)
+agent_runtime: claude-hook session-check        changed: also blocks when origin can't be reached (D1)
+└─ claude_hooks.unsaved_work(variables)        (as above)
 ```
 
 Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `ExecCalled`, the two attach tests that use it, and `Attached`, which no test uses. `NoReturn` goes from `run.main`, `launch` and both `attach`.
 
 ## Steps
-1. Runtime: `WhenOriginUnreachable`, the new wording in `claude_hooks.unsaved_work`, and `check-unsaved-work`.
+1. Runtime: in `claude_hooks.unsaved_work`, the new wording and a failed fetch as "can't tell"; then `check-unsaved-work`.
 2. `agent_sandbox`: `Host.run_in_terminal`, then `Sandbox.is_running`, `is_agent_running`, `stop_hint`. `attach` waits; `Host.exec` goes.
 3. `agent_sandbox`: the refusal in `provision_sandbox` (AC5); `ExitReport` and `exit_report`; `launch` returns it; `LaunchRequest.after_run_command`.
 4. foundry: `Session.launch_request` passes the command; `run.main` prints the report and returns its code.
@@ -66,8 +67,7 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 |---|---|---|---|
 | added | runtime command `check-unsaved-work` | prints the lines on stdout; exits 0 when both are saved, 1 otherwise | the runtime's `check-hardening`, same shape; TASK.md "Terms": Unsaved work. Chosen by the human (LOG entry 9) |
 | added | `agent_runtime.commands.check_unsaved_work.main`, `report` | `() -> int`; `(unsaved: list[str]) -> int` | `commands/check_hardening.py`'s `main` and `report` |
-| added | `claude_hooks.WhenOriginUnreachable` | enum: `COMPARE_WITH_LAST_FETCHED`, `CANT_TELL` | AC3's "origin can't be reached" and "the last fetched state" |
-| changed | `claude_hooks.unsaved_work` | `(variables: SessionVariables, when_origin_unreachable: WhenOriginUnreachable) -> list[str]`: one line per checkout not saved; empty when both are | the code |
+| changed | `claude_hooks.unsaved_work` | `(variables: SessionVariables) -> list[str]`, as today: one line per checkout not saved; empty when both are | the code |
 | added | `LaunchRequest.after_run_command` | `tuple[str, ...]`, required | `init_command`, its neighbour |
 | added | `agent_sandbox.ExitReport` | frozen: `text: str`, `exit_code: int` (0 or 1); exported from `agent_sandbox` | TASK.md "Terms": Exit report |
 | changed | `agent_sandbox.launch` | `(request: LaunchRequest) -> ExitReport`, was `-> NoReturn` | the code |
@@ -89,7 +89,7 @@ The exit report, on stderr, unprefixed, from `check-unsaved-work`:
   - `… : uncommitted changes and commits not pushed`
   - `notes checkout /home/agent/work/<repo>-notes on agent-notes: can't tell: <reason>`
 - A checkout's reasons:
-  - `origin can't be reached: <git's first line>`: the fetch failed, with `CANT_TELL`.
+  - `origin can't be reached: <git's first line>`: the fetch failed.
   - ``can't read it: `git -C <dir> status --porcelain` failed: <git's first line>``, or any other git command, or `can't read it: git not found in PATH`.
 
 From `exit_report`, when it can't run the command (AC3), exit 1:
@@ -97,7 +97,7 @@ From `exit_report`, when it can't run the command (AC3), exit 1:
 - ``can't tell: an agent is still running in sandbox <name>; stop it with `sbx stop <name>` ``
 - `can't tell: <a SandboxError's text>`, such as `can't tell: sbx ls failed: <stderr>`.
 
-The stop check's reason (OS1): `Cannot stop yet: <the lines, joined by "; ">. Commit and push that work (see "Git rules" in AGENTS.md), then finish.` Only the lines' wording changes.
+The stop check's reason: `Cannot stop yet: <the lines, joined by "; ">. Commit and push that work (see "Git rules" in AGENTS.md), then finish.` Only the lines' wording changes.
 
 The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is already running in sandbox <name>, so no second one is started; stop it with `sbx stop <name>` ``
 
@@ -107,7 +107,7 @@ The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is al
 - AC1–AC3, the lines: `tests/agent_runtime/test_claude_hooks.py`, on the real checkouts of the `checkouts` fixture in `tests/agent_runtime/conftest.py`, through `check_unsaved_work.report` and `session_check`:
   - Both saved: the one line, exit 0.
   - Each of uncommitted, unpushed and both, in either checkout: the line naming it, its dir and branch, exit 1. A saved checkout gets no line.
-  - Origin's URL pointed at a missing dir, after a commit that was pushed: `CANT_TELL` says origin can't be reached. The stop check lets the stop through, as today (OS1).
+  - Origin's URL pointed at a missing dir, after a commit that was pushed: the report says origin can't be reached, exit 1, and the stop check blocks with that reason (D1).
   - A removed checkout, and git missing: "can't read it".
   - The existing stop-check tests keep their cases; their expected text changes to the new wording.
 - AC3, the sandbox: `tests/agent_sandbox/test_launcher.py`, against `FakeSandbox`, which gains `running` and `agent_running`, and records the attach:
