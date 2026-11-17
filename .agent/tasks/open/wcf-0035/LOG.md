@@ -36,3 +36,16 @@ Next: the human answers round 4 (Q14–Q19):
 - Q18: foundry killed goes under Risks.
 - Q19: no time limit.
 Then redraft wcf-0035 as slice 1.
+
+## 3 · planner · progress
+Done: the human ran probe round 3 (`sbx-probe-3.py`, sbx v0.46.0, throwaway sandbox):
+- L1: `sbx run -- -p --output-format stream-json --verbose` with stdout piped (no tty) prints none of the agent's output: only a terminal-title escape at the end, exit 0.
+- L2: under a pseudo-terminal it streams live, one JSON event per line as the agent works (each tool call within ~0.1s). But the output is mixed with sbx's own lines ("Attaching…", "Starting claude agent…", "Workspace: …") and escape sequences: a title set and a screen clear glued to the front of the first JSON line, a cursor/title reset at the end. Line endings are CRLF.
+- O1: SIGINT, SIGTERM and SIGHUP to `sbx run` each end it (exit 1, 1, -1) and each leave the headless `claude` running in the sandbox.
+- O2: the orphan keeps working and finishes its task. Some time after it finished, within 45s, the sandbox was found stopped, which never happened after a normal run. Cause not established.
+- O3: an orphan shows in `ps` in the sandbox as `claude --dangerously-skip-permissions -p …` with parent pid 0. `pkill -TERM -x claude` through `sbx env exec` stops it and its tool's child processes within 5s, and the sandbox stays running.
+Next: round 5 with the human:
+- Q20: clean output via `sbx env exec`, to be probed, or a pty plus filtering?
+- Q21: an interrupt stops the agent in the sandbox.
+- Q22: refuse a launch when an agent is already running there.
+Then redraft wcf-0035 as slice 1.
