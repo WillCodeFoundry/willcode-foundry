@@ -115,3 +115,9 @@ Next: the human's answer on a follow-up for a check-only command, then the rest 
 Done: the human agreed to a follow-up for a check-only command, and said the planner will fold D1 into TASK.md.
 - Follow-up: foundry run (src/foundry/commands/run.py) · the exit report exists only at the end of a `foundry run`; there is no command to see it without starting an agent · after `sbx stop`, or while an orphaned agent runs, the human can't learn whether work is unsaved until the next agent run ends.
 Next: the human's review of PLAN.md's names, starting with `launcher.exit_report`.
+
+## 13 · dev · progress
+Done: PLAN.md amended: `ExitReport` is now `CheckoutStatus`, and `exit_report` is now `check_checkout_status`, as the human decided.
+- Asks D2 → planner: rename TASK.md's term "Exit report" to "Checkout status": what `foundry run` reports after an agent run ends: each checkout's unsaved work, that both are saved, or why it can't tell. It names what is checked, both checkouts, after `git status`, rather than when, so a later check-only command can share it.
+- Answers D2: yes (the human).
+Next: the human double-checks the plan's other names.

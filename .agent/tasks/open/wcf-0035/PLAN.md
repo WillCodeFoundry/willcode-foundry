@@ -1,7 +1,7 @@
 # Plan: wcf-0035
 
 ## Approach
-`foundry run` stops replacing itself with `sbx run`. It runs `sbx run` as a child on the same terminal, waits for it, then builds the exit report. That takes three checks, in order, each stopping at the first that fails:
+`foundry run` stops replacing itself with `sbx run`. It runs `sbx run` as a child on the same terminal, waits for it, then reports the checkout status. That takes three checks, in order, each stopping at the first that fails:
 
 1. Is the sandbox running? Asked with `sbx ls --json`, through the existing `list_live_sandboxes`, which never starts it. Not running: "can't tell" (AC3).
 2. Is an agent still running in it? Asked with `pgrep -x claude` through `sbx env exec`. Yes: "can't tell", with the stop hint (AC3).
@@ -21,7 +21,7 @@ Turned down:
 - **Keeping the stop check's offline behaviour (OS1 as first written)**, by a mode parameter or by two functions, one comparing with the last fetch. Either is more code for a case that costs an agent one more stop. The human chose to drop it (D1).
 - **JSON from the runtime, read by foundry.** A record in `contract.py`, its JSON, and a module in foundry to word it: more code for the same lines. The human chose plain text (LOG entry 9).
 - **`pkill -TERM -x claude` as the stop hint.** It needs the sandbox's socket in front of it, and it matches the agent by process name. The human chose `sbx stop` (LOG entry 8).
-- **Reporting a failed `sbx ls` or `pgrep` after the run as an error.** AC3 asks for "can't tell" with the reason, so `exit_report` turns `SandboxError` into one.
+- **Reporting a failed `sbx ls` or `pgrep` after the run as an error.** AC3 asks for "can't tell" with the reason, so `check_checkout_status` turns `SandboxError` into one.
 - **`SIG_IGN` while waiting.** The child inherits an ignored signal across exec, so Ctrl-C would stop reaching sbx. Breaks AC6.
 - **Telling a running agent apart by `sbx ls`.** It lists sandboxes, not agents: a sandbox stays running after its agent run ends (probe U1, LOG entry 2).
 
@@ -31,15 +31,15 @@ Accepted: a sandbox that stops between `sbx ls` and the `env exec` after it woul
 
 ```
 foundry.cli.main                                changed: docstring; no command replaces the process any more
-└─ commands.run.main -> int                     changed: prints the exit report on stderr, returns its exit code
+└─ commands.run.main -> int                     changed: prints the checkout status on stderr, returns its exit code
    ├─ Session.launch_request                    changed: adds after_run_command, the runtime's `check-unsaved-work`
-   └─ agent_sandbox.launch(request) -> ExitReport   changed: attaches and waits, then returns the exit report
+   └─ agent_sandbox.launch(request) -> CheckoutStatus   changed: attaches and waits, then returns the checkout status
       ├─ provision_sandbox                      changed: refuses after ensure_running when an agent is running
       │  ├─ Sandbox.is_agent_running()          new: `pgrep -x claude` in the sandbox
       │  └─ Sandbox.stop_hint()                 new
       ├─ Sandbox.attach(model) -> None          changed: runs `sbx run` and waits, no longer replaces the process
       │  └─ Host.run_in_terminal(command, env) -> int   new: SIGINT does nothing to foundry meanwhile
-      └─ exit_report(request, sandbox) -> ExitReport    new
+      └─ check_checkout_status(request, sandbox) -> CheckoutStatus    new
          ├─ Sandbox.is_running()                new: through list_live_sandboxes (unchanged)
          ├─ Sandbox.is_agent_running()          new (as above)
          └─ Sandbox.run(after_run_command)      unchanged
@@ -57,9 +57,9 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 ## Steps
 1. Runtime: move `unsaved_work` to `agent_runtime/unsaved_work.py`, with no behaviour change. Then the new wording and a failed fetch as "can't tell"; then `check-unsaved-work`.
 2. `agent_sandbox`: `Host.run_in_terminal`, then `Sandbox.is_running`, `is_agent_running`, `stop_hint`. `attach` waits; `Host.exec` goes.
-3. `agent_sandbox`: the refusal in `provision_sandbox` (AC5); `ExitReport` and `exit_report`; `launch` returns it; `LaunchRequest.after_run_command`.
+3. `agent_sandbox`: the refusal in `provision_sandbox` (AC5); `CheckoutStatus` and `check_checkout_status`; `launch` returns it; `LaunchRequest.after_run_command`.
 4. foundry: `Session.launch_request` passes the command; `run.main` prints the report and returns its code.
-5. The sbx tier: after provisioning, `exit_report` on the real sandbox says both checkouts are saved.
+5. The sbx tier: after provisioning, `check_checkout_status` on the real sandbox says both checkouts are saved.
 6. Docs and the glossary's two terms.
 
 ## Names
@@ -69,9 +69,9 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 | added | `agent_runtime.commands.check_unsaved_work.main`, `report` | `() -> int`; `(unsaved: list[str]) -> int` | `commands/check_hardening.py`'s `main` and `report` |
 | moved | `agent_runtime.unsaved_work` module, and its `unsaved_work`, from `claude_hooks` | `(variables: SessionVariables) -> list[str]`, as today: one line per checkout not saved; empty when both are | TASK.md "Terms": Unsaved work; the function's name today |
 | added | `LaunchRequest.after_run_command` | `tuple[str, ...]`, required | `init_command`, its neighbour |
-| added | `agent_sandbox.ExitReport` | frozen: `text: str`, `exit_code: int` (0 or 1); exported from `agent_sandbox` | TASK.md "Terms": Exit report |
-| changed | `agent_sandbox.launch` | `(request: LaunchRequest) -> ExitReport`, was `-> NoReturn` | the code |
-| added | `launcher.exit_report` | `(request: LaunchRequest, sandbox: Sandbox) -> ExitReport` | as above; `launch_summary`, its neighbour, is a noun too |
+| added | `agent_sandbox.CheckoutStatus` | frozen: `text: str`, `exit_code: int` (0 or 1); of both checkouts; exported from `agent_sandbox` | the term "Checkout status", which replaces TASK.md's "Exit report" (D2); `git status` |
+| changed | `agent_sandbox.launch` | `(request: LaunchRequest) -> CheckoutStatus`, was `-> NoReturn` | the code |
+| added | `launcher.check_checkout_status` | `(request: LaunchRequest, sandbox: Sandbox) -> CheckoutStatus` | as above; a verb, since it acts on the sandbox, as `provision_sandbox` does |
 | changed | `Sandbox.attach` | `(model: str \| None) -> None`, was `NoReturn` | the code |
 | added | `Sandbox.is_running` | `() -> bool`: `list_live_sandboxes` has it | `list_live_sandboxes`' "live"; sbx's status "running" |
 | added | `Sandbox.is_agent_running` | `() -> bool` | Glossary: Agent run |
@@ -81,7 +81,7 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 | changed | `commands.run.main` | `-> int`, was `NoReturn` | the code |
 
 ## Errors
-The exit report, on stderr, unprefixed, from `check-unsaved-work`:
+The checkout status, on stderr, unprefixed, from `check-unsaved-work`:
 - Both saved (AC1), exit 0: `both checkouts are saved on origin`
 - One line for each checkout that isn't saved (AC2–AC3), exit 1:
   - `code checkout /home/agent/work/<repo> on task/wcf-0035: uncommitted changes`
@@ -92,7 +92,7 @@ The exit report, on stderr, unprefixed, from `check-unsaved-work`:
   - `origin can't be reached: <git's first line>`: the fetch failed.
   - ``can't read it: `git -C <dir> status --porcelain` failed: <git's first line>``, or any other git command, or `can't read it: git not found in PATH`.
 
-From `exit_report`, when it can't run the command (AC3), exit 1:
+From `check_checkout_status`, when it can't run the command (AC3), exit 1:
 - `can't tell: sandbox <name> is not running`
 - ``can't tell: an agent is still running in sandbox <name>; stop it with `sbx stop <name>` ``
 - `can't tell: <a SandboxError's text>`, such as `can't tell: sbx ls failed: <stderr>`.
@@ -134,14 +134,14 @@ The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is al
 - AC7: read in review. `tests/test_docs.py` checks the links and paths.
 - `tests/agent_kit/test_stop_hook.py`: the built runtime's `check-unsaved-work` against session-setup's checkouts, saved then not. This catches the command missing from the built runtime.
 - `tests/test_run.py`: `launch_request` carries the kit's `check-unsaved-work` runtime command.
-- `tests/sbx/test_smoke.py`: after provisioning, `exit_report` on the real sandbox says both are saved, exit 0. This catches a template image without `pgrep`, a status other than "running", or the runtime unable to fetch over SSH.
+- `tests/sbx/test_smoke.py`: after provisioning, `check_checkout_status` on the real sandbox says both are saved, exit 0. This catches a template image without `pgrep`, a status other than "running", or the runtime unable to fetch over SSH.
 
 ## Docs
 - `README.md`, "Use": what `foundry run` reports after the agent run, and its exit codes 0 and 1 (AC7).
 - `ARCHITECTURE.md`:
-  - Launch step 4: foundry runs `sbx run` and waits, then runs `check-unsaved-work` and prints the exit report. Cut "foundry never learns how the agent run ended" (AC7).
+  - Launch step 4: foundry runs `sbx run` and waits, then runs `check-unsaved-work` and prints the checkout status. Cut "foundry never learns how the agent run ended" (AC7).
   - The runtime's commands table: `check-unsaved-work`, run by foundry after each agent run.
-- `GLOSSARY.md`: "Unsaved work" and "Exit report", from TASK.md's "Terms", with the `domain-modeling` skill.
+- `GLOSSARY.md`: "Unsaved work" and "Checkout status", from TASK.md's "Terms" (D2), with the `domain-modeling` skill.
 - Docstrings:
   - `launcher.py`'s module docstring and `launch`.
   - `Sandbox.attach` and `SbxCli.attach`.
