@@ -11,7 +11,7 @@ foundry prints what the command printed, stdout then stderr, and exits 0 when it
 
 Step 2's check also runs before attaching, right after the sandbox is started, and refuses the launch when an agent is running (AC5). Its message gives `sbx stop <name>`, which stops the whole sandbox; the next launch starts it again. The human chose it over killing the agent's process (LOG entry 8).
 
-The stop check and `check-unsaved-work` share one function, `claude_hooks.unsaved_work`, and so one definition and one wording (TASK.md "Terms"). When `git fetch` fails, both say "can't tell: origin can't be reached" (AC3), so the stop check now blocks there too, where it compared with the last fetched state. Because: DR6, a hook that enforces a rule blocks when it can't check it, as the stop check already does when it can't read a checkout. An agent isn't stuck: its next stop goes through, as after any block. The human chose this, which changes OS1 (LOG entry 10, D1). The stop check's reason also gains each checkout's dir and branch, which the human ruled within OS1 (LOG entry 9).
+The stop check and `check-unsaved-work` share one function, `unsaved_work`, moved from `claude_hooks.py` to its own module, `agent_runtime/unsaved_work.py`, since `check-unsaved-work` isn't a hook. They share one definition and one wording (TASK.md "Terms"). When `git fetch` fails, both say "can't tell: origin can't be reached" (AC3), so the stop check now blocks there too, where it compared with the last fetched state. Because: DR6, a hook that enforces a rule blocks when it can't check it, as the stop check already does when it can't read a checkout. An agent isn't stuck: its next stop goes through, as after any block. The human chose this, which changes OS1 (LOG entry 10, D1). The stop check's reason also gains each checkout's dir and branch, which the human ruled within OS1 (LOG entry 9).
 
 While it waits, foundry swaps SIGINT's handler for one that does nothing, and puts the old one back after. A Ctrl-C that reaches foundry's process group, outside sbx's raw mode, then can't kill foundry before the report (AC4). The child starts with the default handler, since exec resets caught signals, so sbx and Claude Code see Ctrl-C as today (AC6). The child shares the terminal and process group, so it gets SIGWINCH as today (AC6).
 
@@ -46,16 +46,16 @@ foundry.cli.main                                changed: docstring; no command r
 
 agent_runtime: check-unsaved-work               new command
 └─ commands.check_unsaved_work.main -> int      new: prints the lines, or that both are saved
-   └─ claude_hooks.unsaved_work(variables)    changed: a failed fetch is "can't tell"; new wording
+   └─ unsaved_work.unsaved_work(variables)    moved from claude_hooks; a failed fetch is "can't tell"; new wording
 
 agent_runtime: claude-hook session-check        changed: also blocks when origin can't be reached (D1)
-└─ claude_hooks.unsaved_work(variables)        (as above)
+└─ unsaved_work.unsaved_work(variables)        (as above)
 ```
 
 Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `ExecCalled`, the two attach tests that use it, and `Attached`, which no test uses. `NoReturn` goes from `run.main`, `launch` and both `attach`.
 
 ## Steps
-1. Runtime: in `claude_hooks.unsaved_work`, the new wording and a failed fetch as "can't tell"; then `check-unsaved-work`.
+1. Runtime: move `unsaved_work` to `agent_runtime/unsaved_work.py`, with no behaviour change. Then the new wording and a failed fetch as "can't tell"; then `check-unsaved-work`.
 2. `agent_sandbox`: `Host.run_in_terminal`, then `Sandbox.is_running`, `is_agent_running`, `stop_hint`. `attach` waits; `Host.exec` goes.
 3. `agent_sandbox`: the refusal in `provision_sandbox` (AC5); `ExitReport` and `exit_report`; `launch` returns it; `LaunchRequest.after_run_command`.
 4. foundry: `Session.launch_request` passes the command; `run.main` prints the report and returns its code.
@@ -67,7 +67,7 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 |---|---|---|---|
 | added | runtime command `check-unsaved-work` | prints the lines on stdout; exits 0 when both are saved, 1 otherwise | the runtime's `check-hardening`, same shape; TASK.md "Terms": Unsaved work. Chosen by the human (LOG entry 9) |
 | added | `agent_runtime.commands.check_unsaved_work.main`, `report` | `() -> int`; `(unsaved: list[str]) -> int` | `commands/check_hardening.py`'s `main` and `report` |
-| changed | `claude_hooks.unsaved_work` | `(variables: SessionVariables) -> list[str]`, as today: one line per checkout not saved; empty when both are | the code |
+| moved | `agent_runtime.unsaved_work` module, and its `unsaved_work`, from `claude_hooks` | `(variables: SessionVariables) -> list[str]`, as today: one line per checkout not saved; empty when both are | TASK.md "Terms": Unsaved work; the function's name today |
 | added | `LaunchRequest.after_run_command` | `tuple[str, ...]`, required | `init_command`, its neighbour |
 | added | `agent_sandbox.ExitReport` | frozen: `text: str`, `exit_code: int` (0 or 1); exported from `agent_sandbox` | TASK.md "Terms": Exit report |
 | changed | `agent_sandbox.launch` | `(request: LaunchRequest) -> ExitReport`, was `-> NoReturn` | the code |
@@ -104,7 +104,7 @@ The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is al
 `Sandbox.is_agent_running` raises `SandboxError`: `could not check for a running agent: <stderr>`, when `pgrep` exits other than 0 or 1.
 
 ## Tests
-- AC1–AC3, the lines: `tests/agent_runtime/test_claude_hooks.py`, on the real checkouts of the `checkouts` fixture in `tests/agent_runtime/conftest.py`, through `check_unsaved_work.report` and `session_check`:
+- AC1–AC3, the lines: `tests/agent_runtime/test_unsaved_work.py`, its stop-check cases moved from `test_claude_hooks.py`, on the real checkouts of the `checkouts` fixture in `tests/agent_runtime/conftest.py`, through `check_unsaved_work.report` and `session_check`:
   - Both saved: the one line, exit 0.
   - Each of uncommitted, unpushed and both, in either checkout: the line naming it, its dir and branch, exit 1. A saved checkout gets no line.
   - Origin's URL pointed at a missing dir, after a commit that was pushed: the report says origin can't be reached, exit 1, and the stop check blocks with that reason (D1).
@@ -146,5 +146,6 @@ The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is al
   - `launcher.py`'s module docstring and `launch`.
   - `Sandbox.attach` and `SbxCli.attach`.
   - `cli.main`, which says commands may replace the process.
-  - `claude_hooks.py`'s module docstring: `check-unsaved-work` runs `unsaved_work` too.
+  - `claude_hooks.py`'s module docstring: `session-check`'s rule is now `unsaved_work`'s.
+- `ARCHITECTURE.md`'s runtime codemap: `unsaved_work.py`.
 - `CONTRIBUTING.md`'s sbx section still holds: the tier stops before attaching.

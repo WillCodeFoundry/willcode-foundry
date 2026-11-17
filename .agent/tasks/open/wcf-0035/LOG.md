@@ -106,3 +106,7 @@ Done: PLAN.md amended: the stop check and the report share `claude_hooks.unsaved
 - Asks D1 → planner: change OS1 so the stop check also blocks when origin can't be reached, instead of comparing with the last fetched state. Its reason says "can't tell: origin can't be reached". The agent's next stop still goes through, as after any block. Why: one definition with no mode parameter; the stop check already blocks when it can't read a checkout; DR6 says a hook that enforces a rule blocks when it can't check it. Cost: one extra stop for an agent whose work was saved, when GitHub is unreachable.
 - Answers D1: yes, change OS1 that way (the human).
 Next: the human goes on reviewing PLAN.md in this session. TASK.md doesn't hold D1 yet, so the turn ends with task-question for the planner to fold it in, unless the human says otherwise.
+
+## 11 · dev · progress
+Done: PLAN.md amended, as the human decided: `unsaved_work` moves from `claude_hooks.py` to its own runtime module, `agent_runtime/unsaved_work.py`. `ExitReport` keeps its name in `agent_sandbox` (the human).
+Next: the human's answer on a follow-up for a check-only command, then the rest of their review.
