@@ -190,3 +190,66 @@ TASK.md (d7e8764) and PLAN.md (8e44876) are unchanged. Every finding from earlie
 Summary: Smells 2 (R10, R13), Names 2 (R11, R12), all 4 Blocking, ruled by the human. No design questions.
 
 Verdict: changes needed
+
+## Round 4 (reviewing e38eec1)
+
+This round reviews the fix diff `4c6ebc2...e38eec1` (eb887f6, e38eec1). It is the fourth code round.
+
+TASK.md is at d7e8764, signed by the identity the planner shares with the architect, and is unchanged. PLAN.md's round-3 revision is at f4ead80, signed by the dev and approved by the human (LOG entry 30), and is unchanged since. No change the human decided is waiting to go into TASK.md, and no design question is open.
+
+### Earlier findings
+
+- R10: **closed.** `_describe_checkout` (`src/agent_runtime/unsaved_work.py:41`) is the one place that writes "can't tell". `_compare_with_origin` wraps every `GitError` in `_OriginComparisonFailure` (`:60-61`). In launcher the function is now `_unknown_status` (`src/foundry/agent_sandbox/launcher.py:99`).
+- R11: **closed.** `_describe_checkout` (`unsaved_work.py:35`).
+- R12: **closed.** `_outlive_interrupt_handler` (`src/foundry/agent_sandbox/host.py:77`).
+- R13: **closed.** `_checked_output` is gone, and git commands go through `Git.output` with its wording (option A). `test_a_removed_checkout_is_can_t_tell` (`tests/agent_runtime/test_unsaved_work.py:116`) pins that wording.
+- R1–R9: as round 2 judged them.
+
+All the new names match PLAN.md's Names table (lines 95–100). No old name is left at HEAD (`git grep -n -w`). `tests/agent_runtime` and `tests/agent_sandbox` pass at e38eec1, run in a throwaway clone.
+
+### Standards
+
+No findings. None of the fixes breaks DR6, DR8, PLAN.md's Errors or AGENTS.md's Docs and Writing rules. The docstrings and docs that describe `unsaved_work.py`, `git.py`, `host.py` and `launcher.py` all still hold, and none of them names an old helper or the old wording.
+
+### Spec
+
+No findings. R10–R13 are closed against PLAN.md's Approach, Names and Errors. The order of operations is unchanged: status, then fetch, then rev-list, which runs only after a successful fetch. So a failed fetch is still "origin can't be reached", and the code never falls back to the last fetched state (AC3, AC8).
+
+### Behaviour
+
+- **R15 · Follow-up.** A "can't read it" reason can now run over several lines (`src/agent_runtime/unsaved_work.py:61`).
+  - **The situation:** the agent has deleted or renamed its local task branch. Then the fetch succeeds, but `rev-list origin/<b>..refs/heads/<b>` fails with git's three-line "ambiguous argument … Use '--' …" message.
+  - **What goes wrong:** the checkout status's second and third lines carry no checkout name, and the stop hook's reason passes git's usage hint to the agent. Reproduced in a throwaway clone.
+  - **What it costs:** nothing is lost and nothing is reported wrongly. The result is still "can't tell", exit 1, and the stop is still blocked.
+  - **How often:** rare, since the git rules keep agents on their task branch. Git's common failures are one line: a removed dir, not a repository, a corrupt index, git missing.
+  - **Direction:** accept as is. PLAN.md's option A, which the human chose (LOG entry 29), expected the reason may run over several lines. Changing it would change PLAN.md's Errors.
+
+Everything else reports as it did at 4c6ebc2: a fetch and a status that both fail, a rev-list that fails after a good fetch, a branch absent on origin (R6, settled), a detached HEAD, and git missing. The changes to `host.py` and `launcher.py` are renames only.
+
+### Smells
+
+Functions the fix changes:
+- `unsaved_work.py`: `describe_unsaved_work`, `_OriginComparisonFailure` and `_describe_checkout` are clean. `_compare_with_origin` has R14.
+- `launcher.py`: `check_checkout_status` and `_unknown_status` are clean.
+- `host.py`: `run_in_terminal` and `_outlive_interrupt_handler` are clean.
+- `test_unsaved_work.py`: `test_a_removed_checkout_is_can_t_tell` is clean.
+
+R10 and R13 are closed as smells: there is one `except`, and the near-copy of `Git.output` is gone.
+
+- **R14 · Blocking.** Possibly a rule in the wrong place (python-smells #4), raising the failure away from where it is found (#3). It is in `_compare_with_origin`, `src/agent_runtime/unsaved_work.py:55-63`. The rule "a failed fetch is can't tell" is now split in two:
+  - `:56` guards `not_pushed` with `fetch.returncode == 0 and …`, which builds a value nobody uses when the fetch fails.
+  - `:62-63` raises the failure only after the `try`.
+
+  The guard looks optional, but it isn't. Without it, `rev-list` against a missing `origin/<branch>` raises `GitError`, and the reason becomes "can't read it" instead of "origin can't be reached". At 4c6ebc2 the check sat right after the fetch, so eb887f6 introduced the split.
+
+  **Who hits it:** the next dev who tidies `:56` or adds a command between the fetch and the `except`.
+
+  **Direction:** raise `_OriginComparisonFailure` right after the failed fetch, inside the `try`, and drop the guard. It isn't a `GitError`, so the `except` lets it through. The fix is local and leaves PLAN.md's names, errors and shapes as they are. A test that pins "origin can't be reached" already exists.
+
+### Names
+
+No findings. Every name the fix adds or renames matches PLAN.md, the human's choice. That covers `_OriginComparisonFailure`, `_describe_checkout`, `_compare_with_origin`, `_unknown_status`, `_outlive_interrupt_handler`, the locals `description` and `failure`, and the "can't read it" wording. The added prose keeps the glossary's **Unsaved work** wording and uses no _Avoid_ word. "can't tell" no longer names a function in either package. R10–R13 are closed as names.
+
+Summary: Standards 0. Spec 0. Behaviour 1 Follow-up (R15, a multi-line reason). Smells 1 Blocking (R14, the failed-fetch rule split across `:56` and `:62`). Names 0. No design questions.
+
+Verdict: changes needed

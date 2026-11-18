@@ -261,3 +261,15 @@ Done: round 3 fixed on task/wcf-0035 at e38eec1, as PLAN.md's round-3 revision (
 - Answers R13: fixed in eb887f6. `_checked_output` is gone; git commands use `Git.output`, and its wording (option A). `test_a_removed_checkout_is_can_t_tell` pins it, written first and seen failing.
 - Criteria: as entries 19 and 22 tick them, each with the same test; AC4–AC6 by hand, entries 23–24. Behaviour changed only in R13's message, so those by-hand checks still hold.
 Next: the reviewer's round 4, on e38eec1.
+
+## 32 · reviewer · no-agreement
+Done: code round 4 on e38eec1, in REVIEW.md. TASK.md (d7e8764) and PLAN.md (f4ead80, approved by the human) are unchanged. No decision by the human is waiting to go into TASK.md, and no design question is open.
+- Closed: R10, R11, R12 and R13, the human's round-3 findings, on all five axes.
+- New, Blocking: R14. `_compare_with_origin` splits "a failed fetch is can't tell" across a guard at `unsaved_work.py:56` and a raise after the `try` at `:62-63`. eb887f6 introduced the split. The fix is local: raise right after the failed fetch, inside the `try`.
+- New, Follow-up: R15. A "can't read it" reason can run over several lines when the local branch is missing. That is option A's wording, which the human chose, so I direct accept as is.
+- This is past the third code round, so the task goes to the human rather than back to the dev.
+- Asks R14 → human: R14 is a small Blocking smell found in round 4, after the three-round limit. The dev hasn't answered it yet, so we don't disagree; only the round limit stops it going back. Should the dev fix it in one more round, or do you accept it as is, so the dev opens PR #87 (pr-ready)?
+- Follow-up: src/foundry/agent_sandbox/host.py:50-51 `run_in_terminal` docstring · says "a handler that does nothing", what R12's rename moved away from · a reader learns what the handler does, not why.
+- Follow-up: src/agent_runtime/unsaved_work.py:67 `_first_line` · the fetch's reason keeps git's first line, but `Git.output`'s reason keeps all of stderr · two styles of git error in one family of messages.
+- Follow-up: src/agent_runtime/unsaved_work.py:24 loop variable `checkout` · holds a checkout's dir, beside `*_checkout_dir` · reads as a checkout, not a path.
+Next: the human answers R14. If they accept it, the dev opens PR #87 (pr-ready). If they want it fixed, the dev fixes it test-first and the reviewer runs round 5 on that fix only.
