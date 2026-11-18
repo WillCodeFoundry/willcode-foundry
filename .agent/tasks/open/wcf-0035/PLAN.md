@@ -27,8 +27,8 @@ Turned down:
 
 How `unsaved_work.py` reaches "can't tell", and its private names. Amended: R10, R11, R13. Because: round 3's findings cluster on this module, so this part is revised as a whole.
 - `_describe_checkout(git, branch) -> str | None`, was `_unsaved_work`: one checkout's line after its name, dir and branch: what origin lacks, or `can't tell: <reason>`; None when saved. It is the one place that writes "can't tell" (R10). Named `describe_`, as `describe_unsaved_work` is, since it returns text, and `_checkout` since it describes one (R11).
-- `_compare_with_origin(git, branch) -> tuple[bool, bool]`, was `_has_commits_not_pushed`: whether the checkout has uncommitted changes, and commits that `origin/<branch>`, freshly fetched, lacks on the branch or at HEAD. It raises `_ComparisonFailure` with the reason: `origin can't be reached: …` when the fetch fails, `can't read it: <GitError's text>` when any git command fails. Its one `except GitError` is the only place that wraps git's errors (R10).
-- `_ComparisonFailure`, was `_CantTell`: holds why a checkout can't be compared with origin. Raised only by `_compare_with_origin`, caught only by `_describe_checkout` (R10).
+- `_compare_with_origin(git, branch) -> tuple[bool, bool]`, was `_has_commits_not_pushed`: whether the checkout has uncommitted changes, and commits that `origin/<branch>`, freshly fetched, lacks on the branch or at HEAD. It raises `_OriginComparisonFailure` with the reason: `origin can't be reached: …` when the fetch fails, `can't read it: <GitError's text>` when any git command fails. Its one `except GitError` is the only place that wraps git's errors (R10).
+- `_OriginComparisonFailure`, was `_CantTell`: holds why a checkout can't be compared with origin. Raised only by `_compare_with_origin`, caught only by `_describe_checkout` (R10).
 - `_checked_output` goes; the git commands use `Git.output` (R13). `_first_line` stays, for the fetch's stderr, which `run_captured` returns.
 
 Open, a judgement call (R13), the wording of a failed git command; neither option breaks a criterion, out-of-scope line, rule or ADR:
@@ -37,7 +37,7 @@ Open, a judgement call (R13), the wording of a failed git command; neither optio
 
 Elsewhere, round 3's names (R10, R12). Amended: R10, R12. Because: round 3.
 - `launcher._cant_tell` becomes `_unknown_status(reason) -> CheckoutStatus`: a checkout status that can't be told, named for the `CheckoutStatus` it returns, so "can't tell" names no function in either package (R10).
-- `host._do_nothing` becomes `_outlive_interrupt`: the SIGINT handler that lets foundry outlive a Ctrl-C while it waits, so the checkout status still gets printed (AC4). Not "ignore": it is not SIG_IGN (R12).
+- `host._do_nothing` becomes `_outlive_interrupt_handler`: the SIGINT handler that lets foundry outlive a Ctrl-C while it waits, so the checkout status still gets printed (AC4). Not "ignore": it is not SIG_IGN (R12).
 
 Accepted: a sandbox that stops between `sbx ls` and the `env exec` after it would be started again by that call. The window is a fraction of a second.
 
@@ -97,7 +97,7 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 | renamed, private | `unsaved_work._ComparisonFailure`, was `_CantTell` | exception; its message is the reason | what it holds. Amended: R10. Because: "can't tell" named two things |
 | removed, private | `unsaved_work._checked_output` | | Amended: R13. Because: a near-copy of `Git.output` |
 | renamed, private | `launcher._unknown_status`, was `_cant_tell` | `(reason: str) -> CheckoutStatus` | the `CheckoutStatus` it returns. Amended: R10. Because: "can't tell" named two things |
-| renamed, private | `host._outlive_interrupt`, was `_do_nothing` | SIGINT handler | why it exists (AC4). Amended: R12. Because: it named what it does, not why |
+| renamed, private | `host._outlive_interrupt_handler`, was `_do_nothing` | SIGINT handler | why it exists (AC4). Amended: R12. Because: it named what it does, not why |
 | changed | `commands.run.main` | `-> int`, was `NoReturn` | the code |
 
 ## Errors
