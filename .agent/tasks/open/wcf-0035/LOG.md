@@ -203,3 +203,7 @@ Done: the human ran the by-hand checks against real sbx (v0.46.0) at 4c6ebc2, on
 - The sbx tier, `uv run pytest -m sbx`: 10 passed.
 - The sandbox was stopped with `sbx stop`, and sbx-0002 closed.
 Next: the reviewer's round 2. Nothing is left for the human by hand.
+
+## 24 · dev · progress
+Done: the human confirmed AC4's report, which entry 23 left uncaptured: after the SIGTERM to `sbx run`, it said "can't tell" because an agent was still running in the sandbox, as probe O1 (entry 3) predicted.
+Next: the reviewer's round 2.
