@@ -253,3 +253,39 @@ No findings. Every name the fix adds or renames matches PLAN.md, the human's cho
 Summary: Standards 0. Spec 0. Behaviour 1 Follow-up (R15, a multi-line reason). Smells 1 Blocking (R14, the failed-fetch rule split across `:56` and `:62`). Names 0. No design questions.
 
 Verdict: changes needed
+
+## Round 5 (reviewing 5460996)
+
+This round reviews only the R14 fix, as the human asked (LOG entry 33). The fix diff `e38eec1...5460996` is one commit that changes one function: `_compare_with_origin` in `src/agent_runtime/unsaved_work.py`, 3 lines added and 3 removed. A diff this small doesn't call for five sub-agents, so I reviewed the five axes myself. That is a departure from the `code-review` skill.
+
+TASK.md is at d7e8764, signed by the identity the planner shares with the architect. PLAN.md is at f4ead80, signed by the dev and approved by the human (entry 30). Neither has changed since round 4. No change the human decided is waiting to go into TASK.md, and no design question is open.
+
+### Earlier findings
+
+- R14: **closed.** `_compare_with_origin` raises `_OriginComparisonFailure` right after the failed fetch, inside the `try` (`src/agent_runtime/unsaved_work.py:56-57`). The `fetch.returncode == 0 and …` guard and the raise after the `try` are both gone. `_OriginComparisonFailure` subclasses `Exception`, not `GitError`, so `except GitError` (`:62`) lets it through. I deleted `:56-57` in a throwaway clone, and `test_origin_out_of_reach_is_can_t_tell_not_saved` and `test_a_stop_is_blocked_when_origin_can_t_be_reached` both failed, as the dev reported.
+- R15 and entry 32's follow-ups: accepted as is, as round 4 and entry 33 say.
+- R1–R13: as rounds 2 and 4 judged them.
+
+### Standards
+
+No findings. The docstring of `_compare_with_origin` (`:50-52`) still holds, and so does the "one place that says can't tell" line on `_describe_checkout` (`:37`). In a throwaway clone at 5460996, the host tier with `--cov` (97.24%), ruff check and format, mypy, vulture and pylint all pass.
+
+### Spec
+
+No findings. Nothing changes in behaviour, wording or order: status, then fetch, then rev-list only after a successful fetch. The reason is still "origin can't be reached: <git's first line>", as PLAN.md's Errors and AC3/AC8 ask.
+
+### Behaviour
+
+No findings. A failed fetch and a failed status reach the same outcomes as at e38eec1. If status fails, the fetch never runs, and the reason is "can't read it". If the fetch fails, the reason is "origin can't be reached", and rev-list never runs.
+
+### Smells
+
+- `unsaved_work.py:_compare_with_origin`: clean. The rule "a failed fetch is can't tell" now sits in one place, next to the fetch.
+
+### Names
+
+No findings. The fix adds no name.
+
+Summary: Standards 0, Spec 0, Behaviour 0, Smells 0, Names 0. No design questions.
+
+Verdict: approved
