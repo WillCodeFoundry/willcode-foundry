@@ -85,18 +85,18 @@ def check_checkout_status(request: LaunchRequest, sandbox: Sandbox) -> CheckoutS
     try:
         sandbox_name = SandboxDefinition.read(request.definition_dir).name
         if not sandbox.is_running():
-            return _cant_tell(f"sandbox {sandbox_name} is not running")
+            return _unknown_status(f"sandbox {sandbox_name} is not running")
         if sandbox.is_agent_running():
-            return _cant_tell(f"an agent is still running in sandbox {sandbox_name}; {sandbox.stop_hint()}")
+            return _unknown_status(f"an agent is still running in sandbox {sandbox_name}; {sandbox.stop_hint()}")
         result = sandbox.run(request.checkout_status_command)
     except SandboxError as error:
-        return _cant_tell(str(error))
+        return _unknown_status(str(error))
     return CheckoutStatus(
         text=f"{result.stdout}{result.stderr}".rstrip("\n"), exit_code=0 if result.returncode == 0 else 1
     )
 
 
-def _cant_tell(reason: str) -> CheckoutStatus:
+def _unknown_status(reason: str) -> CheckoutStatus:
     return CheckoutStatus(text=f"can't tell: {reason}", exit_code=1)
 
 

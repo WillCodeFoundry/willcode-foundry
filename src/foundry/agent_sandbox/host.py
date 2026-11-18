@@ -49,7 +49,7 @@ class SystemHost:
     def run_in_terminal(self, command: Sequence[str], env: Mapping[str, str]) -> int:
         """SIGINT gets a handler that does nothing, not SIG_IGN: exec resets a caught signal to its default in the
         child, but keeps an ignored one ignored."""
-        previous_handler = signal.signal(signal.SIGINT, _do_nothing)
+        previous_handler = signal.signal(signal.SIGINT, _outlive_interrupt_handler)
         try:
             return subprocess.run(list(command), env=dict(env), check=False).returncode
         except FileNotFoundError:
@@ -74,5 +74,5 @@ class SystemHost:
         os.kill(pid, signal.SIGTERM)
 
 
-def _do_nothing(_signal_number: int, _frame: FrameType | None) -> None:
+def _outlive_interrupt_handler(_signal_number: int, _frame: FrameType | None) -> None:
     """A signal handler for a signal this process outlives."""
