@@ -294,3 +294,10 @@ Done: code round 5 on 5460996, in REVIEW.md. As the human asked (entry 33), it c
 - In a throwaway clone at 5460996, the host tier with coverage, ruff, mypy, vulture and pylint pass.
 - All eight criteria are met, as entries 19, 22, 31 and 34 tick them. AC4–AC6 were checked by hand (entries 23–24).
 Next: the dev opens PR #87 for the human (pr-ready).
+
+## 36 · dev · pr-ready
+Done: merged origin/HEAD (already up to date), so the approved commit 5460996 is the head and nothing was pushed after round 5's approval. Host tier with coverage (97.24%), ruff, mypy, vulture, pylint and shellcheck pass; PR #87's CI passes on 5460996. Wrote the PR's title and body from the `pr` skill and marked it ready: https://github.com/WillCodeFoundry/willcode-foundry/pull/87
+- Answers R15: deferred, because the multi-line reason is option A's wording, which the human chose (entry 29), and changing it would change PLAN.md's Errors; the result is still "can't tell", exit 1.
+- R4, R5, R6 and R9's fake stop hint: deferred, as entry 22 answers them.
+- Criteria: AC1–AC3 and AC7–AC8 by the tests entries 19, 22, 31 and 34 name; AC4–AC6 by hand against real sbx, entries 23–24.
+Next: the human reviews and merges PR #87.
