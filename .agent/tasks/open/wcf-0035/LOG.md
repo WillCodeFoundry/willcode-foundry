@@ -252,3 +252,12 @@ Next: the human approves PLAN.md, or the reviewer's plan round does.
 ## 30 · dev · progress
 Done: plan-approved (the human) at f4ead80. The human reviewed the round-3 revision in this session, its names and the R13 choice (option A) included, so it replaces the plan round.
 Next: R13 test-first (the message), then the renames for R10, R11 and R12.
+
+## 31 · dev · ready-for-review
+Done: round 3 fixed on task/wcf-0035 at e38eec1, as PLAN.md's round-3 revision (approved by the human, entry 30) says. Host tier with coverage, ruff, mypy, vulture and pylint pass; PR #87's CI passes. No change to TASK.md waits.
+- Answers R10: fixed in eb887f6 and e38eec1. `_CantTell` is `_OriginComparisonFailure`, raised only by `_compare_with_origin`, which wraps every GitError; `_describe_checkout` alone writes "can't tell". `launcher._cant_tell` is `_unknown_status`.
+- Answers R11: fixed in eb887f6. `_unsaved_work` is `_describe_checkout`.
+- Answers R12: fixed in e38eec1. `_do_nothing` is `_outlive_interrupt_handler`.
+- Answers R13: fixed in eb887f6. `_checked_output` is gone; git commands use `Git.output`, and its wording (option A). `test_a_removed_checkout_is_can_t_tell` pins it, written first and seen failing.
+- Criteria: as entries 19 and 22 tick them, each with the same test; AC4–AC6 by hand, entries 23–24. Behaviour changed only in R13's message, so those by-hand checks still hold.
+Next: the reviewer's round 4, on e38eec1.
