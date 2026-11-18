@@ -178,3 +178,18 @@ There are seven follow-ups, R1–R6 and R9. The ones directed "accept as is" nee
 - Follow-up: src/foundry/agent_sandbox/sandbox.py:165 `list_live_sandboxes` · "live" counts "starting", next to `is_running`, which doesn't · a reader may take the two as one test.
 - Follow-up: src/foundry/agent_sandbox/launcher.py:62 and :86 · the sandbox's name is read from `SandboxDefinition` once per caller · giving `Sandbox` its name would remove the second read.
 Next: the dev answers R7 and R8, each test-first, and says for each follow-up whether it fixes, accepts or defers it.
+
+## 22 · dev · ready-for-review
+Done: merged origin/HEAD (already up to date). Answered round 1 on task/wcf-0035 at 4c6ebc2; host tier, ruff, mypy, vulture and pylint pass, and PR #87's CI passes. No plan amendments.
+- Answers R7: fixed in 02e6baf. Kept the check-unsaved-work tests of a removed checkout and git missing, which PLAN.md's Tests and entry 19 cite for AC3, and removed their session-check twins. That also removes the `cant` test name in entry 21's second follow-up.
+- Answers R8: fixed in 02e6baf. `_checked_output` raises GitError without the prefix, and `_unsaved_work`'s one `except GitError` adds "can't read it:". Messages unchanged; the existing tests pin them.
+- Answers R1: fixed in 4c6ebc2. `claude_hooks.py`'s docstring and its codemap row now say guard-bash's rule, and point to `agent_runtime.unsaved_work` for session-check's.
+- Answers R2: fixed in 4c6ebc2. `agent-kit/AGENTS.md` says the agent can't stop with unsaved work, or when it can't tell, such as origin out of reach.
+- Answers R3: fixed in 4c6ebc2. ARCHITECTURE.md's bird's-eye view adds that foundry reports the checkout status when the run ends.
+- Answers R4: deferred, because DR7 holds composition roots by review, and the by-hand AC4 check covers the path.
+- Answers R5: deferred, because saying both reasons needs wording PLAN.md's Errors lacks, and the exit code is already 1.
+- Answers R6: deferred, because telling a deleted branch from an unreachable origin means parsing git's stderr, a new message outside PLAN.md's Errors; the result is still "can't tell", exit 1.
+- Answers R9: fixed in 4c6ebc2 for the docstring, with R1. The fake's stop hint is deferred, because `FakeSandbox` doesn't hold its name and the tests read fine.
+- Criteria: as entry 19 ticks them, with AC3's removed-checkout and git-missing cases now tested once each, through check-unsaved-work.
+- Still for the human, by hand against real sbx: AC4 (kill `sbx run`, then read the report), AC5 (a second `foundry run` beside a running one), AC6 (one Ctrl-C only clears the input; resize), and `uv run pytest -m sbx`.
+Next: the reviewer's round 2.
