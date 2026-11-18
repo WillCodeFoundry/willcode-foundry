@@ -279,3 +279,9 @@ Done: the human answered R14 in this session.
 - Answers R14: one more round. The dev fixes R14, and the reviewer reviews only that fix (the human).
 - Round 4's verdict stands: changes needed. R15 and entry 32's follow-ups need no change.
 Next: the dev fixes R14 test-first: raise `_OriginComparisonFailure` right after the failed fetch, inside the `try` in `_compare_with_origin`, and drop the guard at `unsaved_work.py:56`. Then the reviewer runs round 5 on that fix only.
+
+## 34 · dev · ready-for-review
+Done: merged origin/HEAD (already up to date). Fixed R14 at 5460996; host tier with coverage, ruff, mypy, vulture and pylint pass, and PR #87's CI passes on 5460996. No plan amendment, and no change to TASK.md waits.
+- Answers R14: fixed in 5460996. `_compare_with_origin` raises `_OriginComparisonFailure` right after the failed fetch, inside the `try`, and the `fetch.returncode == 0` guard is gone. Behaviour is unchanged, so no new test: `test_origin_out_of_reach_is_can_t_tell_not_saved` and `test_a_stop_is_blocked_when_origin_can_t_be_reached` pin it. Deleting the new raise makes both fail, which I checked before committing.
+- Criteria: as entries 19, 22 and 31 tick them, each with the same test; AC4–AC6 by hand, entries 23–24.
+Next: the reviewer's round 5, on 5460996 only, as the human asked (entry 33).

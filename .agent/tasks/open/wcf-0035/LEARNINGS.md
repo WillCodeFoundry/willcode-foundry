@@ -14,3 +14,5 @@
   doesn't say what its thing holds or returns, or why it exists, and one phrase used for two different things across
   packages. Also: a Blocking finding the human adds in a review session shouldn't count toward the three-round limit
   that sends a task to `no-agreement`.
+- 2026-11-18 [testing] — To check a test pins a refactor, back up the edited file before a mutation: `git checkout -- <file>`
+  to undo the mutation also drops the uncommitted fix. Commit the fix first, or restore from a copy.
