@@ -25,6 +25,20 @@ Turned down:
 - **`SIG_IGN` while waiting.** The child inherits an ignored signal across exec, so Ctrl-C would stop reaching sbx. Breaks AC6.
 - **Telling a running agent apart by `sbx ls`.** It lists sandboxes, not agents: a sandbox stays running after its agent run ends (probe U1, LOG entry 2).
 
+How `unsaved_work.py` reaches "can't tell", and its private names. Amended: R10, R11, R13. Because: round 3's findings cluster on this module, so this part is revised as a whole.
+- `_describe_checkout(git, branch) -> str | None`, was `_unsaved_work`: one checkout's line after its name, dir and branch: what origin lacks, or `can't tell: <reason>`; None when saved. It is the one place that writes "can't tell" (R10). Named `describe_`, as `describe_unsaved_work` is, since it returns text, and `_checkout` since it describes one (R11).
+- `_compare_with_origin(git, branch) -> tuple[bool, bool]`, was `_has_commits_not_pushed`: whether the checkout has uncommitted changes, and commits that `origin/<branch>`, freshly fetched, lacks on the branch or at HEAD. It raises `_ComparisonFailure` with the reason: `origin can't be reached: …` when the fetch fails, `can't read it: <GitError's text>` when any git command fails. Its one `except GitError` is the only place that wraps git's errors (R10).
+- `_ComparisonFailure`, was `_CantTell`: holds why a checkout can't be compared with origin. Raised only by `_compare_with_origin`, caught only by `_describe_checkout` (R10).
+- `_checked_output` goes; the git commands use `Git.output` (R13). `_first_line` stays, for the fetch's stderr, which `run_captured` returns.
+
+Open, a judgement call (R13), the wording of a failed git command; neither option breaks a criterion, out-of-scope line, rule or ADR:
+- **A (recommended): `Git.output`'s wording**, `git -C <dir> status --porcelain failed: <git's stderr>`. The copy goes and nothing replaces it. Cost: no backticks round the command, and git's whole stderr, so a status line can run over several lines, such as rev-list's "unknown revision" with its two lines of usage; the stop check joins lines with "; " but not lines within one. One test's expected text changes (`tests/agent_runtime/test_unsaved_work.py:117`).
+- **B: keep today's wording**, with a helper named for what differs, `_output_or_first_error_line`, built on `run_captured`. Cost: a second way to run a git command and word its failure beside `Git.output`, which is what R13 found.
+
+Elsewhere, round 3's names (R10, R12). Amended: R10, R12. Because: round 3.
+- `launcher._cant_tell` becomes `_unknown_status(reason) -> CheckoutStatus`: a checkout status that can't be told, named for the `CheckoutStatus` it returns, so "can't tell" names no function in either package (R10).
+- `host._do_nothing` becomes `_outlive_interrupt`: the SIGINT handler that lets foundry outlive a Ctrl-C while it waits, so the checkout status still gets printed (AC4). Not "ignore": it is not SIG_IGN (R12).
+
 Accepted: a sandbox that stops between `sbx ls` and the `env exec` after it would be started again by that call. The window is a fraction of a second.
 
 ## Shape
@@ -78,6 +92,12 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 | added | `Sandbox.stop_hint` | `() -> str`: ``stop it with `sbx stop <name>` `` | `session.recreate_hint`; sbx's `stop` |
 | added | `Host.run_in_terminal` | `(command: Sequence[str], env: Mapping[str, str]) -> int`, the exit code | new: on this process's terminal. Not "attach", which in `agent_sandbox` means attaching the agent |
 | removed | `Host.exec` | | |
+| renamed, private | `unsaved_work._describe_checkout`, was `_unsaved_work` | `(git: Git, branch: str) -> str \| None` | `describe_unsaved_work`'s prefix; one checkout. Amended: R11. Because: it returns text, not unsaved work |
+| renamed, private | `unsaved_work._compare_with_origin`, was `_has_commits_not_pushed` | `(git: Git, branch: str) -> tuple[bool, bool]`: uncommitted, not pushed | TASK.md "Terms": what origin lacks. Amended: R10. Because: one path to "can't tell" |
+| renamed, private | `unsaved_work._ComparisonFailure`, was `_CantTell` | exception; its message is the reason | what it holds. Amended: R10. Because: "can't tell" named two things |
+| removed, private | `unsaved_work._checked_output` | | Amended: R13. Because: a near-copy of `Git.output` |
+| renamed, private | `launcher._unknown_status`, was `_cant_tell` | `(reason: str) -> CheckoutStatus` | the `CheckoutStatus` it returns. Amended: R10. Because: "can't tell" named two things |
+| renamed, private | `host._outlive_interrupt`, was `_do_nothing` | SIGINT handler | why it exists (AC4). Amended: R12. Because: it named what it does, not why |
 | changed | `commands.run.main` | `-> int`, was `NoReturn` | the code |
 
 ## Errors
@@ -90,7 +110,7 @@ The checkout status, on stderr, unprefixed, from `check-unsaved-work`:
   - `notes checkout /home/agent/work/<repo>-notes on agent-notes: can't tell: <reason>`
 - A checkout's reasons:
   - `origin can't be reached: <git's first line>`: the fetch failed.
-  - ``can't read it: `git -C <dir> status --porcelain` failed: <git's first line>``, or any other git command, or `can't read it: git not found in PATH`.
+  - `can't read it: git -C <dir> status --porcelain failed: <git's stderr>`, or any other git command, in `Git.output`'s words; or `can't read it: git not found in PATH`. Amended: R13. Because: the copy of `Git.output` that gave the old wording goes (option A below; option B keeps the old wording).
 
 From `check_checkout_status`, when it can't run the command (AC3), exit 1:
 - `can't tell: sandbox <name> is not running`
@@ -108,7 +128,7 @@ The refusal (AC5), printed by `cli.py` as `error: …`, exit 1: ``an agent is al
   - Both saved: the one line, exit 0.
   - Each of uncommitted, unpushed and both, in either checkout: the line naming it, its dir and branch, exit 1. A saved checkout gets no line.
   - Origin's URL pointed at a missing dir, after a commit that was pushed: the report says origin can't be reached, exit 1, and the stop check blocks with that reason (D1).
-  - A removed checkout, and git missing: "can't read it".
+  - A removed checkout, and git missing: "can't read it". With option A, the removed checkout's expected text is `Git.output`'s wording. Amended: R13. Because: the message changes. The renames change no behaviour, so the existing tests cover them; each is checked with `git grep -n -w` for its old name. Amended: R10, R11, R12. Because: round 3.
   - The existing stop-check tests keep their cases; their expected text changes to the new wording.
 - AC3, the sandbox: `tests/agent_sandbox/test_launcher.py`, against `FakeSandbox`, which gains `running` and `agent_running`, and records the attach:
   - A stopped sandbox: "can't tell", exit 1, and nothing runs in it, which would start it.
