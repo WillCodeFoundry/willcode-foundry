@@ -207,3 +207,14 @@ Next: the reviewer's round 2. Nothing is left for the human by hand.
 ## 24 · dev · progress
 Done: the human confirmed AC4's report, which entry 23 left uncaptured: after the SIGTERM to `sbx run`, it said "can't tell" because an agent was still running in the sandbox, as probe O1 (entry 3) predicted.
 Next: the reviewer's round 2.
+
+## 25 · reviewer · approved
+Done: code round 2 on 4c6ebc2, in REVIEW.md.
+- TASK.md (d7e8764) and PLAN.md (8e44876) are unchanged since round 1. No decision by the human is waiting to go into TASK.md, and no design question is open.
+- Closed: R1, R2, R3, R7, R8, and R9's docstring.
+- Deferred, as the dev answered: R4, R5, R6, and R9's fake stop hint.
+- No new findings on any of the five axes.
+- All eight criteria are met. For AC4–AC6, the human's checks by hand against real sbx (entries 23–24) count as met.
+- Host tier, ruff, mypy, vulture and pylint pass at 4c6ebc2.
+- Follow-up: src/agent_runtime/unsaved_work.py:31 `_CantTell` · since 02e6baf only a failed fetch raises it, while a failed git command reaches "can't tell" through `GitError` · its name and docstring promise every can't-tell case, so `_unsaved_work` keeps two `except`s that each write "can't tell: …".
+Next: the dev opens PR #87 for the human (pr-ready).

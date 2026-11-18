@@ -100,3 +100,65 @@ Run these by hand against real sbx, as PLAN.md's Tests lists them:
 Summary: Standards 3 (0 Blocking; worst R2, the agent's instructions omit AC8's block). Spec 2 (0 Blocking; worst R4, the composition-root lines untested, accepted under DR7). Behaviour 1 (0 Blocking; R6, the wrong reason for a deleted branch). Smells 3 (2 Blocking; worst R7, a duplicated test). Names 0. No design questions.
 
 Verdict: changes needed
+
+## Round 2 (reviewing 4c6ebc2)
+
+Reviewed against TASK.md at d7e8764 and PLAN.md at 8e44876.
+- Neither file's history has changed since round 1. TASK.md's last two commits are signed by the identity the planner shares with the architect.
+- LOG.md has no change decided by the human that TASK.md is missing. Entries 23–24 record checks the human ran by hand, not decisions.
+
+Fix diff `c21111b...4c6ebc2`, two commits: 02e6baf and 4c6ebc2. In a throwaway clone these all pass: the host tier, ruff (check and format), mypy, vulture and pylint (10.00). The human ran the sbx tier against real sbx v0.46.0 and it passed, 10 tests (LOG entry 23).
+
+### Earlier findings
+- **R1: closed** (4c6ebc2). `claude_hooks.py:1` and `ARCHITECTURE.md:48` now name guard-bash's rule. They point to `agent_runtime.unsaved_work` rather than retelling session-check's rule.
+- **R2: closed** (4c6ebc2). `agent-kit/AGENTS.md:301-303` says "unsaved work, or when it can't tell, such as when origin can't be reached", and no longer says "unpushed".
+- **R3: closed** (4c6ebc2). `ARCHITECTURE.md:9` adds that foundry reports the checkout status when the agent run ends.
+- **R4: deferred**, as the dev answered. DR7 holds these lines by review. The human's AC4 check by hand now also covers the path from attach to the report (LOG 23–24).
+- **R5: deferred**, as the dev answered.
+- **R6: deferred**, as the dev answered.
+- **R7: closed** (02e6baf). A removed checkout and git missing are each tested once, through `check_unsaved_work.report`, at `tests/agent_runtime/test_unsaved_work.py:109` and `:121`.
+- **R8: closed** (02e6baf). "can't read it:" is built only at `src/agent_runtime/unsaved_work.py:43`.
+- **R9: closed** for the docstring (4c6ebc2). The fake's stop hint is deferred, as the dev answered.
+
+### Standards
+R1–R3 are closed. There are no new findings.
+- The rewritten docstrings and docs agree with the code and with `docs/security-model.md`.
+- `commands/claude_hook.py:3` still reads true.
+- `GitError`'s docstring (`git.py:28`) fits its new use in `_checked_output`.
+
+### Spec
+There are no new findings. The two tests R7 removed duplicated cases that are still tested through the checkout status, so every criterion is still shown met.
+
+| AC | Status | Code · test or check |
+|---|---|---|
+| AC1 | met | `check_unsaved_work.report`, `run.main` · `test_both_saved_is_one_line_and_exit_0`, `test_both_saved_is_the_command_s_output_and_exit_0`. By hand: `/exit` with both checkouts saved exited 0 (LOG 23). |
+| AC2 | met | `describe_unsaved_work` · test_unsaved_work.py's uncommitted, not pushed and both cases |
+| AC3 | met | `_unsaved_work`, `check_checkout_status` · test_unsaved_work.py:95, :109 and :121; test_launcher.py's stopped-sandbox, running-agent and failing-check cases |
+| AC4 | met | `SystemHost.run_in_terminal` · test_host.py. By hand: after SIGTERM to `sbx run`, foundry printed "can't tell", because an agent was still running, and exited 1 (LOG 23–24). |
+| AC5 | met | `provision_sandbox` · `test_a_running_agent_refuses_the_launch_…`. By hand: the refusal named the sandbox and gave `sbx stop`, exited 1, and the first agent kept running (LOG 23). |
+| AC6 | met | `run_in_terminal` · `test_run_in_terminal_starts_the_child_with_the_default_interrupt_handler`. By hand: one Ctrl-C only cleared the input, and resizing redrew the UI (LOG 23). |
+| AC7 | met | README "Use", ARCHITECTURE.md launch steps; unchanged by the fixes |
+| AC8 | met | `_has_commits_not_pushed` · test_unsaved_work.py:179 and :190 |
+
+### Behaviour
+R8 is closed. There are no new findings.
+- I compared the old (c21111b) and new (4c6ebc2) `_unsaved_work` with a stub `Git`. They give the same message in all six cases: status failing, rev-list failing, fetch failing, and git missing at status, fetch or rev-list.
+- `_CantTell` and `GitError` don't inherit from each other, so the order of the two `except`s changes nothing. No new exception type can escape `describe_unsaved_work`.
+
+### Smells
+R7, R8 and R9 are closed. There are no new findings.
+- `unsaved_work.py:_checked_output` is clean, and simpler than at c21111b: it no longer carries its caller's wording.
+- The `claude_hooks.py` module docstring is clean.
+- Removing the two tests adds no smell.
+- `_unsaved_work` is unchanged since c21111b.
+
+### Names
+There are no findings.
+- `GitError` in `_checked_output` is clean.
+- These prose terms are clean, each in the glossary's sense: "guard-bash's rule", "session-check's rule", "the git hooks' rules", "checkout status", "agent run", "unsaved work", "can't tell" and "the block's reason".
+- The fix removes the _Avoid_ word "unpushed" from `agent-kit/AGENTS.md`.
+- The messages match PLAN.md's Errors exactly.
+
+Summary: Standards 0, Spec 0, Behaviour 0, Smells 0, Names 0 new findings. No new finding blocks, and no design question is open. Round 1's Blocking findings, R7 and R8, are closed. R4, R5, R6 and half of R9 are deferred as follow-ups.
+
+Verdict: approved
