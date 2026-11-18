@@ -248,3 +248,7 @@ Next: the human approves PLAN.md and chooses option A or B for R13, or the revie
 ## 29 · dev · progress
 Done: the human chose option A for R13: a failed git command is worded as `Git.output` words it, `can't read it: git -C <dir> status --porcelain failed: <git's stderr>`.
 Next: the human approves PLAN.md, or the reviewer's plan round does.
+
+## 30 · dev · progress
+Done: plan-approved (the human) at f4ead80. The human reviewed the round-3 revision in this session, its names and the R13 choice (option A) included, so it replaces the plan round.
+Next: R13 test-first (the message), then the renames for R10, R11 and R12.
