@@ -244,3 +244,7 @@ Done: the human's review of the round-3 names, PLAN.md amended at f996a5e:
 - `_ComparisonFailure` is now `_OriginComparisonFailure`: it names what the checkout is compared with.
 - `_outlive_interrupt` is now `_outlive_interrupt_handler`: it says it is a signal handler. "ignore" stays out, because the handler isn't SIG_IGN, which PLAN.md turns down (R12).
 Next: the human approves PLAN.md and chooses option A or B for R13, or the reviewer's plan round does.
+
+## 29 · dev · progress
+Done: the human chose option A for R13: a failed git command is worded as `Git.output` words it, `can't read it: git -C <dir> status --porcelain failed: <git's stderr>`.
+Next: the human approves PLAN.md, or the reviewer's plan round does.
