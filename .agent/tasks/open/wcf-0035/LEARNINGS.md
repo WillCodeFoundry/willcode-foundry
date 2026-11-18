@@ -16,3 +16,4 @@
   that sends a task to `no-agreement`.
 - 2026-11-18 [testing] — To check a test pins a refactor, back up the edited file before a mutation: `git checkout -- <file>`
   to undo the mutation also drops the uncommitted fix. Commit the fix first, or restore from a copy.
+- 2026-11-18 [proposal] — The `code-review` skill always runs five sub-agents, even for a round the human limits to one small fix, such as round 5 here: six lines in one function. I reviewed that round inline instead. Proposal: let a fix round whose diff changes one or two functions be reviewed inline on all five axes, saying so in the round.
