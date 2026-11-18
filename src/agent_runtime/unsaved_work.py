@@ -22,25 +22,23 @@ def describe_unsaved_work(variables: contract.SessionVariables) -> list[str]:
     )
     lines = []
     for name, checkout, branch in checkouts:
-        problem = _unsaved_work(Git(checkout), branch)
-        if problem is not None:
-            lines.append(f"{name} {checkout} on {branch}: {problem}")
+        description = _describe_checkout(Git(checkout), branch)
+        if description is not None:
+            lines.append(f"{name} {checkout} on {branch}: {description}")
     return lines
 
 
-class _CantTell(Exception):
-    """Why a checkout's unsaved work can't be told."""
+class _OriginComparisonFailure(Exception):
+    """Why a checkout can't be compared with origin; its message is the reason."""
 
 
-def _unsaved_work(git: Git, branch: str) -> str | None:
-    """What in this checkout origin lacks, in words; None when origin has it all."""
+def _describe_checkout(git: Git, branch: str) -> str | None:
+    """What this checkout has that origin lacks, or why that can't be told, in words; None when origin has it all.
+    The one place that says "can't tell"."""
     try:
-        uncommitted = bool(_checked_output(git, "status", "--porcelain").strip())
-        not_pushed = _has_commits_not_pushed(git, branch)
-    except _CantTell as error:
-        return f"can't tell: {error}"
-    except GitError as error:
-        return f"can't tell: can't read it: {error}"
+        uncommitted, not_pushed = _compare_with_origin(git, branch)
+    except _OriginComparisonFailure as failure:
+        return f"can't tell: {failure}"
     if uncommitted and not_pushed:
         return "uncommitted changes and commits not pushed"
     if uncommitted:
@@ -48,24 +46,22 @@ def _unsaved_work(git: Git, branch: str) -> str | None:
     return "commits not pushed" if not_pushed else None
 
 
-def _has_commits_not_pushed(git: Git, branch: str) -> bool:
-    """Whether origin/``branch``, freshly fetched, lacks commits on the branch, or at HEAD, which a detached HEAD
-    moves off it."""
-    fetch = git.run_captured("fetch", "-q", "origin", branch)
+def _compare_with_origin(git: Git, branch: str) -> tuple[bool, bool]:
+    """Whether the checkout has uncommitted changes, and whether origin/``branch``, freshly fetched, lacks commits on
+    the branch, or at HEAD, which a detached HEAD moves off it. Raises _OriginComparisonFailure when origin can't be
+    reached or a git command fails."""
+    try:
+        uncommitted = bool(git.output("status", "--porcelain").strip())
+        fetch = git.run_captured("fetch", "-q", "origin", branch)
+        not_pushed = fetch.returncode == 0 and any(
+            int(git.output("rev-list", "--count", f"origin/{branch}..{rev}")) > 0
+            for rev in (f"refs/heads/{branch}", "HEAD")
+        )
+    except GitError as error:
+        raise _OriginComparisonFailure(f"can't read it: {error}") from error
     if fetch.returncode != 0:
-        raise _CantTell(f"origin can't be reached: {_first_line(fetch.stderr)}")
-    return any(
-        int(_checked_output(git, "rev-list", "--count", f"origin/{branch}..{rev}")) > 0
-        for rev in (f"refs/heads/{branch}", "HEAD")
-    )
-
-
-def _checked_output(git: Git, *args: str) -> str:
-    """The command's output; a failure raises GitError naming it, with git's first line."""
-    result = git.run_captured(*args)
-    if result.returncode != 0:
-        raise GitError(f"`{git.describe(*args)}` failed: {_first_line(result.stderr)}")
-    return result.stdout
+        raise _OriginComparisonFailure(f"origin can't be reached: {_first_line(fetch.stderr)}")
+    return uncommitted, not_pushed
 
 
 def _first_line(stderr: str) -> str:

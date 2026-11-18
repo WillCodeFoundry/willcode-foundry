@@ -113,9 +113,7 @@ def test_a_removed_checkout_is_can_t_tell(checkouts: Checkouts, capsys: pytest.C
     exit_code, out = checkout_status(variables, capsys)
 
     assert exit_code == 1
-    assert out.startswith(
-        code_line(variables, f"can't tell: can't read it: `git -C {code} status --porcelain` failed: ")
-    )
+    assert out.startswith(code_line(variables, f"can't tell: can't read it: git -C {code} status --porcelain failed: "))
 
 
 def test_git_missing_is_can_t_tell(
