@@ -230,3 +230,11 @@ This round replaces round 2's approval. Entry 25's follow-up on `_CantTell` is n
 
 Round 3 is the third code round. The human chose these findings in this session and wants them fixed, so the task goes back to the dev rather than to `no-agreement`.
 Next: the dev fixes R10–R13, each test-first. For R13: if the fix changes the "can't read it" message, amend PLAN.md's Errors, and get a plan round, before the code changes.
+
+## 27 · dev · plan-ready
+Done: merged origin/HEAD (already up to date; code unchanged since 4c6ebc2). R10, R11 and R13 all land on `unsaved_work.py`, and R13 changes PLAN.md's Errors, so, as ROLE.md says when findings cluster, I revised that part of PLAN.md (at b13bcee) instead of patching. No code yet.
+- Answers R10: plan amended. `_CantTell` becomes `_ComparisonFailure`, raised only by `_compare_with_origin` (was `_has_commits_not_pushed`), which wraps every GitError in it; `_describe_checkout` is the one place that writes "can't tell". `launcher._cant_tell` becomes `_unknown_status`.
+- Answers R11: plan amended. `_unsaved_work` becomes `_describe_checkout`.
+- Answers R12: plan amended. `_do_nothing` becomes `_outlive_interrupt`.
+- Answers R13: plan amended. `_checked_output` goes. Left open as a judgement call for the human, in Approach: A (recommended) uses `Git.output`'s wording, `can't read it: git -C <dir> status --porcelain failed: <git's stderr>`, which may run over several lines; B keeps today's wording with a helper named for what differs.
+Next: a plan round on PLAN.md's round-3 revision, with the human choosing A or B for R13. Then the dev makes the changes, test-first for R13's message.
