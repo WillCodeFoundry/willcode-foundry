@@ -6,7 +6,7 @@ How the foundry is put together, and the rules its code follows. The words are d
 
 Three programs share this repository:
 
-- **foundry** (`src/foundry/`) runs on your machine. It creates tasks in project repositories, writes each sandbox's definition once, builds the runtime into the agent kit, and hands the terminal to sbx.
+- **foundry** (`src/foundry/`) runs on your machine. It creates tasks in project repositories, writes each sandbox's definition once, builds the runtime into the agent kit, and hands the terminal to sbx. When the agent run ends, it reports the checkout status.
 - **The agent kit** (`agent-kit/`) is data, mounted read-only into every sandbox at the same path as on your machine: instructions, roles, skills, Claude Code's managed settings, the git hook stubs and the built runtime.
 - **The runtime** (`src/agent_runtime/`) is built into `agent-kit/.build/agent_runtime.pyz` at every launch and runs inside the sandbox: setup, hardening and the hooks.
 
@@ -45,7 +45,7 @@ A launch, end to end:
 | `session_init.py` | `session-init`'s order: setup, root mode on the first launch, then agent mode. `commands/session_init.py` makes the sudo call. |
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
-| `claude_hooks.py`, `git_hooks.py` | The rules of the Claude hooks and the git hooks. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
+| `claude_hooks.py`, `git_hooks.py` | guard-bash's rule, and the git hooks' rules. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
 | `unsaved_work.py` | Unsaved work in both checkouts, in the words the Stop hook and `check-unsaved-work` share. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 

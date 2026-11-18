@@ -1,10 +1,8 @@
-"""The rules of Claude Code's hooks. agent_runtime.commands.claude_hook reads the hook's JSON and writes its reply.
+"""guard-bash's rule (PreToolUse, on Bash): a command must not skip or reconfigure the git hooks.
 
-``refusal_reason`` is guard-bash's rule (PreToolUse, on Bash): a command must not skip or reconfigure the git hooks.
-session-check's (Stop) is agent_runtime.unsaved_work's: the agent may not stop while either checkout has unsaved
-work, or can't be checked.
-Both are guardrails against mistakes, not boundaries: see docs/security-model.md. Both trust the
-environment Claude Code gives them, which a settings file the agent writes can change.
+agent_runtime.commands.claude_hook reads the hook's JSON and writes its reply. session-check's rule (Stop) is in
+agent_runtime.unsaved_work. The rule is a guardrail against mistakes, not a boundary: see docs/security-model.md. It
+trusts the environment Claude Code gives it, which a settings file the agent writes can change.
 """
 
 import re
