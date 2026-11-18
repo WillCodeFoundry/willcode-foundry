@@ -61,10 +61,10 @@ def _has_commits_not_pushed(git: Git, branch: str) -> bool:
 
 
 def _checked_output(git: Git, *args: str) -> str:
-    """The command's output; a failure raises _CantTell naming it, with git's first line."""
+    """The command's output; a failure raises GitError naming it, with git's first line."""
     result = git.run_captured(*args)
     if result.returncode != 0:
-        raise _CantTell(f"can't read it: `{git.describe(*args)}` failed: {_first_line(result.stderr)}")
+        raise GitError(f"`{git.describe(*args)}` failed: {_first_line(result.stderr)}")
     return result.stdout
 
 

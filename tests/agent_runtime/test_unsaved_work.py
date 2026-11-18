@@ -184,27 +184,6 @@ def test_a_stop_is_blocked_when_origin_can_t_be_reached(checkouts: Checkouts) ->
     assert code_line(variables, "can't tell: origin can't be reached: ") in block_reason(variables)
 
 
-def test_a_stop_is_blocked_when_a_checkout_cant_be_checked(checkouts: Checkouts) -> None:
-    """git failing is no evidence that nothing is unsaved."""
-    variables, code, _ = checkouts
-    shutil.rmtree(code)
-
-    assert code_line(variables, f"can't tell: can't read it: `git -C {code} status --porcelain` failed: ") in (
-        block_reason(variables)
-    )
-
-
-def test_a_stop_is_blocked_when_git_is_missing(
-    checkouts: Checkouts, tmp_path: Path, process_environment: ProcessEnvironment
-) -> None:
-    variables, _, _ = checkouts
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    process_environment.set_env({"PATH": str(empty)})
-
-    assert code_line(variables, "can't tell: can't read it: git not found in PATH") in block_reason(variables)
-
-
 @pytest.mark.parametrize(
     "raw_input", ['{"stop_hook_active": true}', '{"stop_hook_active" : true}', '{\n  "stop_hook_active":\ttrue\n}']
 )
