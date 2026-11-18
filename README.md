@@ -42,7 +42,7 @@ When you write `TASK.md` yourself, you take the planner's place. Hand it off to 
 
 | Command | What it does |
 |---|---|
-| `foundry run PROJECT [ROLE] TASK` | Starts the sandbox for a role on a task, or re-attaches to it. Without ROLE, the role whose turn it is. |
+| `foundry run PROJECT [ROLE] TASK` | Starts the sandbox for a role on a task, or re-attaches to it, then reports the checkout status when the agent run ends. Without ROLE, the role whose turn it is. |
 | `foundry task create PROJECT [TASK]` | Creates a task: its branch, and its notes in `.agent/tasks/open/<task>/` on `agent-notes`. Without TASK, the next task id: the task prefix most of the project's task ids use, and one more than the highest number taken with it. Ids with other task prefixes are ignored. |
 | `foundry task close PROJECT TASK` | Moves the task's notes to `.agent/tasks/closed/<task>/`. Its branch and sandboxes stay. |
 | `foundry task reopen PROJECT TASK` | Moves the task's notes back to `.agent/tasks/open/<task>/`. |
@@ -52,6 +52,16 @@ When you write `TASK.md` yourself, you take the planner's place. Hand it off to 
 | `foundry repo check [--fix] [PROJECT ...]` | Compares projects' repositories with the [repo policy](config/repo-policy/README.md). |
 | `foundry prune` | Prunes the remnants of sandboxes that are stopped or removed (their ssh-agents), sparing any started in the last 10 minutes. `foundry run` does this too. |
 | `foundry skills update [COMMIT]` | Merges upstream's changes into the agent kit's copied [skills](docs/skills.md). |
+
+When the agent run ends, however it ended, `foundry run` prints the checkout status on stderr: whether the agent left unsaved work, uncommitted or not pushed, and where.
+
+| It prints | Exit code |
+|---|---|
+| `both checkouts are saved on origin` | 0 |
+| A line for each checkout with unsaved work: `code checkout <path> on <branch>: uncommitted changes`, `commits not pushed`, or both | 1 |
+| `can't tell`, and why: the sandbox isn't running, an agent still runs in it, a checkout can't be read, or origin can't be reached | 1 |
+
+A launch that fails before the agent starts prints its error instead, and exits 1. `foundry run` refuses to start a second agent in a sandbox where one is running, and says how to stop it: `sbx stop <sandbox>`.
 
 Each command shows its progress on stderr as `==>` lines. Put `-v` before the command, as in `foundry -v run …`, to see the detail too, such as session-init's output.
 

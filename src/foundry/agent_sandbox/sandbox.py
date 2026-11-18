@@ -9,7 +9,7 @@ import shlex
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import NoReturn, Protocol
+from typing import Protocol
 
 from foundry.agent_sandbox.errors import SandboxError
 from foundry.agent_sandbox.github_host_keys import GITHUB_HOST_KEYS
@@ -43,9 +43,21 @@ class Sandbox(Protocol):
         """Run a command inside the sandbox, with its definition's variables, and wait for it."""
         ...
 
-    def attach(self, model: str | None) -> NoReturn:
-        """Replace this process with an agent run in the sandbox, which starts on the opening prompt, on
-        ``model``, or its default when None."""
+    def is_running(self) -> bool:
+        """Whether the sandbox is running, asked without starting it. One still starting is not running yet."""
+        ...
+
+    def is_agent_running(self) -> bool:
+        """Whether an agent is running in the sandbox. Reaching the sandbox starts it."""
+        ...
+
+    def stop_hint(self) -> str:
+        """How the human stops an agent running in the sandbox, as a clause: "stop it with ..."."""
+        ...
+
+    def attach(self, model: str | None) -> None:
+        """Run an agent in the sandbox on this process's terminal, starting on the opening prompt, on ``model``, or its
+        default when None; return when the agent run ends, however it ends."""
         ...
 
 
@@ -116,13 +128,28 @@ class SbxCli:
     def run(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         return self._sbx("env", "exec", str(self._definition_dir), "--", *command)
 
-    def attach(self, model: str | None) -> NoReturn:
+    def is_running(self) -> bool:
+        return _sandbox_statuses(self._host).get(self._sandbox_name) == "running"
+
+    def is_agent_running(self) -> bool:
+        """pgrep matches the agent's process name exactly: Claude Code runs as ``claude``."""
+        result = self.run(("pgrep", "-x", "claude"))
+        if result.returncode not in (0, 1):
+            raise SandboxError(f"could not check for a running agent: {result.stderr.strip()}")
+        return result.returncode == 0
+
+    def stop_hint(self) -> str:
+        """sbx stop stops the whole sandbox, by name alone; the next launch starts it again."""
+        return f"stop it with `sbx stop {self._sandbox_name}`"
+
+    def attach(self, model: str | None) -> None:
         """sbx run, not sbx env run: only sbx run passes arguments after -- to the agent. The sandbox already
         exists, made by ensure_running, so --name re-attaches to it, with the variables it was created with. The
-        model goes to Claude Code as --model, so it can change between launches without recreating the sandbox."""
+        model goes to Claude Code as --model, so it can change between launches without recreating the sandbox.
+        sbx run's exit code is ignored: it is 0 however the agent run ended."""
         model_args = ("--model", model) if model is not None else ()
         command = ("sbx", "run", "--name", self._sandbox_name, "--", *model_args, OPENING_PROMPT)
-        self._host.exec(command, self._sbx_env)
+        self._host.run_in_terminal(command, self._sbx_env)
 
     def _sbx(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self._host.run(("sbx", *args), env=self._sbx_env)
@@ -136,11 +163,14 @@ def _sbx_env(host_env: Mapping[str, str], ssh_agent_socket_path: Path) -> dict[s
 
 
 def list_live_sandboxes(host: Host) -> set[str]:
-    """Names of the sandboxes ``sbx ls --json`` lists with any status but "stopped".
+    """Names of the sandboxes ``sbx ls --json`` lists with any status but "stopped"."""
+    return {name for name, status in _sandbox_statuses(host).items() if status != "stopped"}
 
-    Not aimed at one sandbox, so it runs in the host's own environment, with no sandbox's socket.
-    """
+
+def _sandbox_statuses(host: Host) -> dict[str, str]:
+    """Each sandbox ``sbx ls --json`` lists, by name, with its status. Not aimed at one sandbox, so it runs in the
+    host's own environment, with no sandbox's socket."""
     result = host.run(("sbx", "ls", "--json"), env=host.environ())
     if result.returncode != 0:
         raise SandboxError(f"sbx ls failed: {result.stderr.strip()}")
-    return {sandbox["name"] for sandbox in json.loads(result.stdout)["sandboxes"] if sandbox["status"] != "stopped"}
+    return {sandbox["name"]: sandbox["status"] for sandbox in json.loads(result.stdout)["sandboxes"]}

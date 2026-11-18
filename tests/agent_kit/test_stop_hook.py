@@ -1,5 +1,5 @@
-"""The Stop hook as delivered: the managed settings' command, run against checkouts with work in them. Its
-rules are tested in-process, in tests/agent_runtime/test_claude_hooks.py.
+"""The Stop hook as delivered, the managed settings' command, and check-unsaved-work from the built runtime, run
+against checkouts with work in them. Their rule is tested in-process, in tests/agent_runtime/test_unsaved_work.py.
 
 The checkouts are made by session-setup, as in a sandbox: a code checkout on the task's branch and a notes
 worktree on agent-notes, with the variables a sandbox for the task gets. The git hooks are left out: they run
@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from foundry.task import NOTES_BRANCH
 from tests.support import TASK, UNSIGNED, git
 from tests.support.kit import HOOK_COMMANDS, hook_command, runtime_command
 
@@ -85,6 +86,30 @@ def test_stop_is_blocked_with_uncommitted_or_unpushed_work(repo) -> None:
     commit(notes, f"{TASK.id}: progress")
     decision = json.loads(stop().stdout)
     assert decision["decision"] == "block"
-    assert "code checkout has uncommitted changes; notes checkout" in decision["reason"]
-    assert "notes checkout has commits not pushed" in decision["reason"]
+    assert f"code checkout {code} on {TASK.branch}: uncommitted changes; notes checkout {notes}" in decision["reason"]
+    assert f"notes checkout {notes} on {NOTES_BRANCH}: commits not pushed" in decision["reason"]
     assert decision["reason"].endswith('Commit and push that work (see "Git rules" in AGENTS.md), then finish.')
+
+
+# --- check-unsaved-work ------------------------------------------------------
+
+
+def check_unsaved_work() -> subprocess.CompletedProcess[str]:
+    """check-unsaved-work, run from the built runtime, as foundry runs it after an agent run."""
+    return subprocess.run(
+        runtime_command(Path(os.environ["AGENT_KIT_DIR"]), "check-unsaved-work"),
+        env=os.environ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_check_unsaved_work_says_both_are_saved_then_names_unsaved_work(repo) -> None:
+    code, _ = repo
+    saved = check_unsaved_work()
+    (code / "wip.txt").write_text("x\n")
+    unsaved = check_unsaved_work()
+
+    assert (saved.returncode, saved.stdout) == (0, "both checkouts are saved on origin\n")
+    assert (unsaved.returncode, unsaved.stdout) == (1, f"code checkout {code} on {TASK.branch}: uncommitted changes\n")

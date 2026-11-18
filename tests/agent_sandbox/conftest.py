@@ -3,7 +3,6 @@
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import NoReturn
 
 import pytest
 
@@ -13,14 +12,6 @@ from foundry.agent_sandbox.sandbox import Sandbox
 Response = str | int | tuple[int, str]
 
 
-class ExecCalled(Exception):
-    """Raised by FakeHost.exec instead of replacing the process, carrying what would have run."""
-
-    def __init__(self, command: tuple[str, ...], env: Mapping[str, str]) -> None:
-        self.command = command
-        self.env = env
-
-
 class FakeHost:
     """Answers commands from ``responses`` and records them in ``calls``.
 
@@ -28,9 +19,6 @@ class FakeHost:
     stdout) pair, or a list of those, used in turn. An unexpected command
     raises KeyError.
     """
-
-    ExecCalled = ExecCalled
-    """What exec raises, so a test can catch it as host.ExecCalled without importing it."""
 
     def __init__(self) -> None:
         self.responses: dict[tuple[str, ...], Response | list[Response]] = {}
@@ -42,6 +30,8 @@ class FakeHost:
         """The process ids kill_process was given, in order."""
         self.gone: set[int] = set()
         """Process ids kill_process raises ProcessLookupError for."""
+        self.terminal_runs: list[tuple[tuple[str, ...], Mapping[str, str]]] = []
+        """What run_in_terminal was given, in order; it returns 0 for each."""
 
     def run(self, command: Sequence[str], *, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         command = tuple(command)
@@ -56,8 +46,9 @@ class FakeHost:
             return subprocess.CompletedProcess(command, response, stdout="", stderr="")
         return subprocess.CompletedProcess(command, 0, stdout=response, stderr="")
 
-    def exec(self, command: Sequence[str], env: Mapping[str, str]) -> NoReturn:
-        raise ExecCalled(tuple(command), env)
+    def run_in_terminal(self, command: Sequence[str], env: Mapping[str, str]) -> int:
+        self.terminal_runs.append((tuple(command), env))
+        return 0
 
     def environ(self) -> Mapping[str, str]:
         return self.environ_value
@@ -75,19 +66,12 @@ class FakeHost:
         return [command for command, _ in self.calls]
 
 
-class Attached(Exception):
-    """Raised by FakeSandbox.attach instead of handing this process over, with the model it was given."""
-
-    def __init__(self, model: str | None) -> None:
-        super().__init__(model)
-        self.model = model
-
-
 class FakeSandbox:
     """A sandbox in memory, as agent_sandbox.sandbox.Sandbox describes it.
 
-    A test sets up what the sandbox is like (whether it exists, what keys reach it, which commands
-    fail inside), then checks where it ended up.
+    A test sets up what the sandbox is like (whether it exists and runs, what keys reach it, which commands
+    fail inside, whether an agent runs in it), then checks where it ended up. A command run inside prints
+    "ran <command>".
     """
 
     def __init__(
@@ -96,18 +80,37 @@ class FakeSandbox:
         exists: bool = False,
         forwarded_key_fingerprints: set[str] | None = None,
         exit_codes_by_command: Mapping[tuple[str, ...], int] | None = None,
+        stderr_by_command: Mapping[tuple[str, ...], str] | None = None,
+        running: bool = True,
+        agent_running: bool = False,
     ) -> None:
         self.exists = exists
+        self.running = running
+        """What is_running says; ensure_running sets it."""
+        self.agent_running = agent_running
+        self.attached_models: list[str | None] = []
+        """The model each attach was given, in order."""
         self.created = False
         self.has_github_ssh_access = False
         self.github_token_file: Path | None = None
         self.commands_run: list[tuple[str, ...]] = []
         self._forwarded_key_fingerprints = forwarded_key_fingerprints
         self._exit_codes_by_command = dict(exit_codes_by_command or {})
+        self._stderr_by_command = dict(stderr_by_command or {})
 
     def ensure_running(self) -> None:
         self.created = not self.exists
         self.exists = True
+        self.running = True
+
+    def is_running(self) -> bool:
+        return self.running
+
+    def is_agent_running(self) -> bool:
+        return self.agent_running
+
+    def stop_hint(self) -> str:
+        return "stop it with `sbx stop fake`"
 
     def give_github_ssh_access(self) -> None:
         self.has_github_ssh_access = True
@@ -122,10 +125,11 @@ class FakeSandbox:
         command = tuple(command)
         self.commands_run.append(command)
         code = self._exit_codes_by_command.get(command, 0)
-        return subprocess.CompletedProcess(command, code, stdout=f"ran {' '.join(command)}\n", stderr="")
+        stderr = self._stderr_by_command.get(command, "")
+        return subprocess.CompletedProcess(command, code, stdout=f"ran {' '.join(command)}\n", stderr=stderr)
 
-    def attach(self, model: str | None) -> NoReturn:
-        raise Attached(model)
+    def attach(self, model: str | None) -> None:
+        self.attached_models.append(model)
 
 
 _: type[Sandbox] = FakeSandbox  # FakeSandbox implements the port

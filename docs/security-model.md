@@ -25,7 +25,7 @@ The git hooks and `guard-bash` run inside the sandbox, so an agent set on gettin
 - **`pre-commit`:** nothing under `.agent/` on the task branch; on `agent-notes`, only this task's dir, and its `LOG.md` only added to.
 - **`prepare-commit-msg`:** adds the `Task: <task>` trailer to commits on the task branch, even with `--no-verify`.
 - **`guard-bash`:** refuses `--no-verify` and any mention of `core.hooksPath`, which would skip or replace the git hooks.
-- **`session-check`:** blocks the end of a turn while either checkout has work not committed or not pushed. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
+- **`session-check`:** blocks the end of a turn while either checkout has unsaved work, or when it can't tell, such as when origin can't be reached. The agent's next stop goes through. It trusts the environment Claude Code gives it, which a settings file the agent writes can change.
 
 Force-pushes, deletions, history rewrites and pushes elsewhere are left to the rulesets, which refuse them on the server.
 

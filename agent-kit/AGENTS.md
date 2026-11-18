@@ -298,8 +298,9 @@ the rules above. If one refuses an action, read its message:
 it says what was wrong and what to do instead. Never bypass a hook. If you
 believe a hook is wrong, ask, as "When to stop and ask" says.
 
-You will not be allowed to stop while either checkout has
-uncommitted or unpushed changes.
+You will not be allowed to stop while either checkout has unsaved work, or
+when it can't tell, such as when origin can't be reached. The block's reason
+says which.
 
 ## 5. Sharing what you learn
 

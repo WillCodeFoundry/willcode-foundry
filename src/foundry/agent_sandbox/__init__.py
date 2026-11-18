@@ -8,11 +8,12 @@ tests/agent_sandbox/test_boundary.py checks that.
 
 from foundry.agent_sandbox.definition import MAX_SANDBOX_NAME_LENGTH, SandboxDefinition, is_valid_sandbox_name
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import LaunchRequest, launch
+from foundry.agent_sandbox.launcher import CheckoutStatus, LaunchRequest, launch
 from foundry.agent_sandbox.pruning import Remnant, RemnantKind, prune
 
 __all__ = [
     "MAX_SANDBOX_NAME_LENGTH",
+    "CheckoutStatus",
     "LaunchRequest",
     "Remnant",
     "RemnantKind",

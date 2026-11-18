@@ -6,16 +6,17 @@ How the foundry is put together, and the rules its code follows. The words are d
 
 Three programs share this repository:
 
-- **foundry** (`src/foundry/`) runs on your machine. It creates tasks in project repositories, writes each sandbox's definition once, builds the runtime into the agent kit, and hands the terminal to sbx.
+- **foundry** (`src/foundry/`) runs on your machine. It creates tasks in project repositories, writes each sandbox's definition once, builds the runtime into the agent kit, and hands the terminal to sbx. When the agent run ends, it reports the checkout status.
 - **The agent kit** (`agent-kit/`) is data, mounted read-only into every sandbox at the same path as on your machine: instructions, roles, skills, Claude Code's managed settings, the git hook stubs and the built runtime.
 - **The runtime** (`src/agent_runtime/`) is built into `agent-kit/.build/agent_runtime.pyz` at every launch and runs inside the sandbox: setup, hardening and the hooks.
 
 A launch, end to end:
 
 1. `foundry run PROJECT [ROLE] TASK` reads the config, finds the task on `agent-notes`, opens or creates the session, and builds the runtime into the kit. It refuses a closed task, or one that doesn't exist. Without ROLE, it reads the task's `TURN` file too.
-2. `foundry.agent_sandbox` prunes the remnants of stopped or removed sandboxes, then provisions this one. It starts the sandbox's own ssh-agent, and creates the sandbox if it doesn't exist. It allows SSH to GitHub, has sbx read the role's token from its file, and checks the sandbox sees exactly the role's key.
+2. `foundry.agent_sandbox` prunes the remnants of stopped or removed sandboxes, then provisions this one. It starts the sandbox's own ssh-agent, and creates the sandbox if it doesn't exist. It refuses the launch when an agent already runs in the sandbox, found with `pgrep -x claude`, so no second one starts. It allows SSH to GitHub, has sbx read the role's token from its file, and checks the sandbox sees exactly the role's key.
 3. Provisioning ends with the runtime's `session-init`, in the sandbox: setup as the agent, hardening as root on the first launch, then the check as the agent.
-4. foundry replaces itself with `sbx run --name`, which attaches the agent and sends it the opening prompt, with the role's model as `--model` when config names one. Only `sbx run` passes arguments to the agent; `sbx env run` reads them as more paths. foundry never learns how the agent run ended.
+4. foundry runs `sbx run --name` on its terminal and waits. sbx attaches the agent and sends it the opening prompt, with the role's model as `--model` when config names one. Only `sbx run` passes arguments to the agent; `sbx env run` reads them as more paths. While it waits, a Ctrl-C does nothing to foundry; the agent gets it as before.
+5. When the agent run ends, however it ended, foundry prints the checkout status and exits 0 when both checkouts are saved, 1 otherwise. It runs the runtime's `check-unsaved-work` in the sandbox, unless the sandbox is no longer running or an agent still runs in it: then it says "can't tell", and why.
 
 ## Codemap
 
@@ -44,7 +45,8 @@ A launch, end to end:
 | `session_init.py` | `session-init`'s order: setup, root mode on the first launch, then agent mode. `commands/session_init.py` makes the sudo call. |
 | `session_setup.py` | The agent user's part: checkouts, git identity, the agent's instructions and skills. |
 | `hardening.py` | Root mode and agent mode, each step beside the check that proves it, acting on a `Machine`. |
-| `claude_hooks.py`, `git_hooks.py` | The rules of the Claude hooks and the git hooks. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
+| `claude_hooks.py`, `git_hooks.py` | guard-bash's rule, and the git hooks' rules. `commands/claude_hook.py` speaks Claude Code's hook protocol. |
+| `unsaved_work.py` | Unsaved work in both checkouts, in the words the Stop hook and `check-unsaved-work` share. |
 | `contract.py`, `agent_kit.py`, `git.py`, `atomic_files.py` | Shared with foundry: the session variables, the kit's layout, running git, replacing a file in one step. |
 
 The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <command>`:
@@ -55,6 +57,7 @@ The runtime's commands, each run as `/usr/bin/python3 -IS agent_runtime.pyz <com
 | `session-setup` | `session-init` runs it in-process; the command is for running setup alone, by hand or in tests |
 | `harden` | `session-init`, as root through sudo, on the first launch |
 | `check-hardening` | `session-init` runs agent mode in-process on every launch; the command runs it alone |
+| `check-unsaved-work` | foundry, as the agent, after each agent run, for the checkout status |
 | `claude-hook guard-bash`, `claude-hook session-check` | Claude Code, from the managed settings |
 | `git-hook pre-commit`, `git-hook prepare-commit-msg`, `git-hook pre-push` | git, from the stubs in `agent-kit/hooks/` |
 

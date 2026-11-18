@@ -145,21 +145,43 @@ def test_commands_run_inside_with_the_definitions_variables(host, sbx_cli: SbxCl
     assert sbx_cli.run(("/k/bin/session-init",)).stdout == "ok"
 
 
-def test_attaching_hands_over_to_sbx_run_by_name_with_the_opening_prompt_and_the_socket_of_the_sandbox(
+def test_attaching_runs_sbx_run_by_name_in_the_terminal_with_the_opening_prompt_and_the_socket_of_the_sandbox(
     host, sbx_cli: SbxCli
 ):
-    with pytest.raises(host.ExecCalled) as handed_over:
-        sbx_cli.attach(None)
-    assert handed_over.value.command == ("sbx", "run", "--name", "n", "--", "Start your turn, as AGENTS.md says.")
-    assert handed_over.value.env == ENV
+    sbx_cli.attach(None)
+
+    assert host.terminal_runs == [(("sbx", "run", "--name", "n", "--", "Start your turn, as AGENTS.md says."), ENV)]
 
 
 def test_attaching_with_a_model_gives_it_to_the_agent_before_the_opening_prompt(host, sbx_cli: SbxCli):
-    with pytest.raises(host.ExecCalled) as handed_over:
-        sbx_cli.attach("opus")
-    assert handed_over.value.command == (
-        "sbx", "run", "--name", "n", "--", "--model", "opus", "Start your turn, as AGENTS.md says."
-    )  # fmt: skip
+    sbx_cli.attach("opus")
+
+    assert [command for command, _ in host.terminal_runs] == [
+        ("sbx", "run", "--name", "n", "--", "--model", "opus", "Start your turn, as AGENTS.md says.")
+    ]
+
+
+# --- is_agent_running, stop_hint ----------------------------------------------
+
+
+@pytest.mark.parametrize(("pgrep_exit_code", "running"), [(0, True), (1, False)])
+def test_an_agent_is_running_when_pgrep_finds_claude_in_the_sandbox(
+    host, sbx_cli: SbxCli, definition_dir: Path, pgrep_exit_code: int, running: bool
+) -> None:
+    host.responses = {exec_in(definition_dir, "pgrep", "-x", "claude"): pgrep_exit_code}
+
+    assert sbx_cli.is_agent_running() is running
+
+
+def test_a_failing_pgrep_is_reported(host, sbx_cli: SbxCli, definition_dir: Path) -> None:
+    host.responses = {exec_in(definition_dir, "pgrep", "-x", "claude"): 2}
+
+    with pytest.raises(SandboxError, match="could not check for a running agent"):
+        sbx_cli.is_agent_running()
+
+
+def test_the_stop_hint_names_sbx_stop_and_the_sandbox(sbx_cli: SbxCli) -> None:
+    assert sbx_cli.stop_hint() == "stop it with `sbx stop n`"
 
 
 # --- list_live_sandboxes ------------------------------------------------------
@@ -172,6 +194,21 @@ SBX_LS_JSON = """{
     {"name": "dev-p-starting", "id": "3", "agent": "claude", "status": "starting", "workspaces": []}
   ]
 }"""
+
+
+@pytest.mark.parametrize(
+    ("sandbox_name", "running"),
+    [("dev-p-running", True), ("dev-p-starting", False), ("dev-p-stopped", False), ("dev-p-absent", False)],
+)
+def test_a_sandbox_is_running_only_with_sbx_s_status_running(
+    host, definition_dir: Path, sandbox_name: str, running: bool
+) -> None:
+    """ "starting" can't be checked yet; asking sbx ls never starts a sandbox, as reaching one would."""
+    host.responses = {SBX_LS: SBX_LS_JSON}
+    sbx_cli = SbxCli(host, sandbox_name=sandbox_name, definition_dir=definition_dir, ssh_agent_socket_path=SOCKET)
+
+    assert sbx_cli.is_running() is running
+    assert host.commands == [SBX_LS]
 
 
 def test_live_sandboxes_are_those_sbx_lists_that_are_not_stopped(host) -> None:

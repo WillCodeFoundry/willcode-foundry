@@ -97,6 +97,14 @@ _Avoid_: round 0
 **Code checkout** and **notes checkout**:
 The two working trees of the sandbox clone: one on the task branch, one on the notes branch.
 
+**Unsaved work**:
+Changes in a checkout that origin lacks: uncommitted changes, or commits not pushed to its branch. The Stop hook and the checkout status share this definition.
+_Avoid_: unpushed work, dirty checkout
+
+**Checkout status**:
+What `foundry run` reports after an agent run ends: each checkout's unsaved work, that both are saved, or why it can't tell.
+_Avoid_: exit report
+
 **Task template**:
 `config/task-template/`, the files every new task's notes dir starts from.
 

@@ -1,4 +1,5 @@
-"""provision_sandbox: what a launch does to the sandbox, against a fake sandbox, with a real SshAgent over a fake host.
+"""provision_sandbox and check_checkout_status: what a launch does to the sandbox before and after the agent run,
+against a fake sandbox, with a real SshAgent over a fake host.
 
 The sbx command line behind each step is SbxCli's, tested in test_sandbox.py.
 """
@@ -12,11 +13,18 @@ import pytest
 
 from foundry.agent_sandbox.definition import SandboxDefinition
 from foundry.agent_sandbox.errors import SandboxError
-from foundry.agent_sandbox.launcher import LaunchRequest, launch_summary, provision_sandbox
+from foundry.agent_sandbox.launcher import (
+    CheckoutStatus,
+    LaunchRequest,
+    check_checkout_status,
+    launch_summary,
+    provision_sandbox,
+)
 from foundry.agent_sandbox.sandbox import Sandbox
 from foundry.agent_sandbox.ssh_agent import SshAgent
 
 KEY_FINGERPRINT = "SHA256:abc"
+CHECKOUT_STATUS_COMMAND = ("/k/check-unsaved-work",)
 
 
 class Layout(NamedTuple):
@@ -51,12 +59,23 @@ def ssh_agent(host, layout: Layout) -> SshAgent:
     return SshAgent(host, layout.ssh_agent_socket_path, os.getuid())
 
 
+def launch_request(layout: Layout, **request) -> LaunchRequest:
+    """A launch request pointing at the layout's definition and key."""
+    return LaunchRequest(
+        **{
+            "definition_dir": layout.definition_dir,
+            "ssh_key_path": layout.ssh_key_path,
+            "checkout_status_command": CHECKOUT_STATUS_COMMAND,
+            **request,
+        }
+    )
+
+
 def run_provision_sandbox(layout: Layout, ssh_agent: SshAgent, sandbox: Sandbox, **request) -> str:
     """provision_sandbox() for a launch request pointing at the layout's definition and key."""
-    launch_request = LaunchRequest(
-        **{"definition_dir": layout.definition_dir, "ssh_key_path": layout.ssh_key_path, **request}
+    return provision_sandbox(
+        launch_request(layout, **request), SandboxDefinition.read(layout.definition_dir), ssh_agent, sandbox
     )
-    return provision_sandbox(launch_request, SandboxDefinition.read(layout.definition_dir), ssh_agent, sandbox)
 
 
 @pytest.fixture
@@ -140,6 +159,23 @@ def test_provisioning_aborts_when_init_fails(layout, ssh_agent, make_reachable_s
         run_provision_sandbox(layout, ssh_agent, sandbox, init_command=("init",))
 
 
+def test_a_running_agent_refuses_the_launch_before_anything_is_given_to_the_sandbox(
+    layout, ssh_agent, make_reachable_sandbox
+) -> None:
+    """AC5: no second agent; the refusal names the sandbox and how to stop the agent."""
+    sandbox = make_reachable_sandbox(exists=True, agent_running=True)
+
+    with pytest.raises(SandboxError) as refused:
+        run_provision_sandbox(layout, ssh_agent, sandbox, init_command=("/k/bin/session-init",))
+
+    assert str(refused.value) == (
+        "an agent is already running in sandbox n, so no second one is started; stop it with `sbx stop fake`"
+    )
+    assert not sandbox.has_github_ssh_access
+    assert sandbox.github_token_file is None
+    assert sandbox.commands_run == []
+
+
 def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
     """The launcher never removes a sandbox; adding a step to the port should be a decision."""
     steps = {name for name in vars(Sandbox) if not name.startswith("_")}
@@ -149,22 +185,23 @@ def test_the_sandbox_port_offers_no_way_to_remove_a_sandbox() -> None:
         "set_github_token_file",
         "forwarded_key_fingerprints",
         "run",
+        "is_running",
+        "is_agent_running",
+        "stop_hint",
         "attach",
     }
 
 
 @pytest.mark.parametrize(("model", "line"), [(None, "the agent default"), ("opus", "opus")])
 def test_the_summary_names_the_model(layout: Layout, model: str | None, line: str) -> None:
-    request = LaunchRequest(definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, model=model)
+    request = launch_request(layout, model=model)
     summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
     assert summary[-1] == f"model:      {line}"
 
 
 def test_the_summary_says_where_the_github_token_comes_from(layout: Layout, tmp_path: Path) -> None:
     def github_line(github_token_path: Path | None) -> list[str]:
-        request = LaunchRequest(
-            definition_dir=layout.definition_dir, ssh_key_path=layout.ssh_key_path, github_token_path=github_token_path
-        )
+        request = launch_request(layout, github_token_path=github_token_path)
         summary = launch_summary(request, SandboxDefinition.read(layout.definition_dir), layout.ssh_agent_socket_path)
         return [line for line in summary if line.startswith("github:")]
 
@@ -219,3 +256,62 @@ def test_a_session_whose_workspace_is_gone_is_refused(layout, ssh_agent, tmp_pat
     with pytest.raises(SandboxError, match=r"workspace '.*ws' is not a directory"):
         run_provision_sandbox(layout, ssh_agent, sandbox)
     assert not sandbox.created
+
+
+# --- check_checkout_status --------------------------------------------------------
+
+
+def test_a_stopped_sandbox_is_can_t_tell_and_is_not_started_to_check(layout, make_sandbox) -> None:
+    sandbox = make_sandbox(exists=True, running=False)
+
+    status = check_checkout_status(launch_request(layout), sandbox)
+
+    assert status == CheckoutStatus(text="can't tell: sandbox n is not running", exit_code=1)
+    assert sandbox.commands_run == []  # running anything in it would start it
+    assert not sandbox.running
+
+
+def test_an_agent_still_running_is_can_t_tell_with_how_to_stop_it(layout, make_sandbox) -> None:
+    sandbox = make_sandbox(exists=True, agent_running=True)
+
+    status = check_checkout_status(launch_request(layout), sandbox)
+
+    assert status == CheckoutStatus(
+        text="can't tell: an agent is still running in sandbox n; stop it with `sbx stop fake`", exit_code=1
+    )
+    assert sandbox.commands_run == []
+
+
+def test_a_check_that_fails_is_can_t_tell_with_its_error(layout, make_sandbox) -> None:
+    class SbxLsFails(make_sandbox):  # type: ignore[misc]
+        def is_running(self) -> bool:
+            raise SandboxError("sbx ls failed: daemon not running")
+
+    status = check_checkout_status(launch_request(layout), SbxLsFails(exists=True))
+
+    assert status == CheckoutStatus(text="can't tell: sbx ls failed: daemon not running", exit_code=1)
+
+
+def test_both_saved_is_the_command_s_output_and_exit_0(layout, make_sandbox) -> None:
+    sandbox = make_sandbox(exists=True)
+
+    status = check_checkout_status(launch_request(layout), sandbox)
+
+    assert status == CheckoutStatus(text="ran /k/check-unsaved-work", exit_code=0)
+    assert sandbox.commands_run == [CHECKOUT_STATUS_COMMAND]
+
+
+@pytest.mark.parametrize("command_exit_code", [1, 2])
+def test_any_other_exit_is_exit_1_with_the_command_s_stdout_then_stderr(
+    layout, make_sandbox, command_exit_code: int
+) -> None:
+    """1 is unsaved work; anything else is the command failing, which shows its own error."""
+    sandbox = make_sandbox(
+        exists=True,
+        exit_codes_by_command={CHECKOUT_STATUS_COMMAND: command_exit_code},
+        stderr_by_command={CHECKOUT_STATUS_COMMAND: "Traceback: boom\n"},
+    )
+
+    status = check_checkout_status(launch_request(layout), sandbox)
+
+    assert status == CheckoutStatus(text="ran /k/check-unsaved-work\nTraceback: boom", exit_code=1)

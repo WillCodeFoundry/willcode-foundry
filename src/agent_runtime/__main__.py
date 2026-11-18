@@ -6,7 +6,15 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
 
-from agent_runtime.commands import check_hardening, claude_hook, git_hook, harden, session_init, session_setup
+from agent_runtime.commands import (
+    check_hardening,
+    check_unsaved_work,
+    claude_hook,
+    git_hook,
+    harden,
+    session_init,
+    session_setup,
+)
 from agent_runtime.contract import MissingVariables
 from agent_runtime.git import GitError
 from agent_runtime.git_hooks import GitHookRefused
@@ -22,6 +30,7 @@ COMMANDS: dict[str, tuple[Command, str]] = {
     "session-setup": (session_setup.main, "the agent user's part of session-init"),
     "harden": (harden.main, "as root: harden the sandbox"),
     "check-hardening": (check_hardening.main, "as the agent: check the sandbox is hardened"),
+    "check-unsaved-work": (check_unsaved_work.main, "the checkout status: what the launcher runs after an agent run"),
 }
 CLAUDE_HOOKS: dict[str, Command] = {
     "guard-bash": claude_hook.guard_bash,

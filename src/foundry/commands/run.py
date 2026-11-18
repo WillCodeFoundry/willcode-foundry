@@ -1,10 +1,11 @@
-"""foundry run: start or re-attach to the sandbox for a role on a task, by default the role whose turn it is."""
+"""foundry run: start or re-attach to the sandbox for a role on a task, by default the role whose turn it is, then
+report the checkout status once the agent run ends."""
 
 import argparse
 import logging
 import os
+import sys
 from collections.abc import Mapping
-from typing import NoReturn
 
 from foundry import agent_sandbox, config, paths
 from foundry.config import Config, Role
@@ -32,8 +33,9 @@ def add_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
     parser.set_defaults(func=main)
 
 
-def main(args: argparse.Namespace) -> NoReturn:
-    """Composition root: find the open task and the role, open the session, build the runtime, then launch."""
+def main(args: argparse.Namespace) -> int:
+    """Composition root: find the open task and the role, open the session, build the runtime, then launch. Prints the
+    checkout status on stderr once the agent run ends, and returns its exit code: 0 when both checkouts are saved."""
     foundry_root = paths.find_foundry_root()
     foundry_config = config.load(foundry_root)
     project = foundry_config.project(args.project_name)
@@ -44,7 +46,9 @@ def main(args: argparse.Namespace) -> NoReturn:
         )
     session = open_or_create(foundry_root, project=project, role=role, task=task)  # creates it the first time
     build_runtime(paths.agent_kit_dir(foundry_root))  # writes it when it changed
-    agent_sandbox.launch(session.launch_request())
+    checkout_status = agent_sandbox.launch(session.launch_request())
+    print(checkout_status.text, file=sys.stderr)
+    return checkout_status.exit_code
 
 
 def fetch_open_task(project_tasks: ProjectTasks, *, project_name: str, task_id: str) -> Task:

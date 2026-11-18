@@ -1,9 +1,9 @@
 """A real sbx sandbox, launched up to but not including attaching the agent: run by hand, with -m sbx.
 
 It shows what no fake can: that sbx accepts our definition, mounts the kit read-only at its host path, runs
-session-init as the agent with sudo the first time, and that the sandbox's private dockerd keeps its socket
-root's after a restart. Run it after upgrading sbx, and before merging changes to agent-kit/, src/agent_runtime/
-or src/foundry/agent_sandbox/: see "Testing against real sbx" in CONTRIBUTING.md.
+session-init as the agent with sudo the first time, that the checkout status can be checked, and that the sandbox's
+private dockerd keeps its socket root's after a restart. Run it after upgrading sbx, and before merging changes to
+agent-kit/, src/agent_runtime/ or src/foundry/agent_sandbox/: see "Testing against real sbx" in CONTRIBUTING.md.
 
 It uses this foundry's project foundry-test, role dev and task sbx-0001, and touches only that sandbox and its
 session directory: removed before it starts and after it ends, whatever the outcome. The tests run in order,
@@ -25,7 +25,7 @@ from agent_runtime.agent_kit import AgentKit
 from foundry import agent_sandbox, config, paths
 from foundry.agent_sandbox import SandboxDefinition
 from foundry.agent_sandbox.host import SystemHost
-from foundry.agent_sandbox.launcher import LaunchRequest, provision_sandbox
+from foundry.agent_sandbox.launcher import CheckoutStatus, LaunchRequest, check_checkout_status, provision_sandbox
 from foundry.agent_sandbox.sandbox import SbxCli
 from foundry.agent_sandbox.ssh_agent import SshAgentRegistry, ssh_agent_socket_path
 from foundry.errors import FoundryError
@@ -209,6 +209,16 @@ def test_a_relaunch_only_checks(smoke: Smoke) -> None:
     assert relaunched.returncode == 0, relaunched.stdout + relaunched.stderr
     assert "check-hardening: hardened" in relaunched.stdout
     assert "harden: managed settings installed" not in relaunched.stdout
+
+
+def test_after_a_launch_with_no_agent_run_both_checkouts_are_saved(smoke: Smoke) -> None:
+    """The checkout status, as foundry run gives it after the agent run: sbx ls says "running", pgrep finds no agent,
+    and check-unsaved-work fetches both checkouts over SSH."""
+    assert smoke.request is not None and smoke.sandbox is not None
+
+    status = check_checkout_status(smoke.request, smoke.sandbox)
+
+    assert status == CheckoutStatus(text="both checkouts are saved on origin", exit_code=0)
 
 
 def test_after_a_restart_the_docker_socket_is_still_roots(smoke: Smoke) -> None:
