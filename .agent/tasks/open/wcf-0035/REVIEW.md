@@ -162,3 +162,31 @@ There are no findings.
 Summary: Standards 0, Spec 0, Behaviour 0, Smells 0, Names 0 new findings. No new finding blocks, and no design question is open. Round 1's Blocking findings, R7 and R8, are closed. R4, R5, R6 and half of R9 are deferred as follow-ups.
 
 Verdict: approved
+
+## Round 3 (reviewing 4c6ebc2)
+
+This round reviews the same commit as round 2. After round 2's verdict, I listed the private names the diff adds that PLAN.md's Names doesn't cover. The human read the list in this session and ruled four of them Blocking. Round 2 hadn't reported them, because private names that don't mislead at a use miss the Names bar (see LEARNINGS.md). They are recorded here as the human's findings.
+
+TASK.md (d7e8764) and PLAN.md (8e44876) are unchanged. Every finding from earlier rounds stands as round 2 judged it.
+
+### Smells and Names (the human)
+
+- **R10 · Blocking (the human).** One phrase, "can't tell", names two different things, and one of them now covers less than its name says.
+  - `_CantTell` (`src/agent_runtime/unsaved_work.py:31`) is an exception in the runtime.
+  - `_cant_tell` (`src/foundry/agent_sandbox/launcher.py:99`) is a function in foundry that builds a `CheckoutStatus`.
+  - Since 02e6baf, the only place `_CantTell` is raised is a failed fetch (`unsaved_work.py:56`). A failed git command reaches "can't tell" through `GitError` instead.
+  - So `_unsaved_work` has two `except` clauses, each writing "can't tell: …" (`:40-43`).
+  - The next dev who adds a reason will expect it to go through `_CantTell`.
+
+  Direction: give each a name for what it holds, so the two packages don't share one phrase for two things. Have `unsaved_work.py` reach "can't tell" by one path.
+- **R11 · Blocking (the human).** `_unsaved_work` (`src/agent_runtime/unsaved_work.py:35`) doesn't return unsaved work. It returns a sentence saying what is wrong with the checkout, or None; its own local variable is `problem` (`:25`). The human chose the `describe_` prefix for the public function because it returns text, and this private function returns text too. Next to `describe_unsaved_work`, the two names don't show how they differ. Direction: name it for what it returns.
+- **R12 · Blocking (the human).** `_do_nothing` (`src/foundry/agent_sandbox/host.py:77`) says what the handler does, not why it exists. It lets foundry outlive a Ctrl-C while it waits, so the checkout status still gets printed (AC4). Its docstring says this; its name doesn't. Direction: name it for its purpose. Avoid "ignore", since PLAN.md turns down SIG_IGN and the handler is not that.
+- **R13 · Blocking (the human).** Possible Duplicated Code. `_checked_output` (`src/agent_runtime/unsaved_work.py:63`) is a near-copy of `Git.output` (`src/agent_runtime/git.py:40`, which raises through `:74-76`), with its own wording of the error.
+  - The only differences are backticks around the command and git's first line in place of its whole stderr.
+  - Its name echoes `subprocess.check_output`, which is itself a poor name, and doesn't say why it exists beside `Git.output`.
+
+  Direction: remove the copy, or name and keep only what differs. If the fix changes the message, it changes PLAN.md's Errors ("can't read it: `git -C <dir> status --porcelain` failed: <git's first line>"). The dev then amends PLAN.md and a plan round approves it before the code changes.
+
+Summary: Smells 2 (R10, R13), Names 2 (R11, R12), all 4 Blocking, ruled by the human. No design questions.
+
+Verdict: changes needed

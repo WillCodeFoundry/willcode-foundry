@@ -8,3 +8,9 @@
 - 2026-11-17 [testing] — In the `checkouts` fixture the notes checkout is a worktree of the code checkout's clone, so pointing the code checkout's origin elsewhere changes the notes checkout's too.
 - 2026-11-17 [testing] — To show a child's signal dispositions, read `/proc/self/status` from a non-Python child (grep): Python catches SIGINT at startup, so its own SigCgt always has it.
 - 2026-11-18 [proposal] — code-review's "Spec, partial" bar makes every requirement need a test or a check. A Spec sub-agent marked composition-root lines (`run.main` printing and returning the status) as Blocking and suggested stubbing `launch`, which DR3 forbids. DR7 holds those lines by review. Proposal: have the Spec brief say that a composition root's output and exit-code lines are met by reading them in review (DR7).
+- 2026-11-18 [proposal] — code-review's Names bar reports only names that mislead at a use or break an agreed word. That let
+  private helpers through (`_CantTell`/`_cant_tell`, `_unsaved_work`, `_do_nothing`, `_checked_output`), and the human
+  then ruled them Blocking (wcf-0035, round 3). Proposal: the Names bar also blocks a name, private ones included, that
+  doesn't say what its thing holds or returns, or why it exists, and one phrase used for two different things across
+  packages. Also: a Blocking finding the human adds in a review session shouldn't count toward the three-round limit
+  that sends a task to `no-agreement`.

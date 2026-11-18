@@ -218,3 +218,15 @@ Done: code round 2 on 4c6ebc2, in REVIEW.md.
 - Host tier, ruff, mypy, vulture and pylint pass at 4c6ebc2.
 - Follow-up: src/agent_runtime/unsaved_work.py:31 `_CantTell` · since 02e6baf only a failed fetch raises it, while a failed git command reaches "can't tell" through `GitError` · its name and docstring promise every can't-tell case, so `_unsaved_work` keeps two `except`s that each write "can't tell: …".
 Next: the dev opens PR #87 for the human (pr-ready).
+
+## 26 · reviewer · changes-needed
+Done: code round 3 on 4c6ebc2, in REVIEW.md. After round 2, the human asked which names the dev introduced that they might not like, and ruled four of them Blocking:
+- R10: `_CantTell` and `_cant_tell`;
+- R11: `_unsaved_work`;
+- R12: `_do_nothing`;
+- R13: `_checked_output`, a near-copy of `Git.output`.
+
+This round replaces round 2's approval. Entry 25's follow-up on `_CantTell` is now part of R10.
+
+Round 3 is the third code round. The human chose these findings in this session and wants them fixed, so the task goes back to the dev rather than to `no-agreement`.
+Next: the dev fixes R10–R13, each test-first. For R13: if the fix changes the "can't read it" message, amend PLAN.md's Errors, and get a plan round, before the code changes.
