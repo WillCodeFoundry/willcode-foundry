@@ -53,14 +53,14 @@ def _compare_with_origin(git: Git, branch: str) -> tuple[bool, bool]:
     try:
         uncommitted = bool(git.output("status", "--porcelain").strip())
         fetch = git.run_captured("fetch", "-q", "origin", branch)
-        not_pushed = fetch.returncode == 0 and any(
+        if fetch.returncode != 0:
+            raise _OriginComparisonFailure(f"origin can't be reached: {_first_line(fetch.stderr)}")
+        not_pushed = any(
             int(git.output("rev-list", "--count", f"origin/{branch}..{rev}")) > 0
             for rev in (f"refs/heads/{branch}", "HEAD")
         )
     except GitError as error:
         raise _OriginComparisonFailure(f"can't read it: {error}") from error
-    if fetch.returncode != 0:
-        raise _OriginComparisonFailure(f"origin can't be reached: {_first_line(fetch.stderr)}")
     return uncommitted, not_pushed
 
 
