@@ -94,7 +94,7 @@ Removed: `Host.exec` and `SystemHost.exec`; in the tests, `FakeHost.exec`, `Exec
 | removed | `Host.exec` | | |
 | renamed, private | `unsaved_work._describe_checkout`, was `_unsaved_work` | `(git: Git, branch: str) -> str \| None` | `describe_unsaved_work`'s prefix; one checkout. Amended: R11. Because: it returns text, not unsaved work |
 | renamed, private | `unsaved_work._compare_with_origin`, was `_has_commits_not_pushed` | `(git: Git, branch: str) -> tuple[bool, bool]`: uncommitted, not pushed | TASK.md "Terms": what origin lacks. Amended: R10. Because: one path to "can't tell" |
-| renamed, private | `unsaved_work._ComparisonFailure`, was `_CantTell` | exception; its message is the reason | what it holds. Amended: R10. Because: "can't tell" named two things |
+| renamed, private | `unsaved_work._OriginComparisonFailure`, was `_CantTell` | exception; its message is the reason | what it holds. Amended: R10. Because: "can't tell" named two things |
 | removed, private | `unsaved_work._checked_output` | | Amended: R13. Because: a near-copy of `Git.output` |
 | renamed, private | `launcher._unknown_status`, was `_cant_tell` | `(reason: str) -> CheckoutStatus` | the `CheckoutStatus` it returns. Amended: R10. Because: "can't tell" named two things |
 | renamed, private | `host._outlive_interrupt_handler`, was `_do_nothing` | SIGINT handler | why it exists (AC4). Amended: R12. Because: it named what it does, not why |
