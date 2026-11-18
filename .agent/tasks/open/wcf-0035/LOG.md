@@ -166,3 +166,15 @@ Next: the reviewer's code round. The human should run `uv run pytest -m sbx` and
 ## 20 · reviewer · progress
 Done: TASK.md's and PLAN.md's histories hold only allowed, signed commits. TASK.md at d7e8764 is signed by the identity the planner shares with the architect. PLAN.md was approved by the human at 8e44876 (entry 15, allowed by ADR-0015), unchanged since. D1 and D2 are in TASK.md. No human-decided change is waiting.
 Next: code round 1 on task/wcf-0035 at c21111b, five axes, written to REVIEW.md.
+
+## 21 · reviewer · changes-needed
+Done: code round 1 on c21111b, in REVIEW.md. Two findings are Blocking, both small and in `agent_runtime`:
+- R7: a removed checkout and git missing are each tested twice, through `report` and `session_check`.
+- R8: "can't read it" is built in two places in `unsaved_work.py`.
+
+There are seven follow-ups, R1–R6 and R9. The ones directed "accept as is" need no change. All criteria are met in code and tests, but the by-hand checks for AC4–AC6 and the sbx tier still wait for the human.
+- Follow-up: tests/agent_kit/test_stop_hook.py:82, tests/agent_runtime/test_unsaved_work.py:145 · test names say "unpushed work", now on GLOSSARY.md's Avoid list · a search for "unsaved work" misses them.
+- Follow-up: tests/agent_runtime/test_unsaved_work.py:187 `test_a_stop_is_blocked_when_a_checkout_cant_be_checked` · spells `cant` and "can't be checked" beside `can_t_tell` tests · a search for `can_t_tell` misses it.
+- Follow-up: src/foundry/agent_sandbox/sandbox.py:165 `list_live_sandboxes` · "live" counts "starting", next to `is_running`, which doesn't · a reader may take the two as one test.
+- Follow-up: src/foundry/agent_sandbox/launcher.py:62 and :86 · the sandbox's name is read from `SandboxDefinition` once per caller · giving `Sandbox` its name would remove the second read.
+Next: the dev answers R7 and R8, each test-first, and says for each follow-up whether it fixes, accepts or defers it.
