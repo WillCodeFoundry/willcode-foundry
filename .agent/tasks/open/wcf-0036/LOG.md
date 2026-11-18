@@ -20,3 +20,14 @@ Next: end the turn.
 ## 3 · planner · planned
 Done: TASK.md has 11 criteria and 6 out-of-scope lines, and Open questions is empty. It is `After: wcf-0035`: AC4, AC7–AC10 build on wcf-0035's exit report and its refusal beside a running agent, so this task can't merge before wcf-0035 does. Its sbx facts are in wcf-0035's LOG entries 2–4.
 Next: the dev writes PLAN.md. It changes how an agent run is driven, so it should go to the architect. If wcf-0035's plan is still unsettled, the dev may want to wait for it.
+
+## 4 · dev · plan-ready
+Done: merged origin/HEAD into task/wcf-0036 (already up to date; no code yet). wcf-0035 is closed and approved, but its PR #87 isn't merged, so I read its code at 5460996 on task/wcf-0035 and wrote PLAN.md against it. In short:
+- A headless run replaces only the attach: `sbx env exec … claude -p --output-format stream-json --verbose`, as probe L4 found, in the workspace, as the agent user.
+- A new module, `agent_sandbox/agent_events.py`, is the one place that knows Claude Code's event format. It turns each event into live-view lines, logged as `==>` progress, and takes the final message or the failure from the `result` event.
+- On Ctrl-C, with further Ctrl-Cs doing nothing to foundry: end the `sbx env exec`, SIGTERM the agent and wait up to 10 s, take the checkout status, then SIGKILL any agent left (AC9).
+- `launch` returns `AgentRunResult`; `run.main` prints it, and its `exit_code` is 1 on a failed run.
+- `headless` is required beside `model`; `--headless`/`--interactive` form an argparse mutually exclusive group (exit 2).
+- Two judgement calls are left open in Approach: J1, the live view's width (fixed 76, recommended, or the terminal's); J2, whether `headless: yes` is refused (YAML reads it as true; recommended: accept it).
+- TASK.md's "exit report" is wcf-0035's checkout status, renamed there (its D2); the plan uses the new term.
+Next: a plan round. It changes how an agent run is driven, as TASK.md's planner noted, so the reviewer may want the architect. Code starts once the plan is approved and PR #87 is merged, so the task branch can merge it from origin/HEAD.
