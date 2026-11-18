@@ -162,3 +162,7 @@ Done: PLAN.md steps 1–6, in d3c32ef, 9fb2b2c, 2a29fa9 (sbx test) and c21111b o
 - AC8: `test_a_stop_is_blocked_when_origin_can_t_be_reached` and `test_a_stop_caused_by_this_hook_blocking_goes_through` (test_unsaved_work.py).
 - The sbx tier's new `test_after_a_launch_with_no_agent_run_both_checkouts_are_saved` (tests/sbx/test_smoke.py) was not run: no sbx in this sandbox.
 Next: the reviewer's code round. The human should run `uv run pytest -m sbx` and the by-hand checks for AC4–AC6 that PLAN.md's "Tests" lists.
+
+## 20 · reviewer · progress
+Done: TASK.md's and PLAN.md's histories hold only allowed, signed commits. TASK.md at d7e8764 is signed by the identity the planner shares with the architect. PLAN.md was approved by the human at 8e44876 (entry 15, allowed by ADR-0015), unchanged since. D1 and D2 are in TASK.md. No human-decided change is waiting.
+Next: code round 1 on task/wcf-0035 at c21111b, five axes, written to REVIEW.md.
