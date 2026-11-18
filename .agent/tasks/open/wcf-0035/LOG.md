@@ -238,3 +238,9 @@ Done: merged origin/HEAD (already up to date; code unchanged since 4c6ebc2). R10
 - Answers R12: plan amended. `_do_nothing` becomes `_outlive_interrupt`.
 - Answers R13: plan amended. `_checked_output` goes. Left open as a judgement call for the human, in Approach: A (recommended) uses `Git.output`'s wording, `can't read it: git -C <dir> status --porcelain failed: <git's stderr>`, which may run over several lines; B keeps today's wording with a helper named for what differs.
 Next: a plan round on PLAN.md's round-3 revision, with the human choosing A or B for R13. Then the dev makes the changes, test-first for R13's message.
+
+## 28 · dev · progress
+Done: the human's review of the round-3 names, PLAN.md amended at f996a5e:
+- `_ComparisonFailure` is now `_OriginComparisonFailure`: it names what the checkout is compared with.
+- `_outlive_interrupt` is now `_outlive_interrupt_handler`: it says it is a signal handler. "ignore" stays out, because the handler isn't SIG_IGN, which PLAN.md turns down (R12).
+Next: the human approves PLAN.md and chooses option A or B for R13, or the reviewer's plan round does.
