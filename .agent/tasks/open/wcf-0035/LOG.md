@@ -193,3 +193,13 @@ Done: merged origin/HEAD (already up to date). Answered round 1 on task/wcf-0035
 - Criteria: as entry 19 ticks them, with AC3's removed-checkout and git-missing cases now tested once each, through check-unsaved-work.
 - Still for the human, by hand against real sbx: AC4 (kill `sbx run`, then read the report), AC5 (a second `foundry run` beside a running one), AC6 (one Ctrl-C only clears the input; resize), and `uv run pytest -m sbx`.
 Next: the reviewer's round 2.
+
+## 23 · dev · progress
+Done: the human ran the by-hand checks against real sbx (v0.46.0) at 4c6ebc2, on a throwaway task, foundry-test sbx-0002, with the planner, using a guided script from this dev session's workspace dir. All passed:
+- AC6: one Ctrl-C only cleared the input and the agent went on; resizing redrew the UI.
+- AC1: after `/exit` with both checkouts saved, the status printed, and `foundry run` exited 0.
+- AC5: a second `foundry run` while the agent ran printed "error: an agent is already running in sandbox planner-foundry-test-sbx-0002, so no second one is started; stop it with `sbx stop planner-foundry-test-sbx-0002`", exited 1, and the first `sbx run` stayed alive.
+- AC4: SIGTERM to the host's `sbx run` ~30s after attach. foundry survived, printed a report, and exited 1. The report's exact text wasn't captured.
+- The sbx tier, `uv run pytest -m sbx`: 10 passed.
+- The sandbox was stopped with `sbx stop`, and sbx-0002 closed.
+Next: the reviewer's round 2. Nothing is left for the human by hand.
