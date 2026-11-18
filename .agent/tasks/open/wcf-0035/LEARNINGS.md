@@ -7,3 +7,4 @@
 - 2026-11-17 [testing] — The checks need `uv sync --group dev` first; plain `uv run pytest` fails with "Failed to spawn: pytest".
 - 2026-11-17 [testing] — In the `checkouts` fixture the notes checkout is a worktree of the code checkout's clone, so pointing the code checkout's origin elsewhere changes the notes checkout's too.
 - 2026-11-17 [testing] — To show a child's signal dispositions, read `/proc/self/status` from a non-Python child (grep): Python catches SIGINT at startup, so its own SigCgt always has it.
+- 2026-11-18 [proposal] — code-review's "Spec, partial" bar makes every requirement need a test or a check. A Spec sub-agent marked composition-root lines (`run.main` printing and returning the status) as Blocking and suggested stubbing `launch`, which DR3 forbids. DR7 holds those lines by review. Proposal: have the Spec brief say that a composition root's output and exit-code lines are met by reading them in review (DR7).
