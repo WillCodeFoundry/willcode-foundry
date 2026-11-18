@@ -273,3 +273,9 @@ Done: code round 4 on e38eec1, in REVIEW.md. TASK.md (d7e8764) and PLAN.md (f4ea
 - Follow-up: src/agent_runtime/unsaved_work.py:67 `_first_line` · the fetch's reason keeps git's first line, but `Git.output`'s reason keeps all of stderr · two styles of git error in one family of messages.
 - Follow-up: src/agent_runtime/unsaved_work.py:24 loop variable `checkout` · holds a checkout's dir, beside `*_checkout_dir` · reads as a checkout, not a path.
 Next: the human answers R14. If they accept it, the dev opens PR #87 (pr-ready). If they want it fixed, the dev fixes it test-first and the reviewer runs round 5 on that fix only.
+
+## 33 · reviewer · changes-needed
+Done: the human answered R14 in this session.
+- Answers R14: one more round. The dev fixes R14, and the reviewer reviews only that fix (the human).
+- Round 4's verdict stands: changes needed. R15 and entry 32's follow-ups need no change.
+Next: the dev fixes R14 test-first: raise `_OriginComparisonFailure` right after the failed fetch, inside the `try` in `_compare_with_origin`, and drop the guard at `unsaved_work.py:56`. Then the reviewer runs round 5 on that fix only.
